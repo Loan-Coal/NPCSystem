@@ -6293,3 +6293,225 @@ the 40-line cap and `make check` refused it. Per the phase's own rule the gates 
 therefore re-run from scratch after `docker compose up -d --build app`, and the numbers
 above are from that second run. The rule earned its keep: the re-run is where `wide_rag`
 turned out to have zero exposure too.
+
+---
+
+## DEC-214: an arm may not be declared until its exposure has been measured — the P9 arm
+## set is rebuilt supply-first
+**Date:** 2026-08-27
+**Decided by:** this session (P9 remediation), with the default-path question put to the
+maintainer via `AskUserQuestion` and answered by them.
+
+**The one-sentence root cause: the A/B knobs were ceilings on a supply smaller than the
+ceilings' own defaults.** DEC-213 diagnosed this correctly. Every number in it that binds
+was re-measured here and reproduced; the arms are now rebuilt around it.
+
+### What was reproduced before anything was changed
+
+`docker compose up -d --build app`, `make eval-world-reset`, `make eval-arm-probe`:
+exit 2, gates 1/2/3 PASS, gate 4 FAIL, `wide_events` and `wide_rag` both differing from
+default on **0/2** cases. Corpus 51 items, `corpus_sha 2b19e47a1755354e...`, identical
+across all four arms. Identical to DEC-213's corrected clean-baseline table.
+
+### The measured supply table — the artifact that should have existed first
+
+Measured in the app container over the eight NPCs `scripts/probe_inner_life.py` uses, on
+the clean baseline, at `corpus_sha 2b19e47a1755354e`. Corpus = 51 embeddable nodes
+(23 Character, 17 Location, 11 Event).
+
+    npc              known_ev  scope  scope-known  IN CORPUS  rag items  rag tok  event:
+    captain_sorn            1     30           29          5          5      233       1
+    mira_innkeeper          2     16           14          6          5      219       2
+    old_henryk              1     11           10          4          4      179       1
+    aldric_merchant         1     18           17          5          5      230       1
+    lira_fence              2     22           20          8          5      221       2
+    bren_smith              0     12           12          3          3      133       0
+    vex_spymaster           0     12           12          3          3      137       0
+    harwick_guard           0     11           11          4          4      191       0
+
+World-wide event supply: `MATCH (c:Character)-[:KNOWS_ABOUT]->(e:Event)` over all 23
+Characters gives a **maximum of 2**; 16 know 1 or 2, 7 know none.
+
+Per candidate knob, with the verdict each one earns:
+
+| knob | default | measured supply | verdict |
+|---|---|---|---|
+| `skip_rag` | — | removes 3-5 items, 133-233 tok | **LIVE**, 8/8 |
+| `rag_top_k` | 5 | 3-8 per NPC | RAISE dead (headroom 0 on 6/8, exposed 2/8); **LOWER live at 2**, 8/8 |
+| `events_limit` | 5 | 0-2 per NPC | **DEAD both directions** — raise 0/8, and no cut binds everywhere because one roster NPC knows zero |
+| `disabled_slots` | — | `memories` content 8/8; `nearby_npcs` content **7/8** | **LIVE on `memories`**, 8/8 |
+| `slot_cap_overrides` | 600 | ~46 tok PER ITEM | dead — see the correction below |
+| `enabled_tiers` | all | drops `rag:` + `top_need` | rejected: near-duplicate of `no_rag`, and `top_need` is empty (ISSUE-210) |
+| `cross_encoder_enabled` | false | reorders only | rejected: membership unchanged, and an ~80 MB model download |
+| `weight_profile` | null | — | INERT (ISSUE-203) |
+| `graph_rag_top_k` | 5 | — | INERT, `GRAPH_RAG_ENABLED=False` verified live on the running engine |
+
+### Three things in the brief turned out to be false, and are corrected here
+
+**1. `slot_cap_overrides` does not bind below the measured slot spend.** The brief reasoned
+that "measured `rag:` spend is 233 and 179 tokens against the default cap of 600, so a cap
+BELOW the measured spend binds". It does not: `context_profile_policy.apply_slot_policy`
+applies the cap **per ITEM**, not per slot total. The 233 is 5 items at ~46 tokens each, so
+a cap of 200 changes nothing and only a cap under ~45 binds. And a cap that binds sends
+every `rag:` item through byte truncation, which ISSUE-214 records as emitting invalid
+JSON. The candidate is dead, for a different reason than the one given.
+
+**2. `nearby_npcs` is exposed on 7 of 8, not 8 of 8 — and item_keys cannot tell you that.**
+The tier-A arm was first declared as `no_nearby_npcs` on the strength of item_keys
+occupancy, which reads 8/8 and which is all gate 4 checks. `scripts/probe_inner_life.py`
+reads 7/8, and the probe is right: `bren_smith`'s `nearby_npcs` item has text `"[]"`. It is
+present, ranked and charged, and it is EMPTY. P6 emits every declared slot with its empty
+default, so withholding an already-empty item leaves the serialized context byte-identical
+— a guaranteed null for one NPC in eight, the same defect class as the arms being retired.
+**PRESENCE IN item_keys IS NOT EXPOSURE. CONTENT IS.** The arm was re-pointed at `memories`
+and re-measured across the whole roster before being kept. Filed as ISSUE-222.
+
+**3. `scope` is not a stable quantity.** DEC-213 records `captain_sorn scope 23`; this
+session measured 30, then 49, then 52, then 54 on an idle engine after a reset, while
+`rag_supply` stayed pinned at 5 and the corpus at 51. 41 of those nodes are `Quest`, which
+is not an embeddable type. DEC-210 freezes the corpus for a run; nothing freezes the graph.
+No DEC-214 number depends on scope. Filed as ISSUE-221.
+
+### The arm set, rebuilt
+
+RETIRED, and deliberately NOT replaced by resized versions of themselves:
+
+- **`wide_events`** (events_limit 5 -> 15). There is no value of `events_limit` that is an
+  arm on this world. Raising cannot add a row that does not exist; lowering cannot remove
+  one from an NPC who knows zero. ISSUE-218 closed.
+- **`wide_rag`** (rag_top_k 5 -> 15). The default already retrieves substantially
+  everything in scope. Raise exposure 2/8, and neither of the two is a probe case — which
+  is exactly why a two-case probe read it as a flat 0/2. ISSUE-217 closed.
+
+DECLARED, each with exposure measured on the live engine BEFORE declaration:
+
+| arm | knob | tier | measured exposure |
+|---|---|---|---|
+| `no_rag` | `skip_rag` | B | 8/8 — removes 3-5 `rag:` items, 133-233 tokens |
+| `narrow_rag` | `rag_top_k` 5 -> 2 | B | 8/8 — 2 is below the minimum supply of 3, so it binds everywhere rather than only where there is spare supply |
+| `no_memories` | `disabled_slots: [memories]` | A | 8/8 CONTENT — every NPC loses 2-3 memories and **213-327 tokens** |
+
+`no_memories` is a larger removal than `no_rag` and asks the question this engine's
+headline claim rests on. P9's tier-A/tier-B split therefore survives both retirements.
+
+### The DEFAULT-PATH decision, and who took it
+
+Lowering `Settings.RAG_TOP_K` from 5 would have made an additive `wide_rag` live, and has a
+correctness argument of its own: at a supply of 3-8, a top-k of 5 means the ranker never
+ranks — that is inclusion, not retrieval. It is also a default-path change. DEC-194 verified
+and pinned byte-identical default behaviour (digest `699b3146276691bf`,
+`test_no_profile_and_explicit_default_profile_are_byte_identical`), and
+`build_default_profile` maps one `RAG_TOP_K` onto all three call sites, so it would move
+`events_limit` too unless decoupled.
+
+**The maintainer chose to leave the default alone**, presented with the measured supply
+table and three options. `Settings.RAG_TOP_K` is unchanged at 5, DEC-194's byte-identity is
+untouched, P8/P9 default receipts stay comparable, and **no `src/` engine behaviour changed
+in this remediation at all** — only config, schema, tests and a new eval instrument. The
+"ranker never ranks" point is real and is left for a phase that owns the substrate.
+
+### The MDE, recomputed for the new arm count
+
+Three arms is still three pairings, so the Bonferroni correction is unchanged from DEC-213.
+Recomputed from `evals/mde.py` at every count so the trade is visible:
+
+    comparisons   tone_judge   affirms_judge   refusal_judge
+              1       6.4pp         22.7pp          28.4pp
+              2       7.0pp         25.0pp          31.3pp
+              3       7.4pp         26.2pp          32.9pp     <- shipped
+
+**Can P10 produce a result? On the two weak criteria, no — and fixing the arms did not
+change that.** `affirms_judge` needs a 26.2pp TRUE movement and `refusal_judge` 32.9pp,
+against a 95.1% pass base rate that can fall at most 95.1pp. `tone_judge` resolves 7.4pp,
+but it was unanimous 135/135 in the calibration panel, so it has no variance to move. The
+honest reading is that P10 will produce **descriptive** results — receipts, token deltas,
+qualitative reads — and cannot produce a **significant** one on the current batteries. That
+is a judge problem (ISSUE-184, ISSUE-141), not an arm problem, and no arm work fixes it.
+
+The arms are nonetheless worth running now in a way they were not before: two of three were
+guaranteed nulls, and a guaranteed null is not an informative one. Three measured-exposure
+arms produce a real observation whatever the judges say about it.
+
+### Deterministic matchers — the unexplored path, assessed and not built
+
+`evals/matchers.py` provides `schema`, `in_set`, `range` and `regex`, and
+`evals/deterministic_records.py` scores them. These carry **no kappa penalty by
+construction**: a schema check either passes or it does not, so the Youden's-J attenuation
+that turns a 7.4pp observed MDE into 32.9pp simply does not apply, and the observed MDE is
+the true one. That removes the entire factor of four on the weak criteria. The open question
+is the other input: whether these matchers have any VARIANCE to move. If they pass at 100%
+under both arms — plausible, since a schema check is not obviously sensitive to how much
+context an NPC was given — the MDE is irrelevant because the outcome is constant. This is
+unmeasured. **Worth a future phase, scoped as: run the existing deterministic matchers over
+one existing generation directory, report the pass-rate distribution, and only then decide.**
+That costs an hour and no LLM time, and it is the only identified route to a resolvable
+measurement on this dataset. No code written for it this session, deliberately.
+
+### The recurrence guard, and what it cannot do
+
+Gate 4 catches an inert arm at RUNTIME, against a live engine and a seeded world, which is
+how these two survived a whole phase. Three layers now:
+
+1. **`make eval-supply-report`** (`evals/arm_supply.py`, in-container, graph-only, no HTTP
+   and no LLM) — run BEFORE declaring an arm. A receipt shows `min(supply, ceiling)` items,
+   so a saturated default and a generous world are indistinguishable from assembled
+   context; only a graph read separates them. On the clean baseline it says, unprompted:
+
+       rag_top_k:    default 5, supply 3-8 over 8 NPCs
+           RAISE  exposed on 2/8 NPCs  <- PARTIAL, a 2-case probe cannot sample this
+           LOWER  largest value binding on every NPC: 2
+       events_limit: default 5, supply 0-2 over 8 NPCs
+           RAISE  exposed on 0/8 NPCs  <- DEAD, nothing to take
+           LOWER  largest value binding on every NPC: NONE
+
+   Both retirements and the replacement value, derived rather than argued. Both retired
+   arms are regression cases in `tests/unit/evals/test_arm_supply.py`.
+
+2. **`retrieval_profile_exposure:` in `llm_config.yaml` + `ArmExposureRecord`** — the YAML
+   records the supply each arm was sized against, the roster, and the corpus_sha. The model
+   REJECTS a self-contradictory record at load: a raise whose recorded supply does not
+   exceed the recorded ceiling, a "lower" that is not below it, a ceiling on a knob that has
+   none. `test_declared_arm_exposure` additionally requires an entry per arm, no orphan
+   entries, the recorded knob to match the arm's actual difference from default, and
+   exposure on the WHOLE roster — `wide_rag` would have recorded 2/8 here.
+
+3. **Gate 4**, unchanged. It was not weakened, reordered or edited, and it is the only
+   reason any of this is known.
+
+**What cannot be checked statically, stated plainly:** whether a recorded supply is still
+TRUE. A reseed, a corpus change or a scope change invalidates every number in the block and
+nothing static can know it. `measured_on_corpus_sha` makes the staleness detectable; only a
+live run can detect the drift. That is the permanent division of labour between layer 2 and
+layer 3, and pretending otherwise would be the same mistake in a new place.
+
+Also tightened: `disabled_slots` is no longer a "cross-tier" knob. It is resolved to the
+tier of the slot it names, so a slot arm is checked by the one-arm-one-tier rule instead of
+passing it vacuously.
+
+### Verification, measured this session
+
+    docker compose up -d --build app          rebuilt, healthy
+    make check                                EXIT 0 (3947 unit + 913 evals, cov 87.86%/79.22%)
+    make eval-world-reset                     250 nodes, 236 relationships restored
+    POST /v1/admin/vector-store/rehydrate     nodes_read=51 upserted=51 missing_embedding=0
+                                              corpus_sha 2b19e47a1755354e... (5th independent time)
+    make eval-arm-probe                       EXIT 0 — all 4 gates PASS, runtime 7.4s
+    make probe-inner-life LABEL="post arm-fix"
+
+Inner life, against DEC-213's clean-baseline row, identical on every field:
+
+    beliefs 8/8 · goals 8/8 · memories 8/8 · current_location 8/8
+    retrieved_context 8/8 · nearby_npcs 7/8 · reputation slots 0/8 (correct, DEC-213)
+
+### What this did NOT do, on purpose
+
+`Settings.RAG_TOP_K`, `OLLAMA_CONTEXT_LENGTH`, the tier ceilings and `PROMPT_TOKEN_BUDGET`
+all unchanged — P10's, with its own arithmetic. `evals/fixtures/` untouched, so `corpus_sha`
+is unmoved and P8/P9 comparability holds (DEC-210, ISSUE-213/210). Greedy allocator
+untouched (D2; ISSUE-209 open and dormant). ISSUE-219, ISSUE-220, ISSUE-203 and ISSUE-201
+untouched. No paired generation run. No `src/` engine behaviour changed.
+
+**Closed by this entry:** ISSUE-217, ISSUE-218 — both archived verbatim.
+**Opened by this entry:** ISSUE-221 (the RAG scope drifts on an idle engine while the corpus
+is frozen), ISSUE-222 (an empty producer item is still keyed, ranked and charged, which is
+what made item_keys occupancy a misleading exposure signal).

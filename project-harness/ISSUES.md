@@ -1561,67 +1561,61 @@ for the fixtures), run `git add --renormalize .` as its own commit with no other
 and confirm `evals/fixtures/eval_world_baseline.json` is byte-stable across the
 renormalisation - a fixture whose bytes move invalidates comparability.
 
-## ISSUE-217: `rag_top_k` is saturated at its default, so no top-k arm can produce an effect
-**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
-**Severity:** P2 (annoying) - blocks every tier-B top-k A/B arm; nothing is wrong at runtime
-**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_rag`), the interaction of
-`retrieval/context/context_builder.py:_fetch_rag_results` with the corpus contents
-**Description:** the vector search's candidate set is the DEC-209 scope, minus known
-events, INTERSECTED WITH THE CORPUS. The corpus holds 51 nodes of the three embeddable
-types (Character, Event, Location), so the intersection is small even though the scopes
-are not:
+## ISSUE-221: the eval world is not quiescent, so the RAG scope drifts while the corpus is frozen
+**Found:** 2026-08-27, during P9 remediation supply measurement (DEC-214)
+**Severity:** P2 (annoying) - any measurement quoting `scope` is not reproducible
+**Where:** `src/npc_engine/graph/graph_rag_queries.py::get_rag_scope_ids_for_npc`, and
+whatever writes `Quest` nodes while the app idles
+**Description:** immediately after `make eval-world-reset`, with no dialogue turns and no
+manual ticks, `captain_sorn`'s 1-hop retrieval scope grows continuously. Measured with
+`make eval-supply-report` at three points minutes apart:
 
-    npc              scope   scope-known   IN CORPUS
-    captain_sorn       124           123           6
-    old_henryk          14            13           4
-    mira_innkeeper      17            15           6
-    lira_fence          23            21           8
-    bren_smith          12            12           3
+    captain_sorn scope   30  ->  49  ->  52  ->  54
+    captain_sorn rag_supply  5  ->   5  ->   5  ->   5
+    corpus              51  ->  51  ->  51  ->  51
 
-Default `rag_top_k` is **5**. So raising it to 15 can add at most `supply - 5` items —
-measured as exactly **1** for captain_sorn (`rag:bren_smith`) and **0** for old_henryk.
-`wide_rag` therefore differs from default on 1 of 2 probe cases, by one item.
+Labelling the scope by node type shows what fills it: **41 of the ~54 nodes are `Quest`**,
+against 4 Character, 2 Belief, 2 Memory, 1 each of Location/Goal/Faction/Event/Secret.
+Quests are not an embeddable type, so the corpus intersection — the quantity that actually
+bounds tier-B retrieval — is unaffected, which is why `rag_supply` is pinned at 5 while
+`scope` triples.
 
-This is not a defect in the scope, the corpus or the arm. It is the arms-race arithmetic:
-the knob's ceiling is below its own default on most NPCs, so the knob cannot move.
-**Consequence:** a paired generation of `wide_rag` would spend hours to measure a ~4.7%
-context change on a minority of NPCs, against a 26-33pp judge floor (DEC-213's MDE).
-**Why deferred:** the remedies are all larger than P9 and all belong to a phase that is
-allowed to change the substrate. Raising the corpus's node-type coverage changes
-`corpus_sha` and therefore comparability (DEC-210); widening the scope re-opens DEC-209;
-lowering the DEFAULT `rag_top_k` so the arm has headroom is a default-path engine change,
-which P9's own fence forbids after the gates run.
-**To fix:** pick one, in P10 or later. (a) Lower the default `rag_top_k` to 2-3 so
-`wide_rag` at 15 has real headroom — cheapest, and it also makes the default honest about
-what it can supply. (b) Broaden the embeddable node types so the corpus is larger than the
-scope intersection. (c) Retire top-k as an A/B dimension on this world and keep `no_rag`
-as the only retrieval arm. Whichever is chosen, re-run `make eval-arm-probe` — it prints
-the supply per case, which is the number that decides this.
+Two consequences, one benign and one not:
+  * BENIGN: every supply number DEC-214 records is stable, because it records the corpus
+    intersection and not the scope.
+  * NOT: DEC-213 recorded `captain_sorn scope 23` on what it called a clean baseline and
+    this session measured 30 on one. Neither is wrong; the quantity simply is not stable,
+    and any future entry quoting it will disagree with any other. DEC-210 freezes the
+    CORPUS for the duration of a run; nothing freezes the GRAPH.
+**Why deferred:** finding out what writes the Quest nodes, and whether it should, is a
+scheduler/quest-engine investigation, not a retrieval one. It changes no measurement
+DEC-214 relies on, and P10's own preconditions are about the corpus rather than the scope.
+**To fix:** identify the writer (start with the tick scheduler and `engines/quest`), decide
+whether idle quest generation is intended at all, and if it is, either exclude `Quest` from
+`_CYPHER_RAG_SCOPE_IDS` or stop quoting raw scope size as a measurement. Add a test that
+asserts the scope is stable across two reads with no intervening write.
 
-## ISSUE-218: the `wide_events` arm has structurally zero exposure on the eval world
-**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
-**Severity:** P2 (annoying) - a declared arm that cannot produce a result
-**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_events`)
-**Description:** `events_limit` bounds `get_events_for_npc`, which returns the events the
-NPC actually KNOWS_ABOUT. Measured on the eval baseline, **every NPC knows <= 2 events**
-against a default limit of 5. Raising the limit to 15 cannot add a row that does not
-exist, so the arm's `item_keys` are IDENTICAL to default on 2/2 probe cases and
-`make eval-arm-probe` exits non-zero because of it.
+## ISSUE-222: an empty producer item is still keyed, ranked and charged
+**Found:** 2026-08-27, during P9 remediation while sizing the tier-A arm (DEC-214)
+**Severity:** P3 (nice-to-fix - ~1 token; the cost is that it misleads an instrument)
+**Where:** the tier-A producers feeding `context_builder`, e.g. `nearby_npcs`
+**Description:** `bren_smith`'s `nearby_npcs` context item exists with text `"[]"`. It is
+in `item_keys`, it is ranked, and it is charged to the budget, and it carries nothing. The
+token cost is negligible. The real cost is that `item_keys` occupancy stops being a valid
+signal of whether a slot delivers anything: `nearby_npcs` reads 8/8 by item_keys and 7/8 by
+`scripts/probe_inner_life.py`, and the second number is the true one.
 
-The arm is correctly declared and correctly single-tier — P9 split it out of `wide_rag`
-precisely so a tier-A knob would not be confounded with a tier-B one. The problem is the
-WORLD, not the arm, and the distinction matters: this is "there was nothing to take", not
-"the arm did nothing". The arm probe now prints the supply on failure so the two cannot be
-confused.
-**Why deferred:** the fix is either to seed NPCs who know more than 5 events — which
-regenerates `evals/fixtures/eval_world_baseline.json`, explicitly forbidden between P8 and
-P10 — or to drop the arm, which is a decision about what P10 measures and belongs with
-whoever schedules P10.
-**To fix:** EITHER drop `wide_events` from the declared arms (and from `_DECLARED_ARMS` in
-`tests/unit/config/test_shipped_retrieval_profiles.py`), which also returns the Bonferroni
-correction to two pairings and the MDE floor from 7.4pp to ~6.9pp; OR seed an NPC with
->5 KNOWS_ABOUT edges when the baseline fixture is next legitimately regenerated (after
-P10, alongside ISSUE-213). Do NOT "fix" it by weakening gate 4.
+This nearly shipped a dead A/B arm. `no_nearby_npcs` was declared on the 8/8 figure and
+would have been a guaranteed null for one NPC in eight, because P6 emits every declared
+slot with its empty default — so withholding an already-empty item leaves the serialized
+context byte-identical. Caught by comparing the two instruments; the tier-A arm now
+withholds `memories` instead (DEC-214).
+**Why deferred:** it is a change across several producer call sites, and DEC-214's own
+scope was the arm set. Gate 4 is unaffected either way.
+**To fix:** either have the producers skip an item whose serialized text is an empty
+container, or teach `_drop_withheld_items` to drop it centrally — the latter matches the
+"one place, not twenty call sites" argument already in that function's docstring. Verify
+with `make probe-inner-life`: `nearby_npcs` must read 7/8 by BOTH instruments.
 
 ## ISSUE-219: the player character node is inside the RAG scope and retrievable
 **Found:** 2026-08-27, during P9 gate 4 while reading probe output

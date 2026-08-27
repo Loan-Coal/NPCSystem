@@ -2970,3 +2970,67 @@ version would commit the version P9 is about to replace.
 with a `make probe-inner-life` target, taking the NPC list and the label as arguments.
 Pin its output shape with a unit test against a recorded response fixture, so a change to
 the debug endpoint breaks the probe loudly instead of silently reporting zeros.
+
+## [FIXED] ISSUE-217: `rag_top_k` is saturated at its default, so no top-k arm can produce an effect
+**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
+**Fixed:** 2026-08-27, in commit 4661c3c (P9 remediation, DEC-214)
+**Severity:** P2 (annoying) - blocks every tier-B top-k A/B arm; nothing is wrong at runtime
+**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_rag`), the interaction of
+`retrieval/context/context_builder.py:_fetch_rag_results` with the corpus contents
+**Description:** the vector search's candidate set is the DEC-209 scope, minus known
+events, INTERSECTED WITH THE CORPUS. The corpus holds 51 nodes of the three embeddable
+types (Character, Event, Location), so the intersection is small even though the scopes
+are not:
+
+    npc              scope   scope-known   IN CORPUS
+    captain_sorn       124           123           6
+    old_henryk          14            13           4
+    mira_innkeeper      17            15           6
+    lira_fence          23            21           8
+    bren_smith          12            12           3
+
+Default `rag_top_k` is **5**. So raising it to 15 can add at most `supply - 5` items —
+measured as exactly **1** for captain_sorn (`rag:bren_smith`) and **0** for old_henryk.
+`wide_rag` therefore differs from default on 1 of 2 probe cases, by one item.
+
+This is not a defect in the scope, the corpus or the arm. It is the arms-race arithmetic:
+the knob's ceiling is below its own default on most NPCs, so the knob cannot move.
+**Consequence:** a paired generation of `wide_rag` would spend hours to measure a ~4.7%
+context change on a minority of NPCs, against a 26-33pp judge floor (DEC-213's MDE).
+**Why deferred:** the remedies are all larger than P9 and all belong to a phase that is
+allowed to change the substrate. Raising the corpus's node-type coverage changes
+`corpus_sha` and therefore comparability (DEC-210); widening the scope re-opens DEC-209;
+lowering the DEFAULT `rag_top_k` so the arm has headroom is a default-path engine change,
+which P9's own fence forbids after the gates run.
+**To fix:** pick one, in P10 or later. (a) Lower the default `rag_top_k` to 2-3 so
+`wide_rag` at 15 has real headroom — cheapest, and it also makes the default honest about
+what it can supply. (b) Broaden the embeddable node types so the corpus is larger than the
+scope intersection. (c) Retire top-k as an A/B dimension on this world and keep `no_rag`
+as the only retrieval arm. Whichever is chosen, re-run `make eval-arm-probe` — it prints
+the supply per case, which is the number that decides this.
+
+## [FIXED] ISSUE-218: the `wide_events` arm has structurally zero exposure on the eval world
+**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
+**Fixed:** 2026-08-27, in commit 4661c3c (P9 remediation, DEC-214)
+**Severity:** P2 (annoying) - a declared arm that cannot produce a result
+**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_events`)
+**Description:** `events_limit` bounds `get_events_for_npc`, which returns the events the
+NPC actually KNOWS_ABOUT. Measured on the eval baseline, **every NPC knows <= 2 events**
+against a default limit of 5. Raising the limit to 15 cannot add a row that does not
+exist, so the arm's `item_keys` are IDENTICAL to default on 2/2 probe cases and
+`make eval-arm-probe` exits non-zero because of it.
+
+The arm is correctly declared and correctly single-tier — P9 split it out of `wide_rag`
+precisely so a tier-A knob would not be confounded with a tier-B one. The problem is the
+WORLD, not the arm, and the distinction matters: this is "there was nothing to take", not
+"the arm did nothing". The arm probe now prints the supply on failure so the two cannot be
+confused.
+**Why deferred:** the fix is either to seed NPCs who know more than 5 events — which
+regenerates `evals/fixtures/eval_world_baseline.json`, explicitly forbidden between P8 and
+P10 — or to drop the arm, which is a decision about what P10 measures and belongs with
+whoever schedules P10.
+**To fix:** EITHER drop `wide_events` from the declared arms (and from `_DECLARED_ARMS` in
+`tests/unit/config/test_shipped_retrieval_profiles.py`), which also returns the Bonferroni
+correction to two pairings and the MDE floor from 7.4pp to ~6.9pp; OR seed an NPC with
+>5 KNOWS_ABOUT edges when the baseline fixture is next legitimately regenerated (after
+P10, alongside ISSUE-213). Do NOT "fix" it by weakening gate 4.
