@@ -137,6 +137,63 @@ async def known_event_ids(session: Any, npc_id: str) -> set[str]:
     return await get_known_event_ids_for_npc(session=session, npc_id=npc_id)
 
 
+async def rag_scope_ids(session: Any, npc_id: str) -> set[str]:
+    """Return the node ids tier-B retrieval is allowed to range over for this NPC.
+
+    The DEC-209 scope: the NPC's 1-hop subgraph, its location's co-located nodes and its
+    faction's fellow members. It does NOT subtract known events — the caller does that,
+    because the caller already holds that set.
+
+    Exposed here because the retrieval eval searched the vector store with no filter at
+    all. Post-P8 that is an unfiltered sweep of a mixed corpus: the exact defect DEC-209
+    removed from the engine, left running inside the instrument measuring it.
+
+    Args:
+        session: Active Neo4j AsyncSession.
+        npc_id: Character node ID to scope.
+
+    Returns:
+        Set of node ID strings. EMPTY means no RAG, never "all of it".
+    """
+    from npc_engine.graph.graph_rag_queries import get_rag_scope_ids_for_npc
+
+    return await get_rag_scope_ids_for_npc(session, npc_id=npc_id)
+
+
+def resolve_retrieval_profile(name: str) -> Any:
+    """Resolve a named A/B arm to the RetrievalProfile the engine would apply.
+
+    Resolution is STRICT (DEC-194 decision 2): an undeclared name raises rather than
+    falling back, so a run cannot record `--retrieval-profile wide_rag` while having
+    measured the default.
+
+    Args:
+        name: Arm name; 'default' resolves without being declared in YAML.
+
+    Returns:
+        The resolved RetrievalProfile.
+
+    Raises:
+        RetrievalProfileNotFoundError: When name is neither 'default' nor declared.
+    """
+    from npc_engine.config import get_settings
+    from npc_engine.schema.llm_schema_loader import load_llm_config
+    from npc_engine.schema.retrieval_profile_models import (
+        build_default_profile,
+        resolve_retrieval_profile as _resolve,
+    )
+
+    settings = get_settings()
+    return _resolve(
+        name,
+        profiles=load_llm_config().retrieval_profiles,
+        fallback=build_default_profile(
+            rag_top_k=settings.RAG_TOP_K,
+            cross_encoder_enabled=settings.CROSS_ENCODER_ENABLED,
+        ),
+    )
+
+
 def fetch_corpus_fingerprint(base_url: str, api_key: str) -> dict[str, Any] | None:
     """Fetch the vector store's identity from GET /v1/admin/debug/vector-store.
 

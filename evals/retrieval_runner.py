@@ -1,16 +1,44 @@
 """
 Module: retrieval_runner
 Layer: evals (evaluation harness)
-Purpose: Loads labeled retrieval cases from evals/cases/retrieval_demo.json, calls the
-         retrieval stack in-process (EmbeddingIndex + graph KNOWS_ABOUT query) for each
-         (npc_id, query) pair, computes precision@k / recall@k / MRR, and prints a
-         summary table. Requires a running Neo4j + populated embedding index (make demo-seed).
+Purpose: Loads labeled retrieval cases from evals/cases/retrieval_demo.json, runs
+         TIER-B VECTOR RETRIEVAL plus the graph KNOWS_ABOUT read for each (npc_id, query)
+         pair under a named arm, computes precision@k / recall@k / MRR, and prints a
+         summary table. Requires a running Neo4j + populated corpus (make demo-seed).
 Dependencies: evals.engine_adapter (sole gateway to npc_engine), evals.retrieval_matchers
 Used by: make eval-retrieval (python -m evals.retrieval_runner)
 
+WHAT THIS MEASURES, AND WHAT IT DOES NOT (P9)
+It measures RETRIEVAL: the ranked node ids the tier-B vector search and the KNOWS_ABOUT
+read produce, inside the DEC-209 scope, at the arm's `rag_top_k`. That claim is narrower
+than the module's name suggests and it is now the honest one.
+
+It does NOT measure what reaches the model. That would mean calling
+`build_serialized_context_with_receipt` and scoring over `item_keys`, and P9 deliberately
+did not do it, for three reasons recorded in DEC-213:
+  1. At PROMPT_TOKEN_BUDGET 25,888 nothing is dropped (DEC-204, plan review point E), so
+     precision-over-what-reached-the-model and precision-over-what-was-ranked are the
+     same number today. The repoint would buy nothing until P10's trim makes the budget
+     bind, which is exactly where it belongs.
+  2. `item_keys` are SLOT keys (`rag:x`, `event:0:npc`, `beliefs`), and the labelled
+     fixture is node ids. Tier-A slots such as `beliefs` and `goals` carry no node id at
+     all, so scoring over item_keys would silently drop most of tier A from the
+     denominator and quietly redefine every historical figure.
+  3. It increases evals/ -> src/ coupling that P10 would have to re-verify, inside the
+     fence that says no src/ change lands after P9 goes green.
+
+CONSEQUENCE OF THE SCOPE, RECORDED. The labelled cases are dominated by
+`northern_war_begins`, an event `captain_sorn` KNOWS_ABOUT. DEC-209 removes known events
+from the vector scope on purpose — tier A already carries them — so the vector path can
+no longer return the labelled node for those cases. They stay measurable because the
+graph read still appends them. The labels were written for a retrieval design the engine
+no longer has, and precision numbers from before P9 are not comparable with numbers after
+it.
+
 NOTE: This runner hits Neo4j and the embedding index when invoked from make eval-retrieval.
       For unit tests, the pure metric functions in evals.retrieval_matchers are tested in
-      isolation without any I/O (tests/unit/test_retrieval_eval.py).
+      isolation without any I/O (tests/unit/test_retrieval_eval.py); the scope and profile
+      behaviour is pinned in tests/unit/evals/test_retrieval_runner_scope.py.
 """
 
 from __future__ import annotations
@@ -61,40 +89,84 @@ class RetrievalCase(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+async def _vector_hits(
+    npc_id: str,
+    query: str,
+    profile: Any,
+    embedding_index: Any,
+    graph_session: Any,
+    known_event_ids: set[str],
+) -> list[str]:
+    """Return the vector-ranked node IDs, inside the DEC-209 scope.
+
+    The scope is the NPC's 1-hop subgraph, location and faction, MINUS the events it
+    already knows. An empty scope means NO vector search — never an unfiltered one.
+
+    Args:
+        npc_id: Character node ID.
+        query: Player query text.
+        profile: The resolved RetrievalProfile this measurement runs under.
+        embedding_index: Vector store (must have an async .search).
+        graph_session: Active Neo4j AsyncSession.
+        known_event_ids: Events the NPC already carries in tier A.
+
+    Returns:
+        Ranked node ID strings from the vector store; empty when the arm skips RAG or
+        the NPC has no scope.
+    """
+    if profile.skip_rag:
+        return []
+    scope = await engine_adapter.rag_scope_ids(session=graph_session, npc_id=npc_id)
+    scope = set(scope) - known_event_ids
+    if not scope:
+        return []
+    hits = await embedding_index.search(
+        query=query, top_k=profile.rag_top_k, filter_ids=scope
+    )
+    return [row["id"] for row in hits]
+
+
 async def _retrieve_ranked_ids(
     npc_id: str,
     query: str,
     k: int,
+    profile: Any,
     embedding_index: Any,
     graph_session: Any,
 ) -> list[str]:
     """Return a ranked list of node IDs for one (npc_id, query) pair.
 
     Strategy:
-    1. Vector search: call embedding_index.search(query, top_k=k) to get
-       semantically ranked items from the vector store.  Item IDs from the
-       store directly correspond to the graph node IDs indexed at seed time.
-    2. Graph context: query KNOWS_ABOUT edges for the NPC to surface event
-       nodes the NPC has direct graph knowledge of.
-    3. Append the NPC's own character node ID (always present as Tier A).
-    4. Deduplicate while preserving rank order (vector items first, then
-       graph items not already in the vector list).
+    1. Tier-B vector search, scoped and at the PROFILE's rag_top_k (see _vector_hits).
+    2. Graph context: KNOWS_ABOUT edges, surfacing events the NPC directly knows. These
+       are what the DEC-209 scope deliberately removes from the vector path, and they
+       remain here because they genuinely reach the model as tier-A `event:` items.
+    3. The NPC's own character node (always tier A).
+    4. Deduplicate, preserving rank order.
+
+    `k` is the metric window (precision@k), NOT the retrieval width. Those were the same
+    number until P9, which is why `--retrieval-profile wide_rag` could be recorded while
+    the harness searched at the case's k.
 
     Args:
         npc_id: Character node ID.
         query: Player query text.
-        k: How many top results to retrieve from the vector store.
+        k: Metric window from the case; retained for callers that report it.
+        profile: The resolved RetrievalProfile this measurement runs under.
         embedding_index: EmbeddingIndex instance (must have .search coroutine).
         graph_session: Active Neo4j AsyncSession.
 
     Returns:
         Ordered list of node ID strings (most relevant first).
     """
-    vector_results = await embedding_index.search(query=query, top_k=k)
-    ranked: list[str] = [r["id"] for r in vector_results]
+    known_event_ids = await engine_adapter.known_event_ids(
+        session=graph_session, npc_id=npc_id
+    )
+    ranked = await _vector_hits(
+        npc_id, query, profile, embedding_index, graph_session, set(known_event_ids)
+    )
 
     # Append KNOWS_ABOUT event IDs (graph-sourced, not vector-ranked)
-    known_event_ids = await engine_adapter.known_event_ids(session=graph_session, npc_id=npc_id)
     for event_id in sorted(known_event_ids):
         if event_id not in ranked:
             ranked.append(event_id)
@@ -115,13 +187,21 @@ async def run_eval(
     cases: list[RetrievalCase],
     embedding_index: Any,
     driver: Any,
+    profile: Any,
 ) -> list[dict]:
-    """Run all retrieval cases and return per-case metric dicts.
+    """Run all retrieval cases under one resolved arm and return per-case metric dicts.
+
+    `profile` is required rather than defaulted. This function took no profile at all
+    while `--retrieval-profile` was accepted and written into retrieval_metrics.json, so
+    every recorded arm name was a claim about a measurement that never consulted it —
+    the exact defect DEC-194 exists to prevent. A default here would let that recur
+    silently at the first new call site.
 
     Args:
         cases: Labeled retrieval cases loaded from the fixture.
         embedding_index: Populated EmbeddingIndex instance.
         driver: Neo4j AsyncDriver for graph queries.
+        profile: The resolved RetrievalProfile this measurement runs under.
 
     Returns:
         List of result dicts with keys: id, npc_id, query, p_at_k, r_at_k, mrr_score,
@@ -136,6 +216,7 @@ async def run_eval(
                     npc_id=case.npc_id,
                     query=case.query,
                     k=case.k,
+                    profile=profile,
                     embedding_index=embedding_index,
                     graph_session=session,
                 )
@@ -236,7 +317,14 @@ async def _main(gen_dir: Path | None = None, retrieval_profile: str = "default")
         )
         return 1
 
-    results = await run_eval(cases=cases, embedding_index=embedding_index, driver=driver)
+    profile = engine_adapter.resolve_retrieval_profile(retrieval_profile)
+    print(
+        f"Arm: {retrieval_profile}  (rag_top_k={profile.rag_top_k}, "
+        f"skip_rag={profile.skip_rag})"
+    )
+    results = await run_eval(
+        cases=cases, embedding_index=embedding_index, driver=driver, profile=profile
+    )
     _print_summary(results)
     retrieval_summary = summarize_retrieval(results)
     for line in format_retrieval_summary_lines(retrieval_summary):
