@@ -6,7 +6,7 @@ Purpose: EVAL-P25.1 gate. Fail when a unit exists under src/npc_engine/engines/ 
     longer exists, when a unit is classified twice, when a classification is outside the
     closed three-bucket taxonomy, or when a `not_observable` verdict is recorded with no
     reason.
-Dependencies: stdlib argparse/pathlib/re/sys; pydantic v2.
+Dependencies: stdlib argparse/pathlib/sys; scripts.engine_coverage_contract.
 Used by: `make check-engine-coverage`, tests/unit/scripts/test_check_engine_coverage.py.
 
 Why a gate and not a one-off audit. DEC-214 spent a session remediating A/B arms that
@@ -24,17 +24,56 @@ npc_engine, so it stays a harness script and cannot drag the src layer into a ga
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+_REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+
+from engine_coverage_contract import (  # noqa: E402
+    CLASSIFICATION_CELL,
+    CLASSIFICATIONS,
+    DIALOGUE_OBSERVABLE,
+    EVIDENCE_CELL,
+    HEADER_UNIT_CELL,
+    KIND_CELL,
+    MIN_CELLS,
+    NO_REASON,
+    NOT_OBSERVABLE,
+    REASON_CELL,
+    SEPARATOR_ROW,
+    STATE_OBSERVABLE,
+    TABLE_BEGIN,
+    TABLE_END,
+    UNIT_CELL,
+    CoverageReport,
+    CoverageRow,
+    EngineCoverageDocError,
+)
+
+__all__ = [
+    "CLASSIFICATIONS",
+    "DIALOGUE_OBSERVABLE",
+    "DOC_PATH",
+    "ENGINES_DIR",
+    "NO_REASON",
+    "NOT_OBSERVABLE",
+    "STATE_OBSERVABLE",
+    "TABLE_BEGIN",
+    "TABLE_END",
+    "CoverageReport",
+    "CoverageRow",
+    "EngineCoverageDocError",
+    "audit",
+    "discover_units",
+    "load_doc_text",
+    "main",
+    "parse_rows",
+]
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-_REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 
 #: The tree whose entries must all be classified.
 ENGINES_DIR: Path = _REPO_ROOT / "src" / "npc_engine" / "engines"
@@ -42,138 +81,13 @@ ENGINES_DIR: Path = _REPO_ROOT / "src" / "npc_engine" / "engines"
 #: The classification table's home.
 DOC_PATH: Path = _REPO_ROOT / "docs" / "ENGINE_EVAL_COVERAGE.md"
 
-#: Fence markers around the machine-read table. Everything outside them is prose the
-#: parser must ignore, so the doc can carry other tables without confusing the gate.
-TABLE_BEGIN: str = "<!-- ENGINE-COVERAGE-TABLE: BEGIN -->"
-TABLE_END: str = "<!-- ENGINE-COVERAGE-TABLE: END -->"
-
-#: Reaches player-visible NPC speech, so an LLM judge or a keyword matcher can measure it.
-DIALOGUE_OBSERVABLE: str = "dialogue_observable"
-
-#: Verifiable only through the graph — belongs in a deterministic or scenario check.
-STATE_OBSERVABLE: str = "state_observable"
-
-#: Infrastructure. Out of scope for the judged battery, and the row must say why.
-NOT_OBSERVABLE: str = "not_observable"
-
-#: The closed taxonomy. A fourth bucket is a decision, not an edit.
-CLASSIFICATIONS: frozenset[str] = frozenset(
-    {DIALOGUE_OBSERVABLE, STATE_OBSERVABLE, NOT_OBSERVABLE}
-)
-
-#: The placeholder written in the reason column when no reason is required.
-NO_REASON: str = "—"
-
 #: Directory entries that are not units: the package's own marker and build output.
 _NOT_A_UNIT: frozenset[str] = frozenset({"__init__.py", "__pycache__"})
 
 _PYTHON_SUFFIX: str = ".py"
 
-_MIN_CELLS: int = 5
-_UNIT_CELL: int = 0
-_KIND_CELL: int = 1
-_CLASSIFICATION_CELL: int = 2
-_EVIDENCE_CELL: int = 3
-_REASON_CELL: int = 4
-
-_SEPARATOR_ROW = re.compile(r"^[\s|:-]+$")
-_HEADER_UNIT_CELL: str = "unit"
-
 _EXIT_OK: int = 0
 _EXIT_FAILED: int = 1
-
-
-class EngineCoverageDocError(ValueError):
-    """Raised when the coverage doc cannot be read as a classification table.
-
-    An unreadable table must not degrade to "zero rows found", because zero rows and a
-    fully classified tree are opposite results that would otherwise look identical to a
-    caller that only checked `missing_rows`.
-    """
-
-
-# ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
-
-
-class CoverageRow(BaseModel):
-    """One classification row: a unit under engines/ and what it is observable through.
-
-    Attributes:
-        unit: Package directory name or top-level module stem, without `.py`.
-        kind: `package` or `module` — how the unit is spelled on disk.
-        classification: One of `CLASSIFICATIONS`.
-        evidence: What was checked to reach the verdict (a slot, a port, a prompt rule).
-        reason: Why the unit is out of scope. Mandatory when `not_observable`.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    unit: str
-    kind: str
-    classification: str
-    evidence: str
-    reason: str
-
-    @property
-    def has_reason(self) -> bool:
-        """True when the reason cell carries text rather than the `—` placeholder."""
-        return bool(self.reason) and self.reason != NO_REASON
-
-
-class CoverageReport(BaseModel):
-    """The five ways the table and the tree can disagree.
-
-    Attributes:
-        units: Every unit discovered under the engines tree, sorted.
-        rows: Every classification row parsed from the doc, in document order.
-        missing_rows: Units with no row — the gate's headline failure.
-        stale_rows: Rows naming a unit that is not on disk.
-        duplicate_rows: Units classified more than once.
-        bad_classification: Rows whose classification is outside the closed taxonomy.
-        missing_reason: `not_observable` rows with no reason recorded.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    units: tuple[str, ...]
-    rows: tuple[CoverageRow, ...]
-    missing_rows: tuple[str, ...]
-    stale_rows: tuple[str, ...]
-    duplicate_rows: tuple[str, ...]
-    bad_classification: tuple[str, ...]
-    missing_reason: tuple[str, ...]
-
-    @property
-    def ok(self) -> bool:
-        """True only when the table and the tree agree on every unit."""
-        return not (
-            self.missing_rows
-            or self.stale_rows
-            or self.duplicate_rows
-            or self.bad_classification
-            or self.missing_reason
-        )
-
-    def counts_by_classification(self) -> dict[str, int]:
-        """Rows per bucket, so the split can be reported as a number, not an impression."""
-        return {
-            name: sum(1 for row in self.rows if row.classification == name)
-            for name in sorted(CLASSIFICATIONS)
-        }
-
-    def failure_report(self) -> str:
-        """Human-readable summary of every disagreement, empty when the gate is green."""
-        problems = (
-            ("unclassified units (add a row)", self.missing_rows),
-            ("rows naming units that do not exist (delete the row)", self.stale_rows),
-            ("units classified more than once", self.duplicate_rows),
-            (f"classifications outside {sorted(CLASSIFICATIONS)}", self.bad_classification),
-            (f"`{NOT_OBSERVABLE}` rows with no reason recorded", self.missing_reason),
-        )
-        lines = [f"{label}: {', '.join(names)}" for label, names in problems if names]
-        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -243,20 +157,20 @@ def parse_rows(doc_text: str) -> tuple[CoverageRow, ...]:
     """
     rows: list[CoverageRow] = []
     for line in _table_body(doc_text).splitlines():
-        if not line.strip().startswith("|") or _SEPARATOR_ROW.match(line):
+        if not line.strip().startswith("|") or SEPARATOR_ROW.match(line):
             continue
         cells = _cells(line)
-        if cells[_UNIT_CELL].lower() == _HEADER_UNIT_CELL:
+        if cells[UNIT_CELL].lower() == HEADER_UNIT_CELL:
             continue
-        if len(cells) < _MIN_CELLS:
+        if len(cells) < MIN_CELLS:
             raise EngineCoverageDocError(f"classification row has too few cells: {line!r}")
         rows.append(
             CoverageRow(
-                unit=cells[_UNIT_CELL],
-                kind=cells[_KIND_CELL],
-                classification=cells[_CLASSIFICATION_CELL],
-                evidence=cells[_EVIDENCE_CELL],
-                reason=cells[_REASON_CELL],
+                unit=cells[UNIT_CELL],
+                kind=cells[KIND_CELL],
+                classification=cells[CLASSIFICATION_CELL],
+                evidence=cells[EVIDENCE_CELL],
+                reason=cells[REASON_CELL],
             )
         )
     return tuple(rows)
@@ -325,7 +239,9 @@ def audit(engines_dir: Path, doc_text: str) -> CoverageReport:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Build the CLI parser and parse `argv`."""
-    parser = argparse.ArgumentParser(description=__doc__ and __doc__.strip().splitlines()[2])
+    parser = argparse.ArgumentParser(
+        description="Fail when an engine unit has no row in docs/ENGINE_EVAL_COVERAGE.md."
+    )
     parser.add_argument("--engines-dir", type=Path, default=ENGINES_DIR)
     parser.add_argument("--doc", type=Path, default=DOC_PATH)
     return parser.parse_args(argv)

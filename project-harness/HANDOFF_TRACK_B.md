@@ -28,7 +28,8 @@ it means:
 | file | status |
 |---|---|
 | `docs/ENGINE_EVAL_COVERAGE.md` | new — 44 units classified, 18 / 16 / 10 |
-| `scripts/check_engine_coverage.py` | new — the gate |
+| `scripts/check_engine_coverage.py` | new — the gate (272 lines) |
+| `scripts/engine_coverage_contract.py` | new — its constants and Pydantic models, split out to hold the gate under the 300-line cap, same shape as `base_rate_contract.py` |
 | `tests/unit/scripts/test_check_engine_coverage.py` | new — 15 tests incl. the RED anchor |
 | `docs/REASONING_DIMENSIONS.md` | new — D1–D5, contracts and prefixes |
 | `docs/CAPABILITY_CASES.md` | edited — dimension section, live village/tavern grounding tables, corrected `HAS_GOAL`/`HAS_MEMORY`/`HAS_SECRET` rows, case count |
