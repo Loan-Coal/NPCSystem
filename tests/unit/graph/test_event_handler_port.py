@@ -39,6 +39,7 @@ def _make_handler(
     handler = EventHandler.__new__(EventHandler)
     handler._settings = _make_settings()
     handler._embedding_index = MagicMock()
+    handler._corpus_refresher = None
     handler._registry = MagicMock()
     handler._registry.node_models = {"event": MagicMock(return_value=MagicMock())}
     handler._templates = templates

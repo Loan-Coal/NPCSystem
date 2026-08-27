@@ -221,7 +221,7 @@ async def test_gossip_rumor_record_failure_reraises():
             new=AsyncMock(return_value=[(sharer, receiver, MagicMock(), {"best_standing": None})]),
         ),
         patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
+            "npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely",
             new=AsyncMock(return_value=None),
         ),
     ):

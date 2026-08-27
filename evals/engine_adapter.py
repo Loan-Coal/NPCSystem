@@ -135,3 +135,35 @@ async def known_event_ids(session: Any, npc_id: str) -> set[str]:
     from npc_engine.graph.graph_reader import get_known_event_ids_for_npc
 
     return await get_known_event_ids_for_npc(session=session, npc_id=npc_id)
+
+
+def fetch_corpus_fingerprint(base_url: str, api_key: str) -> dict[str, Any] | None:
+    """Fetch the vector store's identity from GET /v1/admin/debug/vector-store.
+
+    DEC-210 Decision 2: the corpus is the retrieval SUBSTRATE, and DEC-194's rule —
+    never record a config you did not run — has covered only the profile NAME. Without
+    this, "was RAG live during this run?" is an inference from tierB.items rather than a
+    recorded fact, and two arms are neither provably comparable nor provably not.
+
+    Args:
+        base_url: Engine base URL (e.g. 'http://localhost:8000').
+        api_key: Admin API key.
+    Returns:
+        Dict with item_count, embedding_model, embedding_dim, corpus_sha; None when the
+        engine is unreachable. None is DELIBERATELY distinct from a zero item_count: a
+        run that could not ask must not look like a run that asked and got nothing.
+    """
+    import httpx
+
+    try:
+        response = httpx.get(
+            f"{base_url}/v1/admin/debug/vector-store",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json().get("data")
+        return dict(data) if isinstance(data, dict) else None
+    except Exception as exc:
+        _logger.warning("fetch_corpus_fingerprint url=%s error=%r", base_url, exc)
+        return None

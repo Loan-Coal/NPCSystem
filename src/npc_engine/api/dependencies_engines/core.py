@@ -29,6 +29,35 @@ from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
+from npc_engine.retrieval.embedding import EmbeddingCorpusRefresher, EmbeddingReconciler
+
+
+@lru_cache
+def _build_corpus_refresher() -> EmbeddingCorpusRefresher:
+    """Build the shared corpus refresher the handlers use for incremental upsert.
+
+    Cached so both handlers share one reconciler and one store, matching how the boot
+    path and the rehydrate route reach the same singleton EmbeddingIndex — two refreshers
+    over two reconcilers would be two writers racing on the same nodes.
+
+    Returns:
+        The EmbeddingCorpusRefresher singleton.
+    """
+    from npc_engine.api.dependencies_infra import get_graph_db
+
+    settings = get_settings()
+    embedding_index = get_embedding_index()
+    graph_db = get_graph_db()
+    return EmbeddingCorpusRefresher(
+        graph_db=graph_db,
+        embedding_index=embedding_index,
+        reconciler=EmbeddingReconciler(
+            graph_db=graph_db,
+            embedding_index=embedding_index,
+            interval_seconds=settings.EMBEDDING_RECONCILE_INTERVAL_SECONDS,
+            batch_size=settings.VECTOR_STORE_CORPUS_BATCH_SIZE,
+        ),
+    )
 
 
 @lru_cache
@@ -48,6 +77,7 @@ def get_gossip_handler() -> GossipHandler:
         weight_config=load_gossip_config(),
         emotion_updater=get_emotion_updater(),
         gossip_repo=Neo4jGossipRepository(get_graph_db()),
+        corpus_refresher=_build_corpus_refresher(),
     )
 
 
@@ -70,6 +100,7 @@ def get_event_handler() -> EventHandler:
         event_repo=Neo4jEventRepository(graph_db),
         world_state_repo=Neo4jWorldStateRepository(graph_db),
         registry=get_type_registry(),
+        corpus_refresher=_build_corpus_refresher(),
     )
 
 

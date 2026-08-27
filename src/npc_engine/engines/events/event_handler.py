@@ -21,7 +21,10 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from npc_engine.config import Settings
-from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
+from npc_engine.engines.embedding_refresh import (
+    CorpusRefresherProtocol,
+    refresh_embedding_safely,
+)
 from npc_engine.engines.events.disruption_loader import DisruptionRule, load_disruption_rules
 from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
 from npc_engine.engines.ports.event_port import EventGraphPort
@@ -43,6 +46,19 @@ DIRECT_CAUSATION_TYPE = "direct"
 WITNESS_CLARITY = 70
 
 
+
+def _build_rng(settings: Settings) -> random.Random | None:
+    if settings.EVENT_RNG_SEED is None:
+        return None
+    return random.Random(settings.EVENT_RNG_SEED)
+
+
+def _resolve_disruption_rules_path(settings: Settings, override: str | None) -> Path:
+    if override is not None:
+        return Path(override)
+    return Path(settings.EVENT_POOL_PATH).parent / "disruption_rules.yaml"
+
+
 class EventHandler:
     """Coordinates autonomous event creation for one tick."""
 
@@ -54,38 +70,38 @@ class EventHandler:
         world_state_repo: WorldStateGraphPort,
         registry: TypeRegistry | None = None,
         disruption_rules_path: str | None = None,
+        corpus_refresher: CorpusRefresherProtocol | None = None,
     ) -> None:
         """Initialise the event handler.
 
         Args:
             settings: Application settings (EVENT_POOL_PATH, EVENT_RNG_SEED).
             embedding_index: Vector index invalidated after event creation.
-            event_repo: Event graph domain port (atomic emit + witness/causation records).
-            world_state_repo: Shared world-state port for the severity-cap read.
-            registry: Type registry providing the event node model; must be injected
-                by the composition root (``api/dependency_singletons.py``).
-            disruption_rules_path: Optional path to disruption_rules.yaml.  Defaults to the
-                file co-located with the event pool when None.
+            event_repo: Event graph domain port (atomic emit + witness/causation).
+            world_state_repo: World-state port for the severity-cap read.
+            registry: Type registry providing the event node model; injected by the
+                composition root (``api/dependency_singletons.py``).
+            disruption_rules_path: Optional disruption_rules.yaml path; defaults to the
+                file co-located with the event pool.
+            corpus_refresher: Writes the refreshed vector-store entry after invalidation
+                (DEC-210); None means invalidate-only, the pre-P8 behaviour.
         Raises:
             ValueError: If registry is None (must be injected via __init__).
         """
-
         self._settings = settings
         self._embedding_index = embedding_index
+        self._corpus_refresher = corpus_refresher
         self._event_repo = event_repo
         self._world_state_repo = world_state_repo
         if registry is None:
             raise ValueError("EventHandler requires a TypeRegistry injected via __init__")
         self._registry = registry
         self._templates = load_event_pool(settings.EVENT_POOL_PATH)
-        self._rng = random.Random(settings.EVENT_RNG_SEED) if settings.EVENT_RNG_SEED is not None else None
+        self._rng = _build_rng(settings)
         self._lock = asyncio.Lock()
-        rules_path = (
-            Path(disruption_rules_path)
-            if disruption_rules_path is not None
-            else Path(settings.EVENT_POOL_PATH).parent / "disruption_rules.yaml"
+        self._disruption_rules: list[DisruptionRule] = load_disruption_rules(
+            _resolve_disruption_rules_path(settings, disruption_rules_path)
         )
-        self._disruption_rules: list[DisruptionRule] = load_disruption_rules(rules_path)
 
     @staticmethod
     def _apply_disruption_rules(
@@ -186,9 +202,11 @@ class EventHandler:
                     cause_type=DIRECT_CAUSATION_TYPE,
                     tick_lag=0,
                 )
-            await invalidate_embedding_safely(
+            await refresh_embedding_safely(
                 embedding_index=self._embedding_index,
+                refresher=self._corpus_refresher,
                 item_id=location_id,
+                enabled=self._settings.VECTOR_STORE_INCREMENTAL_UPSERT,
                 logger=LOGGER,
                 entity_label="location",
             )

@@ -32,6 +32,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 import judge_config as _judge_config
+from _run_config_corpus import corpus_fields
 from _run_config_hashing import (
     GoldenSetVersionError,
     hash_dialogue_prompts as _hash_dialogue_prompts,
@@ -113,6 +114,14 @@ class RunConfig(BaseModel):
             when their harness_version values match.
         dialogue_prompt_hash: First 12 hex chars of a SHA-256 digest over all YAML files
             under src/npc_engine/prompts/ — changes when any runtime LLM prompt changes.
+        corpus_item_count: Entries the vector store held when this run started. None
+            means the engine could not be asked, which is DELIBERATELY distinct from 0.
+        corpus_embedding_model: Model that produced the stored vectors.
+        corpus_embedding_dim: Stored vector width.
+        corpus_sha: Digest over corpus MEMBERSHIP. Two arms with the same sha retrieved
+            from the same set of nodes; a changed sha means they are not comparable, and
+            a P10 gate can assert the corpus did not move between a run's first turn and
+            its last. All four default so the committed pre-P8 generations keep loading.
 
     The ``seed`` field is honest as of EVAL-P20.0 (DEC-176): the protocol carries an
     optional seed, ollama_adapter.py sets ``options.seed``, and the dialogue engine forwards
@@ -141,6 +150,10 @@ class RunConfig(BaseModel):
     golden_set_version: str
     harness_version: str
     dialogue_prompt_hash: str = ""
+    corpus_item_count: int | None = None
+    corpus_embedding_model: str = ""
+    corpus_embedding_dim: int | None = None
+    corpus_sha: str = ""
 
 
 def _read_llm_config(config_path: Path) -> dict[str, Any]:
@@ -186,6 +199,7 @@ def resolve_run_config(
     fetch_judge_digest: Callable[[str, str], str | None] | None = None,
     fetch_ollama_version_fn: Callable[[str], str | None] | None = None,
     judge_temperature: float | None = None,
+    fetch_corpus_fingerprint: Callable[[], dict[str, Any] | None] | None = None,
 ) -> RunConfig:
     """Build a RunConfig from live engine config, git state, and judge resolution.
 
@@ -215,6 +229,9 @@ def resolve_run_config(
             judge_config.resolve_judge_temperature() — the same value matchers.py
             uses for its Ollama request options, so the two can never drift apart.
             Injectable for tests.
+        fetch_corpus_fingerprint: Callable() -> the vector store's identity dict, or None
+            when the engine is unreachable. Defaults to a probe of
+            GET /v1/admin/debug/vector-store. Injectable for tests.
     Returns:
         Frozen RunConfig instance.
     Raises:
@@ -268,4 +285,5 @@ def resolve_run_config(
             matchers_path=matchers_path or _MATCHERS_FILE,
         ),
         dialogue_prompt_hash=_hash_dialogue_prompts(resolved_prompts_dir),
+        **corpus_fields(fetch_corpus_fingerprint),
     )

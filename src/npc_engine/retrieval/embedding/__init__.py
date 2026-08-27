@@ -2,7 +2,7 @@
 Package: embedding
 Layer: retrieval
 Purpose: Vector store, sentence encoding, cross-encoder reranking, topic classification, and embedding index.
-Public surface: VectorSearchResult, VectorStoreProtocol, create_vector_store, embed, cross_encoder_reranker, detect_dialogue_profile, EMBED_DIMENSION, EmbeddingIndex, EmbeddingReconciler.
+Public surface: VectorSearchResult, VectorStoreProtocol, create_vector_store, embed, cross_encoder_reranker, detect_dialogue_profile, EMBED_DIMENSION, EmbeddingIndex, EmbeddingReconciler, EmbeddingCorpusRefresher, ensure_corpus.
 Does NOT: access Neo4j directly or call LLMs.
 Dependencies injected: None (re-export hub).
 """
@@ -19,6 +19,8 @@ from .vector_store_factory import InMemoryVectorStore
 from .topic_classifier import detect_dialogue_profile
 from .embedding_index import EMBED_DIMENSION, EmbeddingIndex
 from .embedding_reconciler import EmbeddingReconciler
+from .corpus import ensure_corpus
+from .corpus_refresher import EmbeddingCorpusRefresher
 
 __all__ = [
     'VectorSearchResult',
@@ -34,4 +36,6 @@ __all__ = [
     'EMBED_DIMENSION',
     'EmbeddingIndex',
     'EmbeddingReconciler',
+    'EmbeddingCorpusRefresher',
+    'ensure_corpus',
 ]

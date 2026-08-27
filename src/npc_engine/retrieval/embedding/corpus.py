@@ -35,7 +35,7 @@ from npc_engine.graph.infra.embedding_load_queries import (
 )
 from npc_engine.schema.corpus_models import CorpusFingerprint, CorpusReport
 
-__all__ = ["MAX_RECONCILE_PASSES", "ensure_corpus"]
+__all__ = ["MAX_RECONCILE_PASSES", "ensure_corpus", "refresh_corpus_node"]
 
 MAX_RECONCILE_PASSES: int = 100
 """Hard stop on the reconcile-until-dry loop.
@@ -200,3 +200,36 @@ async def ensure_corpus(
         reconcile_passes=passes,
         fingerprint=await _build_fingerprint(index, rows),
     )
+
+
+async def refresh_corpus_node(
+    session: AsyncSession,
+    index: CorpusStoreProtocol,
+    reconciler: CorpusReconcilerProtocol,
+    *,
+    node_id: str,
+) -> bool:
+    """Re-embed whatever is stale, then write THIS node's entry into the store.
+
+    The incremental half of DEC-210. It runs one reconciliation pass rather than
+    embedding the node itself: `select_stale_nodes` builds the embedding TEXT with a
+    specific per-label concatenation, and a second implementation of that text — here,
+    in a handler — is exactly the silent-divergence factory DEC-208 rejected as its
+    option (b). One pass is bounded by batch_size; the periodic loop still catches
+    anything a burst leaves behind.
+
+    Args:
+        session: Active Neo4j async session.
+        index: Vector store to write into.
+        reconciler: Reconciler run for a single pass.
+        node_id: The node whose entry should be refreshed.
+
+    Returns:
+        True when an entry was written; False when the node still carries no embedding.
+    """
+    await reconciler.reconcile_in_session(session)
+    rows = await select_embedded_nodes(session, skip=0, limit=1, node_ids=[node_id])
+    if not rows:
+        return False
+    await _upsert_rows(index, rows)
+    return True

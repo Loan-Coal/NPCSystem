@@ -28,7 +28,10 @@ from npc_engine.common.knowledge_types import (
     KnowledgeState,
 )
 from npc_engine.config import Settings
-from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
+from npc_engine.engines.embedding_refresh import (
+    CorpusRefresherProtocol,
+    refresh_embedding_safely,
+)
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.gossip_distort import (
     compute_confidence,
@@ -80,6 +83,7 @@ class GossipHandler:
         weight_config: GossipWeightConfig,
         emotion_updater: EmotionUpdater | None = None,
         gossip_repo: GossipGraphPort = None,  # type: ignore[assignment]
+        corpus_refresher: CorpusRefresherProtocol | None = None,
     ) -> None:
         """Initialise the gossip handler.
 
@@ -90,6 +94,9 @@ class GossipHandler:
             emotion_updater: Optional emotion updater; when supplied, receivers of high-severity
                 events have their emotion state shocked toward agitated/melancholic.
             gossip_repo: Gossip graph port; must be injected before calling run_tick.
+            corpus_refresher: Writes the refreshed vector-store entry after invalidation
+                (DEC-210). None means invalidate-only, which is the behaviour every caller
+                had before P8.
         """
 
         self._settings = settings
@@ -97,6 +104,7 @@ class GossipHandler:
         self._weight_config = weight_config
         self._emotion_updater = emotion_updater
         self._gossip_repo: GossipGraphPort = gossip_repo
+        self._corpus_refresher = corpus_refresher
         self._lock = asyncio.Lock()
 
     async def run_tick(
@@ -349,9 +357,11 @@ class GossipHandler:
                 tick_id=tick_id,
                 trust_delta=trust_delta,
             )
-            await invalidate_embedding_safely(
+            await refresh_embedding_safely(
                 embedding_index=self._embedding_index,
+                refresher=self._corpus_refresher,
                 item_id=receiver["id"],
+                enabled=self._settings.VECTOR_STORE_INCREMENTAL_UPSERT,
                 logger=LOGGER,
                 entity_label="receiver",
             )
