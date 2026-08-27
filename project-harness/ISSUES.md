@@ -1437,6 +1437,13 @@ change with its own review, and it would alter every eval world's baseline mid-p
 and re-baseline. If no, delete `_maybe_append_top_need` and the `top_need` slot from the
 serializer, and stop paying for the read on every turn. Either way the prompt stops carrying a
 permanently-null field. Pairs with P5, which decides slot membership anyway.
+**UPDATE 2026-08-27 (planning review): there is a third option, and the data is not missing.**
+The checked-in baseline holds **28 nodes labelled `need`** (lowercase) carrying `id`, `kind`,
+`level`, `decay_rate` and a `character_id` property — but **zero `HAS_NEED` edges**. The
+reader queries `(:Character)-[:HAS_NEED]->(:Need)`. Root cause is ISSUE-213: the label is
+wrong, not the data. So "seed or delete" is a false choice — fixing the label resolver plus
+writing the edges is the cheaper third path. It is still a graph-schema-shaped change that
+mutates the baseline fixture, so it must not land between P9 and P10. See ISSUE-213.
 
 ## ISSUE-211: P8's hydrator is specced to run before the only thing that writes embeddings
 **Found:** 2026-08-27, during P6's eval-world re-seed (DEC-206)
@@ -1468,11 +1475,64 @@ task would race the eval run. That constraint still holds; only the position rel
 reconciler is wrong.
 **Why deferred:** it is P8's decision to make, and P6 is scoped to the declaration table.
 Logging it now so P8 does not spend the debugging time rediscovering it.
-**To fix:** pick one, in P8, and record which:
-  (a) await ONE `reconcile_once()` before `hydrate_once()`, both before the reconciler's
-      `run_forever` task — keeps "no re-encode", still finishes before `/health`, costs one
-      synchronous sweep at boot;
-  (b) let the hydrator encode what it finds unembedded, which duplicates the reconciler;
-  (c) put embeddings back in the baseline and accept the model-coupling DEC-206 rejected.
-(a) is the obvious one; it needs measuring, because the sweep is synchronous and
-`/health` gates the eval run.
+**DECIDED 2026-08-27 — see DEC-208.** The planning review found the cause is deeper than the
+ordering: `EmbeddingIndex.upsert` has **zero callers in `src/`** and the reconciler writes
+`n.embedding` in Neo4j only, so the vector store has never been written by any runtime path.
+The hydrator is not a cache warm-up, it is the system's only insert path. Option (a) is taken
+in a strengthened form — `ensure_corpus()` reconciles **until dry** (one `reconcile_once()`
+caps at `batch_size=200` over an unordered `select_stale_nodes`, so a single sweep gives a
+partial corpus in undefined row order once a world exceeds it) — and DEC-208 Decision 3 adds
+`POST /v1/admin/vector-store/rehydrate`, which dissolves the `/health` constraint that forced
+the bad ordering in the first place. (b) rejected: two independent implementations of the
+embedding text. (c) rejected for now, but DEC-211 removes its stated objection.
+**To fix:** land DEC-208 in P8. Close this entry then, not before.
+
+## ISSUE-212: the admin reindex job reports `completed` while only deleting entries that were never inserted
+**Found:** 2026-08-27, during the P8 planning review (DEC-208)
+**Severity:** P2 (annoying — an admin endpoint that cannot do what its name says, and says it did)
+**Where:** `retrieval/graph_rag/reindex_job_service.py:70-88` (`_run_reindex_job`), reached from
+`api/routes/admin/graph_admin.py:131`
+**Description:** `submit_reindex(npc_ids, embedding_index)` loops over the ids calling
+`embedding_index.invalidate(item_id=npc_id)` — i.e. `vector_store.delete` — then sets
+`status: "completed"`, `processed_ids: [...]`, `failed_count: 0`. Nothing re-indexes. There is
+no upsert in the job, and (per DEC-208) there was no upsert anywhere in `src/` at all, so the
+job has always been deleting entries that never existed and reporting success for work it did
+not do. An operator invalidating a stale NPC embedding gets a green job and an unchanged store.
+DEC-208 lands the insert path and `ensure_corpus`, which makes a real reindex *possible*; it
+does not by itself fix this job's semantics or its status reporting.
+**Why deferred:** DEC-208's scope is corpus ownership and the boot/populate path. Repointing
+this job at `ensure_corpus` (or at a per-id upsert) changes an admin endpoint's behaviour and
+belongs in its own change with its own test, not inside the phase that is gating a
+regeneration.
+**To fix:** after DEC-208 lands, repoint `_run_reindex_job` at invalidate-then-upsert per id
+(or at a scoped `ensure_corpus`), and make `processed_ids` mean "re-embedded", not "delete
+attempted". Add a test asserting the store holds an entry for each processed id afterwards —
+the current test suite cannot distinguish this job from a no-op.
+
+## ISSUE-213: `BASE_NODE_LABELS` ignores the registry's declared `node_type`, so most node kinds land under a lowercase label
+**Found:** 2026-08-27, during the P8 planning review (ISSUE-210 root-cause trace)
+**Severity:** P2 (annoying — silently splits a node kind into two labels; readers find nothing)
+**Where:** `graph/generic/generic_graph_utils.py:20-28` (`BASE_NODE_LABELS`) and `:101`
+(`resolve_node_label`); the declared truth it ignores is in
+`type_registry/base_nodes/*.yaml` (`node_type:`)
+**Description:** `resolve_node_label` lowercases the requested type and looks it up in
+`BASE_NODE_LABELS`, which has **seven** entries (character, event, faction, item, location,
+quest, world_state). Everything else falls through to `return node_type` — the registry KEY,
+which is the lowercase filename stem. Meanwhile every registry file declares the correct label
+in its own `node_type:` field (`need.yaml` says `node_type: Need`), and **nothing reads it**.
+Verified in the checked-in eval baseline: 28 nodes labelled `need`, 1 labelled `belief`
+alongside 44 labelled `Belief`, plus `leverage` and `army`. The readers query the PascalCase
+label (`need_queries.py:33` matches `(:Character)-[:HAS_NEED]->(:Need)`), so those 28 nodes
+are invisible to the engine — this is the root cause behind ISSUE-210, and `Belief` is
+already split across two labels. Separately, the `need` nodes carry a `character_id` property
+where the reader expects a `HAS_NEED` edge, so fixing the label alone is not sufficient for
+`top_need`.
+**Why deferred:** it is a graph-label change affecting every generic-write node kind and it
+mutates `evals/fixtures/eval_world_baseline.json`, so it cannot land between P9 and P10
+without invalidating the regeneration baseline. It is also not on the critical path for the
+A/B measurement — `top_need` is one tier-B slot.
+**To fix:** make `resolve_node_label` read the registry's declared `node_type` (falling back to
+`BASE_NODE_LABELS`, then to the key), add a contract test asserting every
+`base_nodes/*.yaml` `node_type` round-trips through `resolve_node_label`, and decide
+separately whether the existing lowercase nodes are migrated or re-seeded. Do it AFTER the
+regeneration, or before P8 — never in between. Pairs with ISSUE-210.

@@ -5615,3 +5615,222 @@ cheapest way to pass an isolation test is to destroy the cache.
 
 **Verified:** 3,828 unit + integration tests pass; `lint`, `check-layers`,
 `check-docstrings`, `check-rules`, `mypy` all clean.
+
+---
+
+## DEC-208: the vector store gets ONE owner and an explicit populate step, because
+## nothing has ever written to it
+**Date:** 2026-08-27
+**Decided by:** this session, P8 planning review; option chosen by the human via
+`AskUserQuestion` ("ensure_corpus() single owner").
+
+**Context — three facts, verified against `src/` at a2b71f5.**
+
+1. `EmbeddingIndex.upsert` (`retrieval/embedding/embedding_index.py:47`) has **zero callers
+   anywhere in `src/`**. It is the only method that writes the vector store.
+2. `EmbeddingReconciler._reconcile_in_session` calls `embed_batch` and then
+   `batch_set_embeddings`, which writes `n.embedding` in **Neo4j only**. It never touches the
+   vector store.
+3. The three paths that do reach the store — `event_handler.py:189`,
+   `gossip_handler.py:352`, `reindex_job_service.py:78` — all call `invalidate`, i.e. `delete`.
+
+So the vector store is **all-delete-no-insert**, and has been since it was written. That is a
+single sufficient cause for `tierB.items == 0` on every run ever recorded — not the empty
+corpus, not the RAG filter, not the token budget. `n.embedding` is likewise write-only:
+produced by the reconciler and read by nothing.
+
+This reframes P8's hydrator. It was specced as a cache warm-up ("read what is already
+persisted, no re-encode"), and it is in fact **the system's only insert path**. ISSUE-211
+caught the symptom — after DEC-206 the baseline carries no embeddings, so a hydrator running
+where P8 put it reads zero rows — but the cause is deeper: P8 assumed Neo4j was a durable
+corpus one commit after DEC-206 ruled that embeddings are derived data that no world fixture
+carries. Hydrating a cache from a cache, with the cache-filler ordered afterwards, is not an
+ordering slip; it is a missing owner.
+
+**Decision 1 — one owner, one entry point.** New `retrieval/embedding/corpus.py`:
+
+    ensure_corpus(session, index, *, batch_size) -> CorpusReport
+        1. reconcile until dry  (loop reconcile_once until processed == 0)
+        2. upsert every embedded node into the vector store
+        3. return {nodes_read, upserted, missing_embedding, model, dim, corpus_sha}
+
+`EmbeddingReconciler.run_forever` and `main.py` both call the same function. This replaces an
+implicit ordering contract between two asyncio tasks — findable only by reading the lifespan
+in `main.py` — with a function that returns a value. Cypher stays in
+`graph/infra/embedding_load_queries.py`, projecting at the Cypher level rather than
+`properties(n)`, and strips `embedding` before upsert.
+
+**Decision 2 — reconcile until dry, not one batch.** `select_stale_nodes` has **no `ORDER
+BY`** and `reconcile_once` caps at `batch_size` (200). The eval baseline holds 51 embeddable
+nodes (23 Character + 11 Event + 17 Location) so one batch covers it today; the demo world
+plus accumulated `Event` nodes will not. A corpus whose membership depends on Neo4j row order
+is an unfalsifiable A/B input, which is the defect class this whole programme exists to
+close. The loop is the difference between "it fits today" and "it is defined".
+
+**Decision 3 — populating the corpus is callable, not only bootable.** New
+`POST /v1/admin/vector-store/rehydrate` alongside P8's `GET /v1/admin/debug/vector-store`.
+The harness step becomes explicit and ordered:
+
+    make eval-world-reset  ->  POST rehydrate  ->  assert item_count > 0  ->  generate
+
+This is what removes the constraint that produced the bad ordering in the first place.
+`restore-with-app-stopped` waits only on `/health`, so P8 put hydration before `/health` to
+avoid racing the eval run; with an explicit call, hydration no longer has to finish before
+health at all. Boot hydration degrades from correctness requirement to latency optimisation,
+and `VECTOR_STORE_HYDRATE_ON_STARTUP=false` becomes a legitimate posture rather than a
+silently broken one. It is also the seam that makes a Qdrant swap a config change: hydration
+as a protocol operation with a report is portable; hydration as a lifespan side effect is not.
+
+**Decision 4 — fail loud.** `HYDRATE_ON_STARTUP=true` with `nodes_read == 0` must refuse to
+report healthy, or log at ERROR with the counts. For an instrument, a silent `item_count=0`
+costs a night of generation and reads afterwards as a null result rather than as a failure.
+
+**Alternatives rejected.**
+(b) *Let the hydrator encode what it finds unembedded* — duplicates the reconciler, and the
+two would then be independent implementations of the embedding TEXT: `select_stale_nodes`
+builds it with a specific `trim(coalesce(...))` concatenation per label. Two encode paths
+that can disagree about their input is a silent-divergence factory.
+(c) *Bake embeddings into the baseline* — reverses DEC-206 one commit after taking it, and
+its stated objection (the reconciler compares timestamps, never model identity) is real.
+DEC-211 removes that objection; the option is recorded as reopened, not taken.
+
+**Layer check.** `retrieval/` owns `corpus.py`; `graph/infra/` owns the Cypher;
+`api/` -> `retrieval` is an allowed dependency. No rule bent.
+
+**Closes ISSUE-211 when it lands.** Until then ISSUE-211 stays open with its `To fix`
+pointing here.
+
+---
+
+## DEC-209: tier B retrieves what tier A cannot reach, so the RAG filter is a SCOPE,
+## not a whitelist
+**Date:** 2026-08-27
+**Decided by:** this session, P8 planning review; option chosen by the human via
+`AskUserQuestion` ("subgraph minus known events").
+
+**Context.** `context_builder.py:262` is
+
+    rag_filter = known_event_ids if known_event_ids else None
+
+and both branches are wrong, in opposite directions.
+
+- The `if` branch filters vector hits down to **events the NPC already knows** — which are
+  already tier-A `event:` items. Tier B is therefore strictly redundant with tier A by
+  construction: it re-ranks what the NPC already has, and every hit is charged to the budget
+  twice. A RAG arm measured against this is measuring a re-ranking, and a null result from it
+  would be uninformative.
+- The `else` branch gives an empty set the run of the whole store. **7 of 22 NPCs know zero
+  events**, and the hydrated store will hold Character, Event and Location nodes, so a third
+  of NPCs would retrieve other characters' profiles and events they never heard of.
+
+Before P6 this also concatenated into `npc_known_events`, which `system_v1.yaml:88` declares
+the anti-hallucination whitelist. **That half is already fixed**: P6 gave `rag:` its own slot
+at `path="retrieved_context"`. What remains is the scope question, and it is load-bearing —
+with the whitelist leak closed, the `if` branch's redundancy is the binding problem.
+
+**Decision 1 — scope, explicitly.** The RAG candidate set is the NPC's 1-hop subgraph, its
+location and its faction, **MINUS** `known_event_ids`, deduplicated by node id. An empty
+scope means **no RAG**, never "all of it". This is what makes tier B carry something tier A
+structurally cannot, which is the only justification the tier has.
+
+**Decision 2 — `filter_ids` moves into `VectorStoreProtocol.search`.** A public interface
+change, signed off in this review. `EmbeddingIndex.search` currently filters **after** top-k
+(`embedding_index.py:85`), so a filtered search over a mixed store returns 0-1 rows: ranking
+happens over everything, then the filter throws almost all of it away. Filtering must precede
+ranking. ~15 lines, two implementations. The alternative — over-fetch `top_k x N` and filter
+— puts a tuning heuristic in the retrieval path, and a heuristic between the arm and the
+measurement is precisely what makes an A/B unfalsifiable.
+
+**Decision 3 — `rag` joins `_ESSENTIAL_FIELDS`.** Without it, compression falls through to
+byte truncation and the first compressed tier-B item emits verified-invalid JSON
+(`{"occurred_at":"...","severity":60,"summary":"...[compressed]#b1113aa4` — unclosed string,
+unclosed brace), which `_safe_parse` then hands to the prompt as a raw string.
+
+**Recorded, not decided:** `_build_tier_b_c_items` splits results at `len // 2`, first half
+tier B and second half tier C, so `rag_top_k` moves **two tiers at once**. It is one
+mechanism and stays one knob, but it is written down here so a future reader does not treat a
+tier-C delta as an independent effect.
+
+---
+
+## DEC-210: the corpus is FROZEN for the duration of an eval run and LIVE in production
+**Date:** 2026-08-27
+**Decided by:** this session, P8 planning review; option chosen by the human via
+`AskUserQuestion` ("frozen for eval, live in production").
+
+**Context.** With DEC-208's `ensure_corpus` called at boot, the corpus becomes a **boot-time
+snapshot**. The reconciler goes on writing `n.embedding` every
+`EMBEDDING_RECONCILE_INTERVAL_SECONDS` and nothing propagates those to the store, so over a
+ten-hour generation the two diverge monotonically and RAG is blind to every Event the run
+itself creates. Meanwhile the handlers can only `delete` (DEC-208 context), so the product
+has no incremental path at all.
+
+Those are two different requirements. The instrument wants a corpus that cannot move; the
+product wants one that tracks the graph.
+
+**Decision 1 — give the handlers their missing insert, behind a flag.**
+`event_handler` and `gossip_handler` gain an upsert next to their existing invalidate, guarded
+by `VECTOR_STORE_INCREMENTAL_UPSERT` (default **on**). The eval harness sets it **off**.
+This pairs the delete-only calls with the insert they have always implied, and it is the
+architecturally honest half of the decision.
+
+**Decision 2 — the corpus is fingerprinted into the generation record.**
+`{item_count, embedding_model, dim, corpus_sha}` written beside `retrieval_profile`.
+DEC-194's principle is *never record a config you did not run*; it currently covers the
+profile NAME and not the retrieval SUBSTRATE, so "was RAG live during this run?" is an
+inference from `tierB.items` rather than a recorded fact. With the fingerprint, two arms are
+provably comparable or provably not, and a P10 gate can assert the corpus did not move
+between the run's first turn and its last.
+
+**Decision 3 — the OFF state is verified by log absence, not by reading `.env`.**
+DEC-206 Decision 3 is the precedent and it was expensive: the tick autopilot was "off" and
+produced 24 `FactionStandingEvent`, 5 `Quest` and 1 `Chapter` node anyway, and only a
+line-by-line fixture diff caught it. P10's preflight therefore checks for the absence of the
+upsert log line during a probe turn. A flag is worth nothing unverified.
+
+**Alternatives rejected.**
+*Always live* — `paired_arms` interleaves arms inside one run (rep -> case -> profile), so
+within-run corpus drift lands unevenly across arms and is indistinguishable from a treatment
+effect. There is no receipt field that could recover the distinction afterwards.
+*Always frozen* — correct for the instrument, a product regression: an NPC would be unable to
+retrieve anything that happened during the session it is in.
+
+---
+
+## DEC-211: embeddings carry their model identity, and the derived-field strip becomes a
+## repo artifact instead of a scratchpad script
+**Date:** 2026-08-27
+**Decided by:** this session, P8 planning review; scope chosen by the human via
+`AskUserQuestion` ("everything including E"). The graph-node schema change is signed off
+by that selection, per the ask-gate in `CLAUDE.md`.
+
+**Context.** DEC-206 rejected baking embeddings into the world fixture partly because
+"a mismatch the reconciler cannot detect, because it compares `last_embedding_indexed_at`
+against `last_graph_updated_at`, never model identity." That is a **missing field**, not a
+law of the system. As long as it stays missing, changing `EMBEDDING_MODEL` silently
+invalidates every stored vector and every prior measurement, with nothing anywhere that
+would say so.
+
+**Decision 1 — the node records what produced its vector.** `batch_set_embeddings` also
+writes `embedding_model` and `embedding_dim` alongside `last_embedding_indexed_at`. This is a
+graph node schema change and is signed off above.
+
+**Decision 2 — staleness compares model identity too.** `select_stale_nodes` treats a node
+as stale when the timestamp is older **or** `embedding_model` differs from the configured
+`EMBEDDING_MODEL`. Changing the model then re-embeds the world on the next `ensure_corpus`
+instead of leaving a mixed-model store that ranks nonsense.
+
+**Decision 3 — the derived-field strip moves into the repo.** DEC-206's procedure step 5 —
+"strip the derived embedding fields" — is performed today by `strip_derived.py` in a
+**session-scoped temp directory**. It is not in the repo, not in the Makefile, and survives
+between sessions only by luck. Decision 1 grows the strip list from two fields to four, so
+the procedure must become executable from a clean checkout: a `DERIVED_NODE_FIELDS` constant
+plus a `--strip-derived` flag on `demo_game/snapshot.py`, and DEC-206's step 5 rewritten to
+name the command. Every future baseline regeneration depends on this; it is small and it is
+load-bearing.
+
+**Consequence, recorded and NOT taken.** With model identity on the node, ISSUE-211's option
+(c) — embeddings in the checked-in baseline — becomes technically safe: a fixture taken under
+a different model would now be detected and re-embedded rather than silently mis-ranked. It
+is still rejected on fixture size (154 KB -> 576 KB) and on DEC-206's separation of world
+state from derived data. Written down so the next session does not re-derive the analysis.
