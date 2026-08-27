@@ -1445,48 +1445,6 @@ wrong, not the data. So "seed or delete" is a false choice — fixing the label 
 writing the edges is the cheaper third path. It is still a graph-schema-shaped change that
 mutates the baseline fixture, so it must not land between P9 and P10. See ISSUE-213.
 
-## ISSUE-211: P8's hydrator is specced to run before the only thing that writes embeddings
-**Found:** 2026-08-27, during P6's eval-world re-seed (DEC-206)
-**Severity:** P1 (blocking) — for P8 specifically; it would make that phase's deliverable
-(`item_count > 0`) unreachable while looking like a data problem
-**Where:** the P8 spec (`vector_store_hydrator.hydrate_once`, called from `main.py`), against
-`retrieval/embedding/embedding_reconciler.py:run_forever` and
-`evals/fixtures/eval_world_baseline.json`
-**Description:** P8 says to call `hydrate_once()` **awaited, in `main.py`, before the
-reconciler task**, reading `n.embedding` values "already persisted in Neo4j" with no
-re-encode. Two facts make that read empty:
-
-1. The checked-in eval-world baseline carries **no** `embedding` property on any node. DEC-206
-   strips them deliberately — they are derived data, they tripled the fixture, and baking them
-   in couples a world fixture to whatever `EMBEDDING_MODEL` produced them, which the
-   reconciler cannot detect because it compares timestamps, not model identity.
-2. `EmbeddingReconciler.run_forever` is the only thing that writes them, and it calls
-   `reconcile_once()` BEFORE its first sleep — so embeddings exist a few seconds AFTER the
-   reconciler task starts, which is strictly after the point P8 wants to read them.
-
-So immediately after `make eval-world-reset`, a hydrator running at P8's specified point
-reads zero rows and reports `nodes_read=0`. That failure looks exactly like "the world has no
-embeddings yet", which is true but is a race, not a data problem — and P8's verification step
-(`/v1/admin/debug/vector-store` → `item_count > 0`) would fail with no indication of why.
-
-The ordering in the plan was not arbitrary: it exists because
-`restore-with-app-stopped` waits only on `/health`, so a hydration running as a background
-task would race the eval run. That constraint still holds; only the position relative to the
-reconciler is wrong.
-**Why deferred:** it is P8's decision to make, and P6 is scoped to the declaration table.
-Logging it now so P8 does not spend the debugging time rediscovering it.
-**DECIDED 2026-08-27 — see DEC-208.** The planning review found the cause is deeper than the
-ordering: `EmbeddingIndex.upsert` has **zero callers in `src/`** and the reconciler writes
-`n.embedding` in Neo4j only, so the vector store has never been written by any runtime path.
-The hydrator is not a cache warm-up, it is the system's only insert path. Option (a) is taken
-in a strengthened form — `ensure_corpus()` reconciles **until dry** (one `reconcile_once()`
-caps at `batch_size=200` over an unordered `select_stale_nodes`, so a single sweep gives a
-partial corpus in undefined row order once a world exceeds it) — and DEC-208 Decision 3 adds
-`POST /v1/admin/vector-store/rehydrate`, which dissolves the `/health` constraint that forced
-the bad ordering in the first place. (b) rejected: two independent implementations of the
-embedding text. (c) rejected for now, but DEC-211 removes its stated objection.
-**To fix:** land DEC-208 in P8. Close this entry then, not before.
-
 ## ISSUE-212: the admin reindex job reports `completed` while only deleting entries that were never inserted
 **Found:** 2026-08-27, during the P8 planning review (DEC-208)
 **Severity:** P2 (annoying — an admin endpoint that cannot do what its name says, and says it did)
@@ -1536,3 +1494,34 @@ A/B measurement — `top_need` is one tier-B slot.
 `base_nodes/*.yaml` `node_type` round-trips through `resolve_node_label`, and decide
 separately whether the existing lowercase nodes are migrated or re-seeded. Do it AFTER the
 regeneration, or before P8 — never in between. Pairs with ISSUE-210.
+
+## ISSUE-214: byte truncation still emits invalid JSON whenever a PROJECTED payload is over budget
+**Found:** 2026-08-27, during P8 §8.2 (DEC-209 Decision 3)
+**Severity:** P2 (annoying — the prompt receives a raw broken string in place of an object)
+**Where:** `retrieval/context/context_compression.py:_compress_text` (reached from
+`_field_select_compress` when the projected text still exceeds `target_chars`)
+**Description:** DEC-209 Decision 3 added `rag` to `_ESSENTIAL_FIELDS`, which fixes the
+*observed* case: an uncompressed `rag:` payload fell straight through to byte truncation
+and produced `{"occurred_at":"2026-01-01","severity":60,"summary":"...[compressed]#b1113aa4`
+— unclosed string, unclosed brace — which `_safe_parse` then handed to the prompt as a raw
+string. Projection now removes the bulk, so a realistic payload compresses to valid JSON.
+
+The truncation path itself is unchanged and still character-based. Any item whose
+payload is over budget *after* projection gets the same broken output, and this is NOT
+rag-specific: `event`, `character`, `memory` and every other row in `_ESSENTIAL_FIELDS`
+reach the same `_compress_text`. A single long `summary` or `content` field is enough.
+Verified with a 920-character summary: `json.loads` raises
+`Unterminated string starting at: line 1 column 14`.
+
+Nothing has hit this in production because tier B has carried zero items on every run
+ever recorded, and tier-A payloads at the current budget do not trigger compression.
+P8 makes tier B reachable; P10's trim makes compression reachable.
+**Why deferred:** DEC-209 Decision 3 names the fix and it is the `_ESSENTIAL_FIELDS` row.
+The truncation path is shared by every node type, so changing it changes compression for
+tier A too — which is a behaviour change inside the phase that is gating a regeneration.
+It is also masked at P5's 25,888-token budget, where nothing is compressed at all.
+**To fix:** truncate the longest FIELD VALUE and re-serialize, rather than truncating the
+JSON string, so the output is always parseable; keep the `...[compressed]#<sha>` marker
+inside the truncated value. Add a property test over `_ESSENTIAL_FIELDS` asserting
+`json.loads` succeeds for every node type at every target size. Do it with P10's trim,
+where compression actually fires, not before.

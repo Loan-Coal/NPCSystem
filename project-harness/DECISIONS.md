@@ -5843,3 +5843,116 @@ load-bearing.
 a different model would now be detected and re-embedded rather than silently mis-ranked. It
 is still rejected on fixture size (154 KB -> 576 KB) and on DEC-206's separation of world
 state from derived data. Written down so the next session does not re-derive the analysis.
+
+---
+
+## DEC-212: what P8 actually measured — the first non-zero tier B ever recorded
+**Date:** 2026-08-27
+**Decided by:** this session, implementing P8 §8.1–8.6 against DEC-208..211.
+
+**The deliverable, measured.** `tierB.items` has been **0 on every run ever recorded**.
+After P8, on the clean eval baseline, at `OLLAMA_CONTEXT_LENGTH=32768`:
+
+    captain_sorn   tier0 3/93   tierA 8/687  tierB 2/93   tierC 3/140
+    old_henryk     tier0 3/94   tierA 8/699  tierB 2/92   tierC 2/87
+
+and the retrieved keys are the NPC's own neighbourhood, not the store:
+
+    captain_sorn -> rag:vex_spymaster, rag:lira_fence, rag:loc_guard_barracks,
+                    rag:harwick_guard, rag:bren_smith
+    old_henryk   -> rag:loc_market_square, rag:tilda_herbalist, rag:mira_innkeeper,
+                    rag:aldric_merchant
+
+Both sets are exactly the DEC-209 scope — 1-hop ∪ location ∪ faction, minus known events
+— and neither contains an event the NPC already carries in tier A. The `rag_top_k=5`
+results split at `len // 2` into tier B and tier C as DEC-209 recorded, which is visible
+here as 2/3 and 2/2: **one mechanism, two tiers, and a tier-C delta is not an independent
+effect.**
+
+**The corpus.** `nodes_read=51, upserted=51, missing_embedding=0, reconcile_passes=1,
+item_count=51, embedding_model=all-MiniLM-L6-v2, dim=384,
+corpus_sha=2b19e47a1755354e782d289d01aaae731a90321406972fdc686fb660663a8b20`.
+
+51 is exactly the count DEC-208 predicted from the baseline (23 Character + 11 Event +
+17 Location), which is a small confirmation that the projection query selects what the
+reconciler embeds and nothing else. `reconcile_passes=1` means the reader went dry on the
+first pass — the loop was not exercised here, and will not be until a world exceeds
+`batch_size=200`. That is the case DEC-208 Decision 2 exists for, and it remains
+**untested against real data**; the bounded-loop behaviour is pinned by unit test only.
+
+**The boot sweep, against `make`'s 180s /health wait.** ~11.3s on the 51-node baseline
+(`game_clock.hydrated` 10:54:08.26 -> `vector_store.boot_hydrated` 10:54:19.58), which
+includes the first sentence-transformer load. It fits comfortably, so
+`HYDRATE_ON_STARTUP=false` plus an explicit rehydrate — the supported fallback, and the
+reason the route exists — **was not needed**. `POST rehydrate` against an already-embedded
+corpus returns in **45ms** and reproduces the identical `corpus_sha`, which is what makes
+P9's fingerprint gate meaningful rather than decorative.
+
+**No regression (D8).** 8-NPC probe, same instrument as P0–P5:
+
+    beliefs 8/8 · goals 8/8 · memories 8/8 · current_location 8/8
+    retrieved_context 8/8  (was 0/8 on every run ever recorded)
+    nearby_npcs 7/8 · player_relation 2/8
+
+**Where this contradicts what was written down.**
+
+1. **`player_relation` reads 2/8, against a 6/8 baseline in the plan.** This is NOT a P8
+   regression and it is not the probe artifact of review point 1 either. Checked directly:
+   `MATCH (c:Character)-[r:RELATES_TO]-(:Character {id:'player_demo'})` returns exactly
+   **two** rows, `captain_sorn` and `mira_innkeeper` — the same two the probe reports. 2/8
+   is the complete and correct answer for this world. The 6/8 figure was measured against
+   a world state that predates DEC-206's re-seed, i.e. it is precisely the cross-run drift
+   `make eval-world-reset` exists to remove. **Retire the 6/8 number**; do not chase it.
+   Review point 1's separate objection stands untouched: the probe passes no `player_id`,
+   so `propagated_reputation` and `reputation` remain structurally invisible through it,
+   and that is still P9's to close.
+
+2. **`nearby_npcs` is 7/8, not the 5/8 baseline.** Consistent with the ISSUE-209 update
+   (P5's budget lift returned `old_henryk`'s `nearby_npcs`). `bren_smith` is the one
+   absence and he is genuinely alone. Nothing to fix.
+
+3. **`VECTOR_STORE_HYDRATE_ON_STARTUP=false` does NOT give you an empty corpus.** Tried
+   it, expecting to isolate P8's tier-B contribution against a pre-P8 baseline;
+   `item_count` was still 51. `run_forever` calls `ensure_corpus` on its first pass,
+   before its first sleep, so the store fills within seconds either way. The flag controls
+   only whether the sweep BLOCKS `/health`. This follows from DEC-208 Decision 1 (one
+   owner, called from both places) and is not a defect, but the setting's comment said
+   something a reader would misread, and it is corrected in `config.py`. **P9/P10: to
+   measure against an empty tier B, use `skip_rag` or `enabled_tiers` minus `tierB` — not
+   this flag.**
+
+**SYSTEM_PROMPT_TOKEN_RESERVE re-measured: 5600 -> 5850.** System prompt Rule 17
+(RETRIEVED CONTEXT) costs 235 tokens and is not optional — without a rule teaching the
+model what `context.retrieved_context` is, P6's separate slot is either ignored or read
+as events the NPC witnessed, which is the anti-hallucination leak relocated rather than
+closed. Assembled prompt is 5,780 tokens at `everyone`. This is P10 gate 12's
+re-measurement, done now; it costs `PROMPT_TOKEN_BUDGET` 250 tokens.
+
+**One default-path behaviour change, deliberate.** `build_default_profile` now sets
+`slot_cap_overrides={"rag:": 600}`. §8.5 asks for it even during the unconstrained
+window: a RAG payload is a whole node property dict, `embedding` is stripped at
+serialization by `NON_PROMPT_NODE_FIELDS` and `biography` is not, and "measure the
+ceiling" must not mean "let one slot define it". There is no byte-identical behaviour
+being broken, because tier B has always been empty. Both declared arms carry the same cap
+so `test_each_arm_differs_from_default_in_exactly_one_field` still holds. **600 is a
+guard, not a measurement** — P10 re-decides it against the observed ceiling. At the
+numbers above (92–93 tokens of tier B) it has never bound.
+
+**A public-interface addition DEC-208 implies but does not name:** `count()` joins
+`VectorStoreProtocol`. Decision 3 specifies a report and an endpoint carrying
+`item_count`, and Decision 3's own argument is that hydration-as-a-protocol-operation is
+what makes a Qdrant swap a config change — neither is answerable by reaching into one
+backend's internals. Recorded here rather than treated as a silent widening.
+
+**What P8 did NOT do, on purpose.** The greedy allocator is untouched (D2; ISSUE-209 stays
+open and dormant — at 25,888 tokens nothing is dropped, so it cannot fire). ISSUE-213 /
+ISSUE-210 (the `need`/`Need` split) is untouched, so `top_need` is still structurally
+empty and a tier-B slot; the eval baseline fixture is unmodified. ISSUE-212 (the reindex
+job) is untouched — DEC-208 makes the fix possible, it is not the fix.
+`evals/fixtures/eval_world_baseline.json` was not regenerated.
+
+**New issue found and deferred:** ISSUE-214 — byte truncation still emits invalid JSON for
+any item whose PROJECTED payload is over budget. DEC-209 Decision 3's `_ESSENTIAL_FIELDS`
+row fixes the observed `rag:` case; the truncation path is shared with tier A and is
+masked at the current budget, so it belongs with P10's trim where compression actually
+fires.

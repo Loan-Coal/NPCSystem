@@ -2875,3 +2875,63 @@ fix, not a re-weighting. The suggested regression test exists verbatim:
 Recency still reads the FIRST record, deliberately: `rerank_by_keyword` has reordered beliefs,
 goals and secrets by relevance to the player's message, so there the first record is a choice
 something upstream made on purpose.
+
+---
+
+## [FIXED] ISSUE-211: P8's hydrator is specced to run before the only thing that writes embeddings
+**Found:** 2026-08-27, during P6's eval-world re-seed (DEC-206)
+**Severity:** P1 (blocking) — for P8 specifically; it would make that phase's deliverable
+(`item_count > 0`) unreachable while looking like a data problem
+**Where:** the P8 spec (`vector_store_hydrator.hydrate_once`, called from `main.py`), against
+`retrieval/embedding/embedding_reconciler.py:run_forever` and
+`evals/fixtures/eval_world_baseline.json`
+**Description:** P8 says to call `hydrate_once()` **awaited, in `main.py`, before the
+reconciler task**, reading `n.embedding` values "already persisted in Neo4j" with no
+re-encode. Two facts make that read empty:
+
+1. The checked-in eval-world baseline carries **no** `embedding` property on any node. DEC-206
+   strips them deliberately — they are derived data, they tripled the fixture, and baking them
+   in couples a world fixture to whatever `EMBEDDING_MODEL` produced them, which the
+   reconciler cannot detect because it compares timestamps, not model identity.
+2. `EmbeddingReconciler.run_forever` is the only thing that writes them, and it calls
+   `reconcile_once()` BEFORE its first sleep — so embeddings exist a few seconds AFTER the
+   reconciler task starts, which is strictly after the point P8 wants to read them.
+
+So immediately after `make eval-world-reset`, a hydrator running at P8's specified point
+reads zero rows and reports `nodes_read=0`. That failure looks exactly like "the world has no
+embeddings yet", which is true but is a race, not a data problem — and P8's verification step
+(`/v1/admin/debug/vector-store` → `item_count > 0`) would fail with no indication of why.
+
+The ordering in the plan was not arbitrary: it exists because
+`restore-with-app-stopped` waits only on `/health`, so a hydration running as a background
+task would race the eval run. That constraint still holds; only the position relative to the
+reconciler is wrong.
+**Why deferred:** it is P8's decision to make, and P6 is scoped to the declaration table.
+Logging it now so P8 does not spend the debugging time rediscovering it.
+**DECIDED 2026-08-27 — see DEC-208.** The planning review found the cause is deeper than the
+ordering: `EmbeddingIndex.upsert` has **zero callers in `src/`** and the reconciler writes
+`n.embedding` in Neo4j only, so the vector store has never been written by any runtime path.
+The hydrator is not a cache warm-up, it is the system's only insert path. Option (a) is taken
+in a strengthened form — `ensure_corpus()` reconciles **until dry** (one `reconcile_once()`
+caps at `batch_size=200` over an unordered `select_stale_nodes`, so a single sweep gives a
+partial corpus in undefined row order once a world exceeds it) — and DEC-208 Decision 3 adds
+`POST /v1/admin/vector-store/rehydrate`, which dissolves the `/health` constraint that forced
+the bad ordering in the first place. (b) rejected: two independent implementations of the
+embedding text. (c) rejected for now, but DEC-211 removes its stated objection.
+**To fix:** land DEC-208 in P8. Close this entry then, not before.
+**Fixed:** 2026-08-27, in P8 (commits 94bce50, 0859910, 5da3345, 38b8a6a, 3bc2aad).
+DEC-208 landed in full: `retrieval/embedding/corpus.py::ensure_corpus` is the single
+owner, it reconciles UNTIL DRY, and `EmbeddingReconciler.run_forever`, the boot lifespan
+and the new `POST /v1/admin/vector-store/rehydrate` all call the same function. Boot
+hydration fails loud at ERROR on `nodes_read == 0`.
+
+MEASURED on the clean eval baseline after `make eval-world-reset`:
+`nodes_read=51, upserted=51, missing_embedding=0, reconcile_passes=1, item_count=51,
+corpus_sha=2b19e47a1755...` — 51 is exactly the count DEC-208 predicted (23 Character +
+11 Event + 17 Location). The boot sweep took ~11s against `make`'s 180s /health wait, so
+`HYDRATE_ON_STARTUP=true` is comfortable today and the fallback posture was not needed.
+`POST rehydrate` on an already-embedded corpus returns in 45ms and reproduces the same
+`corpus_sha`, which is what makes the P9 fingerprint gate meaningful.
+
+The ordering this issue was filed about turned out not to need solving: DEC-208 Decision
+3's route dissolves the `/health` constraint that forced it.

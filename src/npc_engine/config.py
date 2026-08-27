@@ -127,11 +127,19 @@ class Settings(BaseSettings):
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    # Populate the vector store synchronously during boot (DEC-208 Decision 3).
+    # AWAIT the corpus sweep during boot, before the app serves (DEC-208 Decision 3).
     # Hydration is a LATENCY optimisation, not a correctness requirement: since
     # POST /v1/admin/vector-store/rehydrate exists, "false plus an explicit call" is a
     # supported posture rather than a silently broken one. Set it false when the boot
-    # sweep does not fit the harness's 180s /health wait.
+    # sweep does not fit the harness's 180s /health wait (measured 2026-08-27: ~11s on
+    # the 51-node eval baseline, so it fits comfortably today).
+    #
+    # It does NOT give you an empty corpus. VERIFIED 2026-08-27 by setting it false and
+    # finding item_count still 51: EmbeddingReconciler.run_forever calls ensure_corpus
+    # on its first pass, before its first sleep, so the store fills within seconds
+    # either way. This flag controls only whether the sweep BLOCKS /health. To measure
+    # against an empty tier B, use a profile with skip_rag or enabled_tiers minus tierB
+    # — not this flag.
     VECTOR_STORE_HYDRATE_ON_STARTUP: bool = True
     # Pair the handlers' existing invalidate with the insert it has always implied
     # (DEC-210 Decision 1). ON for the product, which needs a corpus that tracks the
