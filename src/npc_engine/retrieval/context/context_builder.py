@@ -216,14 +216,25 @@ def _check_legacy_cache(
     return None, legacy_cache, legacy_key
 
 
-def _get_partial_cache_state(context_cache: Any, npc_id: str, npc_ts: str) -> tuple[Any, Any, Any, Any, Any]:
-    """Extract partial cache and its keys; record hit/miss metrics when both slots are warm."""
+def _get_partial_cache_state(
+    context_cache: Any, npc_id: str, npc_ts: str, profile_name: str
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Extract partial cache and its keys; record hit/miss metrics when both slots are warm.
+
+    `profile_name` reaches the PROFILE key only. The value cached there is read with the
+    profile's own `events_limit`, so two A/B arms sharing an entry means the second arm is
+    served the first arm's event list -- and with the arms interleaved inside one run, that
+    reads as a treatment effect. The beliefs/goals key deliberately omits it; see
+    `build_beliefs_goals_key`.
+    """
     partial_cache: PartialDialogueContextCache | None = (
         context_cache if isinstance(context_cache, PartialDialogueContextCache) else None
     )
     if partial_cache is None:
         return None, None, None, None, None
-    profile_key = partial_cache.build_profile_key(npc_id=npc_id, npc_last_graph_updated_at=npc_ts)
+    profile_key = partial_cache.build_profile_key(
+        npc_id=npc_id, npc_last_graph_updated_at=npc_ts, profile_name=profile_name
+    )
     bg_key = partial_cache.build_beliefs_goals_key(npc_id=npc_id, npc_last_graph_updated_at=npc_ts)
     cached_profile = partial_cache.get_profile(profile_key)
     cached_bg = partial_cache.get_beliefs_goals(bg_key)
@@ -651,7 +662,8 @@ async def build_serialized_context_with_receipt(
     cache_hit, legacy_cache, legacy_key = _check_legacy_cache(context_cache, session_id, npc_id, player_id, emotion_snapshot, npc_ts, world_ts)
     if cache_hit is not None:
         return str(cache_hit), None
-    partial_cache, profile_key, bg_key, cached_profile, cached_bg = _get_partial_cache_state(context_cache, npc_id, npc_ts)
+    active_profile_name = resolved_profile_name(settings=settings, requested=retrieval_profile)
+    partial_cache, profile_key, bg_key, cached_profile, cached_bg = _get_partial_cache_state(context_cache, npc_id, npc_ts, active_profile_name)
     location_id = await get_npc_location_id(session=session, npc_id=npc_id)
     tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag, active_profile)
     profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message, active_profile)
@@ -669,7 +681,7 @@ async def build_serialized_context_with_receipt(
         vector_scores=vector_scores, event_key_trust=event_key_trust, llm_config=llm_config,
         settings=settings, compression_cache=compression_cache, weight_profile=weight_profile or active_profile.weight_profile or detect_dialogue_profile(player_message),
         active_quest=active_quest, game_time=current_game_time, explicit_node_ids=explicit_node_ids,
-        profile_name=resolved_profile_name(settings=settings, requested=retrieval_profile),
+        profile_name=active_profile_name,
     )
     if legacy_cache is not None and legacy_key is not None:
         legacy_cache.set(legacy_key, serialized)
