@@ -75,7 +75,7 @@ _SHIPPED_CONFIG: str = "config/llm_config.yaml"
 _DECLARED_ARMS: tuple[tuple[str, str], ...] = (
     ("no_rag", "skip_rag"),
     ("narrow_rag", "rag_top_k"),
-    ("no_nearby_npcs", "disabled_slots"),
+    ("no_memories", "disabled_slots"),
 )
 
 _MIN_MEASURED_RAG_SUPPLY: int = 3
@@ -94,8 +94,15 @@ Characters: 16 know 1 or 2, 7 know none. This is why `events_limit` is not an ar
 value >= 2 and was retired rather than resized.
 """
 
-_TIER_A_ARM_SLOT: str = "nearby_npcs"
-"""The tier-A slot the tier-A arm withholds. Occupancy measured 8/8 on the probe roster."""
+_TIER_A_ARM_SLOT: str = "memories"
+"""The tier-A slot the tier-A arm withholds (DEC-214).
+
+CONTENT occupancy measured 8/8 on the probe roster, which is a stricter test than
+presence in item_keys. `nearby_npcs` was the first choice and was rejected on measurement:
+its item is present on 8/8 but its text is the empty list `[]` for bren_smith, so the
+serialized context is IDENTICAL under that arm for one of eight NPCs. `memories` is
+populated on 8/8 by the same instrument that reports the P0-P8 `memories 8/8` headline.
+"""
 
 # Which TIER a profile knob moves. P8 made this distinction load-bearing: before it,
 # every one of these was inert (tierB.items was 0 on every run ever recorded), so
@@ -238,11 +245,14 @@ def test_the_tier_a_arm_withholds_a_slot_the_whole_probe_roster_carries() -> Non
     `wide_rag` so a delta could be attributed to a tier, and retiring the dead arm
     without replacing it would have discarded that split.
 
-    `nearby_npcs` is a tier-A slot (context_slots.py, priority 91) populated on 8 of 8
-    roster NPCs, so withholding it is guaranteed to remove exactly one item per NPC. The
-    vector search must be left entirely alone.
+    `memories` is a tier-A slot (context_slots.py, priority 90, path npc.memories) whose
+    CONTENT is populated on 8 of 8 roster NPCs, so withholding it removes exactly one
+    item per NPC AND changes what the model reads. Presence in item_keys is not enough:
+    `nearby_npcs` is present on 8/8 but empty (`[]`) for bren_smith, so that arm would
+    have left one NPC's serialized context byte-identical. The vector search must be left
+    entirely alone.
     """
-    arm = _shipped_profiles()["no_nearby_npcs"]
+    arm = _shipped_profiles()["no_memories"]
     assert arm.disabled_slots == frozenset({_TIER_A_ARM_SLOT})
     assert arm.rag_top_k == _DEFAULT_RAG_TOP_K
     assert arm.graph_rag_top_k == _DEFAULT_RAG_TOP_K

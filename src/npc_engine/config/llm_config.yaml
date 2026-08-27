@@ -177,15 +177,22 @@ retrieval_profiles:
   # DEFAULT limit of 5 already exceeds supply and the knob is dead at any value >= 2.
   # It was not resized, because there is no value of `events_limit` that is an arm here.
   #
-  # `nearby_npcs` is the live tier-A replacement. It is a declared tier-A slot
-  # (context_slots.py, priority 91) measured POPULATED on 8 of 8 roster NPCs, so
-  # withholding it removes exactly one item per NPC — guaranteed exposure, and the reason
-  # the tier-A/tier-B split P9 performed survives the retirement of both additive arms.
+  # `memories` is the live tier-A replacement: a declared tier-A slot (context_slots.py,
+  # priority 90, path npc.memories) whose CONTENT is populated on 8 of 8 roster NPCs, so
+  # withholding it removes exactly one item per NPC AND changes what the model reads.
+  # That is the tier-A/tier-B split P9 performed, surviving the retirement of both
+  # additive arms — and it asks the question this engine's headline claim rests on:
+  # does an NPC's persistent memory change what it says.
+  #
+  # `nearby_npcs` was the first choice and was REJECTED ON MEASUREMENT. Its item is
+  # present in item_keys on 8/8, which is all gate 4 checks, but its text is the empty
+  # list `[]` for bren_smith — so for one NPC in eight the serialized context would have
+  # been byte-identical under the arm. Presence in item_keys is not exposure; content is.
   #
   # Schema is unchanged: apply_slot_policy drops the ITEM, and the generated serializer
-  # still emits the `nearby_npcs` key with its empty default. Two arms whose JSON differs
-  # in shape would be measuring schema drift, not retrieval.
-  no_nearby_npcs:
+  # still emits `npc.memories` with its empty default. Two arms whose JSON differs in
+  # shape would be measuring schema drift, not retrieval.
+  no_memories:
     weight_profile: null
     rag_top_k: 5
     graph_rag_top_k: 5
@@ -193,7 +200,7 @@ retrieval_profiles:
     cross_encoder_enabled: false
     skip_rag: false
     disabled_slots:
-      - nearby_npcs
+      - memories
     # P8 §8.5: every declared arm carries the same `rag:` cap as the default, so the
     # arm differs from default in exactly ONE field. Vary the cap only in an arm whose
     # declared knob IS the cap.
@@ -240,7 +247,7 @@ retrieval_profile_exposure:
     measured_on_corpus_sha: "2b19e47a1755354e"
     note: "2 is below the minimum supply of 3, so it binds on 8/8 rather than on the two NPCs with spare supply; probe 2/2, tierB 2 -> 1"
 
-  no_nearby_npcs:
+  no_memories:
     knob: disabled_slots
     direction: withhold
     measured_supply_min: 1
@@ -248,4 +255,4 @@ retrieval_profile_exposure:
     exposed_npcs: 8
     roster_size: 8
     measured_on_corpus_sha: "2b19e47a1755354e"
-    note: "nearby_npcs measured populated 8/8; withholding removes exactly one tier-A item per NPC, -49 tokens; probe 2/2 cases"
+    note: "measured 8/8 CONTENT exposure on the live engine: every roster NPC loses 2-3 memories and 213-327 assembled tokens. nearby_npcs was rejected here at 7/8 content — present in item_keys on 8/8 but empty for bren_smith, so one NPC in eight would have read identically"
