@@ -5903,6 +5903,10 @@ P9's fingerprint gate meaningful rather than decorative.
    is the complete and correct answer for this world. The 6/8 figure was measured against
    a world state that predates DEC-206's re-seed, i.e. it is precisely the cross-run drift
    `make eval-world-reset` exists to remove. **Retire the 6/8 number**; do not chase it.
+   **Confirmed a second way:** after a handful of verification dialogue turns the
+   probe reported **3/8**, because those turns created a new `RELATES_TO` edge. The
+   figure tracks live world state, which is exactly why a cross-phase comparison of
+   it is only meaningful immediately after `make eval-world-reset`.
    Review point 1's separate objection stands untouched: the probe passes no `player_id`,
    so `propagated_reputation` and `reputation` remain structurally invisible through it,
    and that is still P9's to close.
