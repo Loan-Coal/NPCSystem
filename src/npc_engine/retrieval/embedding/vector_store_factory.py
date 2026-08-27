@@ -72,21 +72,23 @@ class InMemoryVectorStore(VectorStoreProtocol):
         """
 
         _validate_top_k(top_k)
-        candidates = (
-            self._entries.items()
-            if filter_ids is None
-            else [(key, value) for key, value in self._entries.items() if key in filter_ids]
-        )
         scored: list[VectorSearchResult] = [
             {
                 "id": item_id,
                 "score": _dot_similarity(query_vector, entry["vector"]),
                 "payload": dict(entry["payload"]),
             }
-            for item_id, entry in candidates
+            for item_id, entry in self._candidates(filter_ids)
         ]
         ranked = sorted(scored, key=lambda row: float(row["score"]), reverse=True)
         return ranked[:top_k]
+
+    def _candidates(
+        self, filter_ids: set[str] | None
+    ) -> list[tuple[str, dict[str, Any]]]:
+        if filter_ids is None:
+            return list(self._entries.items())
+        return [(key, value) for key, value in self._entries.items() if key in filter_ids]
 
     async def delete(self, item_id: str) -> None:
         """Remove an entry by id; no-op if not present.
@@ -96,6 +98,15 @@ class InMemoryVectorStore(VectorStoreProtocol):
         """
 
         self._entries.pop(item_id, None)
+
+    async def count(self) -> int:
+        """Return how many entries this store holds.
+
+        Returns:
+            Number of stored entries.
+        """
+
+        return len(self._entries)
 
 
 def create_vector_store(settings: Settings) -> VectorStoreProtocol:

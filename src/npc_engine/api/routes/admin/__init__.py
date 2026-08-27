@@ -2,7 +2,7 @@
 Package: routes.admin
 Layer: api
 Purpose: HTTP routers for admin/designer tooling (batch ops, graph admin, system, debug, investigations).
-Public surface: batch_router, graph_router, graph_admin_router, system_router, system_admin_router, system_v1_router, debug_retrieval_router, investigations_router.
+Public surface: batch_router, graph_router, graph_admin_router, system_router, system_admin_router, system_v1_router, debug_retrieval_router, investigations_router, vector_store_rehydrate_router, vector_store_debug_router.
 Does NOT: define route handlers, middleware, or app lifespan.
 Dependencies injected: None (re-export hub).
 """
@@ -17,6 +17,8 @@ from .investigations import router as investigations_router
 from .system import admin_router as system_admin_router
 from .system import router as system_router
 from .system import v1_router as system_v1_router
+from .vector_store import debug_router as vector_store_debug_router
+from .vector_store import rehydrate_router as vector_store_rehydrate_router
 
 __all__ = [
     "batch_router",
@@ -27,4 +29,6 @@ __all__ = [
     "system_admin_router",
     "system_router",
     "system_v1_router",
+    "vector_store_debug_router",
+    "vector_store_rehydrate_router",
 ]

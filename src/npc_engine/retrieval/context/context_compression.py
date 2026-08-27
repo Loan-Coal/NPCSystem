@@ -38,6 +38,20 @@ _ESSENTIAL_FIELDS: dict[str, frozenset[str]] = {
     "secret": frozenset({"content", "severity"}),
     "item": frozenset({"name", "item_type", "value", "rarity"}),
     "debt": frozenset({"amount", "reason", "due_by"}),
+    # DEC-209 Decision 3. A `rag:` item is a whole node payload and the node may be a
+    # Character, an Event or a Location, so this is the union of those three rows. Without
+    # it compression fell through to byte truncation and the first compressed tier-B item
+    # emitted invalid JSON -- an unclosed string inside an unclosed brace -- which
+    # _safe_parse then handed to the prompt as a raw string. Tier B has always been empty,
+    # so nothing has ever hit this in production; P8 is what makes it reachable.
+    # `biography` is deliberately ABSENT even though "character" carries it: a retrieved
+    # node is background, not the NPC's own persona, and one Character hit's biography is
+    # large enough to define the tier's whole spend on its own.
+    "rag": frozenset({
+        "id", "name", "archetype", "current_mood",
+        "summary", "event_type", "severity", "occurred_at",
+        "descriptor", "region",
+    }),
 }
 
 

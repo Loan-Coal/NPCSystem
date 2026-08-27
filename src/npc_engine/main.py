@@ -68,6 +68,43 @@ from npc_engine.utils.logging import configure_logging
 _logger = logging.getLogger(__name__)
 
 
+
+async def _hydrate_vector_store(*, reconciler: EmbeddingReconciler) -> None:
+    """Populate the vector store synchronously before the app starts serving.
+
+    A latency optimisation, not a correctness requirement: POST
+    /v1/admin/vector-store/rehydrate does the same work on demand, which is what makes
+    VECTOR_STORE_HYDRATE_ON_STARTUP=false a legitimate posture instead of a silently
+    broken one (DEC-208 Decision 3).
+
+    Fails LOUD, at ERROR, when it reads nothing (DEC-208 Decision 4). For an instrument a
+    silent item_count of 0 costs a night of generation and then reads afterwards as a
+    null result rather than as a fault. It does NOT abort boot: the engine serves
+    dialogue perfectly well with an empty tier B, and refusing to start would turn a
+    degraded retrieval tier into a total outage.
+
+    Args:
+        reconciler: The reconciler whose ensure_corpus sweep populates the store.
+    """
+    report = await reconciler.ensure_corpus_once()
+    if report.nodes_read == 0:
+        _logger.error(
+            "vector_store.boot_hydration_read_nothing missing_embedding=%s passes=%s "
+            "— tier B will carry zero items this run",
+            report.missing_embedding,
+            report.reconcile_passes,
+        )
+        return
+    _logger.info(
+        "vector_store.boot_hydrated nodes_read=%s item_count=%s model=%s dim=%s corpus_sha=%s",
+        report.nodes_read,
+        report.fingerprint.item_count,
+        report.fingerprint.embedding_model,
+        report.fingerprint.embedding_dim,
+        report.fingerprint.corpus_sha,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     graph_db = get_graph_db()
@@ -163,7 +200,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             graph_db=graph_db,
             embedding_index=get_embedding_index(),
             interval_seconds=settings.EMBEDDING_RECONCILE_INTERVAL_SECONDS,
+            batch_size=settings.VECTOR_STORE_CORPUS_BATCH_SIZE,
         )
+        if settings.VECTOR_STORE_HYDRATE_ON_STARTUP:
+            await _hydrate_vector_store(reconciler=embedding_reconciler)
         reconciler_task = asyncio.create_task(embedding_reconciler.run_forever(), name="embedding-reconciler")
         cleanup_scheduler = IdempotencyCleanupScheduler(
             service=idempotency_service,

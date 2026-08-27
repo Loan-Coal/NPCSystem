@@ -194,3 +194,50 @@ def test_compress_item_changed_text_recompresses():
     r1 = cache.compress_item(item=item1, llm_config=cfg, target_tokens=10)
     r2 = cache.compress_item(item=item2, llm_config=cfg, target_tokens=10)
     assert r1 != r2
+
+
+# ---------------------------------------------------------------------------
+# DEC-209 Decision 3: a compressed rag: item must still be JSON
+# ---------------------------------------------------------------------------
+
+
+def test_a_compressed_rag_item_is_still_valid_json() -> None:
+    """`rag` was absent from _ESSENTIAL_FIELDS, so compression fell through to byte
+    truncation and emitted an unclosed string inside an unclosed brace, which
+    _safe_parse then handed to the prompt as a raw string.
+
+    Verified output before the fix:
+        {"occurred_at":"2026-01-01","severity":60,"summary":"...[compressed]#b1113aa4
+    """
+    import json
+
+    from npc_engine.retrieval.context.context_compression import ContextCompressionCache
+    from npc_engine.retrieval.context.context_merger import ContextItem
+
+    payload = {
+        "id": "evt_market_fire",
+        "summary": "Fire tore through the market stalls before dawn.",
+        "event_type": "disaster",
+        "severity": 60,
+        "occurred_at": "2026-01-01",
+        # The bulk that pushes the item over budget, and which projection removes.
+        # RAG payloads are whole node property dicts, so a retrieved Character drags its
+        # whole biography in behind it.
+        "biography": "an irrelevant wall of text " * 40,
+        "location_tag": "market",
+    }
+    item = ContextItem(
+        key="rag:evt_market_fire",
+        text=json.dumps(payload, sort_keys=True),
+        tier="tierB",
+        priority=60,
+    )
+
+    compressed = ContextCompressionCache().compress_item(
+        item=item, llm_config=_make_llm_config(), target_tokens=60,
+    )
+
+    parsed = json.loads(compressed)
+    assert parsed["summary"] == "Fire tore through the market stalls before dawn."
+    assert "biography" not in parsed, "compression must project, not truncate"
+    assert "location_tag" not in parsed

@@ -58,6 +58,45 @@ class EmbeddingIndex:
         vector = await asyncio.to_thread(_embed_text, text, self._model_name)
         await self._vector_store.upsert(item_id=item_id, vector=vector, payload=payload)
 
+    @property
+    def model_name(self) -> str:
+        """Return the embedding model identifier this index encodes with.
+
+        Exposed because the corpus fingerprint records which model produced the stored
+        vectors: changing EMBEDDING_MODEL invalidates every vector and every prior
+        measurement, and nothing could previously say so (DEC-211).
+        """
+
+        return self._model_name
+
+    async def upsert_vector(
+        self, item_id: str, vector: list[float], payload: dict[str, Any]
+    ) -> None:
+        """Store an ALREADY-COMPUTED vector, without encoding anything.
+
+        The insert path for corpus population (DEC-208). `upsert` above encodes its text;
+        this one deliberately cannot, because the embeddings persisted on the node were
+        produced by the reconciler's embedding TEXT and re-deriving that text here would
+        be a second implementation of it, free to disagree. sentence_encoder.embed
+        normalises, so the store's dot product over these vectors is already cosine.
+
+        Args:
+            item_id: Unique identifier for the indexed item.
+            vector: Precomputed embedding vector.
+            payload: Arbitrary metadata stored alongside the embedding.
+        """
+
+        await self._vector_store.upsert(item_id=item_id, vector=vector, payload=payload)
+
+    async def count(self) -> int:
+        """Return how many entries the backing vector store holds.
+
+        Returns:
+            Number of stored entries.
+        """
+
+        return await self._vector_store.count()
+
     async def search(
         self,
         query: str,

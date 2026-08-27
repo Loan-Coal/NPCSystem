@@ -62,3 +62,16 @@ class VectorStoreProtocol(Protocol):
         Args:
             item_id: Identifier of the item to remove; no-op if not found.
         """
+
+    async def count(self) -> int:
+        """Return how many entries the store currently holds.
+
+        Part of the protocol because DEC-208's report — and the corpus fingerprint a
+        generation record carries — must be answerable through the interface rather than
+        by reaching into one backend's internals. A backend that cannot count cannot say
+        whether hydration worked, and a silent item_count of 0 costs a night of
+        generation and then reads as a null result rather than as a failure.
+
+        Returns:
+            Number of stored entries.
+        """

@@ -127,6 +127,20 @@ class Settings(BaseSettings):
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
+    # Populate the vector store synchronously during boot (DEC-208 Decision 3).
+    # Hydration is a LATENCY optimisation, not a correctness requirement: since
+    # POST /v1/admin/vector-store/rehydrate exists, "false plus an explicit call" is a
+    # supported posture rather than a silently broken one. Set it false when the boot
+    # sweep does not fit the harness's 180s /health wait.
+    VECTOR_STORE_HYDRATE_ON_STARTUP: bool = True
+    # Pair the handlers' existing invalidate with the insert it has always implied
+    # (DEC-210 Decision 1). ON for the product, which needs a corpus that tracks the
+    # graph; OFF for an eval run, which needs one that cannot move — paired_arms
+    # interleaves arms inside a single run, so within-run corpus drift lands unevenly
+    # across arms and no receipt field could recover the distinction afterwards.
+    VECTOR_STORE_INCREMENTAL_UPSERT: bool = True
+    # Page size for reconcile-until-dry and for the corpus load.
+    VECTOR_STORE_CORPUS_BATCH_SIZE: int = 200
     # Maximum tokens the context_builder may fill. Derived as OLLAMA_CONTEXT_LENGTH minus
     # PROMPT_WINDOW_OVERHEAD_TOKENS, which is a SUM OF NAMED RESERVES (see
     # config_prompt_window.py), not a literal. The previous literal 5200 under-reserved by

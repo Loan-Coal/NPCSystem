@@ -22,6 +22,8 @@ from npc_engine.api.routes.admin import (
     system_admin_router,
     system_router,
     system_v1_router,
+    vector_store_debug_router,
+    vector_store_rehydrate_router,
 )
 from npc_engine.api.routes.dialogue import (
     action_router,
@@ -139,6 +141,8 @@ def _register_admin_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(pledges_router, prefix=admin_prefix)
     app.include_router(treaties_router, prefix=admin_prefix)
     app.include_router(debug_retrieval_router, prefix=admin_prefix)
+    app.include_router(vector_store_rehydrate_router, prefix=admin_prefix)
+    app.include_router(vector_store_debug_router, prefix=admin_prefix)
     app.include_router(locations_admin_router, prefix=admin_prefix)
 
 

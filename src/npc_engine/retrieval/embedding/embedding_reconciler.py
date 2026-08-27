@@ -3,7 +3,8 @@ embedding_reconciler.py - Background stale-embedding reconciliation worker.
 Layer: retrieval
 Purpose: Periodic worker that heals stale embeddings using graph timestamps.
 
-Does NOT: mutate core graph properties other than embedding index timestamps.
+Does NOT: own the vector store's contents — it drives retrieval.embedding.corpus, which
+          does (DEC-208) — or mutate core graph properties other than embedding fields.
 
 Dependencies injected: GraphDB and EmbeddingIndex.
 Used by: api/dependencies.py (scheduler wiring).
@@ -17,6 +18,8 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from npc_engine.graph.infra.embedding_sync_queries import batch_set_embeddings, select_stale_nodes
+from npc_engine.retrieval.embedding.corpus import CorpusStoreProtocol, ensure_corpus
+from npc_engine.schema.corpus_models import CorpusReport
 
 
 LOGGER = logging.getLogger(__name__)
@@ -40,15 +43,14 @@ class _GraphDbProtocol(Protocol):
         """Return an async context manager that yields a _SessionProtocol instance."""
 
 
-class _EmbeddingIndexProtocol(Protocol):
-    async def upsert(self, item_id: str, text: str, payload: dict[str, Any]) -> None:
-        """Upsert one embedding row.
+class _EmbeddingIndexProtocol(CorpusStoreProtocol, Protocol):
+    """What the reconciler needs of an index: encode a batch, and be a corpus store.
 
-        Args:
-            item_id: Unique identifier for the item.
-            text: Raw text to embed.
-            payload: Metadata stored alongside the embedding.
-        """
+    It extends CorpusStoreProtocol rather than duplicating it because ensure_corpus_once
+    hands this same object on as the store to populate. The text-embedding `upsert` is
+    NOT here: the reconciler has never called it, and declaring a method no implementor
+    is exercised on is how a mock drifts from the adapter it stands in for.
+    """
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Encode a list of texts and return their embedding vectors.
@@ -103,12 +105,29 @@ class EmbeddingReconciler:
         """
 
         async with self._graph_db.get_session() as session:
-            return await self._reconcile_in_session(session=session)
+            return await self.reconcile_in_session(session)
+
+    async def ensure_corpus_once(self) -> CorpusReport:
+        """Reconcile until dry and load every embedded node into the vector store.
+
+        Returns:
+            The CorpusReport for this sweep.
+        """
+
+        async with self._graph_db.get_session() as session:
+            return await ensure_corpus(
+                session, self._embedding_index, self, batch_size=self._batch_size,
+            )
 
     async def run_forever(self) -> None:
-        """Run reconciliation cycles in a loop until task cancellation.
+        """Populate the corpus in a loop until task cancellation.
 
-        Logs cycle stats when at least one node was processed or failed.
+        Calls ensure_corpus, not reconcile_once: writing `n.embedding` and never
+        propagating it to the vector store is what left the store all-delete-no-insert
+        (DEC-208). One owner, one entry point — this loop, boot, and the rehydrate route
+        all go through the same function.
+
+        Logs cycle stats when at least one node was processed or read.
         Swallows non-cancellation exceptions and retries after the configured interval.
 
         Raises:
@@ -117,12 +136,16 @@ class EmbeddingReconciler:
 
         while True:
             try:
-                stats = await self.reconcile_once()
-                if stats["processed"] > 0 or stats["failed"] > 0:
+                report = await self.ensure_corpus_once()
+                if report.reconcile_passes > 1 or report.nodes_read > 0:
                     LOGGER.info(
-                        "embedding reconcile cycle finished: processed=%s failed=%s",
-                        stats["processed"],
-                        stats["failed"],
+                        "embedding reconcile cycle finished: passes=%s nodes_read=%s "
+                        "upserted=%s missing_embedding=%s item_count=%s",
+                        report.reconcile_passes,
+                        report.nodes_read,
+                        report.upserted,
+                        report.missing_embedding,
+                        report.fingerprint.item_count,
                     )
                 await asyncio.sleep(self._interval_seconds)
             except asyncio.CancelledError:
@@ -132,7 +155,21 @@ class EmbeddingReconciler:
                 LOGGER.exception("embedding reconciler cycle failed")
                 await asyncio.sleep(self._interval_seconds)
 
-    async def _reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
+    async def reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
+        """Run one reconciliation cycle on a session the caller already holds.
+
+        Public because ensure_corpus drives it in a loop until it goes dry, on the same
+        session it then reads the corpus back from (DEC-208). It was private, which is
+        why corpus population and reconciliation could only be sequenced by task-start
+        order in a lifespan.
+
+        Args:
+            session: Active Neo4j async session.
+
+        Returns:
+            Dict with keys ``processed`` (successful writes) and ``failed``.
+        """
+
         batch = await select_stale_nodes(session, self._batch_size)  # type: ignore[arg-type]
 
         if not batch:
