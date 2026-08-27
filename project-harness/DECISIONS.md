@@ -6515,3 +6515,240 @@ untouched. No paired generation run. No `src/` engine behaviour changed.
 **Opened by this entry:** ISSUE-221 (the RAG scope drifts on an idle engine while the corpus
 is frozen), ISSUE-222 (an empty producer item is still keyed, ranked and charged, which is
 what made item_keys occupancy a misleading exposure signal).
+
+---
+
+## DEC-215: P10 — the window is trimmed to the SHIPPED default, and the paired
+## generation is NOT run, because the arithmetic that would justify it does not exist
+**Date:** 2026-08-27
+**Decided by:** this session (P10), against measurements taken this session on the clean
+baseline at `corpus_sha 2b19e47a1755354e`, rebuilt image, `make eval-world-reset`
+immediately prior.
+
+**Recorded BEFORE implementation, as P10's entry condition requires.** The verification
+section at the end was appended after the change landed; everything above it is the
+decision as taken, not a reconstruction.
+
+### The four questions P10 had to answer, answered
+
+**(a) Does P10 run a paired generation at all? NO.** The arithmetic is below and it is
+not close. A recorded "we did not run this, and here is why" is the deliverable.
+
+**(b) Which arms? The three DEC-214 declared, unchanged.** `no_rag`, `narrow_rag`,
+`no_memories`. Bonferroni stays at 3 pairings. No arm was added, dropped or resized, so
+`_DECLARED_ARMS` and `llm_config.yaml` did not move and the MDE did not change. Every one
+was re-measured this session over the FULL eight-NPC roster (table below), not the two
+probe cases: all three are exposed 8/8.
+
+**(c) Trim BEFORE or AFTER the generation? Before — and it is now moot.** The trim lands
+first so that anything measured afterwards describes the configuration that ships rather
+than a 32768-token local instrument nothing else will ever run. Since (a) is NO, no
+generation is measured under either window.
+
+**(d) Do the gates re-run after the `src/` change? Yes, and they did.** The window trim is
+a `src/npc_engine/config.py` change, so the image was rebuilt, the world reset, and the
+arm probe, the inner-life probe and the ceiling probe were all re-run against it. P9's
+"no `src/` change lands after P9 goes green" rule is discharged the way P9 itself
+discharged it: by re-running, not by exempting.
+
+### THE RULE'S STATUS, RESOLVED EXPLICITLY
+
+P9's rule ("no `src/` change lands after P9 goes green; if one does, P9 re-runs") was
+genuinely ambiguous, because P9 did not go fully green — gate 4 was red by design, and
+DEC-214 then made it green with config-only changes. **The rule is read here as: any
+`src/` change invalidates the gate evidence and the gates must be re-run, not as a
+prohibition.** P10 changes `src/npc_engine/config.py` and `src/npc_engine/config/
+llm_config.yaml`, so the whole gate set was re-run against a rebuilt image on a freshly
+reset world. That is the reading DEC-214 already acted on and it is now written down.
+
+### The measured per-NPC ceiling — P10's primary input, and it did not exist
+
+Eight NPCs, `GET /v1/admin/debug/retrieval` with `player_id=player_demo`, query
+"what news", default arm, clean baseline, window 32768 / budget 25638. `summed` is the
+receipt's per-item sum; `serial` is the serialized blob the budget is enforced against;
+CEILING is the larger, because a window sized to the smaller has headroom that is not
+real. No LLM call was made for any of it.
+
+    npc                tier0      tierA      tierB      tierC   summed   serial  CEILING  drops
+    captain_sorn        2/75      8/687       2/93      3/140      995      978      995      0
+    mira_innkeeper      2/75      8/857       2/85      3/134     1151     1130     1151      0
+    old_henryk          2/75      8/708       2/89       2/90      962      951      962      0
+    aldric_merchant     2/75      7/726       2/85      3/145     1031     1015     1031      0
+    lira_fence          2/75      8/731       2/90      3/131     1027     1011     1027      0
+    bren_smith          2/75      7/624       1/45       2/88      832      826      832      0
+    vex_spymaster       2/75      7/710       1/45       2/92      922      910      922      0
+    harwick_guard       2/75      7/644       2/96       2/95      910      896      910      0
+
+**ROSTER CEILING = 1151 tokens** (`mira_innkeeper`). captain_sorn 995 and old_henryk 962
+reproduce the two figures that already existed, which is what makes the other six
+trustworthy. Zero drops on all eight.
+
+Per-tier maxima across the roster, which is what the tier ceilings must clear:
+**tier0 75 · tierA 857 · tierB 96 · tierC 145.**
+
+### THE WINDOW ARITHMETIC, WRITTEN OUT
+
+The overhead is a SUM OF NAMED PARTS, and P8 moved one of them. Verified by execution,
+not by reading:
+
+    SYSTEM_PROMPT_TOKEN_RESERVE   5850   (P8/DEC-212 raised it 5600 -> 5850)
+    DIALOGUE_OUTPUT_TOKEN_RESERVE  512
+    PROMPT_HEADER_RESERVE_TOKENS   768
+    PROMPT_WINDOW_OVERHEAD_TOKENS 7130   <- NOT 6880
+
+    budget(w) = max(512, w - 7130)
+
+    window    budget   holds 1151?   holds 1151+1200 session?
+      8192      1062        NO                 NO
+     10240      3110       yes                yes, by 759 (32%)
+     12288      5158       yes                yes, by 2807 (119%)
+     16384      9254       yes                yes
+     32768     25638       yes                yes
+
+**DEC-204's 25,888 and its 6,880 are stale everywhere they appear and are corrected by
+this entry.** The engine itself has been right all along — a live receipt reports
+`prompt_token_budget: 25638` — so only the prose was wrong, in four places, not three:
+`config.py:157` ("At 8192 -> budget = 1312", now 1062), `config.py:294-295` (the retired
+"~4200 + 512 + ~500 = 5200" narrative), `llm_config.yaml:17` ("max(512, 32768 - 6880) =
+25888"), and DEC-204 itself, which is historical and is corrected here rather than
+rewritten.
+
+**DECISION: `OLLAMA_CONTEXT_LENGTH` 12288, in BOTH the code default and `.env`.**
+
+    12288 - 7130 = 5158 budget
+    required = 5850 + 5158 + 512 + 768 = 12288 exactly   (the window validator passes)
+
+**Why the code default and not only `.env`.** `.env` is NOT tracked by git — verified,
+`git ls-files --error-unmatch .env` fails. So `config.py:123` is what every checkout
+actually runs, and at 8192 it derives a budget of **1062 against a measured ceiling of
+1151**. Three of the eight NPCs (`mira_innkeeper` 1130, `aldric_merchant` 1015,
+`lira_fence` 1011 on the enforced `serial` figure) sit above it. The shipped default
+could not hold its own assembled context, would drop tier-A items, and would re-arm
+ISSUE-209 on the default path — a D8 regression in the configuration that ships, not in
+the one this project happens to develop against. DEC-204 deliberately left the code
+default at 8192 and said the 32768 was "a local instrument, provisional, re-decided in
+P10". This is that re-decision, and it moves the number that matters.
+
+**Why 12288 and not something else.**
+
+- **Not 8192**: budget 1062 < ceiling 1151. It is the defect described above.
+- **Not 10240**: budget 3110 clears the ceiling but leaves only 759 tokens over the
+  ceiling-plus-session figure. Session history is **unbounded on the live path**
+  (ISSUE-224, found this session), so a 32% margin against an unbounded quantity is not
+  a margin.
+- **12288**: budget 5158 is **4.5x the measured roster ceiling**, and still 2.2x after
+  adding the full 1200-token session allowance `llm_config.yaml` declares. Nothing is
+  dropped on any NPC, so ISSUE-209 stays dormant and ISSUE-214 stays masked — both
+  REQUIRED outcomes, because D2 forbids the allocator rewrite and ISSUE-214 is open.
+  It cuts the KV allocation 62% against 32768, and DEC-204 measured latency as
+  effectively window-independent at this prompt size, so the saving is free.
+- **Not 16384**: it works, but the instruction is the SMALLEST window that holds the
+  ceiling with headroom, and 12288 already holds it 4.5 times over.
+
+**What the headroom is for, stated so it can be disagreed with.** 4007 tokens above the
+measured ceiling. It absorbs: the session history the eval harness never sends but a game
+client does; RAG growth if the corpus grows past 51 nodes; and the fact that the ceiling
+was measured on ONE query ("what news") against ONE world state.
+
+### THE TIER CEILINGS, RE-DECIDED — and P5's stated invariant deliberately dropped
+
+    tier_a 12000 -> 4500      tier_b 8000 -> 1500      tier_c 5000 -> 1000
+
+Against per-tier measured maxima of 857 / 96 / 145, that is 5.3x, 15.6x and 6.9x.
+tier_a additionally absorbs the 1200-token session allowance (857 + 1200 = 2057) with
+2.2x margin.
+
+**P5 wrote "Sum <= budget on purpose" and this entry breaks that on purpose.** 4500 +
+1500 + 1000 = 7000 against a 5158 budget. The reason: the three tiers do not partition
+the budget, they draw on ONE shared budget through `_greedy_fill`, so the ceilings are
+per-tier SAFETY limits, not an allocation. Preserving "sum <= budget" at this window
+would force `tier_budget_tokens.tier_a` down to about 3000, which is barely above the
+0.55 fraction floor of 2836 — and `_tier_a_cap_with_reclaim` returns
+`min(ceiling, max(floor, budget - committed))`, so a ceiling that close to the floor
+leaves DEC-203's reclaim only 164 tokens to work with. That would re-create the ISSUE-197
+starvation DEC-203 was written to fix, in order to preserve a sentence written for a
+phase that needed nothing to bind. The invariant that replaces it, and that the YAML now
+states, is: **every tier ceiling clears its measured maximum by a wide margin, tier_a's
+ceiling stays above the tier_a fraction floor so the reclaim is live, and the shared
+prompt budget is the thing that binds.**
+
+At budget 5158 the resulting caps are: tier_a `min(4500, max(2836, 5158-316)) = 4500`
+against a demand of 857; tier_b `min(1500, int(0.30*5158)=1547) = 1500` against 96;
+tier_c `int(0.15*5158) = 773` against 145. Nothing binds. Confirmed by measurement below.
+
+### (a) IN FULL: WHY THE PAIRED GENERATION IS NOT RUN
+
+The MDE was recomputed from `evals/mde.py` this session rather than quoted, and it
+reproduces DEC-213 and DEC-214 exactly. Inputs are the recorded ones: n=78 guard pairs,
+the 6.4pp floor, base rate 0.951, kappas from ISSUE-184. Implied discordance
+p_d = 4.07% against an independence bound of 9.32%.
+
+    comparisons   tone_judge   affirms_judge   refusal_judge
+              1        6.4pp          22.7pp          28.4pp
+              2        7.0pp          25.0pp          31.3pp
+              3        7.4pp          26.2pp          32.9pp   <- the shipped arm set
+
+    pairs needed for a 6.4pp TRUE effect, at 3 comparisons:
+        tone_judge 104 · affirms_judge 1,308 · refusal_judge 2,055   (we have 78)
+
+**Criterion by criterion, there is nothing a ten-hour run can return.**
+
+- `tone_judge` resolves 7.4pp, and 78 pairs is short of the 104 it needs even for the
+  6.4pp floor. It is also the criterion that scored a unanimous 135/135 in the
+  calibration panel: a measure at ceiling with no variance cannot move whatever the
+  arm does.
+- `affirms_judge` needs the underlying rate to move **26.2pp**. The base rate is 95.1%,
+  so the arm would have to destroy more than a quarter of all passing responses.
+- `refusal_judge` needs **32.9pp**, against the same 95.1% base.
+
+**And the descriptive half of the run has already been delivered, for free.** DEC-214's
+argument for running anyway was that "three measured-exposure arms produce a real
+observation whatever the judges say". That observation is the per-arm context delta — and
+`make probe-ceiling --retrieval-profile <arm>` produced it this session over all eight
+NPCs in about thirty seconds, with no LLM call:
+
+    arm           what it removes                       delta vs default (summed tokens)
+    no_rag        tiers B and C entirely, 3-5 items     -133 to -233 on 8/8
+    narrow_rag    tier B/C down to 1 item each          -43 to -145 on 8/8
+    no_memories   2-3 memories from tier A              -213 to -327 on 8/8
+
+Full per-NPC figures are in the verification section. Every arm is exposed on 8/8 with
+zero drops. **So the ten hours buys exactly one thing the probe does not already give:
+the judge verdicts — the one output the arithmetic above says cannot resolve.**
+
+**The cost side is not zero, which settles it.** The run irreversibly retires roughly 147
+human labels. They are keyed POSITIONALLY and `criteria_sha256` covers only the judging
+criteria, so they would NOT drift-flag: a later session would find them attached to
+responses that no longer exist and read them as validated. Spending 147 human labels and
+ten hours to obtain a verdict that is statistically indistinguishable from noise is a bad
+trade in both currencies.
+
+**This is a decision, not a deferral, and here is how to overturn it.** Do the thing
+DEC-214 already scoped and this entry endorses: run the existing deterministic matchers
+(`evals/matchers.py`: `schema`, `in_set`, `range`, `regex`, scored by
+`evals/deterministic_records.py`) over ONE existing generation directory and report the
+pass-rate distribution. Those carry **no kappa penalty by construction** — a schema check
+either passes or it does not, so Youden's-J attenuation does not apply and the observed
+MDE is the true one, which removes the entire factor of four. The open question is
+whether they have any VARIANCE to move; if they pass at 100% under both arms the MDE is
+irrelevant because the outcome is constant. That measurement costs an hour and no LLM
+time. **If it shows variance, the paired generation becomes worth running and this
+decision should be reversed.** Until then it is ten hours spent to learn nothing.
+
+### THE PRE-P10 HUMAN LABELS ARE NOT RETIRED, BECAUSE NOTHING REGENERATED
+
+P10's plan text required recording that a generation retires them. **No generation ran,
+so they are NOT retired and remain valid.** This is recorded explicitly because the
+inverse note was the one P10 was pre-committed to writing, and a future session finding
+neither statement would have to guess. `evals/fixtures/` is untouched, `corpus_sha` is
+unmoved at `2b19e47a1755354e`, and P8/P9/DEC-214 comparability holds.
+
+### What this deliberately did NOT do
+
+The greedy allocator is untouched (D2). ISSUE-209 is OBSERVED and RECORDED at the chosen
+window, not fixed. ISSUE-214 is untouched and stays masked, which the chosen window
+guarantees. `evals/fixtures/` untouched, so ISSUE-213/ISSUE-210's need/Need split is
+still available to a later phase. `Settings.RAG_TOP_K` unchanged at 5, so DEC-194's
+byte-identity holds. ISSUE-219, ISSUE-220, ISSUE-203, ISSUE-201 untouched. No arm added
+or removed. No `src/` ENGINE behaviour changed — the only `src/` edits are two
+configuration values and the comments around them.
