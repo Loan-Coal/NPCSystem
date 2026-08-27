@@ -3444,6 +3444,175 @@ sessions. `EVAL-03` folds into the Parked LLM-`seed` work, which is its real pre
 
 ---
 
+---
+
+## Program 4 — The golden set rebuild and judge repair (EVAL-P25..P28)
+
+> **Full plan, with the measured evidence behind every phase:
+> `project-harness/EVAL_P25_TO_P31_PLAN.md`.** Read §0 before starting anything here — it
+> answers, with numbers, why expanding the case set moves kappa's *interval* and *base rate*
+> but not its *reference-label reliability*, which is what EVAL-P28.1 exists for.
+
+**Commissioned:** 2026-08-27, maintainer decision after the P0–P9 review. The maintainer chose
+**judge repair** over the deterministic-matcher pivot, and chose to pay the golden-set cost
+upfront. The deterministic table is preserved in the plan §1 as the recorded fallback.
+
+**Why this program exists.** Two of four scorers are suppressed by the repo's own trust policy
+(`refusal_judge` kappa 0.247, `affirms_judge` kappa 0.530, both REFUSED), the third is unanimous
+and has no variance, and every one of the 393 reference labels is a single-rater pass with zero
+inter-rater evidence. DEC-214 established that P10 can produce a descriptive result and not a
+significant one. This program is what changes that.
+
+### Phase EVAL-P25 — the coverage contract, before a single case is authored
+
+- [ ] **EVAL-P25.1** Engine observability audit. `create docs/ENGINE_EVAL_COVERAGE.md`,
+      `create scripts/check_engine_coverage.py`,
+      `create tests/unit/scripts/test_check_engine_coverage.py`. Classify all 40+ packages under
+      `src/npc_engine/engines/` as `dialogue_observable` / `state_observable` / `not_observable`.
+      Gate fails on an unclassified package; wire into `make check`.
+- [ ] **EVAL-P25.2** Reasoning-dimension taxonomy. `create docs/REASONING_DIMENSIONS.md`,
+      `edit docs/CAPABILITY_CASES.md`. Event knowledge, causality, rumour provenance, contextual
+      variance, multi-round coherence (declared here, authored in P27). One case-id prefix and one
+      coverage rule per dimension.
+- [ ] **EVAL-P25.3** The base-rate contract — the kappa lever made into a gate.
+      `create scripts/check_base_rate.py`, `create tests/unit/scripts/test_check_base_rate.py`,
+      `edit docs/CASE_SET_POLICY.md`. Target 0.55–0.85. Advisory on first run, blocking after P26.
+- [ ] **EVAL-P25.4** Contextual-variance scorer. `create evals/variance_scorer.py`,
+      `create tests/unit/evals/test_variance_scorer.py`. Deterministic, kappa=1.0 by construction.
+      **The cheapest useful thing in either program — no labels, no Opus spend, no engine change.**
+
+### Phase EVAL-P26 — author the set, adversarially
+
+- [ ] **EVAL-P26.1** The Opus adversarial case reviewer. `create evals/case_adversary.py`,
+      `create prompts/eval/case_adversary.yaml`, `create tests/unit/evals/test_case_adversary.py`,
+      `edit Makefile` (`make review-cases`). Reviews CASES; P28.1 labels RESPONSES — different jobs.
+- [ ] **EVAL-P26.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Authoring
+      pass, per dimension per observable engine. Ratchet clause per EVAL-P20.2. Closes ISSUE-147.
+- [ ] **EVAL-P26.3** Coverage + adversary gate. `edit tests/unit/evals/test_capability_coverage.py`.
+
+### Phase EVAL-P27 — the multi-turn track (the "separate programme" SEQUENCE_SCHEMA names)
+
+> **Scoping warning:** comparable in size to P0–P8 combined. Do not start inside another phase.
+> `docs/SEQUENCE_SCHEMA.md` is explicit that the single-turn `GenerationRecord` cannot carry
+> per-turn judging or branching. Today's six scenario adapters each return a single boolean.
+
+- [ ] **EVAL-P27.1** v2 per-turn record models (`evals/sequence_records.py` becomes load-bearing).
+- [ ] **EVAL-P27.2** Per-turn judging, replacing the scenario boolean.
+- [ ] **EVAL-P27.3** Conversation-coherence criteria in `prompts/eval/`.
+- [ ] **EVAL-P27.4** Fidelity-driven metric suppression per `docs/SEQUENCE_STATS_POLICY.md` §3 —
+      an unmet fidelity requirement means the metric is **absent**, not caveated.
+- [ ] **EVAL-P27.5** *(live; human session)* First measured multi-turn run.
+
+#### 🔴 HUMAN GATE H13 — `EVAL-P28.1` the labelling spend and the drift-policy resolution
+**Ready when:** `EVAL-P25.3`, `EVAL-P26.3`
+**Clears when:** `EVAL-P28.1`
+**Blocks:** `EVAL-P28.2`, `EVAL-P28.3`, `EVAL-P28.4`
+**Runbook:** `project-harness/EVAL_P25_TO_P31_PLAN.md` §3 (EVAL-P28.1) and §2.C
+**Why not the loop:** it spends a labelling budget and writes `evals/calibration/`, which is a
+`FROZEN_PATH_PREFIXES` directory, and it records a DECISIONS entry settling a policy conflict.
+
+Two things need a human: the labelling budget, and settling DEC-181 against the P10 plan note
+(they contradict — see plan §2.C). Neither is a code decision. **Do not run this before the
+case set has landed**: labelling the OLD battery reproduces the base-rate ceiling that §0 shows
+is what suppressed kappa in the first place.
+
+### Phase EVAL-P28 — double-blind labelling and kappa repair
+
+- [ ] **EVAL-P28.1** ⏸️ *(spends labelling budget; records DEC-216 — human session)* The blind
+      dual-label protocol. `edit evals/label_export.py`, `edit evals/label_import.py`,
+      `create evals/interrater.py`, `create tests/unit/evals/test_interrater.py`,
+      `edit docs/EVAL_METHODOLOGY.md`, `edit evals/calibration/LABEL_PROMPT.md`.
+      Opus blind + human blind + adjudicate disagreements. **Inter-rater kappa on the reference
+      side falls out as a byproduct — the number this repo has never had.**
+      `calibration.py` must REFUSE a headline kappa for any scorer lacking two independent
+      reference labels. **RED anchor:** feed it the current 393 single-rater rows, assert refusal.
+      Records **DEC-216** (this, plus the DEC-181 / P10 resolution).
+- [ ] **EVAL-P28.2** Re-measure kappa on the new set. No judge changes yet — the clean read.
+- [ ] **EVAL-P28.3** Judge criteria rewrite, gated behind P28.2. Validate via
+      `make eval-replay-criteria` (EVAL-P19.0b exists for exactly this). **DEC-172 recorded the
+      wording lever exhausted at n=3 against the OLD corpus; if three rewrites fail again against
+      the new one, take the plan §1 deterministic table instead. Written down in advance.**
+- [ ] **EVAL-P28.4** Accept or reject against `docs/SCORER_TRUST_POLICY.md` (kappa >= 0.60). A
+      judge that still fails stays suppressed; the policy is not weakened to fit the result.
+
+---
+
+## Program 5 — The first-class prompt arm (EVAL-P29..P31)
+
+> **Full plan: `project-harness/EVAL_P25_TO_P31_PLAN.md` §4.**
+
+**Commissioned:** 2026-08-27, maintainer decision: a first-class prompt arm, planned with its
+refactors, not a rebuild-and-compare workaround.
+
+**Why this program exists.** Prompt-version A/B does not exist, and not partially:
+`prompt_builder.py:37` resolves `_PROMPT_PATH` at module level so the dialogue prompt is a
+process-wide singleton; `DialogueRequest` carries `retrieval_profile` and no prompt field; and
+`paired_arms` makes arm identity *be* the retrieval profile. `RunConfig.dialogue_prompt_hash`
+only *detects* a prompt change and makes two runs incomparable — it cannot vary one.
+
+**Governing rule, inherited:** DEC-194 (strict resolution, no silent fallback) and DEC-214 (an
+arm may not be declared until its exposure has been measured).
+
+**⚠️ P9 fence:** EVAL-P29.2 and EVAL-P30.2 are `src/` changes. Either they land **before** the
+P10 regeneration, or P10 runs first and these land after with `make eval-arm-probe` re-run.
+**Not decided here.**
+
+### Phase EVAL-P29 — the prompt-variant registry (refactor; byte-identical by construction)
+
+- [ ] **EVAL-P29.1** `prompt_variants:` block in `llm_config.yaml`, mirroring
+      `retrieval_profiles:`. Strict resolution — undeclared name is HTTP 400. `default` is NOT
+      declared, for the same reason `retrieval_profiles` does not declare it.
+      `edit src/npc_engine/config/llm_config.yaml`,
+      `edit src/npc_engine/schema/context_config_models.py`,
+      `create tests/unit/config/test_shipped_prompt_variants.py`.
+- [ ] **EVAL-P29.2** ⚠️ **The refactor.** `prompt_builder` stops loading its prompt at import.
+      `edit src/npc_engine/engines/dialogue/prompt_builder.py`,
+      `edit src/npc_engine/engines/dialogue/dialogue_handler.py`,
+      `create src/npc_engine/engines/dialogue/prompt_variant_resolver.py`. Pays down the existing
+      constructor-injection violation rather than adding one. `prompt_builder.py` already carries
+      a 300-line waiver, so the resolver split is required, not optional. **ISSUE-223.**
+- [ ] **EVAL-P29.3** The byte-identity pin — direct analogue of DEC-194's
+      `test_no_profile_and_explicit_default_profile_are_byte_identical`.
+      `create tests/unit/engines/test_prompt_variant_byte_identity.py`.
+      **RED anchor first: without this test the refactor is unfalsifiable.**
+
+### Phase EVAL-P30 — generalize the arm axis from "retrieval profile" to "arm spec"
+
+- [ ] **EVAL-P30.1** `ArmSpec` frozen model `(retrieval_profile, prompt_variant)`; `arm_gen_id`
+      derives from it. **Back-compat mandatory:** a retrieval-only arm must keep the directory
+      name it produces today, pinned by test, or every committed artifact and every `compare`
+      invocation breaks. `create evals/arm_spec.py`, `edit evals/paired_arms.py`,
+      `create tests/unit/evals/test_arm_spec.py`.
+- [ ] **EVAL-P30.2** ⏸️ *(public interface change with callers outside its module — ask-gate per
+      CLAUDE.md, sign-off required before writing)* `DialogueRequest.prompt_variant`.
+      `edit src/npc_engine/engines/dialogue/dialogue_models.py`, route + `live_openapi.json`.
+- [ ] **EVAL-P30.3** `RunConfig.prompt_variant` + comparability rule. Two different prompt
+      *variants* are a legitimate ARM difference; two different shipped prompt *files*
+      (`dialogue_prompt_hash`) remain an incomparability. The code must distinguish them.
+      `edit evals/run_config.py`, `edit evals/compare.py`,
+      `create tests/unit/evals/test_prompt_arm_comparability.py`.
+- [ ] **EVAL-P30.4** `--arms` CLI. `--profiles a,b` keeps working verbatim.
+      `edit evals/generate_runner.py`, `edit Makefile`.
+- [ ] **EVAL-P30.5** Exposure gate for prompt arms — DEC-214's rule applied. A prompt arm must be
+      shown to change the assembled prompt before it may be declared. Measurable by digest, with
+      **zero LLM calls**, so there is no excuse for skipping it. `edit evals/arm_probe_gates.py`,
+      `edit evals/arm_supply.py`, `edit tests/unit/config/test_declared_arm_exposure.py`.
+
+#### 🔴 HUMAN GATE H14 — `EVAL-P31` the first prompt A/B
+**Ready when:** `EVAL-P29.3`, `EVAL-P30.5`
+**Clears when:** `EVAL-P31.1`
+**Blocks:** —
+**Runbook:** `project-harness/EVAL_P25_TO_P31_PLAN.md` §4 · P10's twelve preconditions apply verbatim
+**Why not the loop:** a live paired generation against a `FROZEN_PATH_PREFIXES` directory, behind
+a `src/` change that re-arms the P9 fence.
+
+### Phase EVAL-P31 — the first prompt A/B
+
+- [ ] **EVAL-P31.1** *(live; human session)* Preconditions inherit P10's twelve gates verbatim,
+      plus gate 4 green for the prompt arm and EVAL-P29.3 green.
+
+---
+
 ## Active — Folder reorganisation (REORG-PR6..PR9)
 
 > Branch: `refactor/folder-reorg`. Full per-PR details, exact file lists, and domain tables:

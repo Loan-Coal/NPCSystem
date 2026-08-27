@@ -16,6 +16,30 @@ Rules:
 
 ## Open
 
+## ISSUE-223: the dialogue prompt is a process-wide singleton, so it cannot be A/B tested
+**Found:** 2026-08-27, during the P0-P9 review that produced `EVAL_P25_TO_P31_PLAN.md`
+**Severity:** P2 (annoying) - blocking for Program 5, not for anything shipping today
+**Where:** `src/npc_engine/engines/dialogue/prompt_builder.py:32-40`
+**Description:** `_PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"` and the `llm_config.yaml`
+load both run at MODULE level, so the dialogue system prompt is resolved once per process.
+Three consequences: (1) no prompt variant can be selected per turn, so prompt-version A/B is
+structurally impossible - `DialogueRequest` carries `retrieval_profile` and has no prompt
+counterpart, and `paired_arms` makes arm identity *be* the retrieval profile; (2) it is a
+module-level load of a stateful resource inside an engine, which CLAUDE.md's
+constructor-injection rule forbids; (3) the only way to compare two prompts today is to edit
+the YAML and rebuild, which changes `RunConfig.dialogue_prompt_hash` and therefore makes
+`compare.py` refuse the pairing outright - so the comparison is not merely unpaired, it is
+rejected by the harness.
+**Why deferred:** it is the subject of EVAL-P29.2, and it is a `src/` change that collides
+with the P9 fence ("no `src/` change lands after P9 goes green"). Sequencing against the P10
+regeneration is an open scheduling decision recorded in the plan, not made.
+**To fix:** EVAL-P29.1-29.3. Declare `prompt_variants:` in `llm_config.yaml` mirroring
+`retrieval_profiles:` with strict resolution; extract
+`engines/dialogue/prompt_variant_resolver.py` (required, not optional - `prompt_builder.py`
+already carries a 300-line waiver); make the variant an injected per-call argument. Pin with
+a byte-identity digest test in the shape of DEC-194's
+`test_no_profile_and_explicit_default_profile_are_byte_identical`, written RED first.
+
 ## ISSUE-201: `npc.emotion` reports "neutral" while the NPC's character node says otherwise
 **Found:** 2026-08-26, during the ISSUE-163 root-cause trace
 **Severity:** P2 (annoying)
