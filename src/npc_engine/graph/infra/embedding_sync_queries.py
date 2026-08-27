@@ -20,6 +20,8 @@ WHERE n.is_active = true
   AND (
       n.last_embedding_indexed_at IS NULL
       OR n.last_graph_updated_at > n.last_embedding_indexed_at
+      OR n.embedding_model IS NULL
+      OR n.embedding_model <> $embedding_model
   )
 RETURN n.id AS id,
        'Character' AS kind,
@@ -32,6 +34,8 @@ WHERE n.id IS NOT NULL
   AND (
       n.last_embedding_indexed_at IS NULL
       OR n.last_graph_updated_at > n.last_embedding_indexed_at
+      OR n.embedding_model IS NULL
+      OR n.embedding_model <> $embedding_model
   )
 RETURN n.id AS id,
        'Event' AS kind,
@@ -44,6 +48,8 @@ WHERE n.id IS NOT NULL
   AND (
       n.last_embedding_indexed_at IS NULL
       OR n.last_graph_updated_at > n.last_embedding_indexed_at
+      OR n.embedding_model IS NULL
+      OR n.embedding_model <> $embedding_model
   )
 RETURN n.id AS id,
        'Location' AS kind,
@@ -51,28 +57,43 @@ RETURN n.id AS id,
        properties(n) AS payload
 """
 
+# DEC-211 Decision 1: the node records WHAT PRODUCED its vector. Without this, changing
+# EMBEDDING_MODEL silently invalidates every stored vector and every prior measurement,
+# because the reconciler compares last_embedding_indexed_at against last_graph_updated_at
+# and never model identity. This is a graph node schema change, signed off in DEC-211.
 _CYPHER_BATCH_SET_EMBEDDINGS = """
 UNWIND $nodes AS n
 MATCH (m {id: n.id})
 SET m.embedding = n.embedding,
-    m.last_embedding_indexed_at = datetime(n.indexed_at)
+    m.last_embedding_indexed_at = datetime(n.indexed_at),
+    m.embedding_model = n.embedding_model,
+    m.embedding_dim = n.embedding_dim
 """
 
 
-async def select_stale_nodes(session: AsyncSession, batch_size: int) -> list[dict[str, Any]]:
-    """Return up to batch_size nodes whose embeddings are stale or missing.
+async def select_stale_nodes(
+    session: AsyncSession, batch_size: int, *, embedding_model: str = ""
+) -> list[dict[str, Any]]:
+    """Return up to batch_size nodes whose embeddings are stale, missing, or foreign.
 
-    A node is stale when last_graph_updated_at > last_embedding_indexed_at or
-    last_embedding_indexed_at is NULL.
+    A node is stale when last_graph_updated_at > last_embedding_indexed_at, when
+    last_embedding_indexed_at is NULL, or when its embedding_model differs from the
+    configured one (DEC-211 Decision 2) — changing the model then re-embeds the world on
+    the next ensure_corpus instead of leaving a mixed-model store that ranks nonsense.
 
     Args:
         session: Active Neo4j async session.
         batch_size: Maximum number of records to collect.
+        embedding_model: The configured EMBEDDING_MODEL. The "" default preserves the
+            pre-DEC-211 behaviour for callers that have not been updated: every node
+            already carrying a model name compares unequal to "" and is treated as
+            stale, which is the SAFE direction — re-embedding costs time, a mixed-model
+            store costs a measurement.
 
     Returns:
-        List of dicts with keys: id, kind, text, payload.
+        List of dicts with keys: node_id, kind, text, payload.
     """
-    result = await session.run(_CYPHER_SELECT_STALE_NODES)
+    result = await session.run(_CYPHER_SELECT_STALE_NODES, embedding_model=embedding_model)
     rows: list[dict[str, Any]] = []
     try:
         async for record in result:

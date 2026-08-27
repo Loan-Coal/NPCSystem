@@ -89,6 +89,19 @@ class _EmbeddingIndexStub:
             raise RuntimeError("forced upsert failure")
         self.upserts.append((item_id, text, payload))
 
+    # The stub must carry the whole contract, or a false pass here is a real failure
+    # in production (CLAUDE.md LSP rule). ensure_corpus and the model-identity write
+    # both read these.
+    async def upsert_vector(self, item_id: str, vector: list[float], payload: dict) -> None:
+        self.upserts.append((item_id, "", payload))
+
+    async def count(self) -> int:
+        return len(self.upserts)
+
+    @property
+    def model_name(self) -> str:
+        return "all-MiniLM-L6-v2"
+
 
 @pytest.mark.asyncio
 async def test_reconcile_once_batch_encodes_and_marks_rows() -> None:

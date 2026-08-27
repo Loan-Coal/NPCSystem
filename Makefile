@@ -555,6 +555,15 @@ demo-snapshot:
 	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
 		python -m demo_game.snapshot --mode snapshot --path /work/.cache/demo/snapshot.json
 
+# eval-world-snapshot: capture the eval-world baseline WITH the derived-field strip.
+# DEC-206 step 5 + DEC-211 Decision 3: `embedding`, `last_embedding_indexed_at`,
+# `embedding_model` and `embedding_dim` are derived data the engine recomputes in
+# seconds. Baking them in triples the fixture and couples a world fixture to whatever
+# EMBEDDING_MODEL produced it. The strip used to be a script in a session-scoped temp
+# directory; it is a flag now, so a clean checkout can regenerate the baseline.
+eval-world-snapshot:
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app 		python -m demo_game.snapshot --mode snapshot 			--path /work/evals/fixtures/eval_world_baseline.json --strip-derived
+
 # demo-restore: wipe Neo4j graph and reimport from .cache/demo/snapshot.json
 # Use between demo takes to reset the world to the snapshot state.
 demo-restore:

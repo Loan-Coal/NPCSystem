@@ -3,7 +3,9 @@ Module: snapshot
 Layer: demo_game (standalone CLI tool — no engine layer imports)
 Purpose: Export and restore Neo4j graph state for demo resets between takes.
 Dependencies: neo4j (sync driver), json, pathlib, argparse, os, demo_game.restore_guard
-Used by: Makefile targets demo-snapshot and demo-restore
+Used by: Makefile targets demo-snapshot, demo-restore and eval-world-snapshot
+Public surface: do_snapshot, do_restore, and the re-exported
+               DERIVED_NODE_FIELDS / strip_derived_fields (DEC-211 Decision 3).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Any
 
 from neo4j import GraphDatabase, Driver
 
+from demo_game.derived_fields import DERIVED_NODE_FIELDS, strip_derived_fields
 from demo_game.restore_guard import (
     REMEDY_HINT,
     LiveWriterDetectedError,
@@ -108,11 +111,16 @@ def _open_driver() -> Driver:
     return GraphDatabase.driver(uri, auth=(user, password))
 
 
-def do_snapshot(path: Path) -> None:
+def do_snapshot(path: Path, *, strip_derived: bool = False) -> None:
     """Export all nodes and relationships to *path* as JSON.
 
     The format is:
     ``{"nodes": [{eid, labels, props}, ...], "rels": [{src_eid, dst_eid, rel_type, props}, ...]}``
+
+    Args:
+        path: Destination JSON file.
+        strip_derived: Remove DERIVED_NODE_FIELDS before writing. Required for any
+            checked-in world fixture (DEC-206 step 5, DEC-211 Decision 3).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     driver = _open_driver()
@@ -138,10 +146,14 @@ def do_snapshot(path: Path) -> None:
     finally:
         driver.close()
 
-    payload = {"nodes": nodes, "rels": rels}
+    payload: dict[str, Any] = {"nodes": nodes, "rels": rels}
+    removed = 0
+    if strip_derived:
+        payload, removed = strip_derived_fields(payload)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(
-        f"[snapshot] saved {len(nodes)} nodes, {len(rels)} relationships → {path}",
+        f"[snapshot] saved {len(nodes)} nodes, {len(rels)} relationships "
+        f"(stripped {removed} derived properties) -> {path}",
         file=sys.stderr,
     )
 
@@ -262,6 +274,15 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SNAPSHOT_PATH,
         help=f"Path to the snapshot JSON file (default: {DEFAULT_SNAPSHOT_PATH}).",
     )
+    parser.add_argument(
+        "--strip-derived",
+        action="store_true",
+        help=(
+            "Remove derived embedding properties before writing "
+            f"({', '.join(sorted(DERIVED_NODE_FIELDS))}). Required for any checked-in "
+            "world fixture — see DEC-206 step 5 and DEC-211."
+        ),
+    )
     return parser
 
 
@@ -269,7 +290,7 @@ def main() -> None:
     """CLI entry point for demo-snapshot and demo-restore Makefile targets."""
     args = _build_parser().parse_args()
     if args.mode == "snapshot":
-        do_snapshot(args.path)
+        do_snapshot(args.path, strip_derived=args.strip_derived)
     else:
         do_restore(args.path)
 

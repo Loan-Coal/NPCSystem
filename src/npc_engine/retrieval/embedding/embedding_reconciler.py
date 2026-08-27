@@ -170,7 +170,10 @@ class EmbeddingReconciler:
             Dict with keys ``processed`` (successful writes) and ``failed``.
         """
 
-        batch = await select_stale_nodes(session, self._batch_size)  # type: ignore[arg-type]
+        model_name = self._embedding_index.model_name
+        batch = await select_stale_nodes(
+            session, self._batch_size, embedding_model=model_name,  # type: ignore[arg-type]
+        )
 
         if not batch:
             return {"processed": 0, "failed": 0}
@@ -180,7 +183,13 @@ class EmbeddingReconciler:
         vectors = await self._embedding_index.embed_batch(texts)
 
         write_nodes = [
-            {"id": item["node_id"], "embedding": vector, "indexed_at": indexed_at}
+            {
+                "id": item["node_id"],
+                "embedding": vector,
+                "indexed_at": indexed_at,
+                "embedding_model": model_name,
+                "embedding_dim": len(vector),
+            }
             for item, vector in zip(batch, vectors)
         ]
         await batch_set_embeddings(session, write_nodes)  # type: ignore[arg-type]

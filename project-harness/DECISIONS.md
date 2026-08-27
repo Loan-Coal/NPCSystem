@@ -5514,8 +5514,17 @@ The procedure is now:
    lines before proceeding — the flag is worth nothing unverified.
 2. `make eval-world-reset`
 3. `make seed-village-world` (idempotent)
-4. snapshot to `evals/fixtures/eval_world_baseline.json`
-5. strip the derived embedding fields (below)
+4. snapshot to `evals/fixtures/eval_world_baseline.json` **with the strip in the same
+   command** (rewritten 2026-08-27 by DEC-211 Decision 3 — it was a scratchpad script):
+
+       docker compose run --rm -v "$PWD:/work" -w /work app          python -m demo_game.snapshot --mode snapshot            --path /work/evals/fixtures/eval_world_baseline.json --strip-derived
+
+   or `make eval-world-snapshot`. The flag removes every field in
+   `demo_game.snapshot.DERIVED_NODE_FIELDS`, which DEC-211 grew from two entries to four
+   (`embedding`, `last_embedding_indexed_at`, `embedding_model`, `embedding_dim`). It
+   prints the count it removed; a `stripped 0` on a freshly-ticked world means the strip
+   did not run.
+5. (folded into 4 — kept numbered so the "step 5" references elsewhere still resolve)
 6. remove the `.env` flag, restart, confirm ticking resumes
 7. **diff the fixture against its previous version and read every line of the diff**
 
