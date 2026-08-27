@@ -46,12 +46,23 @@ class InMemoryVectorStore(VectorStoreProtocol):
             "payload": dict(payload),
         }
 
-    async def search(self, query_vector: list[float], top_k: int) -> list[VectorSearchResult]:
-        """Return top-k results ranked by dot-product similarity.
+    async def search(
+        self,
+        query_vector: list[float],
+        top_k: int,
+        filter_ids: set[str] | None = None,
+    ) -> list[VectorSearchResult]:
+        """Return top-k results ranked by dot-product similarity WITHIN filter_ids.
+
+        The filter is applied to the candidate set before scoring, not to the ranked
+        output (DEC-209). Ranking first and filtering after spends top_k on rows that are
+        then discarded, so a filtered search over a mixed store returns 0-1 rows.
 
         Args:
             query_vector: Embedding to compare against stored vectors.
             top_k: Maximum results to return; must be greater than 0.
+            filter_ids: When given, only these ids are candidates. An empty set yields
+                no results.
 
         Returns:
             List of up to top_k VectorSearchResult dicts sorted by descending score.
@@ -61,13 +72,18 @@ class InMemoryVectorStore(VectorStoreProtocol):
         """
 
         _validate_top_k(top_k)
+        candidates = (
+            self._entries.items()
+            if filter_ids is None
+            else [(key, value) for key, value in self._entries.items() if key in filter_ids]
+        )
         scored: list[VectorSearchResult] = [
             {
                 "id": item_id,
                 "score": _dot_similarity(query_vector, entry["vector"]),
                 "payload": dict(entry["payload"]),
             }
-            for item_id, entry in self._entries.items()
+            for item_id, entry in candidates
         ]
         ranked = sorted(scored, key=lambda row: float(row["score"]), reverse=True)
         return ranked[:top_k]

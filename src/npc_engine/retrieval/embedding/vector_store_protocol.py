@@ -32,12 +32,25 @@ class VectorStoreProtocol(Protocol):
             payload: Arbitrary metadata stored alongside the vector.
         """
 
-    async def search(self, query_vector: list[float], top_k: int) -> list[VectorSearchResult]:
-        """Return top-k payload results sorted by score desc.
+    async def search(
+        self,
+        query_vector: list[float],
+        top_k: int,
+        filter_ids: set[str] | None = None,
+    ) -> list[VectorSearchResult]:
+        """Return top-k payload results sorted by score desc, ranked WITHIN the filter.
+
+        ``filter_ids`` is part of this protocol rather than applied by the caller because
+        filtering must precede ranking (DEC-209). A caller that ranks the whole store and
+        then discards the out-of-scope rows spends its top_k on the majority it is about
+        to throw away, so a filtered search over a mixed store returns 0-1 rows instead of
+        top_k. Every implementation must restrict the candidate set BEFORE scoring.
 
         Args:
             query_vector: Query embedding to compare against stored vectors.
             top_k: Maximum number of results to return; must be greater than 0.
+            filter_ids: When given, only these ids are candidates. An EMPTY set means
+                no candidates and yields no results — it never means "everything".
 
         Returns:
             List of up to top_k results sorted by descending similarity score.

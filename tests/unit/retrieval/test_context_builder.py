@@ -74,6 +74,9 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_known_event_ids(session, npc_id):
         return set()
 
+    async def fake_rag_scope(session, *, npc_id):
+        return {"scope_node_1"}
+
     async def fake_memories(session, *, character_id, k):
         return []
 
@@ -103,6 +106,7 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_world_state", fake_world_reader)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_character_with_relations", fake_character_reader)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc", fake_known_event_ids)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_rag_scope_ids_for_npc", fake_rag_scope)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_npc_location_id", fake_location_id)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_location_context", fake_location_context)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_events_for_npc", fake_events)
@@ -258,8 +262,13 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_builder_passes_known_event_ids_as_filter_to_embedding_index(monkeypatch) -> None:
-    """When the NPC has known event IDs, the embedding index receives them as filter_ids."""
+async def test_builder_passes_the_scope_minus_known_events_as_filter_to_embedding_index(monkeypatch) -> None:
+    """The filter is the SCOPE minus what the NPC already knows (DEC-209).
+
+    Replaces test_builder_passes_known_event_ids_as_filter_to_embedding_index, which
+    pinned the opposite: the known events as a WHITELIST, restricting tier B to facts
+    tier A already carries. That made the tier redundant by construction.
+    """
 
     captured: dict = {}
 
@@ -271,11 +280,18 @@ async def test_builder_passes_known_event_ids_as_filter_to_embedding_index(monke
     async def fake_known_event_ids_non_empty(session, npc_id):
         return {"evt_1", "evt_2"}
 
+    async def fake_scope(session, *, npc_id):
+        return {"evt_1", "evt_2", "evt_unknown", "loc_market"}
+
     _patch_graph_calls(monkeypatch)
     monkeypatch.setattr(
         "npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc",
         fake_known_event_ids_non_empty,
     )
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context.context_builder.get_rag_scope_ids_for_npc",
+        fake_scope,
+    )
 
     settings = Settings(
         API_KEY_SECRET="npc_dev_secret_2026_alpha",
@@ -295,21 +311,33 @@ async def test_builder_passes_known_event_ids_as_filter_to_embedding_index(monke
         session_turns=[],
     )
 
-    assert captured.get("filter_ids") == {"evt_1", "evt_2"}
+    assert captured.get("filter_ids") == {"evt_unknown", "loc_market"}
 
 
 @pytest.mark.asyncio
-async def test_builder_passes_no_filter_when_known_event_ids_empty(monkeypatch) -> None:
-    """When the NPC has no known event IDs, filter_ids is None (no restriction)."""
+async def test_builder_never_searches_at_all_when_the_scope_is_empty(monkeypatch) -> None:
+    """An empty scope means NO RAG (DEC-209).
 
-    captured: dict = {}
+    Replaces test_builder_passes_no_filter_when_known_event_ids_empty, which pinned
+    filter_ids=None — an unfiltered sweep of the whole store for any NPC that knows
+    nothing, which is 7 of the 22 NPCs in the eval world.
+    """
+
+    captured: dict = {"called": False}
 
     class CapturingEmbeddingIndex:
         async def search(self, query: str, top_k: int, filter_ids=None) -> list[VectorSearchResult]:
-            captured["filter_ids"] = filter_ids
+            captured["called"] = True
             return []
 
+    async def fake_empty_scope(session, *, npc_id):
+        return set()
+
     _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context.context_builder.get_rag_scope_ids_for_npc",
+        fake_empty_scope,
+    )
 
     settings = Settings(
         API_KEY_SECRET="npc_dev_secret_2026_alpha",
@@ -329,7 +357,7 @@ async def test_builder_passes_no_filter_when_known_event_ids_empty(monkeypatch) 
         session_turns=[],
     )
 
-    assert captured.get("filter_ids") is None
+    assert captured["called"] is False
 
 
 def test_final_serialized_budget_drops_tier_c_before_tier_b_when_over_budget() -> None:

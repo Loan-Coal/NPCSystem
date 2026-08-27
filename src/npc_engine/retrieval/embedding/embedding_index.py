@@ -69,9 +69,11 @@ class EmbeddingIndex:
         Args:
             query: Text to embed and use as the search query.
             top_k: Maximum number of results; must be greater than 0.
-            filter_ids: When provided, only results whose id is in this set are returned.
-                Filtering is applied after retrieval, so top_k results are fetched first
-                then filtered; the final list may be shorter than top_k.
+            filter_ids: When provided, only these ids are candidates. The filter is
+                pushed DOWN into the store so it restricts the candidate set before
+                ranking (DEC-209); this used to filter the ranked output here, which made
+                a filtered search over a mixed store return 0-1 rows. An empty set is a
+                real empty scope and yields no results.
 
         Returns:
             List of VectorSearchResult dicts sorted by descending similarity score.
@@ -83,10 +85,9 @@ class EmbeddingIndex:
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
         query_vector = await asyncio.to_thread(_embed_text, query, self._model_name)
-        results = await self._vector_store.search(query_vector=query_vector, top_k=top_k)
-        if filter_ids is not None:
-            results = [r for r in results if r["id"] in filter_ids]
-        return results[:top_k]
+        return await self._vector_store.search(
+            query_vector=query_vector, top_k=top_k, filter_ids=filter_ids
+        )
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Encode a list of texts and return their embedding vectors.

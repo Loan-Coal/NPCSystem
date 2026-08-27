@@ -106,7 +106,7 @@ async def test_graph_rag_retrieve_ranking() -> None:
             embedding_index=idx,
             query="test query",
             npc_id="npc_01",
-            known_event_ids={"ev_a", "ev_b"},
+            scope_ids={"ev_a", "ev_b"},
             top_k=3,
         )
 
@@ -128,7 +128,7 @@ async def test_graph_rag_retrieve_empty_seeds() -> None:
         embedding_index=idx,
         query="empty",
         npc_id="npc_01",
-        known_event_ids=set(),
+        scope_ids={"ev_in_scope"},
         top_k=5,
     )
     assert results == []
@@ -150,7 +150,7 @@ async def test_graph_rag_retrieve_top_k_limit() -> None:
             embedding_index=idx,
             query="q",
             npc_id="npc_01",
-            known_event_ids=set(),
+            scope_ids={f"ev_{i}" for i in range(10)},
             top_k=3,
         )
     assert len(results) <= 3

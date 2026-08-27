@@ -133,14 +133,31 @@ def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
 
 async def graph_rag_retrieve(
     session: AsyncSession, embedding_index: EmbeddingIndexProtocol, query: str,
-    npc_id: str, known_event_ids: set[str], top_k: int, game_time: TimePoint | None = None,
+    npc_id: str, scope_ids: set[str], top_k: int, game_time: TimePoint | None = None,
 ) -> list[VectorSearchResult]:
     """GraphRAG retrieval: vector seeds → 1-hop graph expansion → composite scoring.
 
-    Returns ranked list of VectorSearchResult dicts, length ≤ top_k.
+    `scope_ids` is the DEC-209 candidate scope the caller computed — the NPC's 1-hop
+    subgraph, location and faction MINUS its known events. It was `known_event_ids`,
+    which seeded expansion from the events the NPC already carries in tier A. An empty
+    scope yields no seeds and therefore no results; it is never widened to the store.
+
+    Args:
+        session: Active Neo4j async session.
+        embedding_index: Index used for the seed vector search.
+        query: Expanded retrieval query.
+        npc_id: The NPC whose context is being assembled.
+        scope_ids: Candidate node ids retrieval may range over.
+        top_k: Maximum results to return.
+        game_time: Current in-world time, used for recency scoring.
+
+    Returns:
+        Ranked list of VectorSearchResult dicts, length ≤ top_k.
     """
+    if not scope_ids:
+        return []
     seed_results: list[VectorSearchResult] = await embedding_index.search(
-        query=query, top_k=top_k * 2, filter_ids=known_event_ids or None,
+        query=query, top_k=top_k * 2, filter_ids=scope_ids,
     )
     if not seed_results:
         return []

@@ -94,6 +94,11 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_world_state", fake_world_reader)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_character_with_relations", fake_character_reader)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc", fake_known_event_ids)
+
+    async def fake_rag_scope(session, *, npc_id):
+        return {"scope_node_1"}
+
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_rag_scope_ids_for_npc", fake_rag_scope)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_npc_location_id", fake_location_id)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_location_context", fake_location_context)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_events_for_npc", fake_events)

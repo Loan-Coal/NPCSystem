@@ -71,6 +71,7 @@ from .context_metrics import (
     record_attributed_drop_metrics,
 )
 from .context_scoring import rank_tier_items
+from npc_engine.graph.graph_rag_queries import get_rag_scope_ids_for_npc
 from npc_engine.retrieval.graph_rag.graph_rag import graph_rag_retrieve
 from npc_engine.retrieval.embedding.topic_classifier import detect_dialogue_profile
 from npc_engine.world.time_utils import TimePoint
@@ -250,23 +251,33 @@ async def _fetch_rag_results(
     player_message: str, session_turns: list[str], known_event_ids: set[str] | None,
     npc_id: str, game_time: TimePoint | None, skip_rag: bool, profile: RetrievalProfile,
 ) -> list[Any]:
-    """Run vector-only or GraphRAG retrieval for Tier B/C items; return empty list when skip_rag.
+    """Run vector-only or GraphRAG retrieval for Tier B/C items; return empty when out of scope.
 
     Graph and vector top-k come from the profile as SEPARATE fields. They were one
     Settings.RAG_TOP_K, which also governed event fetching, so a top-k experiment silently
     changed three things at once and no effect could be attributed to any of them.
+
+    The candidate set is a SCOPE, not a whitelist (DEC-209). It was
+    `known_event_ids if known_event_ids else None`, and both branches were wrong in
+    opposite directions: the first restricted tier B to events the NPC already carries as
+    tier-A `event:` items, making the tier redundant by construction and charging every
+    hit twice; the second gave an empty set the run of the whole store, and 7 of 22 NPCs
+    in the eval world know zero events. The scope is the NPC's 1-hop subgraph, location
+    and faction MINUS its known events. An empty scope means no RAG, never all of it.
     """
     if skip_rag or profile.skip_rag:
         return []
+    rag_scope = await get_rag_scope_ids_for_npc(session, npc_id=npc_id) - (known_event_ids or set())
+    if not rag_scope:
+        return []
     rag_query = expand_query(player_message, session_turns)
-    rag_filter = known_event_ids if known_event_ids else None
     if settings.GRAPH_RAG_ENABLED:
         return await graph_rag_retrieve(
             session=session, embedding_index=embedding_index, query=rag_query,
-            npc_id=npc_id, known_event_ids=known_event_ids or set(),
+            npc_id=npc_id, scope_ids=rag_scope,
             top_k=profile.graph_rag_top_k, game_time=game_time,
         )
-    return await embedding_index.search(query=rag_query, top_k=profile.rag_top_k, filter_ids=rag_filter)
+    return await embedding_index.search(query=rag_query, top_k=profile.rag_top_k, filter_ids=rag_scope)
 
 
 async def _fetch_npc_profile_data(
