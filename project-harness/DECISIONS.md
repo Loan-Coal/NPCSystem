@@ -5560,3 +5560,58 @@ that slot has carried content in this project.**
 persisted in Neo4j. After this change the baseline carries **no** embeddings, so at that
 point in startup there is nothing to read and the hydrator would report zero. P8 must either
 run after the reconciler's first sweep or encode what it needs. Logged as ISSUE-211.
+
+---
+
+## DEC-207: the profile cache is keyed by retrieval profile, and the fix lands before the
+## corpus exists rather than after
+**Date:** 2026-08-27
+**Decided by:** this session, P7 of the context-pipeline plan.
+
+**Context.** `PartialDialogueContextCache.build_profile_key` was
+`f"{npc_id}:{npc_last_graph_updated_at}"`. The value stored under it is
+`_fetch_npc_profile_data(...)`, whose `events` list is read with
+`limit=profile.events_limit` — a retrieval-profile field. Neither half of the key mentions
+the profile, so two turns for the same NPC at the same graph timestamp collide.
+
+Three facts turn that from a smell into a live defect: the cache is a **process-wide
+singleton** shared by the HTTP and WebSocket paths; `paired_arms` **interleaves** the arms
+inside one generation run (rep → case → profile) rather than running them as separate
+passes; and `events_limit` is one of the knobs `wide_rag` varies. So the default arm's 5
+events are served to the arm that asked for 15, and the run records a profile it did not
+retrieve under — the exact defect DEC-194 exists to prevent, one layer down.
+
+**Reproduced before fixing.** Two builds against one shared cache with a reader that records
+the limit it was asked for returned `[5]`: the second build never reached the reader at all.
+After the fix, `[5, 15]`.
+
+**Decision 1 — key on the profile NAME, not on `events_limit`.** Keying on the field would
+maximise hit rate across arms that happen to share a value. It would also go stale silently
+the moment `_fetch_npc_profile_data` starts reading a second profile field — which is this
+same bug one level down. The name cannot drift out of step with the value.
+
+**Decision 2 — `build_beliefs_goals_key` is audited and deliberately left alone.**
+`_fetch_beliefs_goals_data(session, npc_id)` takes no profile argument and reads no profile
+field, so two arms genuinely produce the same bytes there. An unnecessary key component is a
+pure cache-hit-rate regression that nothing in the suite would have noticed. Recorded in the
+docstring and pinned by a test, because "we checked and it was fine" is otherwise invisible
+in the code and gets re-litigated.
+
+**Decision 3 — delete the world_state sub-cache.** `build_world_key` / `get_world` /
+`set_world` / `_world` had **zero callers** anywhere in the codebase, and `size()` was
+summing a dict nothing ever wrote to. A test asserts the methods are gone, so re-adding one
+without a caller has to be deliberate.
+
+**Why this lands before P8 and not after.** With an empty vector store a contaminated cache
+has no symptom — every arm retrieves nothing, so nothing is inherited. With a populated
+corpus *and* a contaminated cache, arm 2 inheriting arm 1's event list is indistinguishable
+from a treatment effect, and there is nothing in a receipt that would say which it was. The
+ordering is the mitigation; there is no test that could recover the distinction afterwards.
+
+**The guard that matters as much as the fix:**
+`test_the_same_profile_twice_still_hits_the_cache`. Without it, adding the profile to the key
+and adding a random nonce to the key are indistinguishable to the test suite, and the
+cheapest way to pass an isolation test is to destroy the cache.
+
+**Verified:** 3,828 unit + integration tests pass; `lint`, `check-layers`,
+`check-docstrings`, `check-rules`, `mypy` all clean.
