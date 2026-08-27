@@ -117,10 +117,29 @@ class Settings(BaseSettings):
     # Measured 2026-08-26 at the old 4096 default: every dialogue prompt was ~7,100 tokens
     # and Ollama clamped prompt_eval_count to exactly 2,050 (= num_ctx/2) on every turn, so
     # roughly 70% of each prompt -- most of the behavioural rules -- never reached the model.
-    # 8192 is the smallest window that holds SYSTEM_PROMPT_TOKEN_RESERVE plus a usable
-    # context budget. Verified 100% GPU residency at 16384 on a 9.5 GiB card (5.6 GB
-    # resident), so raising this further is a latency and budget decision, not a VRAM one.
-    OLLAMA_CONTEXT_LENGTH: int = 8192
+    # Verified 100% GPU residency at 16384 on a 9.5 GiB card (5.6 GB resident) and at
+    # 32768 (6.6 GB), so the size of this number is a latency and budget decision, not a
+    # VRAM one.
+    #
+    # P10 (2026-08-27, DEC-215): 8192 -> 12288. 8192 was described as "the smallest window
+    # that holds SYSTEM_PROMPT_TOKEN_RESERVE plus a usable context budget", and it is not:
+    # it derives PROMPT_TOKEN_BUDGET = 8192 - 7130 = 1062 against a MEASURED assembled-
+    # context ceiling of 1151 tokens over the 8-NPC probe roster. Three of those eight sat
+    # above the budget, so the shipped default would have dropped tier-A items and
+    # re-armed ISSUE-209 on the default path. The window validator never caught it because
+    # the budget is DERIVED from the window, so coherence holds at every size — see
+    # tests/unit/config/test_shipped_window_holds_the_measured_ceiling.py, which compares
+    # the budget against measured DEMAND rather than against the window.
+    #
+    # 12288 -> budget 5158: 4.5x the measured ceiling, and 2.2x after adding the full
+    # 1200-token session allowance llm_config.yaml declares (the eval harness sends no
+    # session_id, so no measured figure includes session history). Nothing is dropped on
+    # any NPC at this budget, which keeps ISSUE-209 dormant and ISSUE-214 masked — both
+    # required, since D2 forbids the allocator rewrite and ISSUE-214 is open.
+    #
+    # This is the number that SHIPS: .env is untracked, so a fresh checkout runs this
+    # default and nothing else.
+    OLLAMA_CONTEXT_LENGTH: int = 12288
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
@@ -154,7 +173,10 @@ class Settings(BaseSettings):
     # config_prompt_window.py), not a literal. The previous literal 5200 under-reserved by
     # ~1,680 tokens, which made `required = window + 1680` true at EVERY window size -- so
     # no window raise could have made the configuration coherent.
-    # At OLLAMA_CONTEXT_LENGTH=8192 → budget = 1312. Override in .env only deliberately.
+    # Overhead is 5850 + 512 + 768 = 7130 (P8 raised SYSTEM_PROMPT_TOKEN_RESERVE 5600 ->
+    # 5850, DEC-212), so at OLLAMA_CONTEXT_LENGTH=12288 → budget = 5158. The 1312 that
+    # stood here derived from the pre-P8 overhead of 6880 and was wrong from P8 onward.
+    # Override in .env only deliberately.
     PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
     # Named retrieval configuration this deployment runs under (see
@@ -291,9 +313,17 @@ class Settings(BaseSettings):
     def _derive_prompt_token_budget(self) -> "Settings":
         """Derive PROMPT_TOKEN_BUDGET from OLLAMA_CONTEXT_LENGTH when not explicitly set.
 
-        Overhead breakdown: system_v1.yaml prompt (~4200 tokens) + output cap (512)
-        + dialogue headers / fences (~500) ≈ 5200 tokens reserved for the model.
-        The remaining tokens are available for the context_builder to fill.
+        Overhead is PROMPT_WINDOW_OVERHEAD_TOKENS, a SUM OF NAMED RESERVES declared in
+        config_prompt_window.py: SYSTEM_PROMPT_TOKEN_RESERVE (5850, measured against the
+        real assembly and bounded in both directions by
+        test_prompt_window_constants_are_honest) + DIALOGUE_OUTPUT_TOKEN_RESERVE (512)
+        + PROMPT_HEADER_RESERVE_TOKENS (768) = 7130. The remaining tokens are available
+        for the context_builder to fill.
+
+        The "~4200 + 512 + ~500 ≈ 5200" breakdown that stood here described the retired
+        literal, which measured the BYTE SIZE OF THE YAML FILE rather than the assembled
+        prompt and under-reserved by ~1,680 tokens at every window size.
+
         Override PROMPT_TOKEN_BUDGET in .env only for non-standard system prompt sizes.
         """
         if self.PROMPT_TOKEN_BUDGET == 0:

@@ -13,16 +13,38 @@ compression_prompt_version: "v1.5"
 # tier A could never exceed 4000 whatever the window, which made a window raise unable to
 # widen tier A at all (_tier_a_cap_with_reclaim takes min(tier_budget_tokens.tier_a, ...)).
 #
-# P5 (2026-08-26): raised to 12000/8000/5000, sum 25000, against the derived budget
-# max(512, 32768 - 6880) = 25888 at OLLAMA_CONTEXT_LENGTH=32768. Sum <= budget on purpose:
-# these ceilings must not be the thing that binds during the measurement window, because
-# P5 exists to observe what the context system asks for when NOTHING trims it.
+# P5 (2026-08-26) raised these to 12000/8000/5000 against a derived budget it recorded as
+# `max(512, 32768 - 6880) = 25888`. BOTH of those numbers are stale: P8 raised
+# SYSTEM_PROMPT_TOKEN_RESERVE 5600 -> 5850 (DEC-212), so the overhead is 7130 and the
+# budget at a 32768 window is 25638. The engine has always computed this correctly; only
+# this comment was wrong.
 #
-# Provisional, re-decided in P10 alongside the window trim.
+# P10 (2026-08-27, DEC-215): re-decided alongside the window trim to 12288 (budget 5158),
+# against demand MEASURED over the 8-NPC probe roster on the clean eval baseline:
+#
+#     tier A max 857 tok   tier B max 96 tok   tier C max 145 tok   (roster ceiling 1151)
+#
+# 4500/1500/1000 clears those by 5.3x / 15.6x / 6.9x, and tier_a additionally holds the
+# measured 857 plus the full 1200-token session allowance below with 2.2x margin.
+#
+# P5 wrote "Sum <= budget on purpose" and P10 DROPS that invariant deliberately: 7000
+# against a 5158 budget. The three tiers do not partition the budget, they draw on ONE
+# shared budget through `_greedy_fill`, so these are per-tier SAFETY limits rather than an
+# allocation. Holding "sum <= budget" at this window would force tier_a down to about
+# 3000, barely above the 0.55 fraction floor of 2836 — and `_tier_a_cap_with_reclaim`
+# returns `min(ceiling, max(floor, leftover))`, so a ceiling that close to the floor
+# leaves DEC-203's reclaim ~164 tokens to work with and re-creates the ISSUE-197
+# starvation DEC-203 exists to fix.
+#
+# The invariant that replaces it, pinned by
+# tests/unit/config/test_shipped_window_holds_the_measured_ceiling.py:
+#   every ceiling clears its MEASURED maximum by a wide margin; tier_a's ceiling stays
+#   ABOVE the tier_a fraction floor so the reclaim stays live; and the shared prompt
+#   budget is the thing that binds.
 tier_budget_tokens:
-  tier_a: 12000
-  tier_b: 8000
-  tier_c: 5000
+  tier_a: 4500
+  tier_b: 1500
+  tier_c: 1000
 session_turns_budget_tokens: 1200
 compression_trigger_ratio: 0.85
 max_proximity_hops: 2
