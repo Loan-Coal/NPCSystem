@@ -28,7 +28,7 @@ from npc_engine.api.dependency_singletons import get_graph_db
 from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.config import Settings, get_settings
 from npc_engine.retrieval.embedding import EMBED_DIMENSION, EmbeddingIndex, EmbeddingReconciler
-from npc_engine.retrieval.embedding.corpus import ensure_corpus
+from npc_engine.retrieval.embedding.corpus import ensure_corpus, read_corpus_fingerprint
 from npc_engine.schema.corpus_models import CorpusFingerprint, CorpusReport
 
 LOGGER = logging.getLogger(__name__)
@@ -84,24 +84,47 @@ async def rehydrate_vector_store(
 
 @debug_router.get("/vector-store", response_model=OkEnvelope[CorpusFingerprint])
 async def read_vector_store_state(
+    include_sha: bool = True,
+    session: AsyncSession = Depends(get_db_session),
     embedding_index: EmbeddingIndex = Depends(get_embedding_index),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:
     """Report what the vector store currently holds, without changing it.
 
-    The corpus_sha is empty here on purpose: membership is only knowable by reading the
-    store's contents, and this endpoint is a cheap liveness probe. Take the sha from the
-    rehydrate report, which is the thing a generation record cites.
+    `corpus_sha` used to be empty here unconditionally, on the argument that membership
+    is only knowable by reading the store's contents and that this route is a cheap
+    liveness probe. That made DEC-210 Decision 2 unachievable in practice: RunConfig
+    fills its four corpus fields from THIS route, so every generation record carried an
+    empty sha, and the sha is the only one of the four that can detect the corpus
+    MOVING — swap one node for another and item_count is unchanged. The other route that
+    knows the sha computes it while WRITING the store, which a mid-run freeze check may
+    not do.
+
+    So the digest is computed here now, read-only, and `include_sha=false` keeps the
+    cheap probe available for anything that only wants liveness.
+
+    Args:
+        include_sha: Compute the membership digest. False skips the embedded-node scan
+            and returns an empty corpus_sha, restoring the pre-P9 cost.
+        session: Scoped Neo4j session; the embedded-node scan reads through it.
+        embedding_index: The vector store.
+        settings: Application settings, for the backend label.
 
     Returns:
-        A CorpusFingerprint carrying item_count, the embedding model and the dimension.
+        A CorpusFingerprint carrying item_count, the embedding model, the dimension and
+        — unless include_sha is false — the membership digest.
     """
-    return ok_response(
-        CorpusFingerprint(
+    if include_sha:
+        fingerprint = await read_corpus_fingerprint(
+            session=session,
+            index=embedding_index,
+            batch_size=settings.VECTOR_STORE_CORPUS_BATCH_SIZE,
+        )
+    else:
+        fingerprint = CorpusFingerprint(
             item_count=await embedding_index.count(),
             embedding_model=embedding_index.model_name,
             embedding_dim=EMBED_DIMENSION,
             corpus_sha="",
-        ),
-        meta={"backend": settings.VECTOR_STORE_BACKEND},
-    )
+        )
+    return ok_response(fingerprint, meta={"backend": settings.VECTOR_STORE_BACKEND})

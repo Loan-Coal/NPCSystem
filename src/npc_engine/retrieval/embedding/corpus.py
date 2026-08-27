@@ -35,7 +35,12 @@ from npc_engine.graph.infra.embedding_load_queries import (
 )
 from npc_engine.schema.corpus_models import CorpusFingerprint, CorpusReport
 
-__all__ = ["MAX_RECONCILE_PASSES", "ensure_corpus", "refresh_corpus_node"]
+__all__ = [
+    "MAX_RECONCILE_PASSES",
+    "ensure_corpus",
+    "read_corpus_fingerprint",
+    "refresh_corpus_node",
+]
 
 MAX_RECONCILE_PASSES: int = 100
 """Hard stop on the reconcile-until-dry loop.
@@ -159,6 +164,37 @@ async def _build_fingerprint(
         embedding_dim=_resolve_dim(rows),
         corpus_sha=_fingerprint_rows(rows, index.model_name),
     )
+
+
+async def read_corpus_fingerprint(
+    *,
+    session: AsyncSession,
+    index: CorpusStoreProtocol,
+    batch_size: int,
+) -> CorpusFingerprint:
+    """Report corpus identity WITHOUT writing the store — the read-only half of the pair.
+
+    `ensure_corpus` computes the same fingerprint as a side effect of populating the
+    store. That is the wrong shape for a freeze check: DEC-210 Decision 2 wants a P10
+    gate that asserts the corpus did not move between a run's first turn and its last,
+    and a check that rehydrates on the way past is not a check.
+
+    Without this, `GET /v1/admin/debug/vector-store` returned `corpus_sha=""`
+    unconditionally, so the ONE field carrying membership was empty in every generation
+    record DEC-210 produced. `item_count` cannot substitute: swapping one node for
+    another leaves it identical.
+
+    Args:
+        session: Active Neo4j async session.
+        index: The vector store, read for its item count and model name only.
+        batch_size: Page size for the embedded-node scan.
+    Returns:
+        A CorpusFingerprint with a populated corpus_sha. An EMPTY corpus still yields a
+        digest — the caller distinguishes empty from unreachable by item_count, and a
+        raise here would collapse that distinction.
+    """
+    rows = await _load_all_embedded_nodes(session, batch_size)
+    return await _build_fingerprint(index, rows)
 
 
 async def ensure_corpus(
