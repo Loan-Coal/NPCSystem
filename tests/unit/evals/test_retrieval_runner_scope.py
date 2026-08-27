@@ -27,6 +27,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "evals"))
 
+import retrieval_ranking  # noqa: E402
 import retrieval_runner  # noqa: E402
 from retrieval_runner import RetrievalCase  # noqa: E402
 
@@ -74,13 +75,13 @@ def graph(monkeypatch: pytest.MonkeyPatch):
     async def fake_scope(*, session: Any, npc_id: str) -> set[str]:
         return set(state["scope"])
 
-    monkeypatch.setattr(retrieval_runner.engine_adapter, "known_event_ids", fake_known)
-    monkeypatch.setattr(retrieval_runner.engine_adapter, "rag_scope_ids", fake_scope)
+    monkeypatch.setattr(retrieval_ranking.engine_adapter, "known_event_ids", fake_known)
+    monkeypatch.setattr(retrieval_ranking.engine_adapter, "rag_scope_ids", fake_scope)
     return state
 
 
 async def _rank(index: _RecordingIndex, profile: RetrievalProfile, k: int = 5) -> list[str]:
-    return await retrieval_runner._retrieve_ranked_ids(
+    return await retrieval_ranking.retrieve_ranked_ids(
         npc_id=_NPC,
         query="what do you know about the northern war?",
         k=k,

@@ -55,6 +55,7 @@ from pydantic import BaseModel
 
 from evals import engine_adapter
 from evals.retrieval_matchers import mrr, precision_at_k, recall_at_k
+from evals.retrieval_ranking import retrieve_ranked_ids
 from evals.retrieval_summary import (
     RetrievalSummary,
     format_retrieval_summary_lines,
@@ -83,99 +84,6 @@ class RetrievalCase(BaseModel):
     k: int
     notes: str = ""
 
-
-# ---------------------------------------------------------------------------
-# Retrieval helpers
-# ---------------------------------------------------------------------------
-
-
-async def _vector_hits(
-    npc_id: str,
-    query: str,
-    profile: Any,
-    embedding_index: Any,
-    graph_session: Any,
-    known_event_ids: set[str],
-) -> list[str]:
-    """Return the vector-ranked node IDs, inside the DEC-209 scope.
-
-    The scope is the NPC's 1-hop subgraph, location and faction, MINUS the events it
-    already knows. An empty scope means NO vector search — never an unfiltered one.
-
-    Args:
-        npc_id: Character node ID.
-        query: Player query text.
-        profile: The resolved RetrievalProfile this measurement runs under.
-        embedding_index: Vector store (must have an async .search).
-        graph_session: Active Neo4j AsyncSession.
-        known_event_ids: Events the NPC already carries in tier A.
-
-    Returns:
-        Ranked node ID strings from the vector store; empty when the arm skips RAG or
-        the NPC has no scope.
-    """
-    if profile.skip_rag:
-        return []
-    scope = await engine_adapter.rag_scope_ids(session=graph_session, npc_id=npc_id)
-    scope = set(scope) - known_event_ids
-    if not scope:
-        return []
-    hits = await embedding_index.search(
-        query=query, top_k=profile.rag_top_k, filter_ids=scope
-    )
-    return [row["id"] for row in hits]
-
-
-async def _retrieve_ranked_ids(
-    npc_id: str,
-    query: str,
-    k: int,
-    profile: Any,
-    embedding_index: Any,
-    graph_session: Any,
-) -> list[str]:
-    """Return a ranked list of node IDs for one (npc_id, query) pair.
-
-    Strategy:
-    1. Tier-B vector search, scoped and at the PROFILE's rag_top_k (see _vector_hits).
-    2. Graph context: KNOWS_ABOUT edges, surfacing events the NPC directly knows. These
-       are what the DEC-209 scope deliberately removes from the vector path, and they
-       remain here because they genuinely reach the model as tier-A `event:` items.
-    3. The NPC's own character node (always tier A).
-    4. Deduplicate, preserving rank order.
-
-    `k` is the metric window (precision@k), NOT the retrieval width. Those were the same
-    number until P9, which is why `--retrieval-profile wide_rag` could be recorded while
-    the harness searched at the case's k.
-
-    Args:
-        npc_id: Character node ID.
-        query: Player query text.
-        k: Metric window from the case; retained for callers that report it.
-        profile: The resolved RetrievalProfile this measurement runs under.
-        embedding_index: EmbeddingIndex instance (must have .search coroutine).
-        graph_session: Active Neo4j AsyncSession.
-
-    Returns:
-        Ordered list of node ID strings (most relevant first).
-    """
-    known_event_ids = await engine_adapter.known_event_ids(
-        session=graph_session, npc_id=npc_id
-    )
-    ranked = await _vector_hits(
-        npc_id, query, profile, embedding_index, graph_session, set(known_event_ids)
-    )
-
-    # Append KNOWS_ABOUT event IDs (graph-sourced, not vector-ranked)
-    for event_id in sorted(known_event_ids):
-        if event_id not in ranked:
-            ranked.append(event_id)
-
-    # Append NPC's own character node (always Tier A)
-    if npc_id not in ranked:
-        ranked.append(npc_id)
-
-    return ranked
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +120,7 @@ async def run_eval(
         for case in cases:
             relevant = set(case.relevant_node_ids)
             try:
-                ranked = await _retrieve_ranked_ids(
+                ranked = await retrieve_ranked_ids(
                     npc_id=case.npc_id,
                     query=case.query,
                     k=case.k,
@@ -284,26 +192,18 @@ def _print_summary(results: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _main(gen_dir: Path | None = None, retrieval_profile: str = "default") -> int:
-    """Load cases, build retrieval stack, run eval, print summary.
-
-    Returns:
-        Exit code: 0 on success, 1 on connectivity/setup failure.
-    """
-    logging.basicConfig(level=logging.WARNING, format=_LOG_FORMAT)
-
-    # Load cases
+def _load_cases() -> list[RetrievalCase] | None:
+    """Load the labelled case fixture, or None when it is missing."""
     if not _CASES_PATH.exists():
         logger.error("Cases file not found: %s", _CASES_PATH)
-        return 1
+        return None
     with _CASES_PATH.open(encoding="utf-8") as fh:
         raw_cases = json.load(fh)
-    cases = [RetrievalCase(**c) for c in raw_cases]
+    return [RetrievalCase(**c) for c in raw_cases]
 
-    # Bootstrap settings and stack via the sanctioned adapter (keeps this module src-free).
-    embedding_index, driver = await engine_adapter.build_retrieval_stack()
 
-    # Smoke-check Neo4j connectivity
+async def _neo4j_reachable(driver: Any) -> bool:
+    """Smoke-check Neo4j and explain the compose-network gotcha on failure."""
     try:
         await driver.verify_connectivity()
     except Exception as exc:  # noqa: BLE001
@@ -315,6 +215,25 @@ async def _main(gen_dir: Path | None = None, retrieval_profile: str = "default")
             "  docker compose exec app python -m evals.retrieval_runner",
             file=sys.stderr,
         )
+        return False
+    return True
+
+
+async def _main(gen_dir: Path | None = None, retrieval_profile: str = "default") -> int:
+    """Load cases, build retrieval stack, run eval, print summary.
+
+    Returns:
+        Exit code: 0 on success, 1 on connectivity/setup failure.
+    """
+    logging.basicConfig(level=logging.WARNING, format=_LOG_FORMAT)
+
+    cases = _load_cases()
+    if cases is None:
+        return 1
+
+    # Bootstrap settings and stack via the sanctioned adapter (keeps this module src-free).
+    embedding_index, driver = await engine_adapter.build_retrieval_stack()
+    if not await _neo4j_reachable(driver):
         return 1
 
     profile = engine_adapter.resolve_retrieval_profile(retrieval_profile)

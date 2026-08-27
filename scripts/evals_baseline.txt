@@ -11,6 +11,8 @@ R001|evals/summary.py
 R002|evals/__main__.py
 R002|evals/adjudicate.py
 R002|evals/anti_hallucination_runner.py
+R002|evals/arm_probe.py
+R002|evals/arm_probe_report.py
 R002|evals/calibration.py
 R002|evals/case_drafts.py
 R002|evals/compare.py
@@ -58,7 +60,6 @@ R006|evals/paired_stats.py::paired_compare
 R006|evals/refusal_rate.py::score_refusal_rate
 R006|evals/report.py::write_report
 R006|evals/retrieval_join.py::compute_crosstab
-R006|evals/retrieval_runner.py::_retrieve_ranked_ids
 R006|evals/retrieval_runner.py::run_eval
 R006|evals/run_config.py::resolve_run_config
 R006|evals/runner.py::_run_case

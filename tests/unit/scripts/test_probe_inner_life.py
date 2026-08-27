@@ -22,19 +22,37 @@ Does NOT: perform HTTP, hit the engine, or read the graph.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from scripts.probe_inner_life import (  # noqa: E402
-    INNER_LIFE_SLOTS,
-    PROBE_NPCS,
-    extract_slots,
-)
+def _load_probe():
+    """Load scripts/probe_inner_life.py by PATH, without touching sys.path.
+
+    `scripts/` has no `__init__.py`, so importing it normally would mean inserting the
+    REPO ROOT on sys.path. That has a non-obvious side effect measured here: it makes
+    `evals` resolvable as a top-level package, which widens coverage's measured source
+    from 18,291 statements to 23,487 and drops the reported total from 88% to 69% —
+    a 19-point "regression" caused entirely by a test's import mechanics. A path-based
+    load has no such reach.
+    """
+    path = Path(__file__).resolve().parents[3] / "scripts" / "probe_inner_life.py"
+    spec = importlib.util.spec_from_file_location("_probe_inner_life_under_test", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_probe = _load_probe()
+INNER_LIFE_SLOTS = _probe.INNER_LIFE_SLOTS
+PROBE_NPCS = _probe.PROBE_NPCS
+extract_slots = _probe.extract_slots
 
 
 def _item(key: str, value: object) -> dict:

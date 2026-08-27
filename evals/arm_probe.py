@@ -27,6 +27,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -51,7 +52,7 @@ PROBE_CASES: tuple[tuple[str, str], ...] = (
 """The two cases DEC-212 measured tier B on, so P9's numbers compare to P8's directly."""
 
 
-def _declared_arms() -> dict[str, object]:
+def _declared_arms() -> dict[str, Any]:
     """Return every declared arm, resolved to the profile the engine would apply."""
     import engine_adapter
 
@@ -62,7 +63,7 @@ def _declared_arms() -> dict[str, object]:
 
 
 def _observe_all(
-    client: ProbeClient, arms: dict[str, object], player_id: str
+    client: ProbeClient, arms: dict[str, Any], player_id: str
 ) -> tuple[list[ArmObservation], dict[str, list[ArmObservation]]]:
     """Assemble every case under default and under every declared arm."""
     default_runs = [
@@ -80,7 +81,7 @@ def _observe_all(
 
 
 def _live_gates(
-    client: ProbeClient, arms: dict[str, object], player_id: str, selected: str
+    client: ProbeClient, arms: dict[str, Any], player_id: str, selected: str
 ) -> list[GateResult]:
     """Run the gates that need a live engine (2 and 4), honouring --gate."""
     results: list[GateResult] = []
@@ -124,7 +125,7 @@ def _run(base_url: str, api_key: str, player_id: str, selected: str) -> int:
     return _finish(results, arms, started)
 
 
-def _finish(results: list[GateResult], arms: dict[str, object], started: float) -> int:
+def _finish(results: list[GateResult], arms: dict[str, Any], started: float) -> int:
     """Print every verdict, the MDE, the runtime, and return the exit code."""
     for result in results:
         print_gate(result)

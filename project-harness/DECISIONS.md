@@ -5960,3 +5960,241 @@ any item whose PROJECTED payload is over budget. DEC-209 Decision 3's `_ESSENTIA
 row fixes the observed `rag:` case; the truncation path is shared with tier A and is
 masked at the current budget, so it belongs with P10's trim where compression actually
 fires.
+
+---
+
+## DEC-213: what P9 actually measured — three gates hold, gate 4 FAILS, and the declared
+## arms cannot clear the judge floor
+**Date:** 2026-08-27
+**Decided by:** this session, implementing P9 against DEC-194/209/210/212.
+
+**The headline, stated plainly because it is this phase's most valuable output: gate 4
+FAILS, and the MDE says the ten-hour paired generation is not worth running on the arms as
+declared.** That is a successful P9. The alternative was discovering it ten hours into P10.
+
+### The four gates, measured
+
+    gate 1  config     PASS   13 tests
+    gate 3  isolation  PASS   7 tests
+    gate 2  corpus     PASS   51 items, sha 2b19e47a1755354e..., IDENTICAL across all
+                              four arms; nodes_read=51, reconcile_passes=1
+    gate 4  effect     FAIL   wide_events is indistinguishable from default
+
+`make eval-arm-probe` runtime **37.4s**, against the ~5 minute target.
+
+### Gate 4, in full
+
+    npc            arm          tier0    tierA     tierB    tierC   total
+    captain_sorn   default      2/76     9/727     2/93     3/123    1019
+                   no_rag       2/76     9/727     0/0      0/0       803
+                   wide_events  2/76     9/727     2/93     3/123    1019   IDENTICAL
+                   wide_rag     2/76     9/727     3/138    3/126    1067   +rag:bren_smith
+    old_henryk     default      2/76     8/700     2/89     2/90      955
+                   no_rag       2/76     8/700     0/0      0/0       776
+                   wide_events  2/76     8/700     2/89     2/90      955   IDENTICAL
+                   wide_rag     2/76     8/700     2/89     2/90      955   IDENTICAL
+
+`no_rag` differs on 2/2 cases. `wide_rag` differs on 1/2, by exactly one item.
+`wide_events` differs on 0/2.
+
+### Why — measured, after I inferred it wrong first
+
+My first explanation was that the DEC-209 scope was too small. **That was wrong.** The
+scopes are large (captain_sorn 124). The binding constraint is the INTERSECTION of the
+scope with the corpus, because the corpus holds only the three embeddable node types:
+
+    npc              scope   scope-known   IN CORPUS  (= what the vector search can return)
+    captain_sorn       124           123           6
+    old_henryk          14            13           4
+    mira_innkeeper      17            15           6
+    lira_fence          23            21           8
+    bren_smith          12            12           3
+
+Default `rag_top_k` is **5**; the effective candidate set is **3-8**. Raising top_k to 15
+can therefore add at most `supply - 5` items — exactly 1 for captain_sorn, 0 for
+old_henryk, which is precisely what was observed. **`rag_top_k` is very nearly inert as an
+A/B knob on this world, and not because of a defect: it is SATURATED AT ITS DEFAULT.**
+
+Separately, every NPC in the world knows **<= 2 events** against an `events_limit` of 5, so
+`wide_events` at 15 cannot add a row that does not exist. Its exposure is structurally
+zero. This was predicted in the YAML comment when the arm was declared, then confirmed by
+measurement. The arm probe now prints the supply on failure, so "the arm did nothing" is
+distinguishable from "there was nothing for the arm to take" — different findings with
+different remedies, and only the second is a property of the world.
+
+**The failure was not worked around.** Weakening the gate, or quietly deleting
+`wide_events`, is the one thing this phase exists to prevent.
+
+### The MDE — the number that decides P10
+
+Computed in `evals/mde.py` from recorded inputs only: n=78 guard pairs and the >=6.4pp
+floor (`llm_config.yaml`), kappas 1.000 / 0.282 / 0.225 and base rate 0.951 (ISSUE-184).
+
+The model is CALIBRATED against measurements it did not produce: inverting the paired-test
+formula for the recorded 6.4pp at the recorded n=78 implies a discordance rate of **4.07%**,
+which is physically possible and sits below the 9.32% independence bound at the recorded
+base rate — a paired design should be more concordant than two independent samples.
+`test_the_recorded_floor_is_reproduced_from_the_recorded_n` pins that round trip. Without
+it every number below would be plausible rather than trustworthy.
+
+    criterion        kappa   observed MDE   TRUE MDE   n for a 6.4pp TRUE effect
+    tone_judge       1.000       7.4pp        7.4pp        104
+    affirms_judge    0.282       7.4pp       26.2pp      1,308
+    refusal_judge    0.225       7.4pp       32.9pp      2,055
+
+Bonferroni over three pairings. Judge noise is folded in via Youden's J, approximated by
+kappa — an approximation, stated in the module docstring so it can be argued with, and one
+that errs toward understating difficulty rather than overstating it.
+
+**P9's own arm split raised the comparison count from two pairings to three**, which raises
+the floor from 6.4pp to 7.4pp under any multiplicity control. That cost is P9's doing and
+is recorded rather than omitted.
+
+### The verdict on P10, stated plainly
+
+- `wide_events` has **zero exposure**. A paired run of it is a guaranteed null, and a
+  guaranteed null is not an informative null. Do not run it.
+- `wide_rag` changes one item on one of two NPCs — ~4.7% of assembled tokens on
+  captain_sorn, 0% on old_henryk. To be detectable it would need a 26-33pp TRUE movement on
+  the two weak criteria. It cannot plausibly produce that.
+- `no_rag` is the only arm with real exposure: it removes 5 and 4 `rag:` items and 216 and
+  179 tokens respectively. It is still bound by the same 32.9pp floor on `refusal_judge`,
+  but "does retrieval matter AT ALL" is the one question drastic enough to have a chance.
+
+**Recommendation: if P10 runs at all, run `default` vs `no_rag` only.** Dropping the two
+top-k arms also returns the correction to one pairing and the floor to 6.4pp.
+
+### Decisions taken in P9
+
+**D16 — the arm probe reads receipts from the DEBUG ROUTE, not from generation.** Receipts
+exist on both paths; `generation_collection.py:74` already sends
+`include_context_receipt: True`. But a dialogue turn costs an LLM generation, so 2 cases x
+4 arms would be 8 generations, and the probe's entire value is costing minutes against the
+ten hours it can cancel. The debug route runs the same
+`build_serialized_context_with_receipt` with the same player_id, profile, session turns and
+cache parameters. **What that costs, recorded:** the probe does not exercise the dialogue
+engine's degradation ladder, its legacy whole-context cache, or prompt assembly. Those are
+P10's to verify. What the probe DOES establish — that two arms retrieve measurably
+different items, and that tier B is non-empty — is a property of context assembly, which is
+the layer this route calls.
+
+**D17 — `evals/retrieval_runner.py` NARROWS ITS CLAIM; it is not repointed at the engine.**
+The defect was larger than "--retrieval-profile is not wired": `_retrieve_ranked_ids`
+called `search(query=query, top_k=k)` with no `filter_ids`, which post-P8 is an unfiltered
+sweep of a mixed 51-item store — the exact defect DEC-209 removed from the engine, still
+running inside the instrument that measures it. Demonstrated against the pre-change code:
+
+    search call issued by the CURRENT harness: [{'query': 'what news', 'top_k': 5}]
+    filter_ids passed? -> False
+    ranked: ['some_unrelated_node', 'bren_smith']
+
+Fixed by applying the DEC-209 scope at the profile's `rag_top_k`, with `skip_rag` honoured
+and `profile` a REQUIRED argument to `run_eval` so the recorded-but-not-run defect cannot
+recur silently at a new call site. **Not** repointed at `build_serialized_context`, for
+three reasons: (1) at budget 25,888 nothing is dropped (DEC-204), so
+precision-over-what-reached-the-model and precision-over-what-was-ranked are the same
+number today, and the repoint belongs with P10's trim where the budget actually binds;
+(2) `item_keys` are SLOT keys and the labelled fixture is node ids, and tier-A slots like
+`beliefs` carry no node id at all, so scoring over item_keys would silently drop most of
+tier A from the denominator; (3) it increases evals/ -> src/ coupling inside P9's own
+no-src-change-after-green fence.
+
+**Consequence recorded:** the labelled cases are dominated by `northern_war_begins`, which
+captain_sorn KNOWS_ABOUT, and DEC-209 removes known events from the vector scope by design.
+Those cases stay measurable via the graph read, but pre-P9 precision numbers are NOT
+comparable with post-P9 ones.
+
+**D18 — `corpus_sha` becomes readable without writing the store.** Found while building
+gate 2. `RunConfig` fills its four DEC-210 corpus fields from
+`GET /v1/admin/debug/vector-store`, and that route returned `corpus_sha=""`
+unconditionally. Measured live before the fix:
+
+    {"item_count":51,"embedding_model":"all-MiniLM-L6-v2","embedding_dim":384,"corpus_sha":""}
+
+So the one field carrying MEMBERSHIP — the only one of the four that can detect the corpus
+moving, since swapping one node for another leaves item_count, model and dim identical —
+was empty in every record DEC-210 has ever produced, and **P9 gate 2 would have passed
+vacuously on four empty strings.** The other route that knows the sha computes it while
+WRITING the store, which a mid-run freeze check may not do. `read_corpus_fingerprint()` is
+the read-only half, sharing `ensure_corpus`'s loader and digest so the two cannot drift.
+`include_sha=false` preserves the cheap liveness probe.
+
+**D19 — `print()` in `evals/arm_probe.py` and `evals/arm_probe_report.py` is waived.**
+R002 says use `utils/logging.py`. That module is in `npc_engine`, and `evals/` is required
+to stay src-free (`test_src_free.py`, DEC-147 §2), so it is not reachable. Fifteen sibling
+eval CLIs already carry the same waiver; these two are an operator report whose entire
+output IS the printing. Baseline re-ratcheted, and `R006|evals/retrieval_runner.py::
+_retrieve_ranked_ids` was ratcheted DOWN in the same commit.
+
+### Where this contradicts what was written down
+
+**1. DEC-212's `player_relation` 2/8 is wrong, and this retires it a second time.**
+DEC-212 retired the older 6/8 figure and asserted "2/8 is the complete and correct answer
+for this world". On the clean eval baseline, immediately after `make eval-world-reset`,
+there are **ZERO** `RELATES_TO` edges to `player_demo` — the only two RELATES_TO edges in
+the world are `mira_innkeeper->old_henryk` and `lira_fence->aldric_merchant`, both
+NPC-to-NPC. **The correct clean-baseline figure is 0/8.** DEC-212's two edges were created
+by its own earlier verification dialogue turns — exactly the drift DEC-212 itself described
+one paragraph later when it observed the figure moving to 3/8. It was right about the
+mechanism and wrong about the baseline.
+
+**2. Giving the probe a `player_id` LOWERED `player_relation`, from 2/8 to 0/8.** The
+expectation was that it would rise. It did not, because the 2/8 was drift rather than a
+`player_id=""` artifact. The instrument is now correct and the number is smaller.
+
+**3. `player_reputation` is 0/8 and that is the WORLD, not the instrument.** Verified three
+ways: no player-facing `RELATES_TO`; `STANDS_WITH` edges are faction<->faction only, so the
+player holds no standing anywhere; and the engine's own `get_reputation_context_for_npc`
+returns `[]` at threshold **0**, not merely at the configured 20.
+
+**4. DEC-206's reputation seed and the P0-P8 probe roster are DISJOINT populations.**
+`propagated_reputation` reads 0/8 on the roster. The two `reputation_change` events with
+`src_character_id='player_demo'` exist exactly as DEC-206 says, but they are known only by
+`vw_farmer`, `vw_healer` and `vw_guard` — all village-world NPCs, none on the eight-NPC
+roster. Probing those NPCs directly gives `propagated_reputation` **3/4**: populated for
+exactly the three that KNOWS_ABOUT one, empty for `vw_elder` who does not. So P9's fix is
+demonstrably LIVE rather than silently broken; the roster simply points at NPCs for whom
+that slot is correctly empty. **Anyone reading "reputation 0/8" as a regression is reading
+it wrong.**
+
+**5. The inner-life probe rewrite reproduced ISSUE-216's own failure mode.** On its first
+run it reported `current_location` 0/8 against DEC-212's recorded 8/8, because the slot is
+at `npc.profile.current_location` and the probe read `npc.current_location` — three nesting
+depths, none of them top level. Caught only by comparing against the recorded number. This
+is the SECOND time this instrument has been rebuilt wrong, which is the whole argument for
+`tests/unit/scripts/test_probe_inner_life.py` pinning the parse.
+
+**6. ISSUE-215 is broader than filed.** It blames "Python's default text mode on Windows".
+In this session BOTH `sed -i` and the Write tool silently converted whole files between
+CRLF and LF, turning a 19-line rename into a 451-line diff and a 120-line edit into a
+323-line one. Caught before every commit by checking `git diff --stat` against the size of
+the intended change. The issue is updated to name the tools.
+
+### No regression (D8)
+
+Clean eval baseline, immediately after `eval-world-reset`, through the UPGRADED route with
+`player_id=player_demo`:
+
+    beliefs 8/8 · goals 8/8 · memories 8/8 · current_location 8/8
+    retrieved_context 8/8 · nearby_npcs 7/8
+
+Identical to DEC-212 on every field it measured. `corpus_sha` reproduced
+`2b19e47a1755354e...` — the same digest DEC-212 recorded, now for a fourth independent
+time.
+
+### What P9 did NOT do, on purpose
+
+Greedy allocator untouched (D2; ISSUE-209 open and dormant). ISSUE-213/ISSUE-210 untouched;
+`evals/fixtures/` unmodified. ISSUE-212 untouched. Trimming and budget behaviour untouched
+— P10's, with its own arithmetic. The 10-hour paired generation was not run.
+
+**ISSUE-203 is NOT closed.** P9's deliverable was to RECORD in YAML that `weight_profile`
+is inert until `rpg_dialogue_social` / `rpg_dialogue_quest` are declared; declaring them
+requires deciding whether `DEFAULT_WEIGHT_PROFILES` becomes fallback-only or is deleted for
+those names, which is a decision and not a drive-by edit. The comment is in the YAML and
+the issue stays open.
+
+**New issues opened by P9:** ISSUE-217 (`rag_top_k` saturated at its default, so no top-k
+arm can produce an effect on this corpus), ISSUE-218 (`wide_events` has structurally zero
+exposure), ISSUE-219 (`rag:player_demo` — the player node is inside the RAG scope and is
+retrievable as context about the NPC).

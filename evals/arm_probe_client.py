@@ -39,6 +39,41 @@ _VECTOR_STORE_PATH = "/v1/admin/debug/vector-store"
 _TIMEOUT_SECONDS = 120.0
 
 
+def _to_observation(
+    body: dict[str, Any], *, npc_id: str, query: str, arm: str | None
+) -> ArmObservation:
+    """Turn one debug-retrieval body into an ArmObservation.
+
+    Args:
+        body: Parsed JSON response.
+        npc_id: NPC the assembly was for.
+        query: Retrieval signal used.
+        arm: Requested arm name, for the error message.
+    Returns:
+        The populated ArmObservation.
+    Raises:
+        ValueError: When no receipt is present — a cached assembly publishes none
+            (DEC-195), and scoring a pairing without one compares nothing to nothing.
+    """
+    receipt = body.get("context_receipt")
+    if not receipt:
+        raise ValueError(
+            f"no context receipt for arm={arm!r} npc_id={npc_id!r}: the assembly was "
+            f"served from cache, so there is nothing to compare"
+        )
+    return ArmObservation(
+        arm=str(body.get("retrieval_profile") or arm or "default"),
+        npc_id=npc_id,
+        query=query,
+        item_keys=tuple(receipt.get("item_keys", ())),
+        tier_spend=tuple(
+            TierRow(tier=row["tier"], items=row["items"], tokens=row["tokens"])
+            for row in receipt.get("tier_spend", ())
+        ),
+        total_tokens=int(receipt.get("total_tokens", 0)),
+    )
+
+
 class ProbeClient:
     """Thin authenticated client for the three admin routes the probe needs."""
 
@@ -61,9 +96,8 @@ class ProbeClient:
     def __enter__(self) -> ProbeClient:
         return self
 
-    def __exit__(self, *_exc: Any) -> bool:
+    def __exit__(self, *_exc: Any) -> None:
         self.close()
-        return False
 
     def observe(
         self, *, npc_id: str, query: str, player_id: str, arm: str | None
@@ -91,24 +125,7 @@ class ProbeClient:
             params["retrieval_profile"] = arm
         response = self._client.get(f"{self._base_url}{_DEBUG_RETRIEVAL_PATH}", params=params)
         response.raise_for_status()
-        body = response.json()
-        receipt = body.get("context_receipt")
-        if not receipt:
-            raise ValueError(
-                f"no context receipt for arm={arm!r} npc_id={npc_id!r}: the assembly was "
-                f"served from cache, so there is nothing to compare"
-            )
-        return ArmObservation(
-            arm=str(body.get("retrieval_profile") or arm or "default"),
-            npc_id=npc_id,
-            query=query,
-            item_keys=tuple(receipt.get("item_keys", ())),
-            tier_spend=tuple(
-                TierRow(tier=row["tier"], items=row["items"], tokens=row["tokens"])
-                for row in receipt.get("tier_spend", ())
-            ),
-            total_tokens=int(receipt.get("total_tokens", 0)),
-        )
+        return _to_observation(response.json(), npc_id=npc_id, query=query, arm=arm)
 
     def rehydrate(self) -> dict[str, Any]:
         """Reconcile embeddings until dry and load the store; return the CorpusReport."""

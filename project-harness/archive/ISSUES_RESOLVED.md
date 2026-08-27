@@ -2935,3 +2935,38 @@ corpus_sha=2b19e47a1755...` — 51 is exactly the count DEC-208 predicted (23 Ch
 
 The ordering this issue was filed about turned out not to need solving: DEC-208 Decision
 3's route dissolves the `/health` constraint that forced it.
+
+## [FIXED] ISSUE-216: the 8-NPC inner-life probe lives in a session-scoped temp directory
+**Found:** 2026-08-27, during P8 §8.6 verification
+**Fixed:** 2026-08-27, in 7daf7a1 (P9) — landed as `scripts/probe_inner_life.py` with a
+`make probe-inner-life` target and `tests/unit/scripts/test_probe_inner_life.py` pinning
+the parse against a recorded response. The deferral reasoning held exactly: P9 gave the
+debug route its `player_id`, so the committed probe reports the three reputation slots
+that were structurally invisible before. And the prediction that a rebuilt instrument is
+not the same instrument was confirmed once more during the rewrite — it read
+`npc.current_location` instead of `npc.profile.current_location` and reported a false 0/8
+against DEC-212's recorded 8/8, caught only by comparing to the recorded number. That is
+the second wrong rebuild, and it is why the parse is now pinned by test.
+**Severity:** P3 (nice-to-fix - costs a rewrite every session, and a rewritten instrument
+is a changed instrument)
+**Where:** `<scratchpad>/probe8.py`, referenced by the plan's verification block as
+`python <scratchpad>/probe8.py "label"`
+**Description:** every number in the P0-P8 headline - "beliefs 8/8, goals 8/8, memories
+8/8, current_location 8/8, was 0/975" - comes from this probe, and the probe is not in the
+repo. Each session's scratchpad is a new directory, so it has to be rewritten from the
+plan's description; it was rewritten in this session, and the reconstruction initially
+parsed the wrong response shape and reported a false 0/8 across the board before being
+corrected. A measuring instrument that is rebuilt from prose before each use is not the
+same instrument twice, which makes cross-phase comparisons weaker than they read.
+
+This is exactly the defect class DEC-211 Decision 3 just fixed for `strip_derived.py`,
+which had the same problem for the same reason.
+**Why deferred:** P9 changes this probe's contract anyway - review point 1 requires it to
+take `player_id`, `retrieval_profile`, session turns and cache parameters, because without
+`player_id` the probe matches reputation queries against `""` and cannot observe
+`propagated_reputation`, `reputation` or `player_relation` at all. Committing today's
+version would commit the version P9 is about to replace.
+**To fix:** with P9's debug-endpoint work, land the probe as `scripts/probe_inner_life.py`
+with a `make probe-inner-life` target, taking the NPC list and the label as arguments.
+Pin its output shape with a unit test against a recorded response fixture, so a change to
+the debug endpoint breaks the probe loudly instead of silently reporting zeros.

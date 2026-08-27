@@ -158,37 +158,40 @@ def gate_3_isolation(*, tests_path: str = ISOLATION_GATE_TESTS) -> GateResult:
     return _run_pytest(tests_path, 3, "isolation: no cache-key collision between arms")
 
 
+def _no_exposure_lines(arm: str, default_runs: list[ArmObservation]) -> list[str]:
+    """Explain an arm that matched default, by naming the supply its knob is bounded by."""
+    supply = ", ".join(
+        f"{d.npc_id}: event:={d.count_keys('event:')} rag:={d.count_keys('rag:')}"
+        for d in default_runs
+    )
+    return [
+        f"  FAIL {arm}: item_keys IDENTICAL to default on every case",
+        f"       supply at default ({supply}) — if the arm raises a limit above "
+        f"these, it has NO EXPOSURE and a paired run of it is a guaranteed null",
+    ]
+
+
 def _pairing_verdict(
     *, arm: str, expects_rag: bool, default_runs: list[ArmObservation],
     arm_runs: list[ArmObservation],
 ) -> tuple[bool, list[str]]:
     """Score one (default vs arm) pairing across every case. Returns (passed, lines)."""
-    lines: list[str] = []
     differing = [
         d.npc_id for d, a in zip(default_runs, arm_runs) if d.item_keys != a.item_keys
     ]
     exposed = [
-        d.npc_id
-        for d, a in zip(default_runs, arm_runs)
+        d for d, a in zip(default_runs, arm_runs)
         if max(d.tier_items(_TIER_B), a.tier_items(_TIER_B)) > 0
     ]
     arm_tier_b = [a.tier_items(_TIER_B) for a in arm_runs]
-    lines.append(
+    lines = [
         f"  {arm:<14} item_keys differ on {len(differing)}/{len(arm_runs)} cases "
         f"{differing}; arm tierB items={arm_tier_b}; "
         f"default tierB items={[d.tier_items(_TIER_B) for d in default_runs]}"
-    )
+    ]
     passed = True
     if not differing:
-        supply = ", ".join(
-            f"{d.npc_id}: event:={d.count_keys('event:')} rag:={d.count_keys('rag:')}"
-            for d in default_runs
-        )
-        lines.append(f"  FAIL {arm}: item_keys IDENTICAL to default on every case")
-        lines.append(
-            f"       supply at default ({supply}) — if the arm raises a limit above "
-            f"these, it has NO EXPOSURE and a paired run of it is a guaranteed null"
-        )
+        lines.extend(_no_exposure_lines(arm, default_runs))
         passed = False
     if len(exposed) != len(arm_runs):
         lines.append(

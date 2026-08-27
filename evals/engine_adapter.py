@@ -171,7 +171,10 @@ def declared_retrieval_profiles() -> dict[str, Any]:
         Mapping of arm name to RetrievalProfile. 'default' is NOT included: it is
         resolved from Settings by build_default_profile and is never declared.
     """
-    from npc_engine.config import get_settings
+    # Same namespace-package shadowing artifact as build_retrieval_stack above:
+    # get_settings exists at runtime, but src/npc_engine/config/ (the YAML directory)
+    # shadows config.py during mypy's import resolution.
+    from npc_engine.config import get_settings  # type: ignore[attr-defined]
     from npc_engine.schema.llm_schema_loader import load_llm_config
 
     return load_llm_config(config_path=get_settings().LLM_CONFIG_PATH).retrieval_profiles
@@ -193,7 +196,8 @@ def resolve_retrieval_profile(name: str) -> Any:
     Raises:
         RetrievalProfileNotFoundError: When name is neither 'default' nor declared.
     """
-    from npc_engine.config import get_settings
+    # Same namespace-package shadowing artifact as build_retrieval_stack above.
+    from npc_engine.config import get_settings  # type: ignore[attr-defined]
     from npc_engine.schema.retrieval_profile_models import (
         build_default_profile,
         resolve_retrieval_profile as _resolve,

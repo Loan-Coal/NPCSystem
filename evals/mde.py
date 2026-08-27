@@ -172,7 +172,7 @@ def observed_mde(
     Returns:
         The effect as a PROPORTION (0.064 for 6.4pp).
     """
-    return _z_sum(alpha, power, comparisons) * (discordance_rate / n_pairs) ** 0.5
+    return float(_z_sum(alpha, power, comparisons) * (discordance_rate / n_pairs) ** 0.5)
 
 
 def implied_discordance_rate(
@@ -197,7 +197,7 @@ def implied_discordance_rate(
     Returns:
         The implied discordance rate, as a proportion.
     """
-    return n_pairs * (mde / _z_sum(alpha, power, comparisons)) ** 2
+    return float(n_pairs) * (mde / _z_sum(alpha, power, comparisons)) ** 2
 
 
 def arm_pairing_mde(
@@ -268,4 +268,4 @@ def required_pairs_for(
     observed = (true_effect_pp / 100.0) * kappa
     if observed <= 0.0:
         return float("inf")
-    return discordance_rate * (_z_sum(alpha, power, comparisons) / observed) ** 2
+    return float(discordance_rate) * (_z_sum(alpha, power, comparisons) / observed) ** 2

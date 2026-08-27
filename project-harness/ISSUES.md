@@ -1536,6 +1536,15 @@ internally (`DECISIONS.md` 5,029 CRLF / 588 LF; `ISSUES.md` 1,439 / 39). With no
 edit made with Python's default text mode on Windows silently converts a whole file to
 CRLF, and the commit then shows every line as changed.
 
+**Update 2026-08-27 (P9).** Broader than filed: it is not only Python text mode. In one
+session BOTH `sed -i` (LF-ified a 223-line CRLF test module, turning a 19-line rename into
+a 451-line diff) and the **Write tool** (LF-ified a 159-line CRLF route, turning a 120-line
+edit into a 323-line one) did it, in opposite directions on different files because the
+repo is mixed. The Edit tool preserves endings; Write and sed do not. Until the
+`.gitattributes` fix lands, the practical mitigation is to run `git diff --stat` before
+every commit and confirm the numbers match the size of the intended change — that caught
+both instances here before either reached a commit.
+
 Happened for real in P8: `git diff a2b71f5..HEAD` reported 5,792 insertions / 2,709
 deletions across 59 files, in which system_v1.yaml's 13 genuinely-changed lines were
 unfindable. Repaired in c69465e (per-line for the two internally-mixed files), but only
@@ -1552,28 +1561,89 @@ for the fixtures), run `git add --renormalize .` as its own commit with no other
 and confirm `evals/fixtures/eval_world_baseline.json` is byte-stable across the
 renormalisation - a fixture whose bytes move invalidates comparability.
 
-## ISSUE-216: the 8-NPC inner-life probe lives in a session-scoped temp directory
-**Found:** 2026-08-27, during P8 §8.6 verification
-**Severity:** P3 (nice-to-fix - costs a rewrite every session, and a rewritten instrument
-is a changed instrument)
-**Where:** `<scratchpad>/probe8.py`, referenced by the plan's verification block as
-`python <scratchpad>/probe8.py "label"`
-**Description:** every number in the P0-P8 headline - "beliefs 8/8, goals 8/8, memories
-8/8, current_location 8/8, was 0/975" - comes from this probe, and the probe is not in the
-repo. Each session's scratchpad is a new directory, so it has to be rewritten from the
-plan's description; it was rewritten in this session, and the reconstruction initially
-parsed the wrong response shape and reported a false 0/8 across the board before being
-corrected. A measuring instrument that is rebuilt from prose before each use is not the
-same instrument twice, which makes cross-phase comparisons weaker than they read.
+## ISSUE-217: `rag_top_k` is saturated at its default, so no top-k arm can produce an effect
+**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
+**Severity:** P2 (annoying) - blocks every tier-B top-k A/B arm; nothing is wrong at runtime
+**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_rag`), the interaction of
+`retrieval/context/context_builder.py:_fetch_rag_results` with the corpus contents
+**Description:** the vector search's candidate set is the DEC-209 scope, minus known
+events, INTERSECTED WITH THE CORPUS. The corpus holds 51 nodes of the three embeddable
+types (Character, Event, Location), so the intersection is small even though the scopes
+are not:
 
-This is exactly the defect class DEC-211 Decision 3 just fixed for `strip_derived.py`,
-which had the same problem for the same reason.
-**Why deferred:** P9 changes this probe's contract anyway - review point 1 requires it to
-take `player_id`, `retrieval_profile`, session turns and cache parameters, because without
-`player_id` the probe matches reputation queries against `""` and cannot observe
-`propagated_reputation`, `reputation` or `player_relation` at all. Committing today's
-version would commit the version P9 is about to replace.
-**To fix:** with P9's debug-endpoint work, land the probe as `scripts/probe_inner_life.py`
-with a `make probe-inner-life` target, taking the NPC list and the label as arguments.
-Pin its output shape with a unit test against a recorded response fixture, so a change to
-the debug endpoint breaks the probe loudly instead of silently reporting zeros.
+    npc              scope   scope-known   IN CORPUS
+    captain_sorn       124           123           6
+    old_henryk          14            13           4
+    mira_innkeeper      17            15           6
+    lira_fence          23            21           8
+    bren_smith          12            12           3
+
+Default `rag_top_k` is **5**. So raising it to 15 can add at most `supply - 5` items —
+measured as exactly **1** for captain_sorn (`rag:bren_smith`) and **0** for old_henryk.
+`wide_rag` therefore differs from default on 1 of 2 probe cases, by one item.
+
+This is not a defect in the scope, the corpus or the arm. It is the arms-race arithmetic:
+the knob's ceiling is below its own default on most NPCs, so the knob cannot move.
+**Consequence:** a paired generation of `wide_rag` would spend hours to measure a ~4.7%
+context change on a minority of NPCs, against a 26-33pp judge floor (DEC-213's MDE).
+**Why deferred:** the remedies are all larger than P9 and all belong to a phase that is
+allowed to change the substrate. Raising the corpus's node-type coverage changes
+`corpus_sha` and therefore comparability (DEC-210); widening the scope re-opens DEC-209;
+lowering the DEFAULT `rag_top_k` so the arm has headroom is a default-path engine change,
+which P9's own fence forbids after the gates run.
+**To fix:** pick one, in P10 or later. (a) Lower the default `rag_top_k` to 2-3 so
+`wide_rag` at 15 has real headroom — cheapest, and it also makes the default honest about
+what it can supply. (b) Broaden the embeddable node types so the corpus is larger than the
+scope intersection. (c) Retire top-k as an A/B dimension on this world and keep `no_rag`
+as the only retrieval arm. Whichever is chosen, re-run `make eval-arm-probe` — it prints
+the supply per case, which is the number that decides this.
+
+## ISSUE-218: the `wide_events` arm has structurally zero exposure on the eval world
+**Found:** 2026-08-27, during P9 gate 4 (DEC-213)
+**Severity:** P2 (annoying) - a declared arm that cannot produce a result
+**Where:** `src/npc_engine/config/llm_config.yaml` (`wide_events`)
+**Description:** `events_limit` bounds `get_events_for_npc`, which returns the events the
+NPC actually KNOWS_ABOUT. Measured on the eval baseline, **every NPC knows <= 2 events**
+against a default limit of 5. Raising the limit to 15 cannot add a row that does not
+exist, so the arm's `item_keys` are IDENTICAL to default on 2/2 probe cases and
+`make eval-arm-probe` exits non-zero because of it.
+
+The arm is correctly declared and correctly single-tier — P9 split it out of `wide_rag`
+precisely so a tier-A knob would not be confounded with a tier-B one. The problem is the
+WORLD, not the arm, and the distinction matters: this is "there was nothing to take", not
+"the arm did nothing". The arm probe now prints the supply on failure so the two cannot be
+confused.
+**Why deferred:** the fix is either to seed NPCs who know more than 5 events — which
+regenerates `evals/fixtures/eval_world_baseline.json`, explicitly forbidden between P8 and
+P10 — or to drop the arm, which is a decision about what P10 measures and belongs with
+whoever schedules P10.
+**To fix:** EITHER drop `wide_events` from the declared arms (and from `_DECLARED_ARMS` in
+`tests/unit/config/test_shipped_retrieval_profiles.py`), which also returns the Bonferroni
+correction to two pairings and the MDE floor from 7.4pp to ~6.9pp; OR seed an NPC with
+>5 KNOWS_ABOUT edges when the baseline fixture is next legitimately regenerated (after
+P10, alongside ISSUE-213). Do NOT "fix" it by weakening gate 4.
+
+## ISSUE-219: the player character node is inside the RAG scope and retrievable
+**Found:** 2026-08-27, during P9 gate 4 while reading probe output
+**Severity:** P3 (nice-to-fix - no wrong answer today; a category error in the context)
+**Where:** `src/npc_engine/graph/graph_rag_queries.py:_CYPHER_RAG_SCOPE_IDS`
+**Description:** `captain_sorn`'s default assembly retrieves `rag:player_demo` — the
+PLAYER's own Character node — as tier-B/C context about the NPC's surroundings. It is in
+scope legitimately (the player is a `Character` in the NPC's 1-hop subgraph, and the
+corpus embeds every Character), and it is not currently harmful, because the payload is
+the player's own profile fields.
+
+It is still a category error. `retrieved_context` is declared to the model as "related
+information, not events you witnessed" (system prompt Rule 17), and handing an NPC the
+player's node under that heading invites the model to narrate the player's biography back
+at them as background lore. It also spends tier-B budget on a node the player already
+carries via `player_relation`.
+**Why deferred:** it is a scope-query change, and DEC-209's scope is a signed-off decision
+with its own tests; changing it after P9's gates run would re-arm the whole phase under
+P9's own no-src-change-after-green fence. It affects one item out of five and costs no
+correctness today.
+**To fix:** exclude the requesting `player_id` (and any node whose label set marks it as a
+player) from `get_rag_scope_ids_for_npc`, the same way `known_event_ids` is subtracted by
+the caller. Add `test_the_rag_scope_never_contains_the_player_being_talked_to`. Verify with
+`make eval-arm-probe`: `rag:player_demo` must disappear from captain_sorn's default keys
+and the tier-B count drop from 2 to 2 with a different member, not to 1.

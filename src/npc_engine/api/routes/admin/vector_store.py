@@ -82,6 +82,20 @@ async def rehydrate_vector_store(
     return ok_response(report)
 
 
+async def _liveness_fingerprint(embedding_index: EmbeddingIndex) -> CorpusFingerprint:
+    """Report store identity WITHOUT the membership digest — the pre-P9 cheap probe.
+
+    Keeps `include_sha=false` free of the embedded-node scan, for callers that only want
+    to know the store is up.
+    """
+    return CorpusFingerprint(
+        item_count=await embedding_index.count(),
+        embedding_model=embedding_index.model_name,
+        embedding_dim=EMBED_DIMENSION,
+        corpus_sha="",
+    )
+
+
 @debug_router.get("/vector-store", response_model=OkEnvelope[CorpusFingerprint])
 async def read_vector_store_state(
     include_sha: bool = True,
@@ -91,21 +105,17 @@ async def read_vector_store_state(
 ) -> dict[str, object]:
     """Report what the vector store currently holds, without changing it.
 
-    `corpus_sha` used to be empty here unconditionally, on the argument that membership
-    is only knowable by reading the store's contents and that this route is a cheap
-    liveness probe. That made DEC-210 Decision 2 unachievable in practice: RunConfig
-    fills its four corpus fields from THIS route, so every generation record carried an
-    empty sha, and the sha is the only one of the four that can detect the corpus
-    MOVING — swap one node for another and item_count is unchanged. The other route that
+    `corpus_sha` was empty here unconditionally until P9, on the argument that this route
+    is a cheap liveness probe. That made DEC-210 Decision 2 unachievable: RunConfig fills
+    its four corpus fields from THIS route, so every generation record carried an empty
+    sha — and the sha is the only one of the four that can detect the corpus MOVING,
+    since swapping one node for another leaves item_count unchanged. The other route that
     knows the sha computes it while WRITING the store, which a mid-run freeze check may
     not do.
 
-    So the digest is computed here now, read-only, and `include_sha=false` keeps the
-    cheap probe available for anything that only wants liveness.
-
     Args:
-        include_sha: Compute the membership digest. False skips the embedded-node scan
-            and returns an empty corpus_sha, restoring the pre-P9 cost.
+        include_sha: Compute the membership digest. False skips the embedded-node scan,
+            restoring the pre-P9 cost.
         session: Scoped Neo4j session; the embedded-node scan reads through it.
         embedding_index: The vector store.
         settings: Application settings, for the backend label.
@@ -114,17 +124,13 @@ async def read_vector_store_state(
         A CorpusFingerprint carrying item_count, the embedding model, the dimension and
         — unless include_sha is false — the membership digest.
     """
-    if include_sha:
-        fingerprint = await read_corpus_fingerprint(
+    fingerprint = (
+        await read_corpus_fingerprint(
             session=session,
             index=embedding_index,
             batch_size=settings.VECTOR_STORE_CORPUS_BATCH_SIZE,
         )
-    else:
-        fingerprint = CorpusFingerprint(
-            item_count=await embedding_index.count(),
-            embedding_model=embedding_index.model_name,
-            embedding_dim=EMBED_DIMENSION,
-            corpus_sha="",
-        )
+        if include_sha
+        else await _liveness_fingerprint(embedding_index)
+    )
     return ok_response(fingerprint, meta={"backend": settings.VECTOR_STORE_BACKEND})
