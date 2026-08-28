@@ -20,11 +20,15 @@ Rules:
                      files 401-800 lines emit a soft advisory only (no gate, no waiver).
                      Grandfathered R001 entries record line count; growing past that count
                      is a new violation regardless of absolute size.
+                     Scans: src/npc_engine, demo_game, scripts.
   R002 print       - print() in src/npc_engine and evals/ (CLAUDE.md "never print(), use logging")
   R003 swallow     - `except ...: pass` (CLAUDE.md "never swallow errors")
-  R004 raise-exc   - `raise Exception(` (CLAUDE.md "custom exception hierarchy only")
-  R005 cypher-leak - Cypher / session.run / begin_transaction outside graph/ (layer rule)
-  R006 fn-length   - function/method over 40 lines (CLAUDE.md "no function exceeds 40 lines")
+  R004 raise-exc   - raise Exception/BaseException (regex) or class X(Exception/BaseException)
+                     outside utils/errors.py (AST). CLAUDE.md: custom exception hierarchy only.
+  R005 cypher-leak - Cypher / session.run / begin_transaction in any src/npc_engine package
+                     except graph/ (layer rule; all non-graph packages are scanned).
+  R006 fn-length   - function/method over 40 lines (CLAUDE.md "no function exceeds 40 lines").
+                     Scans: src/npc_engine, demo_game, scripts.
   R007 demo-import - demo_game importing npc_engine (zero-src-import contract)
 
 Signatures for R001 are line-count-bearing ("R001|relative/path:NNNN") so the gate
@@ -53,12 +57,13 @@ MAX_FUNCTION_LINES = 40  # CLAUDE.md: "no function or method may exceed 40 lines
 _CYPHER_RE = re.compile(r"\b(?:MATCH|MERGE|CREATE)\s*\(|session\.run\(|tx\.run\(|begin_transaction\(")
 # `except ...: pass` on the same line OR a bare-body `pass` on the next line.
 _SWALLOW_RE = re.compile(r"except[^\n:]*:\s*(?:#[^\n]*)?\n\s*pass\b|except[^\n:]*:\s*pass\b")
-_RAISE_EXC_RE = re.compile(r"raise\s+Exception\(")
+_RAISE_EXC_RE = re.compile(r"raise\s+(?:Exception|BaseException)\s*\(")
 _PRINT_RE = re.compile(r"(?<![\w.])print\(")
 _DEMO_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+npc_engine\b", re.MULTILINE)
 
-# Cypher leak is checked in these src/npc_engine subpackages (everything but graph/).
-_CYPHER_SCAN_DIRS = ("engines", "world", "retrieval", "services", "scheduler")
+# utils/errors.py is the canonical exception registry; class-Exception definitions there are exempt.
+_ERRORS_MODULE_SUFFIX = "utils/errors.py"
+_RAW_EXCEPTION_BASES: frozenset[str] = frozenset({"Exception", "BaseException"})
 
 
 def _is_test_path(path: Path) -> bool:
@@ -111,6 +116,72 @@ def _oversized_functions(text: str, rel: str) -> set[str]:
 
     walk(tree, "")
     return out
+
+
+def _raw_exception_classes(text: str, rel: str) -> set[str]:
+    """Return R004 signatures for classes that inherit directly from Exception/BaseException.
+
+    Files matching utils/errors.py are exempt — that is the canonical exception registry.
+
+    Args:
+        text: File content.
+        rel: Repo-relative POSIX path.
+    Returns:
+        Set of R004 signature strings (one per violating file, not per class).
+    """
+    if rel.endswith(_ERRORS_MODULE_SUFFIX):
+        return set()
+    out: set[str] = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return out
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                if isinstance(base, ast.Name) and base.id in _RAW_EXCEPTION_BASES:
+                    out.add(f"R004|{rel}")
+                    break
+    return out
+
+
+def _r004_violations(text: str, rel: str) -> set[str]:
+    """Return R004 signatures for raise-Exception patterns and raw Exception subclasses.
+
+    Combines the regex check (raise Exception/BaseException) with the AST check
+    (class X(Exception/BaseException) outside utils/errors.py).
+
+    Args:
+        text: File content.
+        rel: Repo-relative POSIX path.
+    Returns:
+        Set of R004 signature strings.
+    """
+    out = _raw_exception_classes(text, rel)
+    if _RAISE_EXC_RE.search(text):
+        out.add(f"R004|{rel}")
+    return out
+
+
+def _collect_scripts() -> tuple[set[str], set[str]]:
+    """Scan scripts/ for R001 (file size) and R006 (function length) violations only.
+
+    Returns:
+        (violations, advisories) in the same format as _collect().
+    """
+    found: set[str] = set()
+    advisories: set[str] = set()
+    for path in _iter_py("scripts"):
+        if _is_test_path(path):
+            continue
+        rel = _rel(path)
+        gate_sig, advisory_sig = _file_violations(path, rel)
+        if gate_sig:
+            found.add(gate_sig)
+        if advisory_sig:
+            advisories.add(advisory_sig)
+        found |= _oversized_functions(_read(path), rel)
+    return found, advisories
 
 
 def _file_violations(path: Path, rel: str) -> tuple[str | None, str | None]:
@@ -180,11 +251,7 @@ def _compare_r001(current: set[str], baseline: set[str]) -> tuple[set[str], set[
 
 
 def _collect() -> tuple[set[str], set[str]]:
-    """Scan src/ and demo_game/ and return (violations, advisories).
-
-    violations: gate-blocking rule-violation signatures.
-    advisories: R001-SOFT signatures for files in the SOFT_LINE_LIMIT..HARD_LINE_LIMIT band.
-    """
+    """Scan src/, demo_game/, and scripts/ and return (violations, advisories)."""
     found: set[str] = set()
     advisories: set[str] = set()
     src = _iter_py("src/npc_engine")
@@ -205,18 +272,21 @@ def _collect() -> tuple[set[str], set[str]]:
         text = _read(path)
         rel = _rel(path)
         found |= _oversized_functions(text, rel)
+        found |= _r004_violations(text, rel)
         if _PRINT_RE.search(text):
             found.add(f"R002|{rel}")
         if _SWALLOW_RE.search(text):
             found.add(f"R003|{rel}")
-        if _RAISE_EXC_RE.search(text):
-            found.add(f"R004|{rel}")
-        if any(seg in path.parts for seg in _CYPHER_SCAN_DIRS) and _CYPHER_RE.search(text):
+        if "graph" not in path.parts and _CYPHER_RE.search(text):
             found.add(f"R005|{rel}")
 
     for path in demo:
         if _DEMO_IMPORT_RE.search(_read(path)):
             found.add(f"R007|{_rel(path)}")
+
+    s_viol, s_adv = _collect_scripts()
+    found |= s_viol
+    advisories |= s_adv
     return found, advisories
 
 

@@ -4,6 +4,16 @@
 R001|demo_game/client.py:1901
 R001|demo_game/seeds/seed.py:1677
 R001|demo_game/ui/layout/game_window.py:925
+R004|src/npc_engine/setup/neo4j_manager.py
+R004|src/npc_engine/setup/ollama_manager.py
+R006|scripts/check_conservation.py::format_report
+R006|scripts/check_harness_honesty.py::main
+R006|scripts/check_layers.py::find_violations_in_file
+R006|scripts/check_rules.py::_run_check
+R006|scripts/check_test_quality.py::_scan_fn
+R006|scripts/migrate_panel_judged.py::migrate
+R006|scripts/migrations/migrate_faction_strings.py::run_migration
+R006|scripts/seed_reproduction_probe.py::measure
 R006|src/npc_engine/api/helpers/quest_helpers.py::build_transition_meta
 R006|src/npc_engine/api/routes/admin/debug_retrieval.py::get_debug_retrieval
 R006|src/npc_engine/api/routes/dialogue/action.py::report_action

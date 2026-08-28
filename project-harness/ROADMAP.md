@@ -122,7 +122,7 @@ Revert afterwards. Second counterfactual: move a file between layer directories 
 its docstring; the gate must red.
 Validation: `make check-docstrings` green on a clean tree. CR-L06-08, CR-L14-07. ✅ AUTO (R1.5, 2026-08-28)
 
-- [ ] **R1.6** Close the three rule-scope gaps
+- [x] **R1.6** Close the three rule-scope gaps
 Files: `scripts/check_rules.py`, `scripts/rules_baseline.txt`
 Spec: R005 (Cypher leak) scans a `_CYPHER_SCAN_DIRS` set excluding `api/`, `auth/`, `data/`,
 `cache/`, `mutation/` — extend to all non-`graph/` packages. R004 matches the literal string
@@ -134,7 +134,7 @@ RED anchor: three, all green today and all must red. (a) add `session.run("MATCH
 to `src/npc_engine/api/routes/quest/quest.py`; (b) add `raise Exception("x")` to any engine;
 (c) add a 45-line function to `scripts/check_rules.py`. Revert all three.
 Validation: `make check-rules` green on a clean tree after re-baselining `scripts/`.
-CR-L02-04, CR-L05-05, CR-L08-04.
+CR-L02-04, CR-L05-05, CR-L08-04. ✅ AUTO (R1.6, 2026-08-28)
 
 - [ ] **R1.7** ⏸️ ask-gate — DEC-224 is written; this task records the counterfactual audit
 Files: `project-harness/DECISIONS.md`
