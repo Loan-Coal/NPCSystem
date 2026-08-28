@@ -578,3 +578,11 @@ make: *** [Makefile:99: lint] Error 1
 The cursor still points at R1.1 after 2 attempts. The session
 reported completion but never ran 'roadmap_cursor.py --mark R1.1', so the work may or may not
 be committed. Inspect the last task log before re-running.
+
+## 2026-08-28 15:39:20 — task R1.1 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-28 16:07:28 — task R1.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.

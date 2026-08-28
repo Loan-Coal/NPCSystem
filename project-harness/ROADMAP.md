@@ -85,7 +85,7 @@ Delete the file afterwards.
 Validation: `python scripts/check_human_gates.py --strict; echo $?` prints 1 while gates are OPEN;
 `make check` does not include check-blocking. CR-L06-03, CR-L06-01. ✅ AUTO (R1.2, 2026-08-28)
 
-- [ ] **R1.3** Remove the two gates that audit unchangeable inputs
+- [x] **R1.3** Remove the two gates that audit unchangeable inputs
 Files: `scripts/check_conservation.py`, `scripts/check_label_survival.py`, `Makefile`
 Spec: drop `check-conservation` and `check-label-survival` from `make check` and delete
 `_check_identity_2`. `check_conservation.py:164` reads `all_slots = compare_slots` then line 169
@@ -95,7 +95,7 @@ RED anchor: `grep -n 'all_slots = compare_slots' scripts/check_conservation.py` 
 today and must return none after. Behavioural: corrupt one row in a generation dir's
 `judged.jsonl` and confirm `make eval-generate` reds on Identity 1.
 Validation: `make check` no longer lists either target; `make check` still green.
-CR-L06-09, CR-L03-07.
+CR-L06-09, CR-L03-07. ✅ AUTO (R1.3, 2026-08-28)
 
 - [ ] **R1.4** Delete `check-harness` H3 — it reads an archived path and can never fire
 Files: `scripts/check_harness_honesty.py`, `Makefile`

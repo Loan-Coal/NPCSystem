@@ -5,16 +5,8 @@ Purpose: Unit tests for scripts/check_conservation.py — pins the exact counts 
          committed k3_73e6c36 artifact and proves the detector goes green on a synthetic
          fixed fixture (a detector that only ever reports failure is broken).
 
-ISSUE-172 fix (2026-08-16): the three "violations" this file used to pin as expected
-were bugs in this SCRIPT, not in the aggregators it audits. Identity 1 hardcoded
-`excluded = 0` instead of counting case_stats.classify_battery's real "excluded"
-verdict — 9 cases (case_001-003, case_voice_*, moderation_everyone_*,
-reputation_dialogue_tone_001) are legitimately excluded by design, not uncategorized.
-Identities 2/3 hand-read judged.jsonl only instead of reusing
-verdict_sources.load_unified_rows, which compare.py and summary.py already use
-correctly (EVAL-P17.1). Fixed here: all three identities now hold against the real
-k3_73e6c36 artifact — see the updated test below, and a new broken-fixture test that
-proves the detector still catches a genuine violation.
+R1.3 (2026-08-28): Identity 2 (all_slots == compare_slots) was a tautology and removed.
+Tests updated accordingly. Identities 1 and 3 remain.
 Dependencies: json, pathlib, sys, pytest, check_conservation
 Used by: make test (pytest discovery)
 """
@@ -49,14 +41,12 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 def _make_fixed_fixture(tmp_path: Path) -> Path:
-    """Create a synthetic generation directory where all 3 identities are satisfied.
+    """Create a synthetic generation directory where identities 1 and 3 are satisfied.
 
     Three cases: 2 guard (case_adv_x, case_neg_y) + 1 capability (case_pos_z).
     All record_ids appear in judged.jsonl; deterministic_judged.jsonl is empty.
-    All capability cases appear in judged.jsonl.
 
     Identity 1: guard(2) + capability(1) + excluded(0) == total(3)  → OK
-    Identity 2: compare reads 3 of 3 unique record_ids               → OK
     Identity 3: cap_in_judged(1) == cap_ran(1)                       → OK
     """
     gen_dir = tmp_path / "fixed_gen"
@@ -114,9 +104,7 @@ def _make_broken_fixture(tmp_path: Path) -> Path:
 
     Same as _make_fixed_fixture, but case_pos_z ran (present in outputs.jsonl)
     and has no verdict row in either judged.jsonl or deterministic_judged.jsonl
-    — a capability case that was never actually scored. Identity 1/2 still hold
-    (case_pos_z is a real capability case, and Identity 2 only compares slots
-    that exist in the verdict files, which don't reference case_pos_z at all).
+    — a capability case that was never actually scored.
     """
     gen_dir = tmp_path / "broken_gen"
     gen_dir.mkdir()
@@ -156,25 +144,19 @@ def _make_broken_fixture(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# RED anchor — all three identities hold against the committed artifact (ISSUE-172)
+# Identities 1 and 3 hold against the committed artifact (ISSUE-172)
 # ---------------------------------------------------------------------------
 
 
 def test_all_identities_hold_against_the_committed_artifact() -> None:
     """Exact counts for the committed k3_73e6c36 artifact (pinned literals).
 
-    If any number changes, a pipeline arithmetic bug has altered the artifact —
-    this is the finding the detector exists to surface. Before the ISSUE-172 fix,
-    this test pinned the SCRIPT's own bugs as if they were real conservation
-    violations (see the module docstring); this is the corrected pin.
+    If any number changes, a pipeline arithmetic bug has altered the artifact.
 
     Identity 1 arithmetic: 78 guard + 7 capability + 9 excluded (case_001-003,
                             case_voice_*, moderation_everyone_*,
                             reputation_dialogue_tone_001 — legitimately excluded
                             by classify_battery, not uncategorized) == 94 total.
-    Identity 2 arithmetic: judged ∪ deterministic_judged (via verdict_sources.
-                            load_unified_rows, same unifier compare.py/summary.py
-                            already use) covers all 307 unique record_ids.
     Identity 3 arithmetic: all 7 capability case_ids appear in the unified rows
                             (2 via judged.jsonl, 5 via deterministic_judged.jsonl).
     """
@@ -185,10 +167,6 @@ def test_all_identities_hold_against_the_committed_artifact() -> None:
     assert report.identity_1.capability_cases == 7
     assert report.identity_1.explicitly_excluded_cases == 9
     assert report.identity_1.total_cases == 94
-
-    assert report.identity_2.ok, f"identity 2 unexpectedly failed: {report.identity_2}"
-    assert report.identity_2.compare_slots == 307
-    assert report.identity_2.all_slots == 307
 
     assert report.identity_3.ok, f"identity 3 unexpectedly failed: {report.identity_3}"
     assert report.identity_3.cap_in_judged == 7
@@ -201,12 +179,11 @@ def test_all_identities_hold_against_the_committed_artifact() -> None:
 
 
 def test_all_violations_cleared_on_fixed_fixture(tmp_path: Path) -> None:
-    """Conservation report is all-OK on a synthetic artifact where every identity holds."""
+    """Conservation report is all-OK on a synthetic artifact where both identities hold."""
     gen_dir = _make_fixed_fixture(tmp_path)
     report = check_conservation(gen_dir)
 
     assert report.identity_1.ok, f"identity 1 unexpectedly failed: {report.identity_1}"
-    assert report.identity_2.ok, f"identity 2 unexpectedly failed: {report.identity_2}"
     assert report.identity_3.ok, f"identity 3 unexpectedly failed: {report.identity_3}"
 
 
@@ -269,12 +246,7 @@ def test_no_violation_exits_zero(tmp_path: Path) -> None:
 
 
 def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """main() survives a cp1252 stdout, which the real report's '∪' glyph would break.
-
-    Reproduces ISSUE-151: a Windows console defaults to cp1252 and `print()` on the
-    unreconfigured stream raises UnicodeEncodeError on the U+222A in Identity 2's
-    label, taking `make check` down with it.
-    """
+    """main() survives a cp1252 stdout — belt-and-suspenders guard from ISSUE-151."""
     from check_conservation import main  # noqa: E402
 
     cp1252_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")

@@ -201,9 +201,9 @@ check-mutations:
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
 # EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
-# EVAL-P17.6 added: check-conservation (exits non-zero on any identity violation)
-# EVAL-P20→P24 unblock plan Phase A1 added: check-label-survival
-check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality check-conservation check-label-survival test-cov test-cov-evals
+# R1.3: check-conservation and check-label-survival moved out — they audited
+# unchangeable committed inputs; conservation now runs inside eval-generate.
+check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality test-cov test-cov-evals
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
@@ -350,6 +350,7 @@ eval-arm-probe:
 
 # eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
 # Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
+# Conservation identities 1 and 3 are checked after generation when GEN_ID is set (R1.3).
 eval-generate:
 	@echo "Running eval generation pass against $(BASE_URL) ..."
 	$(PYTHON) -m evals generate \
@@ -360,6 +361,7 @@ eval-generate:
 		--out evals/generations \
 		--run-id latest \
 		$(ARGS)
+	$(if $(GEN_ID),$(PYTHON) scripts/check_conservation.py --gen-dir evals/generations/$(GEN_ID),)
 
 # eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
 # Pass GEN_ID=<id> to also write evals/generations/<id>/judged.jsonl (EVAL-P1.6).
