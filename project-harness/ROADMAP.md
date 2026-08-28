@@ -58,7 +58,7 @@ Outstanding and human-only: **rotate the wizard API key** if port 8000 was ever 
 
 Gate integrity. Nothing downstream is trustworthy until gates can fail. Plans: `FIX_PLANS.md#r1`.
 
-- [ ] **R1.1** Make `check-rules` signatures line-count-bearing; two-tier size limit
+- [x] **R1.1** Make `check-rules` signatures line-count-bearing; two-tier size limit
 Files: `scripts/check_rules.py`, `scripts/rules_baseline.txt`, `scripts/evals_baseline.txt`
 Spec: record the line count at grandfathering time in the signature; fail when a grandfathered
 file exceeds its recorded size. Two tiers per DEC-226: soft advisory at 400 (no gate, no waiver
@@ -70,7 +70,7 @@ Revert the comment before committing.
 Validation: `make check-rules` green on a clean tree; a synthetic 801-line file reds with no
 waiver available. Four non-test files already exceed 800 (client.py 1901, seed.py 1677,
 game_window.py 925, evals/calibration.py 875) — they are R7.2, not this task.
-Blocks: R7.2. CR-L06-05 +2.
+Blocks: R7.2. CR-L06-05 +2. ✅ AUTO (R1.1, 2026-08-28)
 
 - [ ] **R1.2** Give `check-test-quality` and `check-human-gates` real exit codes
 Files: `scripts/check_test_quality.py`, `scripts/check_human_gates.py`, `Makefile`

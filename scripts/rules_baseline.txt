@@ -1,37 +1,9 @@
 # Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
 # (run the corresponding update target). Never add a line by hand to dodge the gate.
-R001|demo_game/client.py
-R001|demo_game/game_controller.py
-R001|demo_game/game_end_checker.py
-R001|demo_game/quest_trade_controller.py
-R001|demo_game/runners/run.py
-R001|demo_game/runners/run_scenes.py
-R001|demo_game/scenarios/run_tavern_intrigue.py
-R001|demo_game/scenarios/run_village_crisis.py
-R001|demo_game/seeds/seed.py
-R001|demo_game/seeds/seed_npc_data.py
-R001|demo_game/ui/layout/game_window.py
-R001|demo_game/ui/layout/left_panel.py
-R001|demo_game/ui/layout/right_panel.py
-R001|demo_game/ui/panels/branch_panel.py
-R001|demo_game/ui/panels/emotion_panel.py
-R001|demo_game/ui/panels/world_panel.py
-R001|demo_game/ui/widgets/knowledge_sidebar.py
-R001|demo_game/ui/widgets/widgets.py
-R001|src/npc_engine/config.py
-R001|src/npc_engine/data/api_seeder.py
-R001|src/npc_engine/engines/chapter/chapter_engine.py
-R001|src/npc_engine/engines/dialogue/dialogue_handler.py
-R001|src/npc_engine/engines/dialogue/prompt_builder.py
-R001|src/npc_engine/engines/gossip/gossip_handler.py
-R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
-R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
-R001|src/npc_engine/graph/intent/intent_queries.py
-R001|src/npc_engine/retrieval/context/context_budget_enforcer.py
-R001|src/npc_engine/retrieval/context/context_builder.py
-R001|src/npc_engine/scheduler/tick_scheduler.py
-R001|src/npc_engine/utils/errors.py
+R001|demo_game/client.py:1901
+R001|demo_game/seeds/seed.py:1677
+R001|demo_game/ui/layout/game_window.py:925
 R006|src/npc_engine/api/helpers/quest_helpers.py::build_transition_meta
 R006|src/npc_engine/api/routes/admin/debug_retrieval.py::get_debug_retrieval
 R006|src/npc_engine/api/routes/dialogue/action.py::report_action

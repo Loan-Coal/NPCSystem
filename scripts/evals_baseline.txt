@@ -1,13 +1,7 @@
 # Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
 # (run the corresponding update target). Never add a line by hand to dodge the gate.
-R001|evals/anti_hallucination_runner.py
-R001|evals/calibration.py
-R001|evals/case_drafts.py
-R001|evals/compare.py
-R001|evals/matchers.py
-R001|evals/runner.py
-R001|evals/summary.py
+R001|evals/calibration.py:875
 R002|evals/__main__.py
 R002|evals/adjudicate.py
 R002|evals/anti_hallucination_runner.py
