@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from check_test_quality import (  # noqa: E402
     BARE_EXCEPTION_RAISES,
+    EMPTY_TEST_BODY,
     format_findings,
+    main,
     PARAMETRIZE_NO_SUT_CALL,
     SELF_REFERENTIAL_SUM,
     VACUOUS_MOCK_NOT_CALLED,
@@ -268,3 +270,62 @@ def test_real_suite_waivers_are_load_bearing() -> None:
         "removing the quality-ok waivers did not re-surface the VACUOUS_MOCK_NOT_CALLED "
         "finding — the scanner, not the suite, may be what is clean"
     )
+
+
+# ---------------------------------------------------------------------------
+# Pattern 5: EMPTY_TEST_BODY
+# ---------------------------------------------------------------------------
+
+
+def test_empty_test_body_is_flagged(tmp_path: Path) -> None:
+    """A test function with no assertions and no calls is flagged EMPTY_TEST_BODY."""
+    f = _write(tmp_path, "test_nothing.py", "def test_nothing(): pass\n")
+    findings = scan_file(f)
+    assert EMPTY_TEST_BODY in _patterns(findings)
+
+
+def test_test_with_assertion_not_flagged_as_empty(tmp_path: Path) -> None:
+    """A test with an assertion is not flagged EMPTY_TEST_BODY."""
+    f = _write(
+        tmp_path, "test_asserts.py",
+        "def test_something():\n    assert 1 == 1\n",
+    )
+    findings = scan_file(f)
+    assert EMPTY_TEST_BODY not in _patterns(findings)
+
+
+def test_test_with_call_not_flagged_as_empty(tmp_path: Path) -> None:
+    """A test that calls the SUT is not flagged EMPTY_TEST_BODY."""
+    f = _write(
+        tmp_path, "test_calls.py",
+        "def test_something():\n    result = compute(1, 2)\n",
+    )
+    findings = scan_file(f)
+    assert EMPTY_TEST_BODY not in _patterns(findings)
+
+
+# ---------------------------------------------------------------------------
+# Ratchet baseline: main() exit code
+# ---------------------------------------------------------------------------
+
+
+def test_main_exits_one_above_baseline(tmp_path: Path) -> None:
+    """main() returns 1 when current findings exceed the recorded baseline."""
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_nothing.py").write_text("def test_nothing(): pass\n", encoding="utf-8")
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("0\n", encoding="utf-8")
+    result = main(["--tests-dir", str(tests_dir), "--baseline-file", str(baseline)])
+    assert result == 1
+
+
+def test_main_exits_zero_at_or_below_baseline(tmp_path: Path) -> None:
+    """main() returns 0 when current findings are at or below the baseline."""
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_nothing.py").write_text("def test_nothing(): pass\n", encoding="utf-8")
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("5\n", encoding="utf-8")
+    result = main(["--tests-dir", str(tests_dir), "--baseline-file", str(baseline)])
+    assert result == 0

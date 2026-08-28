@@ -235,6 +235,27 @@ def _cmd_check(gates: tuple[HumanGate, ...], states: dict[str, bool], task_id: s
     return EXIT_FAIL
 
 
+def _cmd_strict(gates: tuple[HumanGate, ...], states: dict[str, bool]) -> int:
+    """Exit 1 if any gate has unmet requirements; exit 0 when every gate is cleared.
+
+    Used by `make check-blocking` (not `make check`) to give a human a go/no-go
+    signal before starting loop work. Runs immediately red on 6+ OPEN gates; adding
+    it to `make check` would kill every automated loop task (DEC-228).
+    """
+    pending = [g for g in gates if not g.is_open(states)]
+    if not pending:
+        print(f"HUMAN GATES: all {len(gates)} gate(s) cleared.")
+        return EXIT_OK
+    for gate in pending:
+        outstanding = ", ".join(t for t in gate.requirements if not states.get(t, False))
+        print(
+            f"HUMAN GATE {gate.id} NOT CLEARED: {gate.title}  outstanding: {outstanding}",
+            file=sys.stderr,
+        )
+    print(f"HUMAN GATES: {len(pending)} of {len(gates)} gate(s) not yet cleared.", file=sys.stderr)
+    return EXIT_FAIL
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser (one action per invocation; default is the report)."""
     parser = argparse.ArgumentParser(description="Human-gate checker for the overnight loop.")
@@ -242,6 +263,11 @@ def _build_parser() -> argparse.ArgumentParser:
     action.add_argument("--check", metavar="TASK", help="exit 1 if TASK is behind a closed gate")
     action.add_argument("--verify", action="store_true", help="audit the gate grammar")
     action.add_argument("--blocked", action="store_true", help="list blocked task ids")
+    action.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit 1 while any human gate has unmet requirements (use in check-blocking, not check)",
+    )
     return parser
 
 
@@ -274,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
     gates, states = parse_gates(lines), task_states(lines)
     if args.check:
         return _cmd_check(gates, states, args.check)
+    if args.strict:
+        return _cmd_strict(gates, states)
     if args.verify:
         findings = verify_gates(gates, states)
         for finding in findings:

@@ -261,3 +261,36 @@ def test_the_loop_is_never_handed_a_task_behind_a_closed_gate() -> None:
     _, task = found
     blocked = blocked_tasks(parse_gates(lines), task_states(lines))
     assert task.id not in blocked, f"{task.id} is blocked by gate {blocked.get(task.id)}"
+
+
+# --- --strict mode -----------------------------------------------------------------
+
+
+def test_strict_exits_one_when_pending_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--strict returns 1 when any gate has unmet requirements (not yet cleared)."""
+    _write_roadmap(tmp_path, GATE, monkeypatch)
+    assert main(["--strict"]) == 1
+
+
+def test_strict_exits_zero_when_all_gates_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--strict returns 0 when every gate's requirements are fully ticked."""
+    all_done = (
+        GATE
+        .replace("- [ ] **EVAL-P17.4**", "- [x] **EVAL-P17.4**")
+        .replace("- [ ] **EVAL-P17.5** the gate's own task", "- [x] **EVAL-P17.5** the gate's own task")
+    )
+    _write_roadmap(tmp_path, all_done, monkeypatch)
+    assert main(["--strict"]) == 0
+
+
+def test_strict_is_mutually_exclusive_with_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--strict and --check cannot be combined (argparse enforces this)."""
+    _write_roadmap(tmp_path, GATE, monkeypatch)
+    with pytest.raises(SystemExit):
+        main(["--strict", "--check", "EVAL-P13.3"])

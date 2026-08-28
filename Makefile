@@ -158,6 +158,12 @@ roadmap-verify:
 check-human-gates:
 	$(PYTHON) scripts/check_human_gates.py --verify
 
+# check-blocking: exit 1 while any HUMAN GATE is not yet cleared (R1.2).
+# NOT in `make check` — it reds on 6+ open gates and would block all loop tasks.
+# Run manually to get a go/no-go signal before starting human gate work.
+check-blocking:
+	$(PYTHON) scripts/check_human_gates.py --strict
+
 # check-conservation: gate on conservation identity violations over the committed artifact.
 # Exits non-zero when any identity fails (wired as a gate by EVAL-P17.6).
 # Identity 4 is DEFERRED (spans two different artifact producers).

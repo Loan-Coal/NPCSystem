@@ -3,8 +3,9 @@ Module: check_test_quality
 Layer: scripts (dev tooling)
 Purpose: Static scan of tests/** flagging anti-vacuous-test patterns found in the
          2026-08-10 audit: bare Exception raises, self-referential sum assertions,
-         vacuous mock-not-called checks, and parametrized tests with no SUT calls.
-         Exits 0 always (report-only); gate wired into make check in EVAL-P15.4.
+         vacuous mock-not-called checks, parametrized tests with no SUT calls, and
+         completely empty test bodies. Ratchet-style gate: exits 1 when findings exceed
+         the count recorded in check_test_quality_baseline.txt (R1.2).
          Each flagged item must be fixed or inline-suppressed with '# quality-ok: <reason>'.
 Dependencies: argparse, ast, pathlib, sys, pydantic
 Used by: make check-test-quality, tests/unit/scripts/test_check_test_quality.py
@@ -24,9 +25,11 @@ BARE_EXCEPTION_RAISES = "BARE_EXCEPTION_RAISES"
 SELF_REFERENTIAL_SUM = "SELF_REFERENTIAL_SUM"
 VACUOUS_MOCK_NOT_CALLED = "VACUOUS_MOCK_NOT_CALLED"
 PARAMETRIZE_NO_SUT_CALL = "PARAMETRIZE_NO_SUT_CALL"
+EMPTY_TEST_BODY = "EMPTY_TEST_BODY"
 
 _WAIVER_MARKER = "# quality-ok:"
 _TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"
+_BASELINE_PATH = Path(__file__).resolve().parent / "check_test_quality_baseline.txt"
 
 
 class Finding(BaseModel):
@@ -200,6 +203,25 @@ def _scan_fn(
                 detail="@pytest.mark.parametrize test makes no function calls in its body",
             ))
 
+    # Pattern 5: test body has neither assertions nor function calls (completely empty)
+    if not _is_waived(lines, fn.lineno):
+        body_has_assert = any(
+            isinstance(node, ast.Assert)
+            for stmt in fn.body
+            for node in ast.walk(stmt)
+        )
+        body_has_call = any(
+            isinstance(node, ast.Call)
+            for stmt in fn.body
+            for node in ast.walk(stmt)
+        )
+        if not body_has_assert and not body_has_call:
+            findings.append(Finding(
+                file=relpath, test=name, line=fn.lineno,
+                pattern=EMPTY_TEST_BODY,
+                detail="test body contains no assertions and no function calls",
+            ))
+
     return findings
 
 
@@ -246,18 +268,38 @@ def format_findings(findings: list[Finding]) -> str:
     return "\n".join(out)
 
 
+def _read_baseline(path: Path) -> int:
+    """Return the recorded baseline count; 0 if the file does not exist or is unreadable."""
+    try:
+        return int(path.read_text(encoding="utf-8").strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Scan tests for anti-vacuous patterns. Exits 0 always (report-only until EVAL-P15.4)."""
+    """Scan tests for anti-vacuous patterns. Exits 1 when findings exceed baseline (R1.2)."""
     parser = argparse.ArgumentParser(
-        description="Anti-vacuous test quality scan (report-only; gate wired in EVAL-P15.4)."
+        description="Anti-vacuous test quality scan. Ratchet-style: exits 1 above baseline."
     )
     parser.add_argument(
         "--tests-dir", type=Path, default=_TESTS_ROOT,
         help="Root of the test tree to scan.",
     )
+    parser.add_argument(
+        "--baseline-file", type=Path, default=_BASELINE_PATH,
+        help="Path to the baseline count file (single integer).",
+    )
     args = parser.parse_args(argv)
     findings = scan_directory(args.tests_dir)
     print(format_findings(findings))
+    baseline = _read_baseline(args.baseline_file)
+    count = len(findings)
+    if count > baseline:
+        print(
+            f"check-test-quality: {count} finding(s) exceed baseline of {baseline} — gate RED.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

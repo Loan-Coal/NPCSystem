@@ -72,7 +72,7 @@ waiver available. Four non-test files already exceed 800 (client.py 1901, seed.p
 game_window.py 925, evals/calibration.py 875) — they are R7.2, not this task.
 Blocks: R7.2. CR-L06-05 +2. ✅ AUTO (R1.1, 2026-08-28)
 
-- [ ] **R1.2** Give `check-test-quality` and `check-human-gates` real exit codes
+- [x] **R1.2** Give `check-test-quality` and `check-human-gates` real exit codes
 Files: `scripts/check_test_quality.py`, `scripts/check_human_gates.py`, `Makefile`
 Spec: `check_test_quality.main()` ends `return 0` unconditionally and its docstring admits it
 ("Exits 0 always"). Make it return 1 above a recorded baseline, ratchet-style. `check_human_gates`
@@ -83,7 +83,7 @@ RED anchor: add a test file containing only `def test_nothing(): pass`, run
 `make check-test-quality`, assert exit 1. Today `echo $?` prints 0 regardless of what it reports.
 Delete the file afterwards.
 Validation: `python scripts/check_human_gates.py --strict; echo $?` prints 1 while gates are OPEN;
-`make check` does not include check-blocking. CR-L06-03, CR-L06-01.
+`make check` does not include check-blocking. CR-L06-03, CR-L06-01. ✅ AUTO (R1.2, 2026-08-28)
 
 - [ ] **R1.3** Remove the two gates that audit unchangeable inputs
 Files: `scripts/check_conservation.py`, `scripts/check_label_survival.py`, `Makefile`
