@@ -97,7 +97,7 @@ today and must return none after. Behavioural: corrupt one row in a generation d
 Validation: `make check` no longer lists either target; `make check` still green.
 CR-L06-09, CR-L03-07. ✅ AUTO (R1.3, 2026-08-28)
 
-- [ ] **R1.4** Delete `check-harness` H3 — it reads an archived path and can never fire
+- [x] **R1.4** Delete `check-harness` H3 — it reads an archived path and can never fire
 Files: `scripts/check_harness_honesty.py`, `Makefile`
 Spec: H3 warns when ISSUES.md has open tickets but NEXT_SESSION.md claims none. NEXT_SESSION.md
 exists only at `archive/stale-2026-06/NEXT_SESSION.md`, so H3 is permanently inert. Delete H3,
@@ -106,7 +106,7 @@ first in `make check` and short-circuits it. Do NOT recreate NEXT_SESSION.md to 
 RED anchor: `grep -c H3 scripts/check_harness_honesty.py` returns >0 today, 0 after. Then prove
 H1 still earns its place: remove a required DECISIONS heading and confirm `make check-harness`
 reds.
-Validation: `make check-harness` green on a clean tree. CR-L06-07, CR-L13-06.
+Validation: `make check-harness` green on a clean tree. CR-L06-07, CR-L13-06. ✅ AUTO (R1.4, 2026-08-28)
 
 - [ ] **R1.5** Make `check-docstrings` read content, not the substring `Layer:`
 Files: `scripts/docstring_audit.py`, plus any module whose `Layer:` value is wrong

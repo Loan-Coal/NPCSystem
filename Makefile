@@ -203,7 +203,8 @@ check-mutations:
 # EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
 # R1.3: check-conservation and check-label-survival moved out — they audited
 # unchangeable committed inputs; conservation now runs inside eval-generate.
-check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality test-cov test-cov-evals
+# R1.4: check-harness moved before lint — H1 must fire even when lint short-circuits.
+check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
