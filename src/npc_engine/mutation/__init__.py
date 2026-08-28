@@ -1,6 +1,6 @@
 """
 mutation package - Relation delta bounds and log utilities.
-Layer: services
+Layer: graph
 Purpose: Relation delta bounds and log utilities.
 Public surface: (list re-exports here)
 

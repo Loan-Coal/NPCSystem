@@ -1,6 +1,6 @@
 """
 Module: disruption_loader
-Layer: engines/events
+Layer: engines
 Purpose: Dataclass and YAML loader for routine-disruption rules triggered by events.
 Does NOT: execute any disruption logic or write to the graph.
 Dependencies injected: None.

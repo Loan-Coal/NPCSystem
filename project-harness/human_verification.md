@@ -586,3 +586,11 @@ Every failure pre-dated this task (baseline attribution). Nothing new broke.
 ## 2026-08-28 16:07:28 — task R1.2 committed with a pre-existing red gate
 
 Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-28 16:35:55 — task R1.3 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-28 17:00:00 — task R1.4 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.

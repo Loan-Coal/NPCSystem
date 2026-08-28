@@ -1,6 +1,6 @@
 """
 Module: time_utils
-Layer: retrieval (world sub-package)
+Layer: graph (world sub-package)
 Purpose: Pure helpers for game-time distance calculation and human-readable time labels.
 Does NOT: read or write graph state; make network or I/O calls; import from graph/ or engines/.
 Dependencies: None — stdlib dataclasses only.

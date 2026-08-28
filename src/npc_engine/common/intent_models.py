@@ -1,6 +1,6 @@
 """
 Module: intent_models
-Layer: common
+Layer: config
 Purpose: Pydantic v2 data model for ConversationIntent — the internal intent object
          produced by the scoring service and consumed by the queue writer/reader.
 Does NOT: implement scoring logic, graph queries, or LLM calls.

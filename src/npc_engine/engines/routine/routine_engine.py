@@ -1,6 +1,6 @@
 """
 Module: routine_engine
-Layer: engines/routine
+Layer: engines
 Purpose: Moves active characters to their scheduled locations on each game tick.
 Does NOT: define scheduling intervals, read world state directly, open sessions,
           or import the graph layer.

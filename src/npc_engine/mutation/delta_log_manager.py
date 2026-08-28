@@ -1,6 +1,6 @@
 """
 delta_log_manager.py - Pure utilities for relation delta log append and window math.
-Layer: services
+Layer: graph
 Purpose: Pure utilities for relation delta log append and window math.
 
 Does NOT: persist logs or mutate graph edges in storage.

@@ -1,6 +1,6 @@
 """
 Module: tick_lease
-Layer: scheduler
+Layer: engines
 Purpose: Distributed lease/claim storage for scheduler ticks in Neo4j.
 Does NOT: run engine handlers or advance clock state.
 Dependencies injected: AsyncSession (caller-managed).

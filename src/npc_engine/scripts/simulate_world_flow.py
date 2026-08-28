@@ -1,6 +1,6 @@
 """
 simulate_world_flow.py - Deterministic world-flow simulator for v1.4 smoke verification.
-Layer: unknown
+Layer: config
 Purpose: Deterministic world-flow simulator for v1.4 smoke verification.
 
 Does NOT: write to Neo4j or call LLM backends.

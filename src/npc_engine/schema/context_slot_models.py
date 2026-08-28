@@ -1,6 +1,6 @@
 """
 Module: context_slot_models
-Layer: schema
+Layer: config
 Purpose: The row type for the context-slot declaration table -- one frozen record per key
          the retrieval pipeline can put in front of the model.
 Does NOT: hold the table itself (that is retrieval/context/context_slots.py), read

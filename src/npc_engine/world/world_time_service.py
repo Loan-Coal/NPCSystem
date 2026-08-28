@@ -1,6 +1,6 @@
 """
 Module: world_time_service
-Layer: retrieval (world sub-package)
+Layer: graph (world sub-package)
 Purpose: Pure function for advancing structured game time by one step in a named field.
 Does NOT: read or write graph state; make network or I/O calls.
 Dependencies: world.world_state, world.time_utils

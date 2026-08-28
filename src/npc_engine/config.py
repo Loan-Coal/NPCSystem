@@ -1,6 +1,6 @@
 """
 config.py - Defines application settings loaded from environment variables.
-Layer: unknown
+Layer: config
 Purpose: Defines application settings loaded from environment variables.
 
 Does NOT: initialize runtime services or perform network I/O.

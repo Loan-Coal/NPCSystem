@@ -108,7 +108,7 @@ H1 still earns its place: remove a required DECISIONS heading and confirm `make 
 reds.
 Validation: `make check-harness` green on a clean tree. CR-L06-07, CR-L13-06. ✅ AUTO (R1.4, 2026-08-28)
 
-- [ ] **R1.5** Make `check-docstrings` read content, not the substring `Layer:`
+- [x] **R1.5** Make `check-docstrings` read content, not the substring `Layer:`
 Files: `scripts/docstring_audit.py`, plus any module whose `Layer:` value is wrong
 Spec: verify the `Layer:` value is a declared layer name AND matches the file's directory.
 Do NOT extend the gate to function docstrings — CR-L05-03 shows compliance tracks whatever is
@@ -120,7 +120,7 @@ RED anchor: change `Layer: graph` to `Layer: banana` in any `graph/` module and 
 `make check-docstrings`. Today it stays GREEN — only the substring is checked. Must go RED.
 Revert afterwards. Second counterfactual: move a file between layer directories without updating
 its docstring; the gate must red.
-Validation: `make check-docstrings` green on a clean tree. CR-L06-08, CR-L14-07.
+Validation: `make check-docstrings` green on a clean tree. CR-L06-08, CR-L14-07. ✅ AUTO (R1.5, 2026-08-28)
 
 - [ ] **R1.6** Close the three rule-scope gaps
 Files: `scripts/check_rules.py`, `scripts/rules_baseline.txt`

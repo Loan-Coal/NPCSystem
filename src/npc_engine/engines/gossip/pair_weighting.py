@@ -1,6 +1,6 @@
 """
 Module: pair_weighting
-Layer: engines/gossip
+Layer: engines
 Purpose: Pure function for computing faction-based gossip pair weight multiplier.
 Does NOT: perform I/O or access graph state.
 Dependencies injected: None.

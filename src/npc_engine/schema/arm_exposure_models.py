@@ -1,6 +1,6 @@
 """
 Module: arm_exposure_models
-Layer: schema
+Layer: config
 Purpose: The measured supply an A/B arm was sized against — the design-time half of the
          rule that an arm may not be declared until its exposure has been measured.
 Dependencies: pydantic

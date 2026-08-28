@@ -1,6 +1,6 @@
 """
 Module: seed_data
-Layer: data (tooling, not application code)
+Layer: api (tooling, not application code)
 Purpose: Static world seed data — factions, locations, characters, events, and Phase 3
          content used by the HTTP API seeder.
 Does NOT: make HTTP calls or import any npc_engine application code.

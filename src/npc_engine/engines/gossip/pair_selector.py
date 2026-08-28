@@ -1,6 +1,6 @@
 """
 Module: pair_selector
-Layer: engines/gossip
+Layer: engines
 Purpose: Selects gossip-eligible NPC pairs with faction-weighted deterministic ordering.
 Does NOT: mutate knowledge edges.
 Dependencies injected: GossipGraphPort.

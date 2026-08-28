@@ -1,6 +1,6 @@
 """
 Module: retrieval_profile_models
-Layer: schema
+Layer: config
 Purpose: The named retrieval configuration that a dialogue turn is generated under —
          the A/B switch for context experiments. A profile bundles the retrieval-tier
          knobs (relevance weights, the three top-k call sites, cross-encoder, skip_rag)

@@ -1,6 +1,6 @@
 """
 Module: corpus_models
-Layer: schema
+Layer: config
 Purpose: The report `ensure_corpus` returns and the fingerprint an eval run records —
          what the vector store holds, produced by which embedding model, at what size.
 Dependencies: pydantic.

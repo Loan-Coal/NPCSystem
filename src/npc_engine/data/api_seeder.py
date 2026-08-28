@@ -1,6 +1,6 @@
 """
 Module: api_seeder
-Layer: data (tooling, not application code)
+Layer: api (tooling, not application code)
 Purpose: World seed via the publicly-exposed HTTP API. All resources use their
          typed admin endpoints (/v1/admin/beliefs, /v1/admin/goals, etc.) rather
          than the low-level graph CRUD backdoor. Generic /v1/graph/nodes|edges/

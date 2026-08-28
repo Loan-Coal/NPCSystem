@@ -1,6 +1,6 @@
 """
 Module: gossip_config
-Layer: engines/gossip
+Layer: engines
 Purpose: Faction weight config dataclass and YAML loader for the gossip engine.
 Does NOT: perform any I/O beyond reading the packaged config.yaml once at load time.
 Dependencies injected: None.

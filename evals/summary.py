@@ -1,6 +1,6 @@
 """
 Module: summary
-Layer: eval harness (standalone — not part of the npc_engine layer model)
+Layer: evals harness (standalone — not part of the npc_engine layer model)
 Purpose: Compute the published anti-hallucination headline metric and a
          categorized failure breakdown from a completed eval run's results.
 Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction),

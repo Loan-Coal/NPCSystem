@@ -1,6 +1,6 @@
 """
 world_state.py - Pydantic model for singleton world state node.
-Layer: services
+Layer: graph
 Purpose: Define the frozen, immutable WorldState model shared across all engines (epoch, weather, faction standings, time-of-day).
 
 Does NOT: read or write world state from Neo4j.

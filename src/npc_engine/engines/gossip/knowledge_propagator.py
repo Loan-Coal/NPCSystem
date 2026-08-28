@@ -1,6 +1,6 @@
 """
 Module: knowledge_propagator
-Layer: engines/gossip
+Layer: engines
 Purpose: Re-exports gossip secret-propagation constants (formerly also held dead
          session-based propagate/propagate_secret helpers; those moved to GossipGraphPort
          in the Wave-4 gossip cluster migration, DEC-122 / SEV-24).

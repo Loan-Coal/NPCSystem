@@ -1,6 +1,6 @@
 """
 world package - Models and accessors for global world state.
-Layer: services
+Layer: graph
 Purpose: Models and accessors for global world state.
 Public surface: (list re-exports here)
 

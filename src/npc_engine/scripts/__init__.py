@@ -1,6 +1,6 @@
 """
 scripts package - Utility entry points for project verification tasks.
-Layer: unknown
+Layer: config
 Purpose: Utility entry points for project verification tasks.
 Public surface: (list re-exports here)
 

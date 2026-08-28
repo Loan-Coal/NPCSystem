@@ -1,6 +1,6 @@
 """
 Module: report
-Layer: eval harness (standalone — not part of the npc_engine layer model)
+Layer: evals harness (standalone — not part of the npc_engine layer model)
 Purpose: Write markdown reports for completed eval runs, embedding the anti-hallucination
          guarantee section (guard + capability rates paired) and per-case pass/fail details.
 Dependencies: summary.py, retrieval_summary.py, stdlib (datetime, pathlib).

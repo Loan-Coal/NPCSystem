@@ -1,6 +1,6 @@
 """
 Module: npc_profile_data_models
-Layer: schema
+Layer: config
 Purpose: The named container for one NPC's per-turn profile reads, replacing a raw 9-tuple
          that was unpacked positionally and cached opaquely.
 Does NOT: perform the reads, cache anything, or validate graph payload contents.

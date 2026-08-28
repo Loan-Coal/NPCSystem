@@ -1,6 +1,6 @@
 """
 Module: knowledge_types
-Layer: common
+Layer: config
 Purpose: Canonical KnowledgeState Literal + named constants for the "knows"/"rumor"
          knowledge-state value used on propagation edges and in LLM context (L3-10).
 Does NOT: read the graph, instantiate engines, or perform I/O.
