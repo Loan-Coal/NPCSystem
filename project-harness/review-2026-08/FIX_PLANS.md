@@ -149,8 +149,15 @@ sits, and it gates the eval program, the gossip fix's verification, and the mode
 
 - **Verdict:** UPHELD (all six; four merged)
 - **Severity:** HIGH
-- **Depends on:** R1 complete, CR-L15-01
-- **Blocks:** CR-L03-01's re-baseline
+- **Depends on:** R1 complete, CR-L15-01, **ISSUE-232**
+- **Blocks:** CR-L03-01's re-baseline, and R3.2/R3.3's Proofs
+- **Do ISSUE-232 first (found 2026-08-28, after this plan was written):** `neo4j` publishes no
+  host ports, so a host-run `pytest tests/integration` cannot connect at all — 34 failed / 9
+  passed / 5 errors, every failure `ServiceUnavailable` on `localhost:7687`. The review's
+  "9 passed, 34 skipped" was the same 34 tests skipping. **Their real pass/fail split is
+  unknown**, so this plan's estimate of what CI will surface is unmeasured. Add
+  `ports: ["127.0.0.1:7687:7687"]` (loopback — do not repeat ISSUE-227), re-run, and record the
+  actual split before sizing the CI work.
 - **Chosen approach:** Add `neo4j:5` and an Ollama service to the CI test job; run the 8 currently-skipped `make check` gates; add `make test-demo` and `demo_game` mypy to CI. `demo_game/` is **gated, not cut** — L9 established it is the eval program's fixture generator (`Makefile:627`) and three CI-gated tests import it, and it costs +9 s. Add a coverage floor to `scripts/`, `e2e/` and `demo_game/` (36,527 LOC currently under none, including the gate scripts).
 - **Alternatives rejected:** (a) *Mock Neo4j in CI* — CR-L14-02's counterfactual is the refutation: gutting 105 of 180 repository methods to constants left mypy clean and broke only the layer's own passthrough tests. Mocks are what let that happen. (b) *Cut `demo_game/`* — explicitly rejected by L9 with a reference check.
 - **Proof:** Re-run CR-L14-02's counterfactual in CI: stub 10 graph repository methods to return constants and push. **Today CI stays green** (34 integration tests skip without `NEO4J_URI`; verified locally as "9 passed, 34 skipped"). After the fix CI must red. Second proof: `make test-demo` appears in a CI job and `demo_game/` mypy error count is recorded as a baseline (**currently 256, gated by nothing**).

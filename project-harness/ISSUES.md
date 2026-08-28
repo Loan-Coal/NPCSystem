@@ -1881,3 +1881,27 @@ which makes it load-bearing for the planned swap to a smaller fine-tuned local m
 `httpx` use, and make a `None` digest fatal in any run that publishes a number. Proof: the cited file
 completes in under 5 s with no network (today >120 s), and `resolve()` raises when the digest fn
 returns `None` (today returns a RunConfig with `None`).
+
+## ISSUE-232: Neo4j publishes no host ports, so integration tests cannot run locally
+**Found:** 2026-08-28, capturing the pre-remediation baseline
+**Severity:** P1 (blocking) — blocks the acceptance tests for R3.2 and R3.3
+**Where:** `docker-compose.yml` (the `neo4j` service has no `ports:` stanza)
+**Description:** The `neo4j` service is healthy and reachable inside the compose network — 
+`docker compose exec neo4j cypher-shell "RETURN 1"` returns ok, and `app` holds
+`NEO4J_URI=bolt://neo4j:7687` — but it publishes nothing to the host (`docker port <neo4j>`
+returns empty). A host-run `pytest tests/integration` therefore cannot connect:
+**34 failed, 9 passed, 5 errors in 273 s**, every failure
+`neo4j.exceptions.ServiceUnavailable: Couldn't connect to localhost:7687 … the remote computer
+refused the network connection`.
+
+This is the mechanism behind the review's "9 passed, 34 skipped" observation (CR-L14-02): those
+34 tests have never run for anyone on a host shell, and the skip made that invisible. Note this
+is **not** 34 product defects — it is one missing port mapping. The tests were not evaluated.
+**Why deferred:** it is a `docker-compose.yml` change (config), and it was found during a
+planning session that deliberately made no source or config changes.
+**To fix:** add `ports: ["127.0.0.1:7687:7687"]` to the `neo4j` service — loopback-bound, so it
+does not repeat ISSUE-227's mistake of publishing on 0.0.0.0. Then re-run
+`pytest tests/integration` and record the real pass/fail split, which is currently unknown.
+Until this lands, the Proofs for R3.2 (`test_neo4j_outage_returns_503`) and R3.3
+(`test_distortion_compounds_across_hops`) cannot be executed locally, and R2.2's CI work is
+sequencing against an unmeasured baseline.
