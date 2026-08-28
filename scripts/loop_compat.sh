@@ -130,25 +130,52 @@ compat_start_docker() {
   return 1
 }
 
+# Compose invocation for the loop. The test override publishes neo4j's bolt port on
+# 127.0.0.1 so host-run integration tests can connect (ISSUE-232 / DEC-232). The base
+# file alone puts neo4j on the `internal: true` network only, where a `ports:` stanza is
+# silently inert — so without this override every integration test errors with
+# ServiceUnavailable and the night's R3 tasks all fail for an environment reason.
+COMPOSE_FILES="-f docker-compose.yml -f docker-compose.test.yml"
+
+compat_compose() {
+  docker-compose $COMPOSE_FILES "$@"
+}
+
 compat_neo4j_healthy() {
   local status
   status="$(docker inspect --format '{{.State.Health.Status}}' \
-    "$(docker-compose ps -q neo4j 2>/dev/null)" 2>/dev/null || true)"
+    "$(compat_compose ps -q neo4j 2>/dev/null)" 2>/dev/null || true)"
   [ "$status" = "healthy" ]
+}
+
+# True when bolt is actually reachable from THIS shell, not merely healthy in-container.
+# compat_neo4j_healthy asks Docker; this asks the network. They disagreed for months.
+compat_bolt_reachable() {
+  python - <<'PY' >/dev/null 2>&1
+from neo4j import GraphDatabase
+d = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+d.verify_connectivity()
+d.close()
+PY
 }
 
 compat_services_up() {
   # Usage: compat_services_up [health_timeout_secs]
   local waited=0 limit="${1:-240}"
   compat_start_docker 180 || { echo "COMPAT: docker did not start" >&2; return 1; }
-  docker-compose up -d neo4j >/dev/null 2>&1 || {
-    echo "COMPAT: docker-compose up neo4j failed" >&2; return 1; }
+  compat_compose up -d neo4j >/dev/null 2>&1 || {
+    echo "COMPAT: compose up neo4j failed" >&2; return 1; }
   while [ "$waited" -lt "$limit" ]; do
     if compat_neo4j_healthy; then
       export NEO4J_URI="${NEO4J_URI:-bolt://localhost:7687}"
       export NEO4J_USER="${NEO4J_USER:-neo4j}"
       export NEO4J_PASSWORD="${NEO4J_PASSWORD:-password}"
-      return 0
+      # Healthy != reachable. Refuse to report success on a container the tests
+      # cannot actually connect to — that state produced 34 phantom failures once.
+      if compat_bolt_reachable; then return 0; fi
+      echo "COMPAT: neo4j healthy but bolt unreachable on localhost:7687 —" >&2
+      echo "COMPAT: is docker-compose.test.yml being applied? (ISSUE-232)" >&2
+      return 1
     fi
     sleep 10; waited=$((waited + 10))
   done

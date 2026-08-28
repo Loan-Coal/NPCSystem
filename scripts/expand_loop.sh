@@ -95,6 +95,12 @@ PHASES_DONE=0
 CONSECUTIVE_RED_GATES=0
 CONSECUTIVE_RED_COMMITS=0
 CONSECUTIVE_BLOCKED_PHASES=0
+# ISSUE-126 guard: the cursor is the only progress signal, and the session (not this
+# driver) advances it. Track the last dispatched task id so a cursor that never moves
+# halts the run instead of re-running the same task all night.
+LAST_TASK_ID=""
+SAME_TASK_REPEATS=0
+MAX_SAME_TASK_REPEATS="${MAX_SAME_TASK_REPEATS:-2}"
 SKIPPED_PHASES=""
 START_BRANCH=""
 SESSION_LOG=""
@@ -633,6 +639,28 @@ main() {
     phase="$(echo "$next" | sed -n 's/.*PHASE=\([^ ]*\).*/\1/p')"
     task="$(echo "$next"  | sed -n 's/.*TASK=\([^ ]*\).*/\1/p')"
     [ -n "$phase" ] && [ -n "$task" ] || fatal "could not parse cursor output: $next"
+
+    # ISSUE-126, root cause. Tasks are ticked by the SESSION (`cursor --mark` inside
+    # /expand-linear-next), never by this driver — `grep "cursor --mark" scripts/expand_loop.sh`
+    # returns nothing. So a session that returns TASK_COMPLETE without ticking leaves the
+    # cursor pointing at the same task, and the loop re-runs it forever. None of the existing
+    # caps catch this: they count consecutive RED GATES, REGRESSIONS and BLOCKED PHASES, and
+    # this path is none of those — it looks like success. Night one burned 11.45 h this way.
+    if [ "$task" = "$LAST_TASK_ID" ]; then
+      SAME_TASK_REPEATS=$((SAME_TASK_REPEATS + 1))
+      if [ "$SAME_TASK_REPEATS" -ge "$MAX_SAME_TASK_REPEATS" ]; then
+        flag_for_human "task $task did not tick itself" \
+          "The cursor still points at $task after $SAME_TASK_REPEATS attempts. The session
+reported completion but never ran 'roadmap_cursor.py --mark $task', so the work may or may not
+be committed. Inspect the last task log before re-running."
+        log "HALT: $task repeated $SAME_TASK_REPEATS times without advancing the cursor"
+        break
+      fi
+      log "WARN: cursor still points at $task (attempt $((SAME_TASK_REPEATS + 1)) of $MAX_SAME_TASK_REPEATS)"
+    else
+      LAST_TASK_ID="$task"
+      SAME_TASK_REPEATS=0
+    fi
 
     # DEC-164. `compute_next` enforces no dependency — it skips a flagged task and walks
     # on. A HUMAN GATE says "not yet" where the flags only say "not you". Halting (rather

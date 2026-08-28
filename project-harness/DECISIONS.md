@@ -7099,3 +7099,69 @@ repeating ISSUE-227 with a worse blast radius.
 (`test_neo4j_outage_returns_503`) and R3.3's (`test_distortion_compounds_across_hops`) Proofs can
 actually be executed. R2.2 should model CI on this override rather than on the base file. The true
 integration pass/fail split is recorded in `review-2026-08/BASELINE_2026-08-28.md`.
+
+## DEC-233: the roadmap is rebuilt around the remediation program, in loop grammar
+**Date:** 2026-08-28
+**Context:** `ROADMAP.md` was 4,114 lines carrying 210 ticked items, the culled eval program, and
+a `LOOP:QUEUE` fence spanning lines 204–3350. The remediation program had been appended above
+that fence, so `roadmap_cursor.py --next` returned **ALL_DONE** — the overnight loop would have
+started, logged "queue drained", and done nothing. Its failure mode was a silent no-op reported
+as success. Two further incompatibilities sat behind it: the section used `**R1 — …**` bold
+paragraphs and `- [ ] R1.1 …` bullets, where the cursor requires `### Phase <id>` and
+`- [ ] **<id>**`, so zero tasks would have parsed even inside the fence.
+**Decision:** Archive the old roadmap verbatim to
+`archive/ROADMAP_pre-remediation_2026-08-28.md` and rewrite `ROADMAP.md` at the same path — the
+path is hardcoded in `roadmap_cursor.py`, `expand_loop.sh`, `loop.config.sh`,
+`check_human_gates.py`, `check_harness_honesty.py` and two commands, so a new filename would
+break all of them silently. The new file is written in cursor grammar with the fence around
+R1, R2, R4 and the safe half of R3, and each task carries `Files:` / `RED anchor:` /
+`Validation:` — the self-contained spec `/expand-linear-next` already expects.
+**Scope agreed 2026-08-28:** the loop owns R1, R2 (stopping before R2.5), R4, and R3.1/R3.2/
+R3.4/R3.5/R3.6. Flagged `⏸️`/`ask-gate` and skipped: R1.7, R2.2 (needs a CI run to observe),
+R2.5–R2.7, R4.4. Outside the fence entirely: R5, R6 (the loop must not rewrite its own driver
+mid-run), R7.
+**Consequences:** `/fix-next` stays the *interactive* path and keeps reading `FIX_PLANS.md`; the
+loop keeps using `/expand-linear-next`, whose token contract, gate attribution, flake
+confirmation and anti-fraud rules are already battle-tested. Rewriting `/fix-next` to replicate
+that machinery was considered and rejected as duplicated risk.
+`HUMAN_TASKS.md` and its 14 HUMAN GATE blocks are retired with the culled program
+(`archive/HUMAN_TASKS_eval-program_2026-08-28.md`); `test_real_roadmap_has_a_gate_for_every_deferred_human_task`
+now asserts that whatever gates exist are well-formed rather than checking a frozen list of
+retired eval tasks. Note the side effect: `check_human_gates` now prints
+`TOTAL gates=0 blocked_tasks=0` and exits 0 — which is exactly the counterfactual CR-L06-01 used
+to prove that gate is theatre, reproduced live. R1.2 fixes it.
+
+## DEC-234: `roadmap_cursor.py --slice` was broken on Windows and had never worked
+**Date:** 2026-08-28
+**Context:** `/expand-linear-next` step 1 is `python scripts/roadmap_cursor.py --slice <PHASE>`,
+and the skill instructs the session never to read the whole roadmap because the slice is what
+keeps its context small. On Windows, stdout defaults to cp1252, which cannot encode `⏸️`
+(`DEFERRED_TOKEN`) or `✅` (written into every `--mark` marker) — so `--slice` died with
+`UnicodeEncodeError` on any phase containing either. Verified against **both** the new roadmap
+and the archived pre-remediation one, so this predates today's rewrite: the loop's very first
+command has never succeeded on this machine. It is a plausible contributing cause of night one
+burning 11.45 h on a single issue.
+**Decision:** `roadmap_cursor.py` reconfigures stdout/stderr to UTF-8 with `errors="replace"` at
+import. Chosen over stripping non-ASCII from the roadmap because `⏸️` *is* the grammar — the
+cursor's own skip token — so the file cannot avoid it.
+**Consequences:** `--slice` works on both roadmaps. This is a harness bug fixed outside the
+remediation phases because it blocks the program's execution mechanism; it is not counted as an
+R-item.
+
+## DEC-235: the loop halts when the cursor stops advancing
+**Date:** 2026-08-28
+**Context:** ISSUE-126 recorded that `--dry-run` never terminates. The root cause is more general
+and was not: tasks are ticked by the **session** (`cursor --mark` inside `/expand-linear-next`),
+never by the driver — `grep "cursor --mark" scripts/expand_loop.sh` returns nothing. A session
+that reports `TASK_COMPLETE` without ticking therefore leaves the cursor pointing at the same
+task, and the loop re-runs it indefinitely. None of the existing caps catch this: they count
+consecutive **red gates**, **regressions** and **blocked phases**, and this path is none of those
+— it looks exactly like success.
+**Decision:** The driver tracks the last dispatched task id. If the cursor returns the same task
+`MAX_SAME_TASK_REPEATS` times (default 2), the run flags a human and halts.
+**Consequences:** `--dry-run` now terminates, which closes ISSUE-126's symptom as a side effect
+of fixing its cause. R6.1 remains open for the rest of the loop rework, to be done with the loop
+stopped.
+Also fixed alongside: `compat_services_up` now applies `docker-compose.test.yml` and verifies
+bolt is actually **reachable** rather than merely that the container is **healthy**. Those two
+disagreed for months and produced 34 phantom integration failures (ISSUE-232).

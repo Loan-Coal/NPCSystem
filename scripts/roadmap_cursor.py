@@ -14,6 +14,12 @@ The upstream kit used ``Path.read_text``/``write_text``, whose universal-newline
 would silently rewrite every line LF on each ``--mark`` — turning one-line task commits
 into whole-file diffs and destroying the "the commit is the transaction" property. Every
 read and write below therefore passes ``newline=""``.
+
+**stdout is forced to UTF-8.** On Windows the default console encoding is cp1252, which
+cannot encode the roadmap's own grammar characters — ``⏸️`` is ``DEFERRED_TOKEN`` and ``✅``
+appears in every ``--mark`` marker. ``--slice`` therefore died with ``UnicodeEncodeError``
+on any phase containing either, which is the FIRST command ``/expand-linear-next`` runs.
+Found 2026-08-28; it had been failing on both the current and the archived roadmap.
 """
 
 from __future__ import annotations
@@ -22,6 +28,10 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+if hasattr(sys.stdout, "reconfigure"):  # pragma: no cover - platform dependent
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
