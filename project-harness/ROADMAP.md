@@ -48,7 +48,8 @@ product fix with an instrument a fixed string beats; doing R2 before R1 means wi
 cannot fail into CI. Both cost the work twice.
 
 **R0 — Security (do first, out of band)**
-- [ ] R0.1 `/setup/*` unauthenticated remote read of a plaintext API key — bind `127.0.0.1`, gate the exemption on `env=="dev"`, drop `config_dir`, supersede DEC-131, rotate the key · CR-L05-11 · ISSUE-227
+- [x] R0.1 `/setup/*` unauthenticated remote read of a plaintext API key — bind `127.0.0.1`, gate the exemption on `env=="dev"`, drop `config_dir`, supersede DEC-131, rotate the key · CR-L05-11 · ISSUE-227 · DEC-231 · **done 2026-08-28** (key rotation still outstanding — human)
+- [x] R0.2 Neo4j bolt unreachable from host, so `tests/integration` never ran · ISSUE-232 · DEC-232 · **done 2026-08-28**
 
 **R1 — Gate integrity** · *nothing downstream is trustworthy until gates can fail*
 - [ ] R1.1 `check-rules` signatures become line-count-bearing; two-tier limit (soft 400 / hard 800) · CR-L06-05 +2 · DEC-226

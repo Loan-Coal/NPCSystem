@@ -36,6 +36,11 @@ services:
     image: neo4j:5
     environment:
       NEO4J_AUTH: neo4j/password
+    # No ports published here on purpose: neo4j sits only on the `internal`
+    # network, which is declared `internal: true` (no external connectivity), so a
+    # `ports:` stanza here would be SILENTLY INERT. To reach bolt from the host for
+    # integration tests, use the opt-in override (ISSUE-232):
+    #   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
     volumes:
       - neo4j_data:/data
     networks:
@@ -68,8 +73,11 @@ services:
       args:
         # Surfaced on GET /health (L9-05). `make smoke` passes the git short SHA.
         BUILD_SHA: ${BUILD_SHA:-dev}
+    # Loopback-bound (ISSUE-227). "8000:8000" binds 0.0.0.0, which falsified
+    # DEC-131's premise that localhost was the trust boundary for /setup/*.
+    # To expose this deliberately, put a reverse proxy in front — see the header.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:

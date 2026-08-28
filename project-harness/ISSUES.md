@@ -1798,22 +1798,6 @@ an env var) and return it from `/health` alongside `version`. Then gate 2 become
 comparison. Add a test that `/health` reports something other than a hardcoded literal
 when the env var is set.
 
-## ISSUE-227: `/setup/*` is unauthenticated off-box because compose binds 0.0.0.0
-**Found:** 2026-08-28, during the 2026-08 review remediation triage
-**Severity:** P1 (blocking)
-**Where:** `auth/middleware_helpers.py:51`, `docker-compose.yml:72`, `api/routes/setup/setup.py:94`
-**Description:** The `/setup/*` auth exemption is unconditional in every environment. DEC-131
-justifies it by a 127.0.0.1 bind, but `docker-compose.yml:72` publishes `"8000:8000"`, which binds
-0.0.0.0. `GET /setup/config` returns a wizard config that DEC-131 documents as storing a plaintext
-cloud API key. `POST /setup/config` accepts a schema-hidden `config_dir` query param that `mkdir -p`s
-and writes as root. Re-verified live at HEAD `619dab2` on 2026-08-28: the bind and the unconditional
-exemption are both still present. Three individually sound decisions composing into one unsafe
-outcome — the review's C5 pattern.
-**Why deferred:** not deferred. It is R0.1, ahead of the whole remediation program.
-**To fix:** bind `127.0.0.1:8000:8000`; gate the exemption on `env == "dev"` as `/docs` already is;
-drop or whitelist `config_dir`; supersede DEC-131. Rotate the key if port 8000 was ever reachable
-off-box. Proof: `test_setup_config_requires_auth_outside_dev` — `ENV=staging`, no key, expect 401;
-today returns 200 with the config body.
 
 ## ISSUE-228: gossip distortion does not compound across hops
 **Found:** 2026-08-28, during the 2026-08 review remediation triage
@@ -1882,26 +1866,38 @@ which makes it load-bearing for the planned swap to a smaller fine-tuned local m
 completes in under 5 s with no network (today >120 s), and `resolve()` raises when the digest fn
 returns `None` (today returns a RunConfig with `None`).
 
-## ISSUE-232: Neo4j publishes no host ports, so integration tests cannot run locally
-**Found:** 2026-08-28, capturing the pre-remediation baseline
-**Severity:** P1 (blocking) — blocks the acceptance tests for R3.2 and R3.3
-**Where:** `docker-compose.yml` (the `neo4j` service has no `ports:` stanza)
-**Description:** The `neo4j` service is healthy and reachable inside the compose network — 
-`docker compose exec neo4j cypher-shell "RETURN 1"` returns ok, and `app` holds
-`NEO4J_URI=bolt://neo4j:7687` — but it publishes nothing to the host (`docker port <neo4j>`
-returns empty). A host-run `pytest tests/integration` therefore cannot connect:
-**34 failed, 9 passed, 5 errors in 273 s**, every failure
-`neo4j.exceptions.ServiceUnavailable: Couldn't connect to localhost:7687 … the remote computer
-refused the network connection`.
 
-This is the mechanism behind the review's "9 passed, 34 skipped" observation (CR-L14-02): those
-34 tests have never run for anyone on a host shell, and the skip made that invisible. Note this
-is **not** 34 product defects — it is one missing port mapping. The tests were not evaluated.
-**Why deferred:** it is a `docker-compose.yml` change (config), and it was found during a
-planning session that deliberately made no source or config changes.
-**To fix:** add `ports: ["127.0.0.1:7687:7687"]` to the `neo4j` service — loopback-bound, so it
-does not repeat ISSUE-227's mistake of publishing on 0.0.0.0. Then re-run
-`pytest tests/integration` and record the real pass/fail split, which is currently unknown.
-Until this lands, the Proofs for R3.2 (`test_neo4j_outage_returns_503`) and R3.3
-(`test_distortion_compounds_across_hops`) cannot be executed locally, and R2.2's CI work is
-sequencing against an unmeasured baseline.
+## ISSUE-233: nine integration tests fail — the first ever run of the suite
+**Found:** 2026-08-28, immediately after ISSUE-232 made bolt reachable from the host
+**Severity:** P1 (blocking) — unknown-severity product defects in shipped engine behaviour
+**Where:** `tests/integration/` — faction, faction-gossip, quest lifecycle, reputation, scheme
+**Description:** With Neo4j reachable, `pytest tests/integration` returns **34 passed, 9 failed**
+(99 s). The 34 are tests that have always skipped and pass on their first real execution. The 9
+have never been evaluated by anyone:
+
+- `test_faction_gossip_integration.py::test_same_faction_pairs_rank_higher_than_strangers`
+- `test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs`
+- `test_faction_integration.py::test_remove_member_raises_when_not_a_member`
+- `test_faction_integration.py::test_set_standing_independent_directions`
+- `test_faction_integration.py::test_remove_controls_raises_when_no_edge`
+- `test_quest_lifecycle_integration_v14.py::test_quest_lifecycle_offer_to_completion_and_rewards`
+- `test_reputation_integration.py::test_reputation_context_included_above_threshold`
+- `test_scheme_advance_tick_integration.py::test_advance_creates_covert_event_and_step`
+- `test_scheme_detection_tick_integration.py::test_witnessed_scheme_is_discovered`
+
+**One was investigated and is a genuine product defect**, not a fixture problem:
+`test_remove_member_raises_when_not_a_member` fails `DID NOT RAISE FactionMembershipError` —
+`FactionService.remove_member()` silently no-ops when the character is not a member, where the
+contract says it raises. The other **eight are untriaged**: they may be defects, stale test
+expectations, or missing fixtures. Do not assume either way without opening each.
+
+This is CR-L14-02 realised. That finding showed the graph read layer could be gutted to constants
+with `make check` staying green; this is the same hole from the other side — the tests that would
+have caught these ran for no one, and the skip reported nothing.
+**Why deferred:** out of R0's scope (a security fix plus the port mapping that exposed this).
+Triage belongs in R3 alongside the other product-correctness work.
+**To fix:** triage all nine — defect, stale expectation, or fixture gap — one line each. Fix the
+defects; delete or correct the stale expectations. Then wire the suite into CI (R2.2) so the
+result cannot go unobserved again. Run with:
+`docker compose -f docker-compose.yml -f docker-compose.test.yml up -d` then
+`NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password python -m pytest tests/integration`

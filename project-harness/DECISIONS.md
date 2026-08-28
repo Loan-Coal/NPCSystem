@@ -7018,3 +7018,84 @@ hard dependencies, or move them to an optional extra and make the RAG path degra
 current state, where they are mandatory and absent, is not a third option.
 **Consequences:** R5.2. Verify a 3.14 wheel exists for every pinned dependency before committing to
 the bump.
+
+## DEC-231: DEC-131 is superseded — `/setup/*` is dev-only, and the trust boundary is enforced, not assumed
+**Date:** 2026-08-28
+**Supersedes:** DEC-131 (the `/setup/*` auth exemption and the plaintext wizard key on disk)
+**Context:** DEC-131 exempted `/setup/*` from authentication in every environment, and accepted a
+plaintext API key on disk, on the stated premise that a `127.0.0.1` bind was the trust boundary —
+the first-run Unity wizard has to reach the engine before an engine API key exists, so it cannot
+authenticate. That reasoning was sound *given its premise*. A separate, also-reasonable change
+published `"8000:8000"` in `docker-compose.yml`, which binds `0.0.0.0`. Nothing ever rechecked the
+premise, so three individually sound decisions composed into an unauthenticated remote read of a
+stored secret (ISSUE-227, CR-L05-11 — the review's C5 pattern, and its only CRITICAL that was a
+live exposure rather than a latent defect).
+
+Verified live before the fix at HEAD `36e6ceb`: `docker port` reported `0.0.0.0:8000`, and
+`GET /setup/config` returned **404** ("Wizard config not found") where the control route
+`GET /v1/npcs` returned **401** — proving the route was reachable without a key. It returned 404
+rather than a key only because no wizard config had been written to that freshly rebuilt image;
+running the wizard once would have made it return the config, `api_key` included.
+
+**Decision:** The premise is now enforced in two independent places rather than assumed in one.
+1. `docker-compose.yml` binds `127.0.0.1:8000:8000`. Deliberate exposure requires a reverse proxy,
+   which the file's own header already describes.
+2. `is_public_path()` gates the `/setup/*` exemption on `env == "dev"`, exactly as `/docs`,
+   `/redoc`, `/openapi.json` and the dashboard assets were already gated. The wizard keeps working
+   on a developer machine; staging and prod return 401.
+3. The hidden `config_dir` query param is removed from `GET`/`POST /setup/config`. It let any
+   caller choose a directory that `save_wizard_config` would `mkdir -p` and write to as root. Its
+   docstring claimed "test injection only", but no test ever passed it over HTTP — the route tests
+   patch `load_wizard_config`/`save_wizard_config` directly, so the parameter was pure attack
+   surface with no consumer.
+
+**Defence in depth is the point.** Either change alone would close today's hole. Both are kept
+because DEC-131's failure was not the bind or the exemption individually — it was that a single
+unrechecked assumption carried the entire boundary.
+
+**Consequences:** Two tests in `tests/unit/conformance/test_sev20_auth_surface.py` asserted
+`is_public_path("/setup/config", env="prod") is True` — they encoded the vulnerability as the
+contract. Flipping them to `is False` was the red-first proof: they failed against the old code and
+passed against the new. Anything reaching the API from another host or a non-host-network container
+now needs the reverse proxy; that break is intended and visible rather than silent.
+
+**Still outstanding (human):** rotate the wizard API key if port 8000 has ever been reachable
+off-box. The code fix does not un-disclose a key that already leaked.
+
+## DEC-232: Neo4j bolt is reachable from the host only through an opt-in test override
+**Date:** 2026-08-28
+**Context:** ISSUE-232 recorded that a host-run `pytest tests/integration` could not connect
+(34 failed / 9 passed / 5 errors, every failure `ServiceUnavailable` on `localhost:7687`), and
+proposed adding `ports: ["127.0.0.1:7687:7687"]` to the `neo4j` service. **That fix does not
+work,** and the reason matters: `neo4j` is attached only to the `internal` network, which
+`docker-compose.yml` declares `internal: true`. Docker gives such networks no external
+connectivity, so a `ports:` stanza on a service attached only to `internal` is **silently inert** —
+the binding appears in `HostConfig.PortBindings` and never in `NetworkSettings.Ports`, and
+`docker compose ps` shows a bare `7687/tcp` with no host mapping. Verified by doing exactly that
+and watching it not work, including across a full `down`/`up`. `app` publishes correctly only
+because it is also on `public`.
+
+So the isolation was deliberate and effective, and it is *the reason* 34 integration tests have
+never been evaluated by anyone on a host shell. This is a second instance of the review's C5
+pattern — a sound isolation choice and a sound test-layout choice composing into an untested
+surface — and, fittingly, a `ports:` line that satisfies the form while the behaviour is absent
+(C1) would have been the obvious wrong fix.
+
+**Decision:** The base `docker-compose.yml` keeps neo4j isolated with no published ports and a
+comment explaining why a `ports:` stanza there would be inert. A new `docker-compose.test.yml`
+override attaches neo4j to `public` and publishes `127.0.0.1:7687:7687`:
+
+    docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+
+**Alternatives rejected:** (a) *Put neo4j on `public` permanently* — grants the database outbound
+internet and places it on the same bridge as the API for the sake of a test path; that is a real
+weakening of the default posture. (b) *Run the tests inside a container on `internal`* — preserves
+isolation best, but the repo is not bind-mounted into the app image, so it needs a test image
+first; revisit if the override proves awkward in CI. (c) *Publish on `0.0.0.0`* — would expose a
+database still shipping the default `neo4j/password` credentials (CR-L16-09) on every interface,
+repeating ISSUE-227 with a worse blast radius.
+
+**Consequences:** Integration tests are runnable locally for the first time, so R3.2's
+(`test_neo4j_outage_returns_503`) and R3.3's (`test_distortion_compounds_across_hops`) Proofs can
+actually be executed. R2.2 should model CI on this override rather than on the base file. The true
+integration pass/fail split is recorded in `review-2026-08/BASELINE_2026-08-28.md`.

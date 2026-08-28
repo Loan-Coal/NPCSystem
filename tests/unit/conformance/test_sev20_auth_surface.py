@@ -34,10 +34,24 @@ def test_readiness_is_public_in_prod() -> None:
     assert is_public_path("/readiness", env="prod") is True
 
 
-def test_setup_routes_are_public() -> None:
-    """/setup/* is auth-exempt for the first-run wizard (DEC-131, INTEG-03)."""
-    assert is_public_path("/setup/validate", env="prod") is True
-    assert is_public_path("/setup/config", env="prod") is True
+def test_setup_routes_are_public_in_dev() -> None:
+    """/setup/* is auth-exempt in dev for the first-run wizard (DEC-131, INTEG-03)."""
+    assert is_public_path("/setup/validate", env="dev") is True
+    assert is_public_path("/setup/config", env="dev") is True
+
+
+def test_setup_routes_are_not_public_outside_dev() -> None:
+    """/setup/* must require auth in staging and prod (ISSUE-227, supersedes DEC-131).
+
+    DEC-131 exempted these routes because a 127.0.0.1 bind was the trust boundary.
+    docker-compose published "8000:8000", which binds 0.0.0.0, so the premise was
+    false and GET /setup/config was an unauthenticated remote read of a stored
+    plaintext API key. The exemption is now gated on env, as /docs already was.
+    """
+    assert is_public_path("/setup/validate", env="prod") is False
+    assert is_public_path("/setup/config", env="prod") is False
+    assert is_public_path("/setup/validate", env="staging") is False
+    assert is_public_path("/setup/config", env="staging") is False
 
 
 def test_docs_is_public_in_dev() -> None:

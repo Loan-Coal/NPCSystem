@@ -48,8 +48,12 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
 
     Rules:
     - /health and /readiness are always public (process-manager probes).
-    - /setup/* is always public — localhost-only by bind (DEC-131); used by the
-      Unity wizard on first launch before an engine API key is configured.
+    - /setup/* is public only when ENV == "dev". Used by the Unity wizard on first
+      launch before an engine API key is configured. DEC-131 made it public in every
+      env on the premise that a 127.0.0.1 bind was the trust boundary; docker-compose
+      published "8000:8000", which binds 0.0.0.0, so that premise was false and
+      GET /setup/config was an unauthenticated remote read of a stored plaintext API
+      key (ISSUE-227). The bind is now loopback AND the exemption is env-gated.
     - /docs, /redoc, /openapi.json are public only when ENV == "dev" so that
       the full API surface is not enumerable in staging/prod.
     - Dashboard assets are public in dev only (they supply their own Bearer tokens).
@@ -65,7 +69,7 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
     if path in (HEALTH_PATH, READINESS_PATH):
         return True
     if path.startswith(SETUP_PATH_PREFIX):
-        return True
+        return env == "dev"
     if path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX):
         return env == "dev"
     return False

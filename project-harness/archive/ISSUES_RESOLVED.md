@@ -3034,3 +3034,46 @@ whoever schedules P10.
 correction to two pairings and the MDE floor from 7.4pp to ~6.9pp; OR seed an NPC with
 >5 KNOWS_ABOUT edges when the baseline fixture is next legitimately regenerated (after
 P10, alongside ISSUE-213). Do NOT "fix" it by weakening gate 4.
+
+## [FIXED] ISSUE-227: `/setup/*` is unauthenticated off-box because compose binds 0.0.0.0
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Fixed:** 2026-08-28, R0.1 — loopback bind + `env == "dev"` exemption gate + `config_dir` removed. Superseded DEC-131; see DEC-231.
+**Severity:** P1 (blocking)
+**Where:** `auth/middleware_helpers.py:51`, `docker-compose.yml:72`, `api/routes/setup/setup.py:94`
+**Description:** The `/setup/*` auth exemption is unconditional in every environment. DEC-131
+justifies it by a 127.0.0.1 bind, but `docker-compose.yml:72` publishes `"8000:8000"`, which binds
+0.0.0.0. `GET /setup/config` returns a wizard config that DEC-131 documents as storing a plaintext
+cloud API key. `POST /setup/config` accepts a schema-hidden `config_dir` query param that `mkdir -p`s
+and writes as root. Re-verified live at HEAD `619dab2` on 2026-08-28: the bind and the unconditional
+exemption are both still present. Three individually sound decisions composing into one unsafe
+outcome — the review's C5 pattern.
+**Why deferred:** not deferred. It is R0.1, ahead of the whole remediation program.
+**To fix:** bind `127.0.0.1:8000:8000`; gate the exemption on `env == "dev"` as `/docs` already is;
+drop or whitelist `config_dir`; supersede DEC-131. Rotate the key if port 8000 was ever reachable
+off-box. Proof: `test_setup_config_requires_auth_outside_dev` — `ENV=staging`, no key, expect 401;
+today returns 200 with the config body.
+
+## [FIXED] ISSUE-232: Neo4j publishes no host ports, so integration tests cannot run locally
+**Found:** 2026-08-28, capturing the pre-remediation baseline
+**Fixed:** 2026-08-28, R0.2 — `docker-compose.test.yml` override. The proposed `ports:` line on the base file was silently inert (`internal: true` network); see DEC-232.
+**Severity:** P1 (blocking) — blocks the acceptance tests for R3.2 and R3.3
+**Where:** `docker-compose.yml` (the `neo4j` service has no `ports:` stanza)
+**Description:** The `neo4j` service is healthy and reachable inside the compose network — 
+`docker compose exec neo4j cypher-shell "RETURN 1"` returns ok, and `app` holds
+`NEO4J_URI=bolt://neo4j:7687` — but it publishes nothing to the host (`docker port <neo4j>`
+returns empty). A host-run `pytest tests/integration` therefore cannot connect:
+**34 failed, 9 passed, 5 errors in 273 s**, every failure
+`neo4j.exceptions.ServiceUnavailable: Couldn't connect to localhost:7687 … the remote computer
+refused the network connection`.
+
+This is the mechanism behind the review's "9 passed, 34 skipped" observation (CR-L14-02): those
+34 tests have never run for anyone on a host shell, and the skip made that invisible. Note this
+is **not** 34 product defects — it is one missing port mapping. The tests were not evaluated.
+**Why deferred:** it is a `docker-compose.yml` change (config), and it was found during a
+planning session that deliberately made no source or config changes.
+**To fix:** add `ports: ["127.0.0.1:7687:7687"]` to the `neo4j` service — loopback-bound, so it
+does not repeat ISSUE-227's mistake of publishing on 0.0.0.0. Then re-run
+`pytest tests/integration` and record the real pass/fail split, which is currently unknown.
+Until this lands, the Proofs for R3.2 (`test_neo4j_outage_returns_503`) and R3.3
+(`test_distortion_compounds_across_hops`) cannot be executed locally, and R2.2's CI work is
+sequencing against an unmeasured baseline.

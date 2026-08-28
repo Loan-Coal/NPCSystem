@@ -1,22 +1,24 @@
 """
 Module: api.routes.setup.setup
 Layer: api
-Purpose: Auth-exempt, localhost-only setup routes for the first-run wizard.
+Purpose: Dev-only auth-exempt setup routes for the first-run wizard.
          POST /setup/validate — validate LLM path A or B (INTEG-01).
          GET  /setup/config   — read persisted wizard config (INTEG-02).
          POST /setup/config   — write wizard config (INTEG-02).
 Dependencies: npc_engine.setup.path_validator, npc_engine.setup.wizard_config.
 Used by: api.router_registry (registered under /setup prefix); SHIP-05b Unity wizard.
-Does NOT: require auth (auth.middleware exempts /setup/* via DEC-131); perform
-          graph reads/writes; call LLM.
-Dependencies injected: config_dir path injected via query param (test overrides);
-                       validate_path_a / validate_path_b imported directly.
+Does NOT: require auth when ENV == "dev" (auth.middleware exempts /setup/* in dev
+          only; DEC-131 superseded by ISSUE-227); perform graph reads/writes;
+          call LLM; accept a caller-supplied config directory.
+Dependencies injected: validate_path_a / validate_path_b imported directly.
+                       The config directory is the wizard_config process default —
+                       tests patch load_wizard_config / save_wizard_config.
 """
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.helpers import OkEnvelope, ok_response
@@ -69,10 +71,13 @@ async def validate_path(body: ValidateRequest) -> Any:
 
 
 @router.get("/config", response_model=OkEnvelope[WizardConfig])
-async def get_config(
-    config_dir: Annotated[str | None, Query(include_in_schema=False)] = None,
-) -> Any:
+async def get_config() -> Any:
     """Return the persisted wizard config, or 404 if not yet written.
+
+    The config directory is not caller-controllable: it is the process default from
+    ``wizard_config``. A hidden ``config_dir`` query param existed here for test
+    injection and was removed with ISSUE-227 — tests inject by patching
+    ``load_wizard_config``/``save_wizard_config``, which needs no request surface.
 
     Returns:
         OkEnvelope wrapping a ``WizardConfig`` if the file exists.
@@ -80,39 +85,26 @@ async def get_config(
     Raises:
         HTTPException 404: When the wizard config file has not been written yet.
     """
-    import pathlib
-
-    dir_path = pathlib.Path(config_dir) if config_dir else None
-    cfg: WizardConfig | None
-    if dir_path is not None:
-        cfg = load_wizard_config(config_dir=dir_path)
-    else:
-        cfg = load_wizard_config()
-
+    cfg: WizardConfig | None = load_wizard_config()
     if cfg is None:
         raise HTTPException(status_code=_HTTP_NOT_FOUND, detail="Wizard config not found.")
     return ok_response(cfg.model_dump())
 
 
 @router.post("/config", response_model=OkEnvelope[WizardConfig])
-async def post_config(
-    body: Annotated[WizardConfig, Body()],
-    config_dir: Annotated[str | None, Query(include_in_schema=False)] = None,
-) -> Any:
+async def post_config(body: Annotated[WizardConfig, Body()]) -> Any:
     """Persist the wizard config and echo it back.
+
+    The destination directory is not caller-controllable. A hidden ``config_dir``
+    query param previously let any caller choose the write target, which
+    ``save_wizard_config`` would ``mkdir -p`` and write to as root; it was removed
+    with ISSUE-227.
 
     Args:
         body: The wizard configuration to store.
-        config_dir: Override config directory (test injection only, hidden from schema).
 
     Returns:
         OkEnvelope wrapping the saved ``WizardConfig``.
     """
-    import pathlib
-
-    dir_path = pathlib.Path(config_dir) if config_dir else None
-    if dir_path is not None:
-        save_wizard_config(body, config_dir=dir_path)
-    else:
-        save_wizard_config(body)
+    save_wizard_config(body)
     return ok_response(body.model_dump())

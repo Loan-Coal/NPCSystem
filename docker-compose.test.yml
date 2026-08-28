@@ -1,0 +1,31 @@
+# Test-only override: makes Neo4j's bolt port reachable from the host so that
+# `pytest tests/integration` can run. ISSUE-232.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#   NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password \
+#     python -m pytest tests/integration
+#
+# Why this is an override and not part of docker-compose.yml:
+#
+# The base file puts neo4j on the `internal` network only, and `internal` is
+# declared `internal: true` — Docker gives such networks no external connectivity,
+# so a `ports:` stanza on a service attached only to it is silently inert (the
+# binding appears in HostConfig.PortBindings and never in NetworkSettings.Ports).
+# Publishing bolt therefore requires also attaching neo4j to `public`, which grants
+# it outbound internet and puts the database on the same bridge as the API. That is
+# a real weakening of a deliberate isolation choice, so it is opt-in per command
+# rather than the default posture.
+#
+# Bolt is bound to 127.0.0.1, never 0.0.0.0 — publishing a database with the
+# shipped default credentials (neo4j/password, CR-L16-09) on all interfaces would
+# repeat the mistake ISSUE-227 just fixed on the app, with a worse blast radius.
+#
+# Do NOT use this override in production.
+
+services:
+  neo4j:
+    networks:
+      - internal
+      - public
+    ports:
+      - "127.0.0.1:7687:7687"
