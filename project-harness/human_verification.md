@@ -572,3 +572,9 @@ E741 Ambiguous variable name: `l`
 
 Found 1 error.
 make: *** [Makefile:99: lint] Error 1
+
+## 2026-08-28 14:38:03 — task R1.1 did not tick itself
+
+The cursor still points at R1.1 after 2 attempts. The session
+reported completion but never ran 'roadmap_cursor.py --mark R1.1', so the work may or may not
+be committed. Inspect the last task log before re-running.
