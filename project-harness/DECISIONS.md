@@ -6889,3 +6889,131 @@ roadmap block above). No file over 300 lines of non-test code
 (`make check-docstrings` clean). No prompt strings outside `prompts/`. No layer rule
 violations (`make check-layers` clean). Deferred work is in ISSUE-224/225/226. Non-obvious
 choices are here. No temporary files created. No fixture regenerated.
+
+## DEC-224: a gate must pass a recorded counterfactual before it joins `make check`
+**Date:** 2026-08-28
+**Decided by:** the 2026-08 review remediation session, on L6's executed counterfactual against all
+14 `make check` targets.
+**Context:** Six of the 14 failed a delete-the-guarded-thing counterfactual: `check-human-gates`
+(prints its report and exits 0 with six gates OPEN), `check-test-quality` (`main()` ends `return 0`,
+docstring says "Exits 0 always"), `check-conservation` (Identity 2 reads `all_slots = compare_slots`
+then asserts `compare_slots == all_slots` — a literal `x == x`, introduced in a commit labelled a bug
+fix), `check-harness` (H3 reads `NEXT_SESSION.md`, which exists only under `archive/stale-2026-06/`),
+`check-label-survival` (audits files that cannot change), and `check-docstrings` (verifies the
+substring `Layer:` exists, nothing more). In 967 commits the whole battery produced 9 real catches,
+of which exactly **1** was a defect in shipped runtime behaviour — and that one came from a probe no
+gate runs. Meanwhile gutting 105 of 180 graph repository methods to constants left mypy clean and
+broke only that layer's own passthrough tests.
+**Decision:** A gate may be added to `make check` only with a recorded counterfactual: the commit
+adding it must show the gate **red** with the guarded behaviour removed. Existing gates that fail
+this are removed rather than repaired. New verification effort goes into probes, not gates.
+**Consequences:** `check-conservation` and `check-label-survival` leave `make check` (R1.3); H3 is
+deleted (R1.4); `check-test-quality` and `check-human-gates` gain real exit codes rather than being
+deleted (R1.2 — the review recommended deleting `check-human-gates`, which this session rejected: it
+is the only tracker of 16 blocked human tasks in a program being kept). `check-layers` and the mypy
+gates stay; they pass. The four new gates approved on 2026-08-28 (migration-required,
+API-breaking-change, engine-log fields, dead-test detector) each ship with their counterfactual.
+
+## DEC-225: one-shot session prompts and handoffs are not repo artifacts
+**Date:** 2026-08-28
+**Context:** Fourteen single-use session prompts and handoffs were committed as permanent project
+records, and 214 archive files (23,551 lines) were referenced by nothing outside the archive. The
+top-3 all-time churned files in the repo are harness markdown. `project-harness/` had grown to be
+larger than the product it documents.
+**Decision:** One-shot prompts and handoffs are working files, not records.
+`project-harness/PROMPT_*.md` and `project-harness/*HANDOFF*.md` are gitignored. Deleted this
+session: 214 unreferenced archive files plus 15 root-level one-shot documents — **229 files, 26,794
+lines**. The 51 referenced archive files stay, `ISSUES_RESOLVED.md` included.
+**Consequences:** Also removes the deep paths that made `git clone` fail on Windows without
+`core.longpaths` (R4.2 documents the two remaining fresh-clone steps). Everything deleted remains
+recoverable at `619dab2`.
+
+## DEC-226: file-size limits become two-tier, and baseline signatures become line-count-bearing
+**Date:** 2026-08-28
+**Context:** `check_rules.py:27` states its own defect: "Signatures are file-level … so they stay
+stable across edits." A grandfathered file can therefore grow without limit — `demo_game/client.py`
+gained 481 lines while the gate stayed green and now stands at **1,901**; `seed.py` is 1,677;
+`game_window.py` regrew to 925 after DEC-032 declared the size problem resolved. 133 rules-baseline
+entries retire at 1.43/month (7.8 years to zero) while the evals baseline *grew* 59 to 72 in 17 days.
+Two lenses independently exonerated the 300-line rule as a cause of fragmentation (median `graph/`
+file is 103 lines; DIP-strict Protocols are the real cause, at 8,565 lines across 107 files) — but it
+demonstrably functions as a floor with a permanent exemption list CLAUDE.md never mentions.
+**Decision:** Three parts. (1) Grandfathered R001/R006 entries record their line count at
+grandfathering; the gate fails when a grandfathered file exceeds its recorded size. (2) The limit
+becomes two-tier: a **soft advisory at 400 lines** (cohesion judgement, no gate, no waiver list) and
+a **hard, unwaivable gate at 800**. (3) Project rules override user-level rules on conflict, stated
+in `CLAUDE.md` — resolving the undeclared precedence between the project's 300/40 and the user-level
+800/50.
+**Rationale for two tiers:** the hard 300 produced an exemption list rather than smaller files, and
+the review showed the cap was not what fragmented the tree. A soft 400 preserves cohesion-first
+judgement; a hard 800 makes a 1,901-line file impossible; line-count-bearing signatures stop the
+bleed without forcing 31 file splits at once.
+**Consequences:** Three files exceed 800 today and must split (R7.2), sequenced behind R1.1 so they
+cannot re-grow. Re-baseline once, in the same commit, so no file mid-refactor inherits an inflated
+ceiling.
+
+## DEC-227: the overnight loop is kept and reworked, not retired
+**Date:** 2026-08-28
+**Context:** The review recommended deleting the loop bundle (§D row 3, 5,178 lines / 18 files):
+carried 13 days with no owner, `ISSUE-126` (its `--dry-run` hangs; it burned 11.45 h on night one)
+open 26 days, and **every** HALT it ever produced was the harness tripping over its own self-tests
+rather than finding a product defect. Its other output, `soft_review.md`, held ~60 findings read by
+nobody — one of which the 2026-08 review independently rediscovered as an open HIGH.
+**Decision:** Keep the loop; rework it. §D row 3 is void. `ISSUE-126` is upgraded from MEDIUM to a
+prerequisite. HALT causes are classified so a self-test failure logs and continues while a product
+defect halts, with a cap on consecutive non-halting failures.
+**Consequences:** The subtraction ledger loses 5,178 lines. The rework is sequenced to R6, **behind
+R1** — the loop's HALTs come from the gate battery, so reworking it before the gates can fail would
+mean tuning it against theatre and doing the work twice. `soft_review.md` is deleted; its surviving
+finding is planned as R2.5 / CR-L03-02.
+
+## DEC-228: the eval program is culled to a minimal trustworthy instrument
+**Date:** 2026-08-28
+**Context:** 46 of 65 unchecked roadmap items were eval meta-work, and 8 of 8 active programs were
+eval/harness. The 2026-08 triage established that the instrument those items were extending is
+broken in two independent ways: a null responder emitting one fixed string scores 0.949 against the
+engine's 0.897 on the guard battery whose published figure is 0.914 (ISSUE-229), and
+`run_config.resolve()` records `generation_model_digest=None` wherever Ollama is absent, including CI
+(ISSUE-231) — so no score is attributable to a model. Extending an instrument that cannot measure
+produces more unmeasurement.
+**Decision:** Cull to what a local-model A/B actually needs: base-rate gate, null baseline,
+model-digest pinning, one working judge, and trend comparison once two comparable rows exist. That is
+R2, seven items. Programs 4 and 5 (EVAL-P25..P31 — the golden-set rebuild, judge repair, and the
+first-class prompt arm, 25 unstarted items) are **retired**; their specifications remain at
+`619dab2`. Program 3's unchecked remainder is superseded by R2.
+**Consequences:** The roadmap's eval surface drops from 46 unchecked items to 7. `check-base-rate`
+(386 lines) is wired because it measures the ISSUE-229 breach directly; `check_engine_coverage`
+(658 lines, reachable from no `make` target) is deleted. The trend/regression stack (1,309 lines, one
+row) is **kept and integrated** rather than deleted — trend comparison is precisely what a model swap
+needs, and it is unusable today only because ISSUE-231 nulls the identity that makes rows comparable.
+
+## DEC-229: the DemoGame is the integrator; the B2B/Unreal track stays deliberately paused
+**Date:** 2026-08-28
+**Context:** The review's root cause C2 was that no integrator had ever existed, so nothing outside
+the repo defined "done" and the eval harness supplied a substitute — the machinery outgrew the
+product 8.68:1 over 200 commits. That finding (CR-L12-06) is **withdrawn as of this date**: an
+Unreal demo game is under construction expressly to showcase this engine, which supplies an external
+clock for the first time. Separately, the B2B track had been the worst of both states: 12 unchecked
+items in `UNREAL_DEFERRED.md`, a side file the loop cannot see, with 0 commits in 28 days.
+**Decision:** The DemoGame is the integrator. The B2B/Unreal integration track stays **paused, in
+writing**, until engine work lands and smaller fine-tuned local models free the VRAM budget for
+graphics. The constraint governing engine work in the meantime is "do not break future Unreal
+integration", which makes API stability a present concern rather than a future one.
+**Consequences:** CR-L12-07 (148 operations governed by one sentence of stability policy) is upgraded
+MEDIUM to HIGH and becomes R5.1, done first in its phase — cheap now, expensive once Unreal binds to
+a route. `make package` (R5.3) and the migration down-paths (R5.4) become real requirements rather
+than hypotheticals. No external demo before ISSUE-228 lands: the pitch currently narrates a
+hand-seeded fixture as a working engine.
+
+## DEC-230: Python 3.14 is the single target
+**Date:** 2026-08-28
+**Context:** `mypy.ini` declared `python_version = 3.11` and `pyproject.toml`
+`requires-python = ">=3.11"`, while CI and the README mandate 3.14 and the demo requires pygame-ce on
+3.14 — so mypy was validating a language version nothing executes. Separately `torch>=2.0.0` and
+`sentence-transformers>=2.6.0` are declared hard dependencies at `pyproject.toml:19-20` but neither
+imports in the dev venv, leaving the embedding/RAG path unexercised locally.
+**Decision:** 3.14 everywhere — `mypy.ini`, `requires-python`, and the Docker base. Install the two
+hard dependencies, or move them to an optional extra and make the RAG path degrade explicitly; the
+current state, where they are mandatory and absent, is not a third option.
+**Consequences:** R5.2. Verify a 3.14 wheel exists for every pinned dependency before committing to
+the bump.

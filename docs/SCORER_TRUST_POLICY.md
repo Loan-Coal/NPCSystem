@@ -72,7 +72,7 @@ policy violation — `scripts/scan_fix_diff.py` will flag it on review.
 - It does not say a RESTRICTED scorer is worthless — calibration drove a remediation
   loop, and RESTRICTED scorers are candidates for prompt revision (EVAL-P11.2).
 - It does not impose a minimum sample size. Sample-size adequacy is a separate concern
-  tracked in `EVAL_STRATEGY.md`.
+  tracked in `docs/EVAL_METHODOLOGY.md`.
 - It does not set the kappa CI width requirement. That is in `evals/calibration.py`
   (`BOOTSTRAP_RESAMPLES = 2000`).
 

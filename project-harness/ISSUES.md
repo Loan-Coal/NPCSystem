@@ -1797,3 +1797,87 @@ same sequence, recorded).
 an env var) and return it from `/health` alongside `version`. Then gate 2 becomes a real
 comparison. Add a test that `/health` reports something other than a hardcoded literal
 when the env var is set.
+
+## ISSUE-227: `/setup/*` is unauthenticated off-box because compose binds 0.0.0.0
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P1 (blocking)
+**Where:** `auth/middleware_helpers.py:51`, `docker-compose.yml:72`, `api/routes/setup/setup.py:94`
+**Description:** The `/setup/*` auth exemption is unconditional in every environment. DEC-131
+justifies it by a 127.0.0.1 bind, but `docker-compose.yml:72` publishes `"8000:8000"`, which binds
+0.0.0.0. `GET /setup/config` returns a wizard config that DEC-131 documents as storing a plaintext
+cloud API key. `POST /setup/config` accepts a schema-hidden `config_dir` query param that `mkdir -p`s
+and writes as root. Re-verified live at HEAD `619dab2` on 2026-08-28: the bind and the unconditional
+exemption are both still present. Three individually sound decisions composing into one unsafe
+outcome — the review's C5 pattern.
+**Why deferred:** not deferred. It is R0.1, ahead of the whole remediation program.
+**To fix:** bind `127.0.0.1:8000:8000`; gate the exemption on `env == "dev"` as `/docs` already is;
+drop or whitelist `config_dir`; supersede DEC-131. Rotate the key if port 8000 was ever reachable
+off-box. Proof: `test_setup_config_requires_auth_outside_dev` — `ENV=staging`, no key, expect 401;
+today returns 200 with the config body.
+
+## ISSUE-228: gossip distortion does not compound across hops
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P1 (blocking)
+**Where:** `src/npc_engine/graph/gossip/gossip_batch_queries.py:29-47`
+**Description:** `CYPHER_BATCH_EVENT_TRUST` returns `best_event.summary` — the canonical Event node's
+text — rather than the sharer's own `distorted_summary`, which `CYPHER_BATCH_PROPAGATE_KNOWLEDGE`
+does write to the KNOWS_ABOUT edge. Every hop therefore distorts the original, so the signature demo
+feature is a no-op; the chain looks right only because it is hand-seeded. Separately the
+`MERGE ... SET` overwrites existing edges unconditionally: `old_henryk`, seeded at distortion_level
+70, reads 0 at tick 600 — running the world erases the seeded demo. Re-verified by reading the Cypher
+at HEAD.
+**Why deferred:** sequenced to R3.3, behind R2 — fixing gossip shifts eval golden strings and gossip
+determinism fixtures, and the instrument that would verify the fix is itself broken (ISSUE-229).
+**To fix:** relay the sharer's `distorted_summary` with `e.summary` as fallback; use `ON CREATE SET`
+for the distortion fields or guard on higher incoming distortion. Proof:
+`test_distortion_compounds_across_hops` — assert hop-2 level strictly exceeds hop-1; today equal.
+
+## ISSUE-229: the guard battery is beaten by a fixed string
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P1 (blocking)
+**Where:** `evals/`, `evals/reports/20260825T231028Z.md:11`, `scripts/hedge_responder_probe.py`
+**Description:** A null responder emitting one hard-coded sentence scores 74/78 = 0.949 across the
+YAML guard cases; the engine scores 70/78 = 0.897. The published claim is "Guard 170/186, 0.914". The
+baseline had never been taken because `hedge_responder_probe.py` raises `NotACapabilityCaseError`
+when handed a guard case — it structurally refuses to score the battery it would need to score. No
+scorer's agreement interval excludes chance, and the YAML guard-case base rate is 1.000.
+**Why deferred:** not deferred; it is R2.5, gated only on ISSUE-231 and the base-rate wiring.
+**To fix:** allow the probe to score guard cases; print the null baseline beside every published
+number; refuse to publish a headline where engine ≤ null; retract 0.914 until it clears. Delete the
+18 guaranteed-pass assertions first, in a separate commit, or the delta is unattributable.
+
+## ISSUE-230: the Neo4j-unavailable fallback contract is unimplemented at every hop
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P2 (annoying)
+**Where:** `utils/errors.py:54,301`, `api/errors/exception_handlers.py:113-120`,
+`engines/dialogue/degradation.py:107,119`
+**Description:** CLAUDE.md declares (strict) "Neo4j unavailable → raise GraphUnavailableError →
+API 503". Re-verified at HEAD: `grep -rn "raise GraphUnavailableError" src/` returns **0 rows**, and
+`grep -rn "503" src/npc_engine/api/` returns **0 rows**. `register_exception_handlers()` registers
+four handlers, none for it, so the catch-all returns 500. `TokenBudgetExceededError` subclasses bare
+`Exception`. **Dependency the review missed:** `degradation.py:107,119` are bare `except Exception`
+blocks that log and fall through to a canned 200, so a newly-raised `GraphUnavailableError` would be
+swallowed before any handler saw it — the degradation fix must land first or in the same change.
+**Why deferred:** sequenced to R3.1→R3.2; the regression guard needs Neo4j in CI (R2.2).
+**To fix:** narrow the degradation catches; raise on driver `ServiceUnavailable`/`SessionExpired`;
+register a 503 handler; make `TokenBudgetExceededError` structured. Proof:
+`test_neo4j_outage_returns_503` — stop the container, POST dialogue, expect 503; today 500.
+
+## ISSUE-231: "unit" tests make live network calls, and CI silently records `None` model digests
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P1 (blocking)
+**Where:** `evals/run_config.py:260-262`, `evals/engine_adapter.py:111-125`,
+`tests/unit/evals/test_run_config.py`
+**Description:** `run_config.resolve()` falls back to `_engine_adapter.fetch_model_digest` (twice)
+and `fetch_ollama_version` when no injector is passed; each is a real `httpx` call with a 10 s
+timeout. Only 2 of 17 tests in the cited file inject fakes, so 15 make three live HTTP attempts each
+— the file times out at **120 s** while collection takes 0.07 s. The worse half: both fetchers are
+documented to return `None` on any failure, and CI declares no Ollama service, so on a runner the
+connection is refused instantly, the tests **pass**, and the run records
+`generation_model_digest=None`. That is the only field making eval scores attributable to a model,
+which makes it load-bearing for the planned swap to a smaller fine-tuned local model.
+**Why deferred:** not deferred; it is R2.1, the first item of the measurement phase.
+**To fix:** require the injector under `tests/unit/` via an autouse fixture that raises on real
+`httpx` use, and make a `None` digest fatal in any run that publishes a number. Proof: the cited file
+completes in under 5 s with no network (today >120 s), and `resolve()` raises when the digest fn
+returns `None` (today returns a RunConfig with `None`).

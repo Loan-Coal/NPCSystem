@@ -81,3 +81,7 @@ project-harness/.loop-state/
 evals/generations/*/judged.jsonl.*.bak
 evals/generations/*/*.pre-panel-*.bak
 evals/generations/*/*.pre-combined-*.bak
+
+# One-shot session prompts and handoffs (DEC-225): keep them out of the repo.
+project-harness/PROMPT_*.md
+project-harness/*HANDOFF*.md

@@ -1,26 +1,91 @@
 # NPCSystem — Engine Roadmap
 
-**Status:** Phases 0–26 complete; the EXP-201..230 expansion program **and** its slice-2 follow-up
-(**Phases F/G/H — activate, surface, make-it-a-game**) are **fully shipped** (every F/G/H item checked;
-only the two type-C deferrals H-D1/H-D2 + parked backlog remain). The architectural-remediation SEV backlog
-(SEV-01..24, incl. the GraphRepository facade) is **fully drained** (47/47). `make check` GREEN.
+**Status (2026-08-28):** the active program is the **remediation program** below, sequenced from the
+2026-08 strategic codebase review. Engine phases 0–26, the EXP-201..230 expansion, slice-2 phases
+F/G/H, and the SEV-01..24 architectural backlog remain shipped and are archived below.
 
-**Next (as of 2026-08-02):** the active program is the **eval pipeline — `EVAL-P0..P8`** (see
-*Active — Eval pipeline* below). ~20.1 h of coding, one phase per `/expand-next` session. Goal: turn the
-existing scoring *harness* into a reproducible, repeat-aware, calibrated *pipeline* that can also answer
-whether a given change improved the engine.
+**What the review changed.** 145 findings across 16 lenses, adversarially triaged to **118 canonical
+problems** (7 withdrawn, 27 merged, 21 recalibrated). Four CRITICALs survived direct attack and a
+fifth was promoted: the signature gossip feature is a no-op, the eval instrument is beaten by a fixed
+string, the documented Neo4j→503 contract does not exist, `/setup/*` is an unauthenticated remote
+read of a plaintext API key, and "unit" tests make live network calls that make CI record `None`
+model digests. Verdicts and evidence: [TRIAGE.md](review-2026-08/TRIAGE.md). Plans:
+[FIX_PLANS.md](review-2026-08/FIX_PLANS.md).
 
-**Revised 2026-08-02 by adversarial review — 🔶 DEC-153 (ACCEPTED).** Ten findings applied: a
-`DEC-149` id collision that falsely cleared EVAL-P5.2's ask-gate (now **DEC-152**), a wrong pinned Wilson
-interval used as a test oracle, a loop fence wide enough to drain the whole program without ever measuring
-anything, and the absence of any run-to-run comparison. **`compare` is promoted out of Parked to
-Phase EVAL-P8**; the 18 h ceiling is lifted rather than silently overrun. Full rationale: DEC-153.
+**Eval program culled (2026-08-28).** 46 unchecked eval-meta items reduced to R2's seven. The
+instrument is broken in a way that invalidated the work queued behind it; rebuilding it minimally
+(base rate, null baseline, model-digest pinning, one working judge) is what a local-model A/B
+actually needs. Programs 4 and 5 are retired — see below. Rationale: DEC-228.
 
-**Deferred (2026-07-31):** all game-client integration work — `SHIP-05b..11` and `Phase X` (Unity/Unreal
-SDKs) — moved verbatim to **`project-harness/UNREAL_DEFERRED.md`**. Shipped engine-side runtime work
-(`P0` / `SHIP-01..05a`, `INTEG-01..05`, Phases `F`/`G`/`H`) stays here. Engine choice for the LLM/graph
-runtime remains **DEC-124** (dual LLM path; stay on Neo4j for now, copyleft revisit deferred via
-`OD-Ship-graph`/`PERF-04`).
+**Integrator (2026-08-28).** An Unreal demo game is under construction expressly to showcase this
+engine, which for the first time supplies an external definition of "done". API stability and
+packaging correctness (R5) stopped being hypothetical. The B2B/Unreal track itself stays
+**deliberately paused** — `project-harness/UNREAL_DEFERRED.md` — until engine work and smaller
+fine-tuned local models free the VRAM budget. Rationale: DEC-229.
+
+## Remediation program (2026-08 review) — **the active program**
+
+Sequenced from the 2026-08 strategic review: 145 findings → 118 canonical problems after
+[adversarial triage](review-2026-08/TRIAGE.md) → 37 work items. **Substance lives in
+[FIX_PLANS.md](review-2026-08/FIX_PLANS.md); this section holds sequence and state only.**
+Every item has a Proof that is red today — no item entered this list without one.
+
+Phase order is a dependency order, not a priority order. Doing R3 before R2 means verifying a
+product fix with an instrument a fixed string beats; doing R2 before R1 means wiring gates that
+cannot fail into CI. Both cost the work twice.
+
+**R0 — Security (do first, out of band)**
+- [ ] R0.1 `/setup/*` unauthenticated remote read of a plaintext API key — bind `127.0.0.1`, gate the exemption on `env=="dev"`, drop `config_dir`, supersede DEC-131, rotate the key · CR-L05-11 · ISSUE-227
+
+**R1 — Gate integrity** · *nothing downstream is trustworthy until gates can fail*
+- [ ] R1.1 `check-rules` signatures become line-count-bearing; two-tier limit (soft 400 / hard 800) · CR-L06-05 +2 · DEC-226
+- [ ] R1.2 Gates that cannot fail: real exit codes for `check-test-quality`, `check-human-gates` · CR-L06-03, CR-L06-01
+- [ ] R1.3 Remove `check-conservation` (Identity 2 is `x == x`) and `check-label-survival` from `make check` · CR-L06-09 +2
+- [ ] R1.4 Delete `check-harness` H3 (reads an archived path; permanently inert) · CR-L06-07 +1
+- [ ] R1.5 Make `check-docstrings` read content, not the substring `Layer:` · CR-L06-08 +2
+- [ ] R1.6 Rule-scope gaps: R005 misses 5 packages, R004 matches a never-written string, `scripts/` unscanned · CR-L02-04 +2
+- [ ] R1.7 **DEC-224**: a gate must pass a recorded counterfactual before joining `make check`
+- [ ] R1.8 Build the 4 approved new gates: migration-required, API-breaking-change, engine-log fields, dead-test detector · CR-L04-06, CR-L12-07, CR-L05-02, CR-L14-06
+
+**R2 — Measurement** · *gates the eval program, the gossip fix's verification, and the model swap*
+- [ ] R2.1 **CRITICAL** Unit tests make live network calls; CI silently records `None` model digests · CR-L15-01
+- [ ] R2.2 Neo4j + Ollama services in CI; run the 8 skipped gates; gate `demo_game/` · CR-L06-06 +5
+- [ ] R2.3 Wire `check-base-rate`; delete `check-engine-coverage` · CR-L09-02 +1
+- [ ] R2.4 Delete the 18 guaranteed-pass assertions — **own commit, before R2.5** · CR-L03-08
+- [ ] R2.5 **CRITICAL** Publish the null baseline beside every eval number; retract the 0.914 claim · CR-L03-01 +1
+- [ ] R2.6 Instrument repairs: unparseable verdicts, aggregator join, reproducibility gate, MDE, digest pinning · CR-L03-03 +6
+- [ ] R2.7 Deferred-value subsystems: trend stack (integrate, re-decide), sequence (keep+split), budget re-measure · CR-L03-05 +3
+
+**R3 — Product correctness**
+- [ ] R3.1 Stop the degradation ladder swallowing infrastructure errors — **blocks R3.2** · CR-L01-04
+- [ ] R3.2 **CRITICAL** Implement the Neo4j→503 contract; make `TokenBudgetExceededError` structured · CR-L08-03 +3
+- [ ] R3.3 **CRITICAL** Make gossip distortion compound; stop the batch write erasing the seed · CR-L01-01 +2
+- [ ] R3.4 Engine wiring: consolidation on the tick path, composition-root slot assertion, fallback policy, seed logging · CR-L01-03 +5
+- [ ] R3.5 Structural: `BaseEngine` signature, converter triplication, stray singletons · CR-L14-04 +2
+
+**R4 — Subtraction** · *executed 2026-08-28: 229 files / 26,794 lines removed from `project-harness/`*
+- [x] R4.1 Delete the 214 unreferenced archive files; `.gitignore` the one-shot prompt pattern · CR-L09-01 +2
+- [ ] R4.2 Document the two fresh-clone steps (`core.longpaths`, `.env` copy) · CR-L16-01
+- [ ] R4.3 Delete dead code and phantom guards: 61 `session_kwarg` refs, `_draw_no_data`, dead tests · CR-L14-01 +4
+- [ ] R4.4 Rewrite `CLAUDE.md` 476 → ≤250; move narrative to skills; replace claims with file pointers · CR-L09-04 +7
+- [ ] R4.5 Ledger hygiene: 7 reused IDs, 2 stale P1s, `SKILLS_QUEUE.md` · CR-L07-02 +6
+- [ ] R4.6 Documentation repair — delete numbers from prose, cite the files · CR-L13-01 +7
+
+**R5 — Integrator-facing** · *the Unreal DemoGame is a real external consumer now*
+- [ ] R5.1 API stability policy + breaking-change contract test — **do first** · CR-L12-07
+- [ ] R5.2 Python 3.14 everywhere; install `torch`/`sentence-transformers` · CR-L16-06, CR-L16-04
+- [ ] R5.3 Make `make package` build (spec names two paths that don't exist) · CR-L12-02
+- [ ] R5.4 Migration down paths + applied-state record · CR-L04-01 +2
+- [ ] R5.5 Ops: image staleness, non-root, healthcheck, creds, lockfile, NFR measurement · CR-L16-03 +5
+
+**R6 — Overnight loop rework** · *kept, per 2026-08-28 decision — DEC-227*
+- [ ] R6.1 Fix ISSUE-126 (`--dry-run` hangs) · CR-L11-09
+- [ ] R6.2 Classify HALT causes so a self-test failure is not a product HALT · CR-L11-03
+
+**R7 — Deferred large work** · *do not start before R2 is green*
+- [ ] R7.1 Pydantic models at `BaseEngine.run_tick()` / `generate_structured()` — 145 functions, XL · CR-L02-05
+- [ ] R7.2 Debt with no urgency: file splits behind R1.1, `config.py` fan-in, DIP port cull, coverage · CR-L14-03 +9
+
 
 ## Archive (completed history)
 
@@ -164,7 +229,7 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
      Do not trust any prose in this file over `python scripts/roadmap_cursor.py --verify`. -->
 
 
-> **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
+> **Origin:** an externally-written proposal (deleted 2026-08-28, DEC-225; at `619dab2`) reviewed
 > adversarially on 2026-07-31. The proposal was **not** adopted as written — its phase numbering,
 > effort estimates and several load-bearing repo claims were wrong. This block is renumbered and
 > re-timed from measurements taken against the codebase. **Do not consult the proposal for
@@ -1598,6 +1663,11 @@ have hardened into five call sites costs far more.
 
 
 ## Program 3 — Audit remediation and the regression harness (EVAL-P15..P24)
+
+> **Superseded in part (2026-08-28, DEC-228).** The 18 unchecked EVAL-P15..P24 items below
+> are retired: the eval program is culled to the minimal trustworthy instrument in R2. Completed
+> items are kept as history. Do not start an unchecked item in this section.
+
 
 **Why this program exists.** The 2026-08-09 adversarial audit (four parallel reviewers, findings verified
 by hand against the real `k3_73e6c36` artifact) established that the published headline
@@ -3074,7 +3144,7 @@ a technical requirement for the trend store to function. Arm 1 (regeneration #1)
 baseline for engine iteration immediately.
 
 **Depends on:** `EVAL-P20.4` (regeneration #1 — the first valid A/B arm), and the four defect
-repairs specified in `project-harness/PROMPT_P23_UNBLOCK.md`.
+repairs specified in the EVAL-P23 unblock prompt (deleted 2026-08-28, DEC-225; at `619dab2`).
 
 **The defect repairs are deliberately NOT tasks in this phase** (human decision, 2026-08-18): they
 are defect fixes to already-built code, handed to a dedicated session via that prompt, not new
@@ -3446,172 +3516,14 @@ sessions. `EVAL-03` folds into the Parked LLM-`seed` work, which is its real pre
 
 ---
 
-## Program 4 — The golden set rebuild and judge repair (EVAL-P25..P28)
+## Programs 4 & 5 — superseded (2026-08-28)
 
-> **Full plan, with the measured evidence behind every phase:
-> `project-harness/EVAL_P25_TO_P31_PLAN.md`.** Read §0 before starting anything here — it
-> answers, with numbers, why expanding the case set moves kappa's *interval* and *base rate*
-> but not its *reference-label reliability*, which is what EVAL-P28.1 exists for.
-
-**Commissioned:** 2026-08-27, maintainer decision after the P0–P9 review. The maintainer chose
-**judge repair** over the deterministic-matcher pivot, and chose to pay the golden-set cost
-upfront. The deterministic table is preserved in the plan §1 as the recorded fallback.
-
-**Why this program exists.** Two of four scorers are suppressed by the repo's own trust policy
-(`refusal_judge` kappa 0.247, `affirms_judge` kappa 0.530, both REFUSED), the third is unanimous
-and has no variance, and every one of the 393 reference labels is a single-rater pass with zero
-inter-rater evidence. DEC-214 established that P10 can produce a descriptive result and not a
-significant one. This program is what changes that.
-
-### Phase EVAL-P25 — the coverage contract, before a single case is authored
-
-- [ ] **EVAL-P25.1** Engine observability audit. `create docs/ENGINE_EVAL_COVERAGE.md`,
-      `create scripts/check_engine_coverage.py`,
-      `create tests/unit/scripts/test_check_engine_coverage.py`. Classify all 40+ packages under
-      `src/npc_engine/engines/` as `dialogue_observable` / `state_observable` / `not_observable`.
-      Gate fails on an unclassified package; wire into `make check`.
-- [ ] **EVAL-P25.2** Reasoning-dimension taxonomy. `create docs/REASONING_DIMENSIONS.md`,
-      `edit docs/CAPABILITY_CASES.md`. Event knowledge, causality, rumour provenance, contextual
-      variance, multi-round coherence (declared here, authored in P27). One case-id prefix and one
-      coverage rule per dimension.
-- [ ] **EVAL-P25.3** The base-rate contract — the kappa lever made into a gate.
-      `create scripts/check_base_rate.py`, `create tests/unit/scripts/test_check_base_rate.py`,
-      `edit docs/CASE_SET_POLICY.md`. Target 0.55–0.85. Advisory on first run, blocking after P26.
-- [ ] **EVAL-P25.4** Contextual-variance scorer. `create evals/variance_scorer.py`,
-      `create tests/unit/evals/test_variance_scorer.py`. Deterministic, kappa=1.0 by construction.
-      **The cheapest useful thing in either program — no labels, no Opus spend, no engine change.**
-
-### Phase EVAL-P26 — author the set, adversarially
-
-- [ ] **EVAL-P26.1** The Opus adversarial case reviewer. `create evals/case_adversary.py`,
-      `create prompts/eval/case_adversary.yaml`, `create tests/unit/evals/test_case_adversary.py`,
-      `edit Makefile` (`make review-cases`). Reviews CASES; P28.1 labels RESPONSES — different jobs.
-- [ ] **EVAL-P26.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Authoring
-      pass, per dimension per observable engine. Ratchet clause per EVAL-P20.2. Closes ISSUE-147.
-- [ ] **EVAL-P26.3** Coverage + adversary gate. `edit tests/unit/evals/test_capability_coverage.py`.
-
-### Phase EVAL-P27 — the multi-turn track (the "separate programme" SEQUENCE_SCHEMA names)
-
-> **Scoping warning:** comparable in size to P0–P8 combined. Do not start inside another phase.
-> `docs/SEQUENCE_SCHEMA.md` is explicit that the single-turn `GenerationRecord` cannot carry
-> per-turn judging or branching. Today's six scenario adapters each return a single boolean.
-
-- [ ] **EVAL-P27.1** v2 per-turn record models (`evals/sequence_records.py` becomes load-bearing).
-- [ ] **EVAL-P27.2** Per-turn judging, replacing the scenario boolean.
-- [ ] **EVAL-P27.3** Conversation-coherence criteria in `prompts/eval/`.
-- [ ] **EVAL-P27.4** Fidelity-driven metric suppression per `docs/SEQUENCE_STATS_POLICY.md` §3 —
-      an unmet fidelity requirement means the metric is **absent**, not caveated.
-- [ ] **EVAL-P27.5** *(live; human session)* First measured multi-turn run.
-
-#### 🔴 HUMAN GATE H13 — `EVAL-P28.1` the labelling spend and the drift-policy resolution
-**Ready when:** `EVAL-P25.3`, `EVAL-P26.3`
-**Clears when:** `EVAL-P28.1`
-**Blocks:** `EVAL-P28.2`, `EVAL-P28.3`, `EVAL-P28.4`
-**Runbook:** `project-harness/EVAL_P25_TO_P31_PLAN.md` §3 (EVAL-P28.1) and §2.C
-**Why not the loop:** it spends a labelling budget and writes `evals/calibration/`, which is a
-`FROZEN_PATH_PREFIXES` directory, and it records a DECISIONS entry settling a policy conflict.
-
-Two things need a human: the labelling budget, and settling DEC-181 against the P10 plan note
-(they contradict — see plan §2.C). Neither is a code decision. **Do not run this before the
-case set has landed**: labelling the OLD battery reproduces the base-rate ceiling that §0 shows
-is what suppressed kappa in the first place.
-
-### Phase EVAL-P28 — double-blind labelling and kappa repair
-
-- [ ] **EVAL-P28.1** ⏸️ *(spends labelling budget; records DEC-216 — human session)* The blind
-      dual-label protocol. `edit evals/label_export.py`, `edit evals/label_import.py`,
-      `create evals/interrater.py`, `create tests/unit/evals/test_interrater.py`,
-      `edit docs/EVAL_METHODOLOGY.md`, `edit evals/calibration/LABEL_PROMPT.md`.
-      Opus blind + human blind + adjudicate disagreements. **Inter-rater kappa on the reference
-      side falls out as a byproduct — the number this repo has never had.**
-      `calibration.py` must REFUSE a headline kappa for any scorer lacking two independent
-      reference labels. **RED anchor:** feed it the current 393 single-rater rows, assert refusal.
-      Records **DEC-216** (this, plus the DEC-181 / P10 resolution).
-- [ ] **EVAL-P28.2** Re-measure kappa on the new set. No judge changes yet — the clean read.
-- [ ] **EVAL-P28.3** Judge criteria rewrite, gated behind P28.2. Validate via
-      `make eval-replay-criteria` (EVAL-P19.0b exists for exactly this). **DEC-172 recorded the
-      wording lever exhausted at n=3 against the OLD corpus; if three rewrites fail again against
-      the new one, take the plan §1 deterministic table instead. Written down in advance.**
-- [ ] **EVAL-P28.4** Accept or reject against `docs/SCORER_TRUST_POLICY.md` (kappa >= 0.60). A
-      judge that still fails stays suppressed; the policy is not weakened to fit the result.
-
----
-
-## Program 5 — The first-class prompt arm (EVAL-P29..P31)
-
-> **Full plan: `project-harness/EVAL_P25_TO_P31_PLAN.md` §4.**
-
-**Commissioned:** 2026-08-27, maintainer decision: a first-class prompt arm, planned with its
-refactors, not a rebuild-and-compare workaround.
-
-**Why this program exists.** Prompt-version A/B does not exist, and not partially:
-`prompt_builder.py:37` resolves `_PROMPT_PATH` at module level so the dialogue prompt is a
-process-wide singleton; `DialogueRequest` carries `retrieval_profile` and no prompt field; and
-`paired_arms` makes arm identity *be* the retrieval profile. `RunConfig.dialogue_prompt_hash`
-only *detects* a prompt change and makes two runs incomparable — it cannot vary one.
-
-**Governing rule, inherited:** DEC-194 (strict resolution, no silent fallback) and DEC-214 (an
-arm may not be declared until its exposure has been measured).
-
-**⚠️ P9 fence:** EVAL-P29.2 and EVAL-P30.2 are `src/` changes. Either they land **before** the
-P10 regeneration, or P10 runs first and these land after with `make eval-arm-probe` re-run.
-**Not decided here.**
-
-### Phase EVAL-P29 — the prompt-variant registry (refactor; byte-identical by construction)
-
-- [ ] **EVAL-P29.1** `prompt_variants:` block in `llm_config.yaml`, mirroring
-      `retrieval_profiles:`. Strict resolution — undeclared name is HTTP 400. `default` is NOT
-      declared, for the same reason `retrieval_profiles` does not declare it.
-      `edit src/npc_engine/config/llm_config.yaml`,
-      `edit src/npc_engine/schema/context_config_models.py`,
-      `create tests/unit/config/test_shipped_prompt_variants.py`.
-- [ ] **EVAL-P29.2** ⚠️ **The refactor.** `prompt_builder` stops loading its prompt at import.
-      `edit src/npc_engine/engines/dialogue/prompt_builder.py`,
-      `edit src/npc_engine/engines/dialogue/dialogue_handler.py`,
-      `create src/npc_engine/engines/dialogue/prompt_variant_resolver.py`. Pays down the existing
-      constructor-injection violation rather than adding one. `prompt_builder.py` already carries
-      a 300-line waiver, so the resolver split is required, not optional. **ISSUE-223.**
-- [ ] **EVAL-P29.3** The byte-identity pin — direct analogue of DEC-194's
-      `test_no_profile_and_explicit_default_profile_are_byte_identical`.
-      `create tests/unit/engines/test_prompt_variant_byte_identity.py`.
-      **RED anchor first: without this test the refactor is unfalsifiable.**
-
-### Phase EVAL-P30 — generalize the arm axis from "retrieval profile" to "arm spec"
-
-- [ ] **EVAL-P30.1** `ArmSpec` frozen model `(retrieval_profile, prompt_variant)`; `arm_gen_id`
-      derives from it. **Back-compat mandatory:** a retrieval-only arm must keep the directory
-      name it produces today, pinned by test, or every committed artifact and every `compare`
-      invocation breaks. `create evals/arm_spec.py`, `edit evals/paired_arms.py`,
-      `create tests/unit/evals/test_arm_spec.py`.
-- [ ] **EVAL-P30.2** ⏸️ *(public interface change with callers outside its module — ask-gate per
-      CLAUDE.md, sign-off required before writing)* `DialogueRequest.prompt_variant`.
-      `edit src/npc_engine/engines/dialogue/dialogue_models.py`, route + `live_openapi.json`.
-- [ ] **EVAL-P30.3** `RunConfig.prompt_variant` + comparability rule. Two different prompt
-      *variants* are a legitimate ARM difference; two different shipped prompt *files*
-      (`dialogue_prompt_hash`) remain an incomparability. The code must distinguish them.
-      `edit evals/run_config.py`, `edit evals/compare.py`,
-      `create tests/unit/evals/test_prompt_arm_comparability.py`.
-- [ ] **EVAL-P30.4** `--arms` CLI. `--profiles a,b` keeps working verbatim.
-      `edit evals/generate_runner.py`, `edit Makefile`.
-- [ ] **EVAL-P30.5** Exposure gate for prompt arms — DEC-214's rule applied. A prompt arm must be
-      shown to change the assembled prompt before it may be declared. Measurable by digest, with
-      **zero LLM calls**, so there is no excuse for skipping it. `edit evals/arm_probe_gates.py`,
-      `edit evals/arm_supply.py`, `edit tests/unit/config/test_declared_arm_exposure.py`.
-
-#### 🔴 HUMAN GATE H14 — `EVAL-P31` the first prompt A/B
-**Ready when:** `EVAL-P29.3`, `EVAL-P30.5`
-**Clears when:** `EVAL-P31.1`
-**Blocks:** —
-**Runbook:** `project-harness/EVAL_P25_TO_P31_PLAN.md` §4 · P10's twelve preconditions apply verbatim
-**Why not the loop:** a live paired generation against a `FROZEN_PATH_PREFIXES` directory, behind
-a `src/` change that re-arms the P9 fence.
-
-### Phase EVAL-P31 — the first prompt A/B
-
-- [ ] **EVAL-P31.1** *(live; human session)* Preconditions inherit P10's twelve gates verbatim,
-      plus gate 4 green for the prompt arm and EVAL-P29.3 green.
-
----
+EVAL-P25..P31 (the golden-set rebuild, judge repair, and the first-class prompt arm) held 25
+unstarted items. **Retired** by the 2026-08 review decision to cull the eval program to a minimal
+trustworthy instrument: the triage established that the instrument itself is broken (a null
+responder beats the engine, and CI records `None` model digests), so this work would have measured
+with an instrument that cannot measure. What survives of it is R2 above. Full specifications
+remain in git history at `619dab2`.
 
 ## Active — Folder reorganisation (REORG-PR6..PR9)
 

@@ -60,7 +60,9 @@ or `⏸️`. Today that is EVAL-P0.3, EVAL-P0.4, EVAL-P1.2, EVAL-P6.3.
 2. `git log --oneline` — one commit per task. Look for `[UNVERIFIED: regression]` and
    `fix(loop): auto-repair ... [needs review]`.
 3. `grep "UNVERIFIED" project-harness/ROADMAP.md` — tasks committed over a red gate.
-4. `project-harness/soft_review.md` — the cheap per-phase review's findings.
+4. ~~`project-harness/soft_review.md`~~ — deleted 2026-08-28 (DEC-225/DEC-227): 305 lines of
+   loop-generated findings that nothing read. The loop rework (R6) must not recreate an
+   unread output; findings go to `ISSUES.md` or nowhere.
 
 ## Flags
 
