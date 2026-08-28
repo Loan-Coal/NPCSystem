@@ -25,6 +25,19 @@ fine-tuned local models free the VRAM budget. Rationale: DEC-229.
 
 ## Remediation program (2026-08 review) — **the active program**
 
+### Carry-forward notes
+
+*Cheap context for the next `/fix-next` or `/fix-parallel` session. Add a line when a fix
+creates something downstream work must know; delete a line once it is consumed. Keep ≤10.*
+
+- Baseline numbers captured 2026-08-28 in `review-2026-08/BASELINE_2026-08-28.md`. Diff against
+  it whenever an item moves a measured value; R2.4 and R2.2 are *expected* to move numbers.
+- Fast gates were green at program start (`lint`, `check-rules` 133 grandfathered,
+  `check-evals-rules` 72, `check-layers`, `check-docstrings`). A red fast gate is yours, not inherited.
+- Plans were written against `619dab2`; confirm each cited location before editing.
+- R0.1 is the human owner's (security). Do not implement it in an agent session.
+
+
 Sequenced from the 2026-08 strategic review: 145 findings → 118 canonical problems after
 [adversarial triage](review-2026-08/TRIAGE.md) → 37 work items. **Substance lives in
 [FIX_PLANS.md](review-2026-08/FIX_PLANS.md); this section holds sequence and state only.**

@@ -6948,8 +6948,9 @@ in `CLAUDE.md` — resolving the undeclared precedence between the project's 300
 the review showed the cap was not what fragmented the tree. A soft 400 preserves cohesion-first
 judgement; a hard 800 makes a 1,901-line file impossible; line-count-bearing signatures stop the
 bleed without forcing 31 file splits at once.
-**Consequences:** Three files exceed 800 today and must split (R7.2), sequenced behind R1.1 so they
-cannot re-grow. Re-baseline once, in the same commit, so no file mid-refactor inherits an inflated
+**Consequences:** Four non-test files exceed 800 today and must split (R7.2), sequenced behind
+R1.1 so they cannot re-grow: `client.py` 1901, `seed.py` 1677, `game_window.py` 925,
+`evals/calibration.py` 875 (measured 2026-08-28; see `review-2026-08/BASELINE_2026-08-28.md`). Re-baseline once, in the same commit, so no file mid-refactor inherits an inflated
 ceiling.
 
 ## DEC-227: the overnight loop is kept and reworked, not retired
