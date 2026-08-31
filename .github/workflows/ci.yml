@@ -33,6 +33,36 @@ jobs:
       - name: Full gate (19 targets)
         run: make check
 
+  # demo_game/ was gated by nothing: 256 mypy errors across 45 files and a test suite CI
+  # never ran (R2.2). Its own job, not a `check:` prerequisite — test-demo needs pygame-ce,
+  # networkx and matplotlib, which .[dev] does not install, and `make check` should not
+  # require a display stack. Mirrors the existing separation in loop_gates.DEMO_GATE_CMD.
+  demo-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_KEY_SECRET: "test-api-key-secret-ci"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pip install -r demo_game/requirements.txt
+
+      - name: demo_game tests
+        run: make test-demo
+
+      - name: demo_game type ratchet (baseline 256)
+        run: make type-demo
+
   v13-tests:
     runs-on: ubuntu-latest
     strategy:

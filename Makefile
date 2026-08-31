@@ -17,7 +17,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
-        type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
+        type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
@@ -127,13 +127,27 @@ type-ratchet:
 type-ratchet-update:
 	$(PYTHON) scripts/mypy_ratchet.py --update
 
-# type-evals: ratchet mypy errors in evals/ (baseline 16 in .mypy_evals_baseline, EVAL-P15.4).
-# Fails only when the error count grows above baseline.
+# type-evals: ratchet mypy errors in evals/ (baseline in .mypy_evals_baseline, EVAL-P15.4).
+# Fails only when the error count grows above baseline. The file holds 0 today; the
+# comment used to say 16 and had gone stale (ISSUE-249).
 type-evals:
 	$(PYTHON) scripts/mypy_evals_ratchet.py
 
 type-evals-update:
 	$(PYTHON) scripts/mypy_evals_ratchet.py --update
+
+# type-demo: ratchet mypy errors in demo_game/ (baseline 256 in .mypy_baseline_demo, R2.2).
+# demo_game/ was gated by nothing at all — 256 errors across 45 files, invisible on every
+# push. Ratchet and not a hard zero for DEC-236's reason: a gate that is red before the
+# work starts gets switched off, and fixing 256 errors is not this task's job. The count
+# is measured with mypy.ini (which wins over pyproject's strict=true), i.e. exactly the
+# invocation this target uses. Requires demo_game/requirements.txt to be installed, or
+# mypy reports import errors and the count will not reproduce.
+type-demo:
+	$(PYTHON) scripts/mypy_ratchet.py --target demo_game/ --baseline-file .mypy_baseline_demo --label mypy-demo-ratchet --update-hint "make type-demo-update"
+
+type-demo-update:
+	$(PYTHON) scripts/mypy_ratchet.py --target demo_game/ --baseline-file .mypy_baseline_demo --label mypy-demo-ratchet --update-hint "make type-demo-update" --update
 
 # test-cov-evals: gate evals/ test coverage at ~78% measured baseline; floor 75 (EVAL-P15.4).
 # Runs evals unit tests and script tests only (fast; integration evals need real artifacts).
