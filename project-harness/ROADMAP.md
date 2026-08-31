@@ -173,7 +173,7 @@ CR-L05-02, CR-L14-06. ✅ AUTO (R1.8, 2026-08-31)
 Measurement. Holds the fifth CRITICAL. Nothing downstream is measurable until R2.1 lands.
 Plans: `FIX_PLANS.md#r2`.
 
-- [ ] **R2.1** CRITICAL — unit tests make live network calls; CI records `None` model digests
+- [x] **R2.1** CRITICAL — unit tests make live network calls; CI records `None` model digests
 Files: `evals/run_config.py`, `evals/engine_adapter.py`, `tests/unit/evals/test_run_config.py`,
 `tests/unit/conftest.py`
 Spec: `run_config.resolve()` falls back to `_engine_adapter.fetch_model_digest` (twice) and
@@ -201,7 +201,7 @@ Validation: re-run CR-L14-02's counterfactual in CI — stub 10 graph repository
 constants and push; CI must red. Today it stays green (34 integration tests skip).
 CR-L06-06, CR-L14-02, CR-L15-06, CR-L06-10, CR-L12-08, CR-L09-07.
 
-- [ ] **R2.3** Wire `check-base-rate`; delete `check-engine-coverage`
+- [x] **R2.3** Wire `check-base-rate`; delete `check-engine-coverage`
 Files: `Makefile`, `scripts/check_base_rate.py`, `scripts/check_engine_coverage.py` (delete),
 `docs/CAPABILITY_CASES.md`, `docs/CASE_SET_POLICY.md`, `docs/ENGINE_EVAL_COVERAGE.md`
 Spec: L9 resolved this escalated conflict and it is not re-litigated. Wire `check_base_rate.py`
@@ -214,7 +214,7 @@ rate is 1.000 — a battery every responder passes.
 Validation: `git grep -l check_engine_coverage` returns nothing outside `review-2026-08/`.
 CR-L09-02, CR-L13-03.
 
-- [ ] **R2.4** Delete the guaranteed-pass assertions — own commit, before R2.5
+- [x] **R2.4** Delete the guaranteed-pass assertions — own commit, before R2.5
 Files: `evals/cases/**`
 Spec: delete the 18 of 36 forbidden-keyword assertions that cannot fail, the dead `keyword_none`
 expectation blocks, and the 3 `moderation_everyone_*` cases. **This must be its own commit.** If
