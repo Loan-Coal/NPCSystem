@@ -2,8 +2,10 @@
 
 The three that matter most, each guarding a way an unattended night is lost silently:
 
-* **CRLF preservation** — a ``--mark`` that rewrites all 1183 lines LF turns every task
-  commit into a whole-file diff and destroys "the commit is the transaction".
+* **Terminator preservation** — a ``--mark`` that rewrites every line to the other
+  terminator turns each task commit into a whole-file diff and destroys "the commit is
+  the transaction". The synthetic fixture below stays CRLF on purpose: the writer must
+  preserve what it is given, not impose the repo's current convention.
 * **Fence isolation** — 19 open tasks live outside the queue (Phase PERF, bullets inside
   "## Completed", Parked). If the cursor ever sees them, the loop starts one at 3am.
 * **✅-in-prose** — this roadmap writes "DEC-147 ✅ ACCEPTED" in task bodies. The upstream
@@ -360,23 +362,31 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assert set(pending) <= known_task_ids
 
 
-def test_real_roadmap_is_entirely_crlf() -> None:
-    """ROADMAP.md must stay 100% CRLF, or a one-line ``--mark`` becomes a whole-file diff.
+def test_real_roadmap_line_endings_are_uniform() -> None:
+    """ROADMAP.md must use one line terminator throughout, or ``--mark`` rewrites it whole.
 
     ``roadmap_cursor`` reads and writes with ``newline=""`` precisely so each line keeps
     its original terminator; the property that makes "the commit is the transaction" hold
     is that every line already agrees. Any tool that rewrites the file through Python's
-    universal-newline handling silently converts all 1500+ lines to LF, and the next
-    ``--mark`` then produces a diff touching the whole file instead of one checkbox.
-    That happened on 2026-08-07 and was only caught by inspection — hence this guard.
+    universal-newline handling silently converts all 1500+ lines, and the next ``--mark``
+    then produces a diff touching the whole file instead of one checkbox. That happened on
+    2026-08-07 and was only caught by inspection — hence this guard.
+
+    Was ``test_real_roadmap_is_entirely_crlf`` until 2026-08-31. The roadmap was all-CRLF
+    then because the repo had no line-ending policy; ``.gitattributes`` now stores and
+    checks out every text file LF, so pinning CRLF would pin the state the policy removed.
+    Uniformity was always the real invariant — CRLF was only which uniform state it
+    happened to be in.
     """
-    path = Path(__file__).resolve().parents[3] / "project-harness" / "ROADMAP.md"
-    raw = path.read_bytes()
+    raw = (Path(__file__).resolve().parents[3] / "project-harness" / "ROADMAP.md").read_bytes()
     total_lf = raw.count(b"\n")
     crlf = raw.count(b"\r\n")
 
     assert total_lf > 0, "roadmap is empty"
-    assert crlf == total_lf, f"{total_lf - crlf} lines are bare LF; roadmap must be all CRLF"
+    assert crlf in (0, total_lf), (
+        f"{crlf} of {total_lf} lines are CRLF and the rest are LF — mixed terminators make "
+        "the next --mark rewrite the whole file"
+    )
 
 
 def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:

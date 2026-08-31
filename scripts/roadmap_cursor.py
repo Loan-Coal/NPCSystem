@@ -9,9 +9,10 @@ Used by: scripts/expand_loop.sh, .claude/commands/expand-linear-next.md, `make r
 Both the loop and the skill go through this CLI; nothing else parses ROADMAP.md. That
 one-parser rule is why a marker written by ``--mark`` always parses back on the next run.
 
-**CRLF is load-bearing here.** ROADMAP.md is 1183/1183 CRLF with ``core.autocrlf=false``.
+**Uniform line endings are load-bearing here.** ROADMAP.md uses one terminator throughout
+(LF since ``.gitattributes`` landed 2026-08-31; CRLF before it).
 The upstream kit used ``Path.read_text``/``write_text``, whose universal-newline handling
-would silently rewrite every line LF on each ``--mark`` — turning one-line task commits
+would silently rewrite every line on each ``--mark`` — turning one-line task commits
 into whole-file diffs and destroying the "the commit is the transaction" property. Every
 read and write below therefore passes ``newline=""``.
 
