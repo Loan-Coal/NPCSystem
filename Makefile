@@ -252,7 +252,12 @@ check-engine-logs:
 #        because R2.4's RED anchor is its ratchet direction, and a ratchet outside this
 #        aggregate is a gate nothing runs — the exact shape R1 spent three tasks
 #        removing. 17 targets.
-check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
+# R2.2: test-cov-v13 and test-cov-full-report folded in (DEC-238), 17 -> 19. They were
+#        verify-v13 prerequisites that only CI ran directly, so collapsing the CI
+#        coverage job into `make check` without them would have deleted two gates in
+#        the commit meant to restore gates. CI now runs this aggregate as one step, so
+#        anything added here is enforced on push without editing any YAML.
+check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
