@@ -192,11 +192,26 @@ returning `None`, assert it raises. Today it returns a RunConfig with `None` and
 Validation: `make test` unchanged in pass count; eval runs without Ollama now fail loudly.
 CR-L15-01.
 
-- [ ] **R2.2** ⏸️ (live) — Neo4j and Ollama services in CI; gate `demo_game/`
-Files: `.github/workflows/ci.yml`, `Makefile`, `.mypy_baseline_demo`
+- [ ] **R2.2** ⏸️ (live) — Neo4j in CI; gate `demo_game/`
+Files: `.github/workflows/ci.yml`, `Makefile`, `.mypy_baseline_demo`,
+`scripts/check_integration_baseline.py`, `scripts/integration_baseline.txt`
 Spec: needs CI credentials and a push to observe the result, and R2.2 must model CI on
-`docker-compose.test.yml` (DEC-232), not the base compose. Skipped by the loop — it cannot
+`docker-compose.test.yml` (DEC-232), not the base compose — bring it up as
+`docker compose -f docker-compose.yml -f docker-compose.test.yml up -d neo4j`, **naming the
+service**: a bare `up -d` also starts `app`, which needs a Dockerfile build and an `env_file`
+`.env` that is not in the repo, so compose errors out. Wait for **bolt** to answer, not for the
+container to report healthy (DEC-235 / ISSUE-232). Skipped by the loop — it cannot
 observe a CI run. Depends on R2.1 and ISSUE-232 (done).
+Corrected 2026-08-31: **no Ollama.** Zero tests under `tests/integration/` call an LLM, and
+`requires_llm` is not a registered marker (`pyproject.toml` has only `asyncio`, `demo`,
+`llm_eval`). CI runs `make check` wholesale (DEC-238), which first folds `test-cov-v13` and
+`test-cov-full-report` into `check:` — they are `verify-v13` prerequisites, not `check` ones, so
+dropping the duplicated CI steps without folding them in would delete two gates. 17 → 19 targets.
+The integration gate ratchets on a **node-id allowlist**, not a bare count and not an expected
+red: a count lets a newly-broken test hide behind a newly-fixed one. It must also assert a
+minimum executed count — `_skip_if_no_neo4j()` calls `pytest.skip()`, so a job with missing env
+vars passes green with all 34 tests skipped, which is the vacuity this task exists to remove.
+Settles ISSUE-236.
 Validation: re-run CR-L14-02's counterfactual in CI — stub 10 graph repository methods to return
 constants and push; CI must red. Today it stays green (34 integration tests skip).
 CR-L06-06, CR-L14-02, CR-L15-06, CR-L06-10, CR-L12-08, CR-L09-07.
@@ -235,14 +250,35 @@ product decision, and the correct action depends on what the null baseline measu
 — which is not knowable in advance. The standing rule agreed is: never publish a headline where
 engine ≤ null. Detail in `FIX_PLANS.md`. CR-L03-01, CR-L03-02.
 
-- [ ] **R2.6** ⏸️ Instrument repairs — blocked behind R2.5
+- [ ] **R2.6** ⏸️ Instrument repairs — mostly blocked behind R2.5
 Spec: unparseable-verdict handling, aggregator join, reproducibility gate, MDE vs headroom,
-model-digest content addressing. Each changes a number, so none may run before the baseline is
-trustworthy. CR-L03-03, CR-L03-06, CR-L03-10, CR-L03-11, CR-L16-08.
+model-digest content addressing, plus the case-existence filter (ISSUE-237). Each changes a
+number, so none may run before the baseline is trustworthy.
+CR-L03-03, CR-L03-06, CR-L03-09, CR-L03-10, CR-L03-11, CR-L16-08.
+Revised 2026-08-31:
+(a) **The aggregator join (CR-L03-06) is promoted AHEAD of R2.5.** One generation reports two
+guard denominators — `trend_v1.jsonl` says `guard.n = 78`, the published report says `170/186`.
+R2.5's engine-vs-null comparison and its rows-per-case halt condition are both computed against
+whichever is right, so the join is measured and fixed first.
+(b) **CR-L03-09** ("a third of the corpus has never been scored") was dropped by omission from
+this line; it is in `FIX_PLANS.md`'s R2.6 heading and body. Plan it or descope it with a reason.
+(c) **MDE vs headroom cannot start as specified** — `evals/mde.py` has no `mde()` and no
+`headroom()`, and three rival κ families circulate (ISSUE-244). Calibration is authoritative;
+reconcile and recompute before any judge-retirement call.
+(d) The unparseable-verdict fix removes failures from the denominator, so the overall rate
+**rises** — and `check-base-rate` reds on a rise. Its baseline re-record belongs there, not on
+the case-existence filter, which moves the rate down where the ratchet is already content.
 
 - [ ] **R2.7** ⏸️ Deferred-value eval subsystems — blocked behind R2.5
 Spec: trend stack (integrate then re-decide — 1 row today), sequence subsystem (keep and split,
-6 consumers), token-budget re-measurement gate. CR-L03-05, CR-L03-12, CR-L10-01, CR-L01-07.
+8 consumers), token-budget re-measurement gate. CR-L03-05, CR-L03-12, CR-L10-01, CR-L01-07.
+Corrected 2026-08-31: the re-measurement gate targets **`MEASURED_ROSTER_CEILING_TOKENS = 1151`**
+(`tests/unit/config/test_shipped_window_holds_the_measured_ceiling.py:45`, DEC-215), not
+`TIER0_MAX_TOKENS = 380` — 380 is a design allocation from `docs/PROMPT_DESIGN.md:91`, never
+measured, so it cannot be re-measured. Whether 380 is right is a runtime/product question for R3;
+note `MEASURED_TIER_MAXIMA` records tier_a/b/c and has no tier-0 entry at all. Trend and sequence
+are **510** and **808** lines of Python, not the 1,309 / 1,714 quoted (ISSUE-242). The trend
+re-decision needs two rows sharing a model digest, which row 1 can never satisfy (ISSUE-246).
 
 ### Phase R4
 

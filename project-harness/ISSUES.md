@@ -1988,3 +1988,118 @@ branch in `matchers.py`, no case file uses it, and ISSUE-141 records kappa=0.247
 crossing zero. Note the replacement inherits ISSUE-129: `affirms_judge` kappa is 0.530
 [0.000, 0.853], refused against the 0.60 threshold — a measurable instrument, not yet a trusted
 one. Land it after the next regeneration so the before/after is comparable.
+
+
+## ISSUE-243: `evals/runner.py` guard prefixes do not mirror `summary.py`, so `ah_demo_*` cases are counted but not guarded
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P1 (blocking) — it makes the published guard rate a mixed population
+**Where:** `evals/runner.py:37-38` vs `evals/case_stats.py:43` and `evals/summary.py`
+**Description:** `runner.py:38` sets `_GUARD_PREFIXES = ("case_adv_", "case_neg_")` under a
+comment that reads "mirror summary._GUARD_PREFIXES". It does not mirror it. `case_stats.py:43`
+and `summary.py` both use three prefixes, adding `ah_demo_`, and the published headline is
+`Guard (adv + neg + ah_demo_*) | 170/186`. Because `_expected_with_guards` keys off runner's
+two-prefix tuple, `ah_demo_*` cases contribute to the published guard rate while receiving
+**none** of the four injected guard expectations (`min_length`, the fallback `keyword_none`,
+`tone_judge`, `affirms_judge`). The battery named anti-hallucination is the only one in the
+guard set scored on its YAML `expected:` list alone.
+Consequence for R2.5: the engine-vs-null figures (0.897 / 0.949) and the published 0.914 are
+different populations, which is the same conflation DEC-236 and R2.3 untangled for base rates.
+**Why deferred:** unifying moves the guard rate, so it must be its own commit and must be
+computed once — landing it mid-R2 would make R2.5's delta unattributable, the R2.4 error.
+**To fix:** hoist one shared prefix constant, make `runner.py` use it (three prefixes), and land
+it as its own commit **immediately before the next regeneration** so the new numbers are
+measured once under one definition. Until then R2.5 scopes its null comparison to the 37 guarded
+`case_adv_*` / `case_neg_*` cases and states the population in the retraction.
+
+## ISSUE-244: three rival kappa families circulate for the same scorers
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P1 (blocking) — R2.6's MDE-vs-headroom item cannot be decided until it is settled
+**Where:** `evals/mde.py:93-97` vs `evals/trend/trend_v1.jsonl` (`scorer_kappas` and
+`kappa_by_criterion`) vs `project-harness/review-2026-08/BASELINE_2026-08-28.md`
+**Description:** For the same scorers, three different kappas are in circulation:
+calibration 0.849 / 0.530 / 0.247 (tone / affirms / refusal); `mde.py`'s `RECORDED_KAPPAS`
+1.000 / 0.282 / 0.225; panel Fleiss 0.753 / 0.519 / 0.422. `CODEBASE_REVIEW.md:2427` already
+recorded this ("three different kappa for the same scorer circulate in the docs") and nothing
+reconciled it. The consequence is concrete: the 17.25 pp / 29.01 pp MDEs were computed from
+`mde.py`'s numbers, while the judge-retirement argument quotes calibration's. Under `mde.py`'s
+0.282, `affirms_judge` is HIDDEN (below the 0.40 threshold), not RESTRICTED — which reverses the
+recommendation.
+**Why deferred:** it is R2.6's first step, not a standalone fix, and recomputing the MDEs is part
+of that task.
+**To fix:** calibration is authoritative (decided 2026-08-31 with the maintainer). Update
+`mde.py`'s `RECORDED_KAPPAS` to 0.849 / 0.530 / 0.247, recompute the MDEs, and make the other two
+families cite or derive from calibration rather than circulate independently. Only then make the
+retirement call.
+
+## ISSUE-245: `base_rate_baseline.json` records no `n`, so a shrinking corpus passes the ratchet
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P2 (annoying)
+**Where:** `scripts/base_rate_baseline.json`, `scripts/base_rate_contract.py:124-141`
+**Description:** The persisted baseline has exactly three keys — `gen_dir`, `overall_rate`,
+`breaches`. The n=975 that DEC-236 quotes lives only in that prose. Because the ratchet compares
+a rate and a breach map but never a denominator, a corpus that shrinks while holding the same
+rate passes undetected. (`FamilyRate` does carry an `n`, but that is the per-family measurement
+type, not the persisted baseline.)
+**Why deferred:** adding the field changes the baseline file, which is a deliberate human
+re-record step; it belongs with R2.6's case-existence filter, which re-records anyway.
+**To fix:** add `n` to the baseline model and file, and assert it does not fall without a
+deliberate `make check-base-rate-update`.
+
+## ISSUE-246: the baseline generation records null model digests, so the trend re-decision can never unblock
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P2 (annoying)
+**Where:** `evals/generations/k3_77688e7_regen1/meta.json`, `evals/trend/trend_v1.jsonl`
+**Description:** `meta.json` records `generation_model_digest: null` and
+`judge_model_digest: null` — exactly the values R2.1 now makes fatal. Trend row 1 carries no
+digest field at all; its model identity is the tag string
+`panel:llama3.1:8b+mixtral:8x7b+qwen2.5:14b`. R2.7a's stated deferral condition is
+"`wc -l trend_v1.jsonl` >= 2 **and** the two rows share a model digest". Since R2.1 guarantees
+row 2 will have a digest and row 1 can never acquire one, that condition is unsatisfiable by
+row 1 + row 2, so the trend re-decision would defer forever.
+**Why deferred:** it is a restatement of R2.7a's exit condition, which is R2.7's job.
+**To fix:** restate the condition as "two rows recorded **after** R2.1 share a model digest" —
+i.e. the comparable series restarts at row 2 — or regenerate the baseline. Also sequence R2.6d
+(content-addressing) so it does not split the schema mid-series.
+
+## ISSUE-247: `evals/reports/` is gitignored, so every published report is machine-local
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P2 (annoying)
+**Where:** `.gitignore:26`
+**Description:** `git ls-files evals/reports/` returns nothing; `git check-ignore -v` confirms
+`evals/reports/20260825T231028Z.md` — the artifact publishing `170/186 ... 0.914`, cited as the
+source of record by `BASELINE_2026-08-28.md:93`, `FINDINGS.md:55`, `FIX_PLANS.md` and
+`TRIAGE.md` — exists on one machine only and is one `git clean -xdf` from gone. DEC-158 extended
+tracking to `evals/generations/` and `evals/calibration/` for exactly this reason
+(`.gitignore:28`: "every quoted rate rested on files that existed on one machine only") but the
+reports that *quote* those generations were never brought in. It also means R2.5's planned
+retraction banner would not appear in any diff or survive a fresh clone.
+**Why deferred:** not deferred; it is R2.5(e), decided 2026-08-31 — remove the ignore line,
+commit the reports, then banner the retracted one.
+**To fix:** as above, plus a DECISIONS entry recording the extension of DEC-158's reasoning.
+
+## ISSUE-248: the resolved-issues archive reuses two ids and skips five
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/archive/ISSUES_RESOLVED.md`
+**Description:** 157 entries are declared under 155 distinct ids. `ISSUE-035` is declared twice
+(lines 280 and 749 — a reputation eval failure and a stubbed `tone_judge` matcher) and
+`ISSUE-056` twice (883 and 1197 — pre-existing test failures and a `graph_rag.py` full-scan).
+This violates the log's own "ID is monotonic and never reused" rule, so a cross-reference to
+either id is ambiguous. Separately, ids 026-030 were never assigned in either file.
+**Why deferred:** cosmetic; renumbering a resolved archive would break inbound references from
+DECISIONS.md and the review documents, which is worse than the ambiguity.
+**To fix:** do not renumber. Append a disambiguation note at the top of the archive naming both
+reused ids and their two meanings, and record 026-030 as never-assigned so a future session does
+not treat the gap as a bug.
+
+## ISSUE-249: gate baseline comments contradict the files they describe
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P3 (nice-to-fix)
+**Where:** `Makefile:130`, `project-harness/DECISIONS.md` (DEC-236)
+**Description:** `Makefile:130` says "baseline 16 in `.mypy_evals_baseline`"; the file holds `0`.
+DEC-236 says `dead_keywords_baseline.txt` records 208; it holds 105, superseded by DEC-237 in the
+same session. Both are stale prose next to live numbers, which is the class of drift
+`make check-harness` exists to catch but does not cover here.
+**Why deferred:** documentation-only; no gate behaviour is wrong.
+**To fix:** correct both comments to the live values, and consider extending
+`check_harness_honesty.py` to compare a ratchet comment's quoted number against its baseline file.

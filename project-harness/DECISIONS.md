@@ -7225,3 +7225,48 @@ dead terms 208 -> **105** (ratchet re-recorded in the same commit). `check-base-
 unchanged at 0.9426 and that is expected, not a failure — see ISSUE-237: the gate reads frozen
 verdict rows and never consults `evals/cases/`, so a case deletion cannot move it until the next
 regeneration. The published guard rate is still expected to fall then.
+
+
+## DEC-238: CI runs `make check` wholesale, and `check` absorbs the two orphaned coverage gates
+
+**Date:** 2026-08-31
+**Status:** ✅ ACCEPTED (maintainer decision during the R2-remainder review)
+
+**Context:** `make check` has 17 prerequisites; `.github/workflows/ci.yml` ran **6** of them.
+The 11 absent were `check-evals-rules`, `check-docstrings`, `type-evals`, `check-human-gates`,
+`check-test-quality`, `test-cov-evals`, `check-migrations`, `check-api-stability`,
+`check-engine-logs`, `check-base-rate`, `check-dead-keywords` — all passing locally, none
+enforced on push. `FIX_PLANS.md:161` said "run the 8 currently-skipped gates"; it was 8 when
+written and is 11 now (R1.8 added 3, R2.3 added 2). That drift is itself the finding: a CI job
+that enumerates target names in YAML diverges from `check` the moment a gate is added.
+
+**Decisions:**
+
+1. **CI runs `make check` as one step**, not a list of targets. `static-analysis` becomes that
+   single step. Enumerating names in YAML re-creates the divergence on the next gate added;
+   after this, CI and the local gate cannot drift without someone editing `check:` itself.
+
+2. **`test-cov-v13` and `test-cov-full-report` are folded into `check:` first**, taking it from
+   17 to **19** targets. They are prerequisites of `verify-v13`, **not** of `check` — the R2
+   plan asserted they were "already inside `check`", which was half false. Collapsing the
+   `coverage-gate` job without folding them in would have deleted two gates in the commit whose
+   purpose is restoring gates. Cost, accepted: local `make check` gets slower too.
+
+3. **A permanent test pins CI to the gate.** `tests/unit/scripts/test_ci_runs_the_full_gate.py`
+   parses `check:`'s prerequisites and `ci.yml` and fails if any prerequisite is unreachable
+   from CI. It **derives** the count rather than hardcoding it — the hardcoded 8 is exactly what
+   rotted. It reuses `read_makefile()` / `prerequisites()` from
+   `tests/unit/evals/test_gate_scope.py` instead of reimplementing a Makefile parser.
+
+4. **This supersedes `FIX_PLANS.md:161`'s "run the 8 currently-skipped gates" instruction**,
+   which authorised a subset, not a wholesale run. Recorded here rather than applied silently.
+
+**Alternative rejected:** named sub-aggregates in the Makefile (`check-fast`, `check-slow`) run
+as parallel CI jobs. It preserves parallelism and keeps wall clock down, but it is more
+machinery and re-introduces a second place where the gate set is written down. If wall clock
+becomes the binding constraint, split `check` in the **Makefile** — never by re-listing targets
+in YAML.
+
+**Known cost, accepted:** that job's wall clock rises to roughly `make check`'s ~595 s and loses
+some parallelism. `ci.yml` has no `timeout-minutes` on any job today; one is added with this
+change.
