@@ -1,0 +1,24 @@
+# One rule: everything git considers text is stored and checked out with LF.
+#
+# Added 2026-08-31. Before this file, the repo had no line-ending policy and
+# core.autocrlf=false, so any tool that rewrote a file on Windows flipped it to
+# CRLF and git recorded every line as changed. That made diffs unreadable and hid
+# real edits: the R1.5 commit looked like a 20-file mass edit but was ~20 one-line
+# changes, and R1.1/R1.6 showed 364/249 and 434/364 line diffs that were actually
+# 138/23 and 84/14. Reviewing a change you cannot see is the failure this prevents.
+#
+# LF for .ps1 too — PowerShell reads LF scripts fine, and one rule with no
+# exceptions is easier to keep than four.
+
+* text=auto eol=lf
+
+# Binary: never touched, never diffed as text.
+*.ttf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.mp4 binary
+*.zip binary
