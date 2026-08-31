@@ -16,6 +16,39 @@ Rules:
 
 ## Open
 
+## ISSUE-234: 25 tests call the SUT and assert nothing
+**Found:** 2026-08-31, during R1.8
+**Severity:** P2 (annoying)
+**Where:** 18 files under `tests/unit/`; `make check-test-quality` lists them all
+**Description:** `check_test_quality`'s NO_ASSERTION pattern, added in R1.8, found 25 tests
+that exercise the system under test and then check nothing. They can only fail by raising.
+Some are legitimate does-not-raise tests (`test_exact_fit_is_accepted`,
+`test_no_op_when_already_utf8`, `test_exception_does_not_propagate`) and want a
+`# quality-ok: <reason>` waiver naming what they prove. Others are probably genuinely weak
+and want a real assertion. Which is which is a per-test judgment.
+**Why deferred:** R1.8's task was to build the gate, not to spend its findings. Blanket-waiving
+all 25 with a generic reason would buy conformance rather than quality — the exact effect
+CR-L05-03 measured, and the reason R1.5 was told not to mass-edit.
+**To fix:** triage the 25. Each either gains an assertion or a waiver with a specific reason.
+Then `printf '0' > scripts/check_test_quality_baseline.txt` and update
+`test_real_suite_is_clean` to drop the NO_ASSERTION exclusion, restoring the
+zero-findings-plus-explicit-waivers invariant the other five patterns hold.
+
+## ISSUE-235: 42 of 59 engine logger.info calls omit duration_ms
+**Found:** 2026-08-31, during R1.8
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/**`; `make check-engine-logs` lists them
+**Description:** CLAUDE.md requires `npc_id`, `player_id`, `tick` and `duration_ms` on every
+engine log entry. 42 of the 59 `logger.info` calls in `engines/` carry no `duration_ms`, so
+per-engine latency cannot be read out of the logs. `scripts/engine_logs_baseline.txt` records
+42; the gate reds on 43, so this cannot grow.
+**Why deferred:** R1.8 built the gate. Adding a duration to 42 call sites means timing the work
+each one reports, which is a behaviour change per site, not a mechanical edit.
+**To fix:** work the list down, re-recording with `python scripts/check_engine_logs.py --update`
+as it shrinks. The gate only enforces `duration_ms` today — the other three fields CLAUDE.md
+names are not yet checked, and widening it is a follow-on decision, not part of this issue.
+
+
 ## ISSUE-223: the dialogue prompt is a process-wide singleton, so it cannot be A/B tested
 **Found:** 2026-08-27, during the P0-P9 review that produced `EVAL_P25_TO_P31_PLAN.md`
 **Severity:** P2 (annoying) - blocking for Program 5, not for anything shipping today

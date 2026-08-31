@@ -3,9 +3,11 @@ Module: check_test_quality
 Layer: scripts (dev tooling)
 Purpose: Static scan of tests/** flagging anti-vacuous-test patterns found in the
          2026-08-10 audit: bare Exception raises, self-referential sum assertions,
-         vacuous mock-not-called checks, parametrized tests with no SUT calls, and
-         completely empty test bodies. Ratchet-style gate: exits 1 when findings exceed
-         the count recorded in check_test_quality_baseline.txt (R1.2).
+         vacuous mock-not-called checks, parametrized tests with no SUT calls,
+         completely empty test bodies, and tests that call the SUT but assert nothing
+         (R1.8 — absorbed from the separate check_dead_tests gate, which duplicated
+         this scanner). Ratchet-style gate: exits 1 when findings exceed the count
+         recorded in check_test_quality_baseline.txt (R1.2).
          Each flagged item must be fixed or inline-suppressed with '# quality-ok: <reason>'.
 Dependencies: argparse, ast, pathlib, sys, pydantic
 Used by: make check-test-quality, tests/unit/scripts/test_check_test_quality.py
@@ -26,6 +28,7 @@ SELF_REFERENTIAL_SUM = "SELF_REFERENTIAL_SUM"
 VACUOUS_MOCK_NOT_CALLED = "VACUOUS_MOCK_NOT_CALLED"
 PARAMETRIZE_NO_SUT_CALL = "PARAMETRIZE_NO_SUT_CALL"
 EMPTY_TEST_BODY = "EMPTY_TEST_BODY"
+NO_ASSERTION = "NO_ASSERTION"
 
 _WAIVER_MARKER = "# quality-ok:"
 _TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"
@@ -41,6 +44,37 @@ class Finding(BaseModel):
     line: int
     pattern: str
     detail: str
+
+
+_ASSERTION_CALL_NAMES: frozenset[str] = frozenset({"raises", "fail"})
+
+
+def _has_assertion(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True if the test asserts something.
+
+    Recognises the bare `assert` statement plus the call forms that stand in for it:
+    `pytest.raises(...)`, `pytest.fail(...)`, and any `assert*` method such as
+    `mock.assert_called_once_with` or `self.assertEqual`.
+
+    Args:
+        fn: The test function node to inspect.
+    Returns:
+        True when at least one assertion form is present anywhere in the function.
+    """
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assert):
+            return True
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = (
+            func.id if isinstance(func, ast.Name)
+            else func.attr if isinstance(func, ast.Attribute)
+            else ""
+        )
+        if name in _ASSERTION_CALL_NAMES or name.startswith("assert"):
+            return True
+    return False
 
 
 def _is_waived(lines: list[str], lineno: int) -> bool:
@@ -145,7 +179,7 @@ def _scan_fn(
     lines: list[str],
     relpath: str,
 ) -> list[Finding]:
-    """Scan a single test function for all four anti-vacuous patterns."""
+    """Scan a single test function for every anti-vacuous pattern."""
     findings: list[Finding] = []
     name = fn.name
 
@@ -203,24 +237,24 @@ def _scan_fn(
                 detail="@pytest.mark.parametrize test makes no function calls in its body",
             ))
 
-    # Pattern 5: test body has neither assertions nor function calls (completely empty)
-    if not _is_waived(lines, fn.lineno):
-        body_has_assert = any(
-            isinstance(node, ast.Assert)
-            for stmt in fn.body
-            for node in ast.walk(stmt)
-        )
+    # Patterns 5 and 6: the test asserts nothing, so it can only fail by raising.
+    # The two partition on whether the body does anything at all, so a test is
+    # reported once, never twice.
+    if not _is_waived(lines, fn.lineno) and not _has_assertion(fn):
         body_has_call = any(
             isinstance(node, ast.Call)
             for stmt in fn.body
             for node in ast.walk(stmt)
         )
-        if not body_has_assert and not body_has_call:
-            findings.append(Finding(
-                file=relpath, test=name, line=fn.lineno,
-                pattern=EMPTY_TEST_BODY,
-                detail="test body contains no assertions and no function calls",
-            ))
+        findings.append(Finding(
+            file=relpath, test=name, line=fn.lineno,
+            pattern=NO_ASSERTION if body_has_call else EMPTY_TEST_BODY,
+            detail=(
+                "test calls the SUT but asserts nothing — it can only fail by raising"
+                if body_has_call
+                else "test body contains no assertions and no function calls"
+            ),
+        ))
 
     return findings
 

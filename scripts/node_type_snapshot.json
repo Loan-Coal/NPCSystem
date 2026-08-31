@@ -1,0 +1,253 @@
+{
+  "Agenda": [
+    "id",
+    "description",
+    "proposed_by_faction_id",
+    "status"
+  ],
+  "Army": [
+    "id",
+    "faction_id",
+    "strength",
+    "current_location_id",
+    "composition"
+  ],
+  "Deduction": [
+    "id",
+    "held_by_character_id",
+    "claim",
+    "confidence",
+    "status"
+  ],
+  "Evidence": [
+    "id",
+    "kind",
+    "description",
+    "discovered_at_tick",
+    "discovered_by_character_id",
+    "confidence"
+  ],
+  "FactionStandingEvent": [
+    "id",
+    "src_faction_id",
+    "dst_faction_id",
+    "delta",
+    "new_standing",
+    "tick_id"
+  ],
+  "Group": [
+    "id",
+    "name",
+    "kind",
+    "cohesion",
+    "is_secret",
+    "formed_at_tick"
+  ],
+  "Leverage": [
+    "id",
+    "demand",
+    "status",
+    "created_at_tick"
+  ],
+  "Need": [
+    "id",
+    "kind",
+    "level",
+    "decay_rate",
+    "character_id"
+  ],
+  "PendingIntent": [
+    "id",
+    "npc_id",
+    "player_id",
+    "tick",
+    "score",
+    "reason",
+    "trigger_type",
+    "trigger_ref",
+    "status",
+    "created_tick"
+  ],
+  "ResourceNode": [
+    "id",
+    "kind",
+    "yield_per_tick",
+    "depletion"
+  ],
+  "Rumor": [
+    "id",
+    "content",
+    "created_at_tick",
+    "mutation_distance",
+    "severity",
+    "is_fabricated"
+  ],
+  "Skill": [
+    "id",
+    "name",
+    "category"
+  ],
+  "Title": [
+    "id",
+    "name",
+    "faction_id",
+    "power",
+    "is_inheritable"
+  ],
+  "Trait": [
+    "id",
+    "name"
+  ],
+  "Treaty": [
+    "id",
+    "terms_narrative",
+    "terms_conditions",
+    "signed_at_tick",
+    "status"
+  ],
+  "belief": [
+    "id",
+    "content",
+    "confidence",
+    "created_at_game_time"
+  ],
+  "chapter": [
+    "id",
+    "name",
+    "started_at_tick",
+    "status"
+  ],
+  "character": [
+    "id",
+    "name",
+    "archetype",
+    "biography",
+    "is_player",
+    "is_active",
+    "created_at",
+    "updated_at",
+    "last_graph_updated_at",
+    "gossipy",
+    "credulity",
+    "honesty"
+  ],
+  "choice": [
+    "id",
+    "chosen_at_tick",
+    "chosen_by_character_id",
+    "selected_option"
+  ],
+  "dialogue_turn": [
+    "id",
+    "npc_id",
+    "player_id",
+    "turn_index",
+    "role",
+    "content"
+  ],
+  "event": [
+    "id",
+    "summary",
+    "severity",
+    "location_id",
+    "occurred_at",
+    "tick_id",
+    "event_type",
+    "is_public",
+    "last_graph_updated_at"
+  ],
+  "faction": [
+    "id",
+    "name",
+    "archetype",
+    "is_active",
+    "created_at",
+    "last_graph_updated_at"
+  ],
+  "goal": [
+    "id",
+    "description",
+    "urgency",
+    "status",
+    "created_at_game_time"
+  ],
+  "item": [
+    "id",
+    "name",
+    "description",
+    "value",
+    "rarity",
+    "type",
+    "is_unique"
+  ],
+  "location": [
+    "id",
+    "name",
+    "location_tag",
+    "descriptor",
+    "last_graph_updated_at"
+  ],
+  "memory": [
+    "id",
+    "content",
+    "vividness",
+    "emotional_charge",
+    "created_at_game_time"
+  ],
+  "narrative_beat": [
+    "id",
+    "kind",
+    "intensity",
+    "chapter_id"
+  ],
+  "player_model": [
+    "id",
+    "npc_id",
+    "player_id"
+  ],
+  "quest": [
+    "id",
+    "description",
+    "quest_giver_id",
+    "success_condition",
+    "status",
+    "severity",
+    "created_at"
+  ],
+  "quest_template": [
+    "id",
+    "name",
+    "archetype",
+    "slot_definitions",
+    "description_template",
+    "reward_template",
+    "severity"
+  ],
+  "schedule": [
+    "id",
+    "name",
+    "entries",
+    "created_at",
+    "last_graph_updated_at"
+  ],
+  "scheme": [
+    "id",
+    "npc_id",
+    "goal"
+  ],
+  "secret": [
+    "id",
+    "content",
+    "severity"
+  ],
+  "world_state": [
+    "id",
+    "epoch",
+    "faction_standings",
+    "active_conditions",
+    "weather",
+    "time_of_day",
+    "last_updated_at",
+    "last_graph_updated_at"
+  ]
+}

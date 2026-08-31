@@ -1,0 +1,98 @@
+{
+  "src/npc_engine/api/response_models/npc_state.py": {
+    "CharacterNode": [
+      "id"
+    ],
+    "EventNode": [
+      "event",
+      "knowledge_state",
+      "distorted_summary"
+    ],
+    "RelationEdge": [
+      "relation",
+      "character"
+    ]
+  },
+  "src/npc_engine/api/schemas.py": {
+    "ActionReportRequest": [
+      "player_id",
+      "npc_id",
+      "action_type",
+      "intensity",
+      "counterparty_id",
+      "currency_amount",
+      "currency_reason",
+      "session_scope"
+    ],
+    "ConversationIntentResponse": [
+      "intent_id",
+      "npc_id",
+      "tick",
+      "score",
+      "reason",
+      "trigger_type",
+      "trigger_ref"
+    ],
+    "EmotionResponse": [
+      "npc_id",
+      "label",
+      "valence",
+      "arousal",
+      "updated_at"
+    ],
+    "NPCStateResponse": [
+      "character",
+      "relations",
+      "events"
+    ],
+    "QuestAcceptRequest": [
+      "quest_id",
+      "player_id"
+    ],
+    "QuestChooseRequest": [
+      "player_id",
+      "choice_id"
+    ],
+    "QuestChooseResponse": [
+      "quest_id",
+      "player_id",
+      "next_quest_id"
+    ],
+    "QuestEvaluateRequest": [
+      "quest_id",
+      "player_id"
+    ],
+    "QuestObjectiveBody": [
+      "objective_id",
+      "target_count",
+      "objective_type",
+      "target_id"
+    ],
+    "QuestObjectiveUpdateRequest": [
+      "quest_id",
+      "player_id",
+      "objective_id",
+      "progress_delta"
+    ],
+    "QuestOfferRequest": [
+      "quest_id",
+      "player_id",
+      "title",
+      "objectives",
+      "item_rewards",
+      "currency_reward",
+      "reward_source_id"
+    ],
+    "QuestRewardApplyRequest": [
+      "quest_id",
+      "player_id"
+    ],
+    "QuestRewardCurrencyBody": [
+      "amount"
+    ],
+    "QuestRewardItemBody": [
+      "item_id",
+      "quantity"
+    ]
+  }
+}

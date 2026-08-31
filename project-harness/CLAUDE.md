@@ -125,9 +125,16 @@ proposing the change. Wait for human approval.
 
 ### Files
 
-- Hard limit: **300 lines of non-test code per file.** If you exceed this, split
-  before merging. If a split would be artificial, write a justifying comment at
-  the top of the file and add an entry to `DECISIONS.md`.
+- Two-tier size limit (DEC-226), enforced by `make check-rules`:
+  - **400 lines** of non-test code — soft advisory. The gate reports it and does not
+    fail. Treat it as the point at which you should be looking for the split.
+  - **800 lines** — hard gate, unwaivable. No baseline entry can grandfather a file
+    past it.
+  - A file already on the R001 baseline records the line count it was grandfathered at.
+    Growing beyond that recorded count is a new violation even below 800, so debt can
+    shrink but never grow.
+- If a split would be artificial, write a justifying comment at the top of the file
+  and add an entry to `DECISIONS.md`.
 - One class or one cohesive set of functions per module.
 - Module-level docstring on every module (see `documentation` section below).
 
@@ -320,7 +327,7 @@ into your final summary message:
 
 - [ ] All new tests pass
 - [ ] All existing tests still pass
-- [ ] No file exceeds 300 lines of non-test code
+- [ ] No file exceeds 800 lines of non-test code, and no grandfathered file grew
 - [ ] Every new file has a module docstring
 - [ ] Every new public function has a docstring
 - [ ] Every new public class has a docstring

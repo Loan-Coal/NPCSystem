@@ -144,21 +144,29 @@ references a counterfactual or the gate leaves. That is a judgment call per gate
 Skipped by the loop deliberately — needs a human.
 Validation: `make check` lists 10 targets, not 14, once R1.2–R1.4 land.
 
-- [ ] **R1.8** Build the four approved new gates, warn-only
+- [x] **R1.8** Build the four approved new gates, warn-only
 Files: `scripts/check_migrations.py`, `scripts/check_api_stability.py`,
 `scripts/check_engine_logs.py`, `scripts/check_dead_tests.py`, `Makefile`
-Spec: build all four per DEC-224 — each ships with its own recorded counterfactual. Per decision
-2026-08-28 they enter **warn-only** (report and exit 0) and are promoted to blocking once their
-existing violations are cleared: the engine-log gate has 0% compliance across 118 sites and the
-dead-test detector will find ~70. Warn-only here is a deliberate, dated exception to DEC-224's
-spirit, not a permanent state — record the promotion criterion in each gate's docstring.
-RED anchor: one per gate, each demonstrably red with the guarded behaviour removed —
-(a) add a required field to a node type with no migration; (b) delete a field from a `/v1`
-response model; (c) add an engine `logger.info` without `duration_ms`; (d) add
-`def test_nothing(): pass`. Each must be shown red in the commit even though the gate is
-warn-only in `make check`.
-Validation: all four exist, all four run, `make check` still green.
-CR-L04-06, CR-L12-07, CR-L05-02, CR-L14-06.
+Spec: build them per DEC-224 — each ships with its own recorded counterfactual. Warn-only was
+superseded on 2026-08-31: every surviving gate is **blocking**, with today's violation count as a
+recorded baseline and any increase RED. That removes the warn-only state entirely, which is the
+state R1 exists to eliminate, and needs no promotion criterion to remember later.
+Landed as THREE gates, not four. `check_dead_tests` was deleted before commit: it duplicated
+`check_test_quality` (same tree, same AST approach, overlapping EMPTY_TEST_BODY rule, a second
+waiver marker), and as written it found 0 of the ~70 it predicted — any `ast.Call` counted as
+signal. Its one real rule became `check_test_quality`'s sixth pattern, NO_ASSERTION, baselined at
+25. The engine-log gate's "0% across 118 sites" was also wrong: 42 of 59 measured, now the baseline.
+`check_migrations` reads a `MIGRATES = [(node_type, field)]` declaration in `scripts/migrations/`
+rather than a root `migrations/` dir of `.cypher` files — the repo has one migration system and
+now keeps one. Blocked debt: ISSUE-234 (25 assertion-free tests), ISSUE-235 (42 engine log sites).
+RED anchor: one per gate, each pinned by a test rather than only demonstrated once —
+(a) a required field with no migration reds, and greens once a migration declares it
+(`test_check_migrations.py`); (b) a `/v1` response model that loses a field reds
+(`test_check_api_stability.py`); (c) an engine `logger.info` without `duration_ms` above
+baseline reds (`test_check_engine_logs.py`); (d) a test that calls the SUT and asserts nothing
+is NO_ASSERTION (`test_check_test_quality.py`). 68 tests across the four files.
+Validation: three gates exist, three run blocking, `make check` green. CR-L04-06, CR-L12-07,
+CR-L05-02, CR-L14-06. ✅ AUTO (R1.8, 2026-08-31)
 
 ### Phase R2
 

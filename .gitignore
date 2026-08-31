@@ -18,6 +18,7 @@ venv/
 
 # Coverage
 .coverage
+.coverage.*
 htmlcov/
 
 # E2E and eval outputs

@@ -15,6 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
+        check-migrations check-api-stability check-engine-logs \
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -198,13 +199,34 @@ check-docstrings:
 check-mutations:
 	$(PYTHON) scripts/mutation_probe.py
 
+# R1.8 gates. All three are blocking. Each accepts today's state as a recorded
+# baseline and reds on any increase, so none of them needs a "warn-only until
+# promoted" phase — the state a gate cannot fail in is the one R1 exists to remove.
+
+# check-migrations: a node type gained a required field that no migration in
+# scripts/migrations/ declares (existing graph nodes would not carry it).
+check-migrations:
+	$(PYTHON) scripts/check_migrations.py
+
+# check-api-stability: a /v1 response model lost a field it had in the baseline.
+check-api-stability:
+	$(PYTHON) scripts/check_api_stability.py
+
+# check-engine-logs: engine logger.info calls missing duration_ms exceed the
+# recorded baseline (42 at R1.8).
+check-engine-logs:
+	$(PYTHON) scripts/check_engine_logs.py
+
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
 # EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
 # R1.3: check-conservation and check-label-survival moved out — they audited
 # unchangeable committed inputs; conservation now runs inside eval-generate.
 # R1.4: check-harness moved before lint — H1 must fire even when lint short-circuits.
-check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals
+# R1.8: three blocking ratchet gates added (check-migrations check-api-stability
+#        check-engine-logs). check-dead-tests was NOT added — it duplicated
+#        check-test-quality, whose NO_ASSERTION pattern absorbed its one real rule.
+check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals check-migrations check-api-stability check-engine-logs
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

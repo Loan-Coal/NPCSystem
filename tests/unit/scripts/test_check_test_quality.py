@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 from check_test_quality import (  # noqa: E402
     BARE_EXCEPTION_RAISES,
     EMPTY_TEST_BODY,
+    NO_ASSERTION,
     format_findings,
     main,
     PARAMETRIZE_NO_SUT_CALL,
@@ -240,8 +241,13 @@ def test_real_suite_is_clean() -> None:
     2026-08-20 — a snapshot of debt cannot double as a gate. Every pattern the scanner
     detects already has synthetic coverage above; what the real tree adds is this, which
     is exactly what `make check-test-quality` enforces.
+
+    NO_ASSERTION is excluded here and pinned separately below: it arrived in R1.8 with
+    25 pre-existing findings, so it is ratcheted rather than waived. Blanket-waiving 25
+    sites would buy conformance, not quality (CR-L05-03). The other five patterns keep
+    the stronger zero-findings invariant they have always had.
     """
-    findings = scan_directory(_TESTS_ROOT)
+    findings = [f for f in scan_directory(_TESTS_ROOT) if f.pattern != NO_ASSERTION]
 
     assert findings == [], "unaddressed test-quality findings:\n" + format_findings(findings)
 
@@ -295,13 +301,14 @@ def test_test_with_assertion_not_flagged_as_empty(tmp_path: Path) -> None:
 
 
 def test_test_with_call_not_flagged_as_empty(tmp_path: Path) -> None:
-    """A test that calls the SUT is not flagged EMPTY_TEST_BODY."""
+    """A test that calls the SUT is NO_ASSERTION, not EMPTY_TEST_BODY — the two partition."""
     f = _write(
         tmp_path, "test_calls.py",
         "def test_something():\n    result = compute(1, 2)\n",
     )
-    findings = scan_file(f)
-    assert EMPTY_TEST_BODY not in _patterns(findings)
+    patterns = _patterns(scan_file(f))
+    assert EMPTY_TEST_BODY not in patterns
+    assert NO_ASSERTION in patterns
 
 
 # ---------------------------------------------------------------------------
@@ -329,3 +336,71 @@ def test_main_exits_zero_at_or_below_baseline(tmp_path: Path) -> None:
     baseline.write_text("5\n", encoding="utf-8")
     result = main(["--tests-dir", str(tests_dir), "--baseline-file", str(baseline)])
     assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# Pattern 6: NO_ASSERTION (R1.8 — absorbed from the deleted check_dead_tests gate)
+# ---------------------------------------------------------------------------
+
+
+def test_a_test_that_calls_but_never_asserts_is_flagged(tmp_path: Path) -> None:
+    """The R1.8 counterfactual: exercising the SUT without checking it is a finding."""
+    f = _write(tmp_path, "test_x.py", "def test_x():\n    build_thing(1)\n")
+    assert NO_ASSERTION in _patterns(scan_file(f))
+
+
+def test_pytest_raises_counts_as_an_assertion(tmp_path: Path) -> None:
+    """pytest.raises IS the assertion — flagging it would be a false positive."""
+    body = "def test_x():\n    with pytest.raises(ValueError):\n        boom()\n"
+    assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
+
+
+def test_a_mock_assert_method_counts_as_an_assertion(tmp_path: Path) -> None:
+    body = "def test_x():\n    m.assert_called_once_with(1)\n"
+    assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
+
+
+def test_a_unittest_assert_method_counts_as_an_assertion(tmp_path: Path) -> None:
+    body = "def test_x(self):\n    self.assertEqual(a(), 1)\n"
+    assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
+
+
+def test_pytest_fail_counts_as_an_assertion(tmp_path: Path) -> None:
+    body = "def test_x():\n    if run():\n        pytest.fail('nope')\n"
+    assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
+
+
+def test_an_assertion_nested_in_a_loop_counts(tmp_path: Path) -> None:
+    body = "def test_x():\n    for v in items():\n        assert v\n"
+    assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
+
+
+def test_a_no_assertion_finding_is_waivable(tmp_path: Path) -> None:
+    """The gate shares one waiver marker with the other five patterns."""
+    body = "# quality-ok: proves the call does not raise\ndef test_x():\n    build_thing(1)\n"
+    assert scan_file(_write(tmp_path, "test_x.py", body)) == []
+
+
+def test_a_test_is_reported_once_not_twice(tmp_path: Path) -> None:
+    """EMPTY_TEST_BODY and NO_ASSERTION partition; neither test earns both labels."""
+    empty = _write(tmp_path, "test_e.py", "def test_e(): pass\n")
+    calls = _write(tmp_path, "test_c.py", "def test_c():\n    go()\n")
+    assert _patterns(scan_file(empty)) == [EMPTY_TEST_BODY]
+    assert _patterns(scan_file(calls)) == [NO_ASSERTION]
+
+
+def test_real_suite_no_assertion_findings_match_the_baseline() -> None:
+    """Pins the ratchet in both directions.
+
+    Growth means an assertion-free test slipped in. Shrinkage means findings were fixed
+    without re-recording, which would leave the gate looser than the tree it guards.
+    """
+    recorded = int(
+        (_REPO_ROOT / "scripts" / "check_test_quality_baseline.txt")
+        .read_text(encoding="utf-8").strip()
+    )
+    actual = [f for f in scan_directory(_TESTS_ROOT) if f.pattern == NO_ASSERTION]
+    assert len(actual) == recorded, (
+        f"{len(actual)} NO_ASSERTION findings vs baseline {recorded} — fix them, waive "
+        "them with '# quality-ok: <reason>', or re-record the baseline"
+    )
