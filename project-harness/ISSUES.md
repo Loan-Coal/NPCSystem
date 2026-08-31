@@ -1952,3 +1952,39 @@ numbers, which is the attribution error R2 exists to stop.
 **To fix:** add a case-existence filter to `_iter_rows`, report the dropped-row count
 explicitly so silent shrinkage is visible, and red when the drop rate exceeds a recorded
 baseline. Revisit when a regeneration is next run.
+
+
+## ISSUE-238: 14 guard cases state a knowledge-boundary property that nothing enforces
+**Found:** 2026-08-31, during R2.4
+**Severity:** P1 (blocking) — the engine's central behavioural claim is unasserted per NPC pair
+**Where:** `evals/cases/case_adv_*.yaml`, `evals/cases/case_neg_*.yaml` (the 14 stripped by R2.4)
+**Description:** Each of these 14 cases carries a precise property in its `description` — "NPC X,
+pressed under a false premise, must not confabulate knowledge belonging to NPC Y's KNOWS_ABOUT
+edges" (10 cases), "NPC X must hold its voice register" (3), or both (1). That property was
+asserted by a `keyword_none` list of literal phrasings. Every one of those lists was 100% dead
+against `k3_77688e7_regen1` — 103 terms, zero hits in 975 responses — so none could fail, and
+R2.4 removed them. The lists were lexical, not semantic: `case_neg_aldric_no_troop_knowledge`
+forbade `"the troops are at"` but not "the garrison sits north of the pass";
+`case_neg_mira_no_guild_secrets` forbade `"the hideout is"` but not "Lira keeps things down by
+the docks". Zero hits was therefore equally consistent with "the engine never leaks" and "the
+engine leaks in words nobody guessed", and the block could not distinguish them. Two of the
+files record earlier hand-repairs that made their lists *narrower* still
+(`case_adv_captain_sorn_guild_smuggling` dropped `"the smugglers are"`,
+`case_adv_mira_aldric_trade_figures` dropped `"exactly"`), so the lexical approach has already
+been observed failing in both directions.
+What still runs on these cases is the runtime-injected guard battery
+(`evals/runner.py:_expected_with_guards`): `min_length`, a `keyword_none` over the canned
+fallback lines, `tone_judge` (structural in-character rubric) and — for demo-world cases, which
+all 14 are — `affirms_judge` with the war-is-over lore rubric. None of those asserts the
+per-case knowledge boundary. That specific claim is currently unenforced.
+**Why deferred:** the fix is 14 hand-written judge rubrics, which is a phase of work, and it
+must be a separate commit from R2.4's deletion or the 208 -> 105 move has two causes — the
+attribution error R2 exists to stop.
+**To fix:** replace each removed block with an `affirms_judge` criterion restating that case's
+`description` as a rubric. `affirms_judge` is a supported matcher kind (`evals/matchers.py:197`),
+already used for the injected lore rubric, and carries real variance (0.941 on the recorded
+generation) — so the assertion can actually fail. Do NOT use `refusal_judge`: it has no dispatch
+branch in `matchers.py`, no case file uses it, and ISSUE-141 records kappa=0.247 with a CI
+crossing zero. Note the replacement inherits ISSUE-129: `affirms_judge` kappa is 0.530
+[0.000, 0.853], refused against the 0.60 threshold — a measurable instrument, not yet a trusted
+one. Land it after the next regeneration so the before/after is comparable.

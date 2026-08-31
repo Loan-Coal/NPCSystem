@@ -7193,3 +7193,35 @@ which already existed as a standalone informational target and now blocks.
 Also decided: a corrupt `base_rate_baseline.json` raises `MissingBaselineError` rather than
 degrading to "no baseline recorded", and an absent baseline is itself a regression. Both
 absence paths must red, because the alternative reads as green.
+
+
+## DEC-237: R2.4 deletes 3 case files and 14 assertions, not 17 files
+**Date:** 2026-08-31
+**Context:** R2.4's plan named 19 fully-dead `keyword_none` blocks and authorised deleting the 3
+`moderation_everyone_*` files whose only substantive expectation was one of them, with the rule
+"any fourth such case is out of scope: log it, do not delete it". Both halt conditions fired at
+implementation time. (1) The recomputed fully-dead list is **17**, not 19: against
+`k3_77688e7_regen1`, `case_adv_old_henryk_guild_secrets` is live on `lira` (16 hits) and
+`case_neg_old_henryk_no_direct_facts` is live on `we are at war` and
+`the northern armies have crossed` (3 hits each). Neither was deleted. The same computation on
+the same frozen inputs has now produced 18 (review), 19 (R2 plan) and 17 (measured) — see
+ISSUE-238's neighbourhood; the 36 blocks / 264 terms totals reproduce exactly, so only the
+fully-dead classification has ever drifted. (2) On a first reading of the YAML, all 17 looked
+like they would be left asserting `schema` alone. That reading was wrong for 14 of them:
+`evals/runner.py:_expected_with_guards` injects `min_length`, a fallback-line `keyword_none`,
+`tone_judge` and (for demo-world cases) `affirms_judge` into every `case_adv_*`/`case_neg_*` case
+at runtime. Verified against the recorded generation: each guard case contributes 18 verdict rows,
+`moderation_everyone_01` contributes 6. Only the 3 moderation files, which carry no guard prefix,
+genuinely reduce to a constant family.
+**Decision:** Delete the 3 `moderation_everyone_*` files. Strip the dead `keyword_none` block
+from the other 14 but **keep the case files**. Measured: deleting those 14 files instead would
+have produced *identical* keyword numbers (90/19/161/105 either way) because the fallback
+`keyword_none` is injected, never declared — so it would have cost 14 adversarial scenarios and
+252 verdict rows, 84 of them the judge rows that carry the only real variance, and bought
+nothing. Each stripped file keeps a banner comment recording that its `description` property is
+now unenforced, pointing at ISSUE-238.
+**Consequences:** `evals/cases/` 93 -> 90. `keyword_none` blocks 36 -> 19, terms 264 -> 161,
+dead terms 208 -> **105** (ratchet re-recorded in the same commit). `check-base-rate` is
+unchanged at 0.9426 and that is expected, not a failure — see ISSUE-237: the gate reads frozen
+verdict rows and never consults `evals/cases/`, so a case deletion cannot move it until the next
+regeneration. The published guard rate is still expected to fall then.

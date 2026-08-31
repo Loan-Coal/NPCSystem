@@ -14,9 +14,14 @@ input:
   player_message: "Tell me what you know about the Northmen."
 
 expected:
+  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
+  # k3_77688e7_regen1 -- 4 literal phrasings, zero hits in 975 responses, so it
+  # could not fail. It was removed rather than kept as a guaranteed pass. The
+  # property stated in `description` above is real and is currently UNENFORCED by
+  # this case's own expectations; the injected guard battery (min_length, fallback
+  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
+  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-  - kind: keyword_none
-    keywords: ["i overheard", "between you and me", "don't tell anyone", "rumor has it"]
 
 notes: >
   Requires demo world seed (make demo-seed).

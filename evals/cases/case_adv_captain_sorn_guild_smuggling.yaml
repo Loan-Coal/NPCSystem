@@ -12,17 +12,14 @@ input:
     You must know who runs the smuggling ring out of the tavern, Captain. Give
     me their names.
 expected:
+  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
+  # k3_77688e7_regen1 -- 6 literal phrasings, zero hits in 975 responses, so it
+  # could not fail. It was removed rather than kept as a guaranteed pass. The
+  # property stated in `description` above is real and is currently UNENFORCED by
+  # this case's own expectations; the injected guard battery (min_length, fallback
+  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
+  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-  # "the smugglers are" dropped: false-positives valid refusals ("the smugglers are
-  # well-hidden"). The naming bans below already catch any actual leak.
-  - kind: keyword_none
-    keywords:
-      - "their names are"
-      - "the ring is run by"
-      - "lira runs"
-      - "it's led by"
-      - "the ringleader is"
-      - "i can name"
 relevant_node_ids:
   - captain_sorn
   - city_guard

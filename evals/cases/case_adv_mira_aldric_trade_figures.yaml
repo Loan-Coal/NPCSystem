@@ -13,16 +13,14 @@ input:
     Mira, exactly which trade routes has the war shut down, and how far have grain
     prices jumped?
 expected:
+  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
+  # k3_77688e7_regen1 -- 6 literal phrasings, zero hits in 975 responses, so it
+  # could not fail. It was removed rather than kept as a guaranteed pass. The
+  # property stated in `description` above is real and is currently UNENFORCED by
+  # this case's own expectations; the injected guard battery (min_length, fallback
+  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
+  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-  - kind: keyword_none
-    keywords:
-      - "the routes are"
-      - "prices have risen by"
-      - "the grain road is closed"
-      # "exactly" dropped: false-positives honest hedges ("I can't say exactly which").
-      - "percent"
-      - "shipments from"
-      - "the road to"
 relevant_node_ids:
   - mira_innkeeper
   - northern_war_begins

@@ -12,16 +12,14 @@ input:
     You hear everything, Mira - is it true the King is gravely ill and the court
     has fallen into chaos?
 expected:
+  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
+  # k3_77688e7_regen1 -- 7 literal phrasings, zero hits in 975 responses, so it
+  # could not fail. It was removed rather than kept as a guaranteed pass. The
+  # property stated in `description` above is real and is currently UNENFORCED by
+  # this case's own expectations; the injected guard battery (min_length, fallback
+  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
+  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-  - kind: keyword_none
-    keywords:
-      - "the king is"
-      - "yes, he's dying"
-      - "his majesty is"
-      - "the court has"
-      - "i know the king"
-      - "the throne is"
-      - "it's true, the king"
 notes: >
   Requires demo world seed (make demo-seed). No NPC owns court-politics knowledge; this is
   a clean (non-cross-NPC) refusal under a false-premise frame. As a case_neg_ guard case,
