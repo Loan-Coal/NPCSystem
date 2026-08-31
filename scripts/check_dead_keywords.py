@@ -8,6 +8,10 @@ Purpose: Flag forbidden keywords (keyword_none) that never occur anywhere in
          testing anything (EVAL-P19.3). Output is a work-list for a human to
          decide what a case should actually forbid (EVAL-P20.1); this script
          never edits a case file.
+Enforcement: ratchet (R2.3). The count is recorded in dead_keywords_baseline.txt and
+         any increase is RED — a new guaranteed-pass keyword can no longer be added
+         unnoticed. Deleting dead terms lowers the count; re-record with --update. Full
+         triage to zero is the golden-set rebuild's job (ISSUE-157), not this gate's.
 Dependencies: argparse, json, pathlib, sys, pydantic, yaml; evals/keyword_matching
               (contains_keyword — same word-boundary semantics as the runner)
 Used by: make check-dead-keywords, tests/unit/scripts/test_check_dead_keywords.py
@@ -28,14 +32,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals"))
 from keyword_matching import contains_keyword  # noqa: E402
 
 _DEFAULT_CASES_DIR = Path(__file__).resolve().parents[1] / "evals" / "cases"
+
+#: Newest committed generation (R2.3). Re-pointing this is a deliberate human step:
+#: an automatic re-point would let a corpus with narrower vocabulary launder more
+#: keywords into "live" and shrink the count without any case improving.
 _DEFAULT_CORPUS_PATH = (
     Path(__file__).resolve().parents[1]
     / "evals"
     / "generations"
-    / "k3_73e6c36"
+    / "k3_77688e7_regen1"
     / "outputs.jsonl"
 )
 _KEYWORD_NONE_KIND = "keyword_none"
+BASELINE_PATH = Path(__file__).resolve().parent / "dead_keywords_baseline.txt"
 
 
 class DeadKeyword(BaseModel):
@@ -148,28 +157,74 @@ def format_report(dead: Sequence[DeadKeyword]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: print the dead-keyword work-list.
+def read_baseline(path: Path = BASELINE_PATH) -> int:
+    """Return the recorded dead-keyword count; 0 when the file is missing or unreadable.
 
-    Always exits 0 — this is a work-list for a human (EVAL-P20.1 decides
-    what a case should forbid), never an automatic edit or a hard gate.
+    Args:
+        path: Baseline file holding a single integer.
+    Returns:
+        The recorded count, or 0 — which makes any dead keyword at all a regression, so
+        a lost baseline reds rather than silently passing.
+    """
+    try:
+        return int(path.read_text(encoding="utf-8").strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: print the dead-keyword work-list and ratchet on its size.
+
+    Which keywords a case should forbid is still a human call (EVAL-P20.1) — this gate
+    never edits a case file. What it no longer does is exit 0 unconditionally: since
+    R2.3 the count is ratcheted against dead_keywords_baseline.txt, so a newly added
+    guaranteed-pass term is RED.
 
     Args:
         argv: Command-line arguments; defaults to sys.argv[1:].
     Returns:
-        0 always.
+        0 at or below the recorded baseline, 1 above it.
     """
     parser = argparse.ArgumentParser(
-        description="Flag keyword_none terms with zero hits in a committed corpus (work-list only)."
+        description="Gate keyword_none terms with zero hits in a committed corpus (ratchet)."
     )
     parser.add_argument("--cases-dir", type=Path, default=_DEFAULT_CASES_DIR)
     parser.add_argument("--corpus", type=Path, default=_DEFAULT_CORPUS_PATH)
+    parser.add_argument("--baseline-file", type=Path, default=BASELINE_PATH)
+    parser.add_argument("--update", action="store_true", help="record the current count")
     args = parser.parse_args(argv)
 
     cases = _load_cases(args.cases_dir)
     corpus = _load_corpus(args.corpus)
     dead = find_dead_keywords(cases, corpus)
+    count = len(dead)
+
+    if args.update:
+        args.baseline_file.write_text(f"{count}\n", encoding="utf-8", newline="")
+        print(f"check-dead-keywords: baseline recorded at {count}")
+        return 0
+
     print(format_report(dead))
+    return _ratchet_verdict(count, read_baseline(args.baseline_file))
+
+
+def _ratchet_verdict(count: int, baseline: int) -> int:
+    """Compare a dead-keyword count against the recorded baseline and report the verdict.
+
+    Args:
+        count: Dead keywords found in this run.
+        baseline: The recorded count.
+    Returns:
+        1 when count exceeds baseline, else 0.
+    """
+    if count > baseline:
+        print(
+            f"check-dead-keywords: {count} dead keyword(s) exceed baseline of {baseline} — gate RED.",
+            file=sys.stderr,
+        )
+        return 1
+    if count < baseline:
+        print(f"check-dead-keywords: {count} < baseline {baseline} — re-record with --update.")
     return 0
 
 

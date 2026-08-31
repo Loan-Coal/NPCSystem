@@ -1,7 +1,19 @@
 # Engine Eval Coverage — what a judge can actually measure
 
-**Status:** EVAL-P25.1. Gated by `scripts/check_engine_coverage.py`
-(`make check-engine-coverage`), tested by `tests/unit/scripts/test_check_engine_coverage.py`.
+> **RETRACTED (2026-08-31, R2.3): the gate this document claimed does not exist.**
+> The Status line below said this table was gated by `make check-engine-coverage`. There
+> was no such make target — `scripts/check_engine_coverage.py` was reachable from no
+> target and had never run in `make check`, so no coverage row was ever enforced. R2.3
+> deleted the script, its contract module and its 234-line test file (658 lines) rather
+> than leave a gate-shaped object nothing invoked.
+>
+> **The classification below is kept, and is still correct as measured on 2026-08-27.**
+> Nothing else records which engine units are `dialogue_observable`, and case authoring
+> still depends on that distinction. What is retracted is the enforcement claim, not the
+> measurement. For the rules a case set is actually held to, and for the gates that do
+> run, see [`CASE_SET_POLICY.md`](CASE_SET_POLICY.md).
+
+**Status:** EVAL-P25.1. **Unenforced reference table** (see retraction above).
 **Measured:** 2026-08-27, against the working tree.
 
 ## Why this table exists before any case is authored

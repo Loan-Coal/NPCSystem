@@ -3077,3 +3077,31 @@ does not repeat ISSUE-227's mistake of publishing on 0.0.0.0. Then re-run
 Until this lands, the Proofs for R3.2 (`test_neo4j_outage_returns_503`) and R3.3
 (`test_distortion_compounds_across_hops`) cannot be executed locally, and R2.2's CI work is
 sequencing against an unmeasured baseline.
+
+
+## [FIXED] ISSUE-231: "unit" tests make live network calls, and CI silently records `None` model digests
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Fixed:** 2026-08-31, in R2.1 (`fix(evals): block network in unit tests; a missing model
+digest is now fatal`)
+**Severity:** P1 (blocking)
+**Where:** `evals/run_config.py:260-262`, `evals/engine_adapter.py:111-125`,
+`tests/unit/evals/test_run_config.py`
+**Description:** `run_config.resolve()` falls back to `_engine_adapter.fetch_model_digest` (twice)
+and `fetch_ollama_version` when no injector is passed; each is a real `httpx` call with a 10 s
+timeout. Only 2 of 17 tests in the cited file inject fakes, so 15 make three live HTTP attempts each
+— the file times out at **120 s** while collection takes 0.07 s. The worse half: both fetchers are
+documented to return `None` on any failure, and CI declares no Ollama service, so on a runner the
+connection is refused instantly, the tests **pass**, and the run records
+`generation_model_digest=None`. That is the only field making eval scores attributable to a model,
+which makes it load-bearing for the planned swap to a smaller fine-tuned local model.
+**Why deferred:** not deferred; it is R2.1, the first item of the measurement phase.
+**To fix:** require the injector under `tests/unit/` via an autouse fixture that raises on real
+`httpx` use, and make a `None` digest fatal in any run that publishes a number. Proof: the cited file
+completes in under 5 s with no network (today >120 s), and `resolve()` raises when the digest fn
+returns `None` (today returns a RunConfig with `None`).
+**Verified:** `tests/unit/evals/test_run_config.py` 152.38 s -> 1.54 s; `resolve_run_config` raises `ModelDigestUnavailableError` on a `None` digest, pinned by two
+permanent tests. The block is repo-wide under `tests/unit/` via a socket patch in
+`tests/unit/conftest.py`, not an httpx patch — `httpx` is imported lazily in three separate
+function bodies in `engine_adapter.py`. Two further files (`test_run_config_corpus_fingerprint.py`,
+`test_generate_runner_k.py`) also resolved with absent digests and were fixed in the same commit.
+The CI half of the title is R2.2, which is blocked on credentials and CI-config approval.

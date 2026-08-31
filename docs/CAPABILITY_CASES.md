@@ -66,7 +66,9 @@ Two documents gate a case before its YAML is written, and they are read in this 
    18 of 44 units qualify. A case authored against an engine whose output never reaches
    the serialized dialogue context passes unconditionally, which pushes the battery's pass
    base rate back toward 1.0 — and a base rate at the ceiling is what crushes kappa.
-   `make check-engine-coverage` fails when a unit exists with no classification row.
+   The classification table is an unenforced reference: `make check-engine-coverage`
+   never existed, and R2.3 deleted the script that would have backed it. What is
+   enforced is the base rate itself, by `make check-base-rate` (ratchet).
 
 2. **`docs/REASONING_DIMENSIONS.md`** (EVAL-P25.2) says what the case is allowed to claim
    it measures. Each dimension carries its own assertion contract, on top of — never

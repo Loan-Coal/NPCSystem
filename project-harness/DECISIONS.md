@@ -7165,3 +7165,31 @@ stopped.
 Also fixed alongside: `compat_services_up` now applies `docker-compose.test.yml` and verifies
 bolt is actually **reachable** rather than merely that the container is **healthy**. Those two
 disagreed for months and produced 34 phantom integration failures (ISSUE-232).
+
+
+## DEC-236: `check-base-rate` and `check-dead-keywords` ship as ratchets, and `make check` has 17 targets
+**Date:** 2026-08-31
+**Context:** R2.3 had to wire `check-base-rate` into `make check`. The gate had shipped in
+`advisory` mode with a written promotion criterion: switch to `blocking` "in the same commit
+that lands EVAL-P26's rebuilt case set". DEC-233 culled EVAL-P26. The criterion could
+therefore never fire, which is the same never-promoted-advisory shape R1 removed three
+separate times. Raw `blocking` was not available either: the shipped battery breaches nine
+of ten families (measured 0.9426 overall over n=975 on `k3_77688e7_regen1`), so a blocking
+gate reds on a clean tree from day one, for a defect no scheduled task fixes, and would
+block every subsequent R2/R3/R4 task through no fault of its own. A gate that is red before
+the work starts gets switched off.
+**Decision:** Both gates ship as **ratchets**. `check-base-rate` records the overall rate and
+the breach set in `scripts/base_rate_baseline.json` and reds when the rate rises or a family
+enters an unrecorded breach. `check-dead-keywords` records its count in
+`scripts/dead_keywords_baseline.txt` (208) and reds on any increase. Neither has a promotion
+criterion to forget; both let the debt shrink and never grow. Re-pointing either at a newer
+generation is a deliberate human step (`--update`) — an automatic re-point would let a worse
+generation launder itself into the baseline.
+**Consequences:** `make check` goes from 15 targets to **17**, not the 16 the R2 plan
+predicted. The plan listed only `check-base-rate` as a new aggregate member while separately
+anchoring R2.4 on `check-dead-keywords` being "ratcheted in R2.3". A ratchet outside the
+aggregate is a gate nothing runs, so both were added. The extra target is `check-dead-keywords`,
+which already existed as a standalone informational target and now blocks.
+Also decided: a corrupt `base_rate_baseline.json` raises `MissingBaselineError` rather than
+degrading to "no baseline recorded", and an absent baseline is itself a regression. Both
+absence paths must red, because the alternative reads as green.

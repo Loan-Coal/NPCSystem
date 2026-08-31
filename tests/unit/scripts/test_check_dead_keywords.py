@@ -3,21 +3,28 @@ Module: tests.unit.scripts.test_check_dead_keywords
 Layer: tests
 Purpose: Unit tests for scripts/check_dead_keywords.py — flags keyword_none
          terms that never occur anywhere in a committed corpus (EVAL-P19.3).
-Dependencies: pathlib, sys, pytest, check_dead_keywords
+Dependencies: json, pathlib, sys, typing, yaml, check_dead_keywords
 Used by: make test (pytest discovery)
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+from typing import Sequence
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from check_dead_keywords import (  # noqa: E402
+    BASELINE_PATH,
     DeadKeyword,
     find_dead_keywords,
     format_report,
+    main,
+    read_baseline,
 )
 
 
@@ -122,3 +129,72 @@ def test_format_report_names_case_and_keyword() -> None:
 def test_format_report_clean_corpus_says_none_found() -> None:
     text = format_report([])
     assert "No dead keyword" in text
+
+
+# ---------------------------------------------------------------------------
+# R2.3: ratchet — the gate can now fail, in both directions
+# ---------------------------------------------------------------------------
+
+def _fixture_tree(tmp_path: Path, cases: Sequence[dict], responses: Sequence[str]) -> list[str]:
+    """Write a case dir and a corpus, and return the argv main() needs to read them."""
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    for case in cases:
+        (cases_dir / f"{case['case_id']}.yaml").write_text(yaml.safe_dump(case), encoding="utf-8")
+    corpus = tmp_path / "outputs.jsonl"
+    corpus.write_text(
+        "".join(json.dumps({"npc_response": text}) + "\n" for text in responses), encoding="utf-8"
+    )
+    return [
+        "--cases-dir", str(cases_dir),
+        "--corpus", str(corpus),
+        "--baseline-file", str(tmp_path / "baseline.txt"),
+    ]
+
+
+def test_the_gate_reds_when_a_dead_keyword_is_added(tmp_path: Path) -> None:
+    """The RED direction R2.4's anchor depends on: one more dead term than baseline is 1."""
+    argv = _fixture_tree(tmp_path, [_case("case_a", ["never uttered"])], ["Nothing here."])
+    (tmp_path / "baseline.txt").write_text("0\n", encoding="utf-8")
+
+    assert main(argv) == 1
+
+
+def test_the_gate_is_green_at_the_recorded_baseline(tmp_path: Path) -> None:
+    """Recorded debt does not red. Only growth does."""
+    argv = _fixture_tree(tmp_path, [_case("case_a", ["never uttered"])], ["Nothing here."])
+    (tmp_path / "baseline.txt").write_text("1\n", encoding="utf-8")
+
+    assert main(argv) == 0
+
+
+def test_update_records_the_current_count(tmp_path: Path) -> None:
+    """--update writes the count, and the same run is green immediately afterwards."""
+    argv = _fixture_tree(tmp_path, [_case("case_a", ["never uttered", "nor this"])], ["Nothing."])
+
+    assert main(argv + ["--update"]) == 0
+    assert read_baseline(tmp_path / "baseline.txt") == 2
+    assert main(argv) == 0
+
+
+def test_deleting_a_dead_keyword_lowers_the_count_below_baseline(tmp_path: Path) -> None:
+    """The shrink direction: green, with a nudge to re-record. Debt shrinks, never grows."""
+    argv = _fixture_tree(tmp_path, [_case("case_a", ["never uttered"])], ["Nothing here."])
+    (tmp_path / "baseline.txt").write_text("5\n", encoding="utf-8")
+
+    assert main(argv) == 0
+    assert read_baseline(tmp_path / "baseline.txt") == 5
+
+
+def test_a_missing_baseline_reds_rather_than_passing(tmp_path: Path) -> None:
+    """A lost baseline reads as 0, which makes any dead keyword a regression."""
+    argv = _fixture_tree(tmp_path, [_case("case_a", ["never uttered"])], ["Nothing here."])
+
+    assert read_baseline(tmp_path / "baseline.txt") == 0
+    assert main(argv) == 1
+
+
+def test_the_committed_case_set_is_green_against_the_committed_baseline() -> None:
+    """`make check-dead-keywords` must be green on a clean tree, as a permanent test."""
+    assert BASELINE_PATH.exists(), "scripts/dead_keywords_baseline.txt must be committed"
+    assert main([]) == 0

@@ -16,6 +16,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-engine-logs \
+        check-base-rate check-base-rate-update check-dead-keywords-update \
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -171,11 +172,31 @@ check-blocking:
 check-conservation:
 	$(PYTHON) scripts/check_conservation.py
 
-# check-dead-keywords: work-list of keyword_none terms with zero hits in the committed
-# corpus (EVAL-P19.3). Informational only — always exits 0, never edits a case file.
-# Deciding what a case should forbid is a human call (EVAL-P20.1).
+# check-dead-keywords: keyword_none terms with zero hits in the newest committed
+# generation (EVAL-P19.3). Ratcheted at 208 by R2.3 — still never edits a case file
+# (what a case should forbid is a human call, EVAL-P20.1), but it no longer exits 0
+# unconditionally: a newly added guaranteed-pass term is RED. The corpus moved from
+# k3_73e6c36 to k3_77688e7_regen1 in the same commit, which is what took the count
+# from 237 to 208; no case file was edited to get there.
 check-dead-keywords:
 	$(PYTHON) scripts/check_dead_keywords.py
+
+check-dead-keywords-update:
+	$(PYTHON) scripts/check_dead_keywords.py --update
+
+# check-base-rate: the guard battery's pass base rate against the [0.55, 0.85] target
+# band (EVAL-P25.3), ratcheted by R2.3 against scripts/base_rate_baseline.json.
+# Ratchet, not advisory: advisory's promotion criterion named EVAL-P26, a phase DEC-233
+# culled, so it would never have fired. Not raw blocking either: nine of ten families
+# breach today for a defect no scheduled task fixes, so blocking would red every
+# downstream task through no fault of its own. Re-pointing at a newer generation is a
+# deliberate human step — automatic re-pointing would let a worse generation launder
+# itself into the baseline.
+check-base-rate:
+	$(PYTHON) scripts/check_base_rate.py evals/generations/k3_77688e7_regen1
+
+check-base-rate-update:
+	$(PYTHON) scripts/check_base_rate.py evals/generations/k3_77688e7_regen1 --update
 
 # check-label-survival: freeze-gate check — does the labels file survive the
 # committed transcript unchanged (no drift, no orphaning)? Run before spending a
@@ -226,7 +247,12 @@ check-engine-logs:
 # R1.8: three blocking ratchet gates added (check-migrations check-api-stability
 #        check-engine-logs). check-dead-tests was NOT added — it duplicated
 #        check-test-quality, whose NO_ASSERTION pattern absorbed its one real rule.
-check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals check-migrations check-api-stability check-engine-logs
+# R2.3: check-base-rate and check-dead-keywords added, both ratcheted. The plan
+#        predicted 16 targets (check-base-rate only); check-dead-keywords is here too
+#        because R2.4's RED anchor is its ratchet direction, and a ratchet outside this
+#        aggregate is a gate nothing runs — the exact shape R1 spent three tasks
+#        removing. 17 targets.
+check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

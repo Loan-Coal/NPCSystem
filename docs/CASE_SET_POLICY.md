@@ -132,18 +132,34 @@ comparison can move it, and no amount of extra n makes it informative. It is rep
 separately from a merely-high family because the remedy is different — a high family needs
 harder cases, a constant one needs a different assertion.
 
-### Enforcement: advisory first, blocking after EVAL-P26
+### Enforcement: ratchet (R2.3, 2026-08-31)
 
-The gate ships with `--enforce advisory`. It computes the full report and the full breach
-list, and exits 0. It is switched to `--enforce blocking` in the same commit that lands
-EVAL-P26's rebuilt case set.
+The gate ships with `--enforce ratchet` and runs inside `make check` as
+`make check-base-rate`. It records the current measurement in
+`scripts/base_rate_baseline.json` and exits 1 when the next run is **worse**: when the
+overall rate rises above the recorded rate, or when a family enters a breach the baseline
+did not record. Debt can shrink, never grow. Re-record deliberately with
+`make check-base-rate-update` after an intentional improvement.
 
-This is a declared parameter, not a disabled check. The reason is arithmetic: today's
-battery measures 0.949, so a blocking gate would fail against the shipped set by
-construction, on day one, for a defect the phase that fixes it has not run yet. A gate that
-is red before the work starts gets switched off; a gate that reports the number every run
-and turns red on a declared date does not. The report is byte-identical in both modes —
-only the exit code differs.
+**Recorded baseline:** `k3_77688e7_regen1`, overall **0.9426** (n=975), **9 of 10 families
+out of band**. Note that this is the merged deterministic+judged population the gate
+actually measures — not the 0.949 deterministic-only subset in the table above, and not
+the 1.000 null-responder figure from `BASELINE_2026-08-28.md`, which is a different
+measurement over YAML guard cases entirely.
+
+**Why not advisory.** The previous text promised promotion to blocking "in the same commit
+that lands EVAL-P26's rebuilt case set". DEC-233 culled EVAL-P26, so the promotion
+criterion could never fire — the gate would have reported forever. That is the
+never-promoted-advisory shape R1 removed three times.
+
+**Why not raw blocking.** Nine families breach today for a defect no scheduled task fixes.
+A blocking gate would red on a clean tree from day one and block every downstream task
+through no fault of its own; a gate that is red before the work starts gets switched off.
+
+**A caveat the ratchet does not fix.** `check_base_rate` reads only the committed verdict
+rows of a frozen generation directory; it never consults `evals/cases/`. Deleting a case
+therefore does not change its number until the next regeneration — see ISSUE-237. This is
+why R2.4's deletion is anchored on `check-dead-keywords`, not on this gate.
 
 ### Minimum n, and why it is not a chosen number
 

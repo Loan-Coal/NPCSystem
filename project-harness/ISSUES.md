@@ -1858,7 +1858,9 @@ YAML guard cases; the engine scores 70/78 = 0.897. The published claim is "Guard
 baseline had never been taken because `hedge_responder_probe.py` raises `NotACapabilityCaseError`
 when handed a guard case — it structurally refuses to score the battery it would need to score. No
 scorer's agreement interval excludes chance, and the YAML guard-case base rate is 1.000.
-**Why deferred:** not deferred; it is R2.5, gated only on ISSUE-231 and the base-rate wiring.
+**Why deferred:** not deferred; it is R2.5. ISSUE-231 and the base-rate wiring both landed
+2026-08-31 (R2.1, R2.3); what remains is the product decision plus removing
+`NotACapabilityCaseError` from `hedge_responder_probe.py`.
 **To fix:** allow the probe to score guard cases; print the null baseline beside every published
 number; refuse to publish a headline where engine ≤ null; retract 0.914 until it clears. Delete the
 18 guaranteed-pass assertions first, in a separate commit, or the delta is unattributable.
@@ -1879,26 +1881,6 @@ swallowed before any handler saw it — the degradation fix must land first or i
 **To fix:** narrow the degradation catches; raise on driver `ServiceUnavailable`/`SessionExpired`;
 register a 503 handler; make `TokenBudgetExceededError` structured. Proof:
 `test_neo4j_outage_returns_503` — stop the container, POST dialogue, expect 503; today 500.
-
-## ISSUE-231: "unit" tests make live network calls, and CI silently records `None` model digests
-**Found:** 2026-08-28, during the 2026-08 review remediation triage
-**Severity:** P1 (blocking)
-**Where:** `evals/run_config.py:260-262`, `evals/engine_adapter.py:111-125`,
-`tests/unit/evals/test_run_config.py`
-**Description:** `run_config.resolve()` falls back to `_engine_adapter.fetch_model_digest` (twice)
-and `fetch_ollama_version` when no injector is passed; each is a real `httpx` call with a 10 s
-timeout. Only 2 of 17 tests in the cited file inject fakes, so 15 make three live HTTP attempts each
-— the file times out at **120 s** while collection takes 0.07 s. The worse half: both fetchers are
-documented to return `None` on any failure, and CI declares no Ollama service, so on a runner the
-connection is refused instantly, the tests **pass**, and the run records
-`generation_model_digest=None`. That is the only field making eval scores attributable to a model,
-which makes it load-bearing for the planned swap to a smaller fine-tuned local model.
-**Why deferred:** not deferred; it is R2.1, the first item of the measurement phase.
-**To fix:** require the injector under `tests/unit/` via an autouse fixture that raises on real
-`httpx` use, and make a `None` digest fatal in any run that publishes a number. Proof: the cited file
-completes in under 5 s with no network (today >120 s), and `resolve()` raises when the digest fn
-returns `None` (today returns a RunConfig with `None`).
-
 
 ## ISSUE-233: nine integration tests fail — the first ever run of the suite
 **Found:** 2026-08-28, immediately after ISSUE-232 made bolt reachable from the host
@@ -1934,3 +1916,39 @@ defects; delete or correct the stale expectations. Then wire the suite into CI (
 result cannot go unobserved again. Run with:
 `docker compose -f docker-compose.yml -f docker-compose.test.yml up -d` then
 `NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password python -m pytest tests/integration`
+
+
+## ISSUE-236: two different integration-failure baselines are recorded
+**Found:** 2026-08-31, during R2 planning
+**Severity:** P2 (annoying) — R3.6 would inherit a wrong denominator
+**Where:** project-harness/ISSUES.md (ISSUE-233) vs project-harness/.loop-state/gate_baseline.json
+**Description:** ISSUE-233 lists nine failing integration tests; gate_baseline.json records
+eight. The lists differ by exactly
+`test_faction_integration.py::test_set_standing_independent_directions`. Neither has been
+re-run since 2026-08-28 and Neo4j was not running during this planning session, so which
+is current is unknown.
+**Why deferred:** R2 fixes none of these (that is R3.6) and no R2 task attributes any
+measurement to integration counts. Settling it needs the stack up.
+**To fix:** bring up `docker compose -f docker-compose.yml -f docker-compose.test.yml`,
+run `NEO4J_URI=bolt://localhost:7687 python -m pytest tests/integration`, record the real
+list, and correct whichever file is stale. Do this as R3.6's first step.
+
+
+## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
+**Found:** 2026-08-31, during R2 planning
+**Severity:** P2 (annoying) — silently overstates n and makes case deletions invisible
+**Where:** scripts/check_base_rate.py `_iter_rows`
+**Description:** `_iter_rows` reads only `deterministic_judged.jsonl` and `judged.jsonl`
+from a generation directory and never consults `evals/cases/`. A case deleted from the
+corpus keeps contributing verdict rows to every base rate forever. Measured: deleting the
+19 fully-dead keyword_none blocks plus the 3 moderation cases would move the overall rate
+0.943 -> 0.935 and keyword_none 0.957 -> 0.917 on `k3_77688e7_regen1` if the filter
+existed; today it moves neither. This is why R2.4 had to be re-anchored onto
+check-dead-keywords.
+**Why deferred:** the fix couples the gate to working-tree case state and must derive
+case_id by string-parsing `record_id` ("case:matcher:rep") for deterministic rows, which
+carry no case_id field. Landing it inside R2.3 would add a second cause to that commit's
+numbers, which is the attribution error R2 exists to stop.
+**To fix:** add a case-existence filter to `_iter_rows`, report the dropped-row count
+explicitly so silent shrinkage is visible, and red when the drop rate exceeds a recorded
+baseline. Revisit when a regeneration is next run.

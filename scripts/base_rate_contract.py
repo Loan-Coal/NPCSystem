@@ -32,14 +32,20 @@ from pydantic import BaseModel, ConfigDict
 TARGET_BAND_LOW: float = 0.55
 TARGET_BAND_HIGH: float = 0.85
 
-#: Enforcement modes. `advisory` reports and exits 0; `blocking` exits 1 on any breach.
-#: See check_base_rate's module docstring for why advisory is the shipped default.
+#: Enforcement modes. `advisory` reports and exits 0; `blocking` exits 1 on any breach;
+#: `ratchet` exits 1 only when the measurement is WORSE than the recorded baseline.
 ADVISORY: str = "advisory"
 BLOCKING: str = "blocking"
-ENFORCEMENT_MODES: tuple[str, ...] = (ADVISORY, BLOCKING)
+RATCHET: str = "ratchet"
+ENFORCEMENT_MODES: tuple[str, ...] = (ADVISORY, BLOCKING, RATCHET)
 
-#: Shipped default. Flip to BLOCKING in the same commit that lands EVAL-P26's case set.
-DEFAULT_ENFORCEMENT: str = ADVISORY
+#: Shipped default (R2.3). Ratchet, not advisory: advisory's promotion criterion named
+#: EVAL-P26, a phase DEC-233 culled, so it would never have fired — the same
+#: never-promoted-advisory pattern R1 removed three times. Not blocking either: the
+#: battery breaches nine families today for a defect no scheduled task fixes, so blocking
+#: would red every downstream task through no fault of its own. The ratchet blocks from
+#: day one, has no promotion criterion to forget, and lets the debt shrink but never grow.
+DEFAULT_ENFORCEMENT: str = RATCHET
 
 _EXIT_OK: int = 0
 _EXIT_BREACH: int = 1
@@ -115,6 +121,26 @@ def classify(passes: int, n: int, low: float, high: float) -> BandStatus:
 # --- Models ---
 
 
+class BaseRateBaseline(BaseModel):
+    """The recorded measurement a ratchet run is judged against.
+
+    Attributes:
+        gen_dir: Generation directory the baseline was recorded from. Recorded for
+            provenance; re-pointing the ratchet at a newer generation is a deliberate
+            human step, never automatic — an automatic re-point would let a worse
+            generation launder itself into the baseline.
+        overall_rate: Recorded whole-battery pass rate. A HIGHER rate is worse: the band
+            is breached from above, where Pe swamps kappa.
+        breaches: family -> BandStatus value, for every family out of band when recorded.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    gen_dir: str
+    overall_rate: float
+    breaches: dict[str, str]
+
+
 class FamilyRate(BaseModel):
     """The measured pass rate for one matcher/expectation family.
 
@@ -148,8 +174,11 @@ class BaseRateReport(BaseModel):
         enforcement: ADVISORY or BLOCKING.
         overall: The whole-battery rate, family name `ALL`.
         families: Per-family rates, largest n first.
-        breaches: Families ABOVE_BAND or BELOW_BAND. Populated identically in both
-            enforcement modes; only `exit_code` differs.
+        breaches: Families ABOVE_BAND or BELOW_BAND. Populated identically in every
+            enforcement mode; only `exit_code` differs.
+        baseline: The recorded measurement, when one was loaded. None outside ratchet mode.
+        regressions: Human-readable reasons this run is worse than `baseline`. Empty when
+            the run is at or better than baseline. Only ratchet mode consults it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -161,10 +190,14 @@ class BaseRateReport(BaseModel):
     overall: FamilyRate
     families: tuple[FamilyRate, ...]
     breaches: tuple[FamilyRate, ...]
+    baseline: BaseRateBaseline | None = None
+    regressions: tuple[str, ...] = ()
 
     @property
     def exit_code(self) -> int:
-        """0 in advisory mode always; in blocking mode, 1 when anything is out of band."""
+        """0 in advisory always; 1 in blocking on any breach; 1 in ratchet on regression."""
         if self.enforcement == ADVISORY:
             return _EXIT_OK
+        if self.enforcement == RATCHET:
+            return _EXIT_BREACH if self.regressions else _EXIT_OK
         return _EXIT_BREACH if self.breaches else _EXIT_OK

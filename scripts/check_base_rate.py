@@ -11,11 +11,15 @@ Dependencies: argparse, json, pathlib, sys, typing; scripts/base_rate_contract.
 Used by: `make check-base-rate`, tests/unit/scripts/test_check_base_rate.py.
 
 Enforcement is a first-class, documented parameter, not a commented-out line. The band
-cannot bind the CURRENT battery — it measures 0.949 and would fail by construction — so
-the gate ships in `advisory` mode: it computes and reports the full breach list and exits
-0, and is switched to `blocking` when EVAL-P26 has rebuilt the case set. Advisory is not
-"disabled": the report and the breach list are identical in both modes and only
-`exit_code` differs, so the switch to blocking is a formality rather than a surprise.
+cannot bind the CURRENT battery — `k3_77688e7_regen1` measures 0.943 overall with nine
+of ten families out of band — so raw `blocking` would red on day one for a defect no
+scheduled task fixes. The shipped mode is `ratchet` (R2.3): the current measurement is
+recorded in scripts/base_rate_baseline.json and the gate reds when the overall rate RISES
+above it, or when a family enters a breach the baseline did not record. Debt can shrink,
+never grow. Re-record with --update, deliberately, after an intentional improvement.
+
+`advisory` remains available for exploration but is no longer the default: its promotion
+criterion named EVAL-P26, a phase DEC-233 culled, so it would never have fired.
 
 This module reads committed artifacts and never writes to them.
 """
@@ -33,9 +37,11 @@ from base_rate_contract import (
     BLOCKING,
     DEFAULT_ENFORCEMENT,
     ENFORCEMENT_MODES,
+    RATCHET,
     TARGET_BAND_HIGH,
     TARGET_BAND_LOW,
     BandStatus,
+    BaseRateBaseline,
     BaseRateReport,
     EmptyGenerationError,
     FamilyRate,
@@ -45,9 +51,11 @@ from base_rate_contract import (
 
 #: Re-exported so the whole gate is importable from one module.
 __all__ = [
-    "ADVISORY", "BLOCKING", "DEFAULT_ENFORCEMENT", "ENFORCEMENT_MODES", "TARGET_BAND_HIGH",
-    "TARGET_BAND_LOW", "BandStatus", "BaseRateReport", "EmptyGenerationError", "FamilyRate",
-    "check_generation", "classify", "format_report", "main", "smallest_n_reaching_band",
+    "ADVISORY", "BASELINE_PATH", "BLOCKING", "DEFAULT_ENFORCEMENT", "ENFORCEMENT_MODES",
+    "RATCHET", "TARGET_BAND_HIGH", "TARGET_BAND_LOW", "BandStatus", "BaseRateBaseline",
+    "BaseRateReport", "EmptyGenerationError", "FamilyRate", "check_generation", "classify",
+    "format_report", "main", "read_baseline", "regressions_vs_baseline",
+    "smallest_n_reaching_band", "write_baseline",
 ]
 
 #: Verdict files inside a generation directory, and the field naming the family in each.
@@ -59,6 +67,21 @@ _VERDICT_FILES: tuple[tuple[str, str], ...] = (
 )
 
 _OVERALL_FAMILY: str = "ALL"
+
+#: The two statuses that count as a breach.
+_OUT_OF_BAND: tuple[BandStatus, ...] = (BandStatus.ABOVE_BAND, BandStatus.BELOW_BAND)
+
+#: Recorded measurement the ratchet judges against. A single integer would not do:
+#: the breach SET matters as much as the scalar, so this is JSON.
+BASELINE_PATH: Path = Path(__file__).resolve().parent / "base_rate_baseline.json"
+
+
+class MissingBaselineError(ValueError):
+    """Raised when a baseline file exists but cannot be parsed.
+
+    Falling back to "no baseline" would read as green, which is exactly the silent
+    degradation this gate exists to prevent.
+    """
 
 
 # --- Loading ---
@@ -111,6 +134,95 @@ def _rate(family: str, passes: int, n: int, low: float, high: float) -> FamilyRa
     )
 
 
+def _measure_families(gen_dir: Path, band_low: float, band_high: float) -> tuple[FamilyRate, ...]:
+    """Tally one generation directory into per-family rates, largest n first."""
+    return tuple(
+        sorted(
+            (_rate(name, p, n, band_low, band_high) for name, (p, n) in _tally(gen_dir).items()),
+            key=lambda f: (-f.n, f.family),
+        )
+    )
+
+
+# --- Baseline (ratchet) ---
+
+
+def read_baseline(path: Path = BASELINE_PATH) -> BaseRateBaseline | None:
+    """Load the recorded measurement, or None when no baseline has been recorded.
+
+    Args:
+        path: Baseline JSON file.
+    Returns:
+        The parsed baseline, or None when the file is absent.
+    Raises:
+        MissingBaselineError: When the file exists but is not a readable baseline. A
+            corrupt baseline must not silently degrade to "no baseline", which reads as
+            green — the failure mode this whole gate exists to stop.
+    """
+    if not path.exists():
+        return None
+    try:
+        return BaseRateBaseline.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise MissingBaselineError(f"baseline at {path} exists but could not be read: {exc!r}") from exc
+
+
+def write_baseline(report: BaseRateReport, path: Path = BASELINE_PATH) -> BaseRateBaseline:
+    """Record `report` as the new baseline and return it.
+
+    Args:
+        report: The measurement to record.
+        path: Baseline JSON file to write.
+    Returns:
+        The baseline that was written.
+    """
+    baseline = BaseRateBaseline(
+        gen_dir=Path(report.gen_dir).as_posix(),
+        overall_rate=report.overall.pass_rate,
+        breaches={f.family: f.status.value for f in report.breaches},
+    )
+    payload = baseline.model_dump_json(indent=2)
+    path.write_text(f"{payload}\n", encoding="utf-8", newline="")
+    return baseline
+
+
+def regressions_vs_baseline(
+    overall: FamilyRate,
+    breaches: Sequence[FamilyRate],
+    baseline: BaseRateBaseline | None,
+) -> tuple[str, ...]:
+    """Name every way this measurement is worse than the recorded one.
+
+    Two things can regress: the whole-battery rate can rise (the band is breached from
+    above, so higher is worse), and a family can enter a breach the baseline did not
+    record — including the same family breaching in the opposite direction.
+
+    Args:
+        overall: This run's whole-battery rate.
+        breaches: This run's out-of-band families.
+        baseline: The recorded measurement, or None when none has been recorded.
+    Returns:
+        Human-readable regression reasons; empty when the run is at or better than baseline.
+    """
+    if baseline is None:
+        return (
+            "no baseline recorded — run `make check-base-rate-update` to record the "
+            "current measurement before this gate can ratchet",
+        )
+    found: list[str] = []
+    if overall.pass_rate > baseline.overall_rate:
+        found.append(
+            f"overall rate rose {baseline.overall_rate:.4f} -> {overall.pass_rate:.4f} "
+            f"(higher is worse: the band is breached from above)"
+        )
+    found.extend(
+        f"{f.family} newly {f.status.value} (baseline recorded {baseline.breaches.get(f.family, 'in band')})"
+        for f in breaches
+        if baseline.breaches.get(f.family) != f.status.value
+    )
+    return tuple(found)
+
+
 # --- Public entry point ---
 
 
@@ -120,14 +232,18 @@ def check_generation(
     enforcement: str = DEFAULT_ENFORCEMENT,
     band_low: float = TARGET_BAND_LOW,
     band_high: float = TARGET_BAND_HIGH,
+    baseline: BaseRateBaseline | None = None,
 ) -> BaseRateReport:
     """Measure a generation directory's base rate against the target band.
 
     Args:
         gen_dir: A directory holding deterministic_judged.jsonl and/or judged.jsonl.
-        enforcement: ADVISORY (report, exit 0) or BLOCKING (report, exit 1 on breach).
+        enforcement: ADVISORY (report, exit 0), BLOCKING (exit 1 on any breach), or
+            RATCHET (exit 1 only when worse than `baseline`).
         band_low: Inclusive lower band edge.
         band_high: Inclusive upper band edge.
+        baseline: Recorded measurement for RATCHET mode; injected, not read here, so this
+            function stays a pure measurement over its arguments.
     Returns:
         The BaseRateReport; `exit_code` carries the enforcement decision.
     Raises:
@@ -136,23 +252,36 @@ def check_generation(
     """
     if enforcement not in ENFORCEMENT_MODES:
         raise ValueError(f"unknown enforcement mode {enforcement!r}; expected one of {ENFORCEMENT_MODES}")
-    families = tuple(
-        sorted(
-            (_rate(name, p, n, band_low, band_high) for name, (p, n) in _tally(gen_dir).items()),
-            key=lambda f: (-f.n, f.family),
-        )
+    families = _measure_families(gen_dir, band_low, band_high)
+    overall = _rate(
+        _OVERALL_FAMILY, sum(f.passes for f in families), sum(f.n for f in families), band_low, band_high
     )
-    out_of_band = (BandStatus.ABOVE_BAND, BandStatus.BELOW_BAND)
+    return _build_report(gen_dir, families, overall, enforcement, band_low, band_high, baseline)
+
+
+def _build_report(
+    gen_dir: Path,
+    families: tuple[FamilyRate, ...],
+    overall: FamilyRate,
+    enforcement: str,
+    band_low: float,
+    band_high: float,
+    baseline: BaseRateBaseline | None,
+) -> BaseRateReport:
+    """Assemble the report, deriving the breach list and (in ratchet mode) regressions."""
+    breaches = tuple(f for f in families if f.status in _OUT_OF_BAND)
     return BaseRateReport(
         gen_dir=str(gen_dir),
         band_low=band_low,
         band_high=band_high,
         enforcement=enforcement,
-        overall=_rate(
-            _OVERALL_FAMILY, sum(f.passes for f in families), sum(f.n for f in families), band_low, band_high
-        ),
+        overall=overall,
         families=families,
-        breaches=tuple(f for f in families if f.status in out_of_band),
+        breaches=breaches,
+        baseline=baseline,
+        regressions=regressions_vs_baseline(overall, breaches, baseline)
+        if enforcement == RATCHET
+        else (),
     )
 
 
@@ -185,10 +314,30 @@ def format_report(report: BaseRateReport) -> str:
         lines.append("  out of band:")
         lines.extend(f"    - {f.family} ({f.pass_rate:.3f}, {f.status.value})" for f in report.breaches)
         if report.enforcement == ADVISORY:
-            lines.append(f"  ADVISORY: reported, not blocking. Switch to {BLOCKING} when EVAL-P26 lands.")
+            lines.append("  ADVISORY: reported, not blocking. Exploration mode, not the shipped default.")
     else:
         lines.append("  every family with sufficient n is inside the band.")
+    if report.enforcement == RATCHET:
+        lines.extend(_ratchet_lines(report))
     return "\n".join(lines)
+
+
+def _ratchet_lines(report: BaseRateReport) -> list[str]:
+    """Render the ratchet verdict: what the baseline was, and how this run compares."""
+    if report.regressions:
+        return ["  RATCHET RED - this measurement is worse than the recorded baseline:"] + [
+            f"    - {reason}" for reason in report.regressions
+        ]
+    baseline = report.baseline
+    if baseline is None:
+        return ["  RATCHET OK - no baseline to compare against."]
+    lines = [
+        f"  RATCHET OK - at or better than baseline {baseline.overall_rate:.4f} "
+        f"({len(baseline.breaches)} breaching families) from {baseline.gen_dir}."
+    ]
+    if report.overall.pass_rate < baseline.overall_rate or len(report.breaches) < len(baseline.breaches):
+        lines.append("  Improved - re-record with `make check-base-rate-update` to lock the gain in.")
+    return lines
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -199,15 +348,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--enforce",
         choices=ENFORCEMENT_MODES,
         default=DEFAULT_ENFORCEMENT,
-        help="advisory reports and exits 0; blocking exits 1 on any breach (default: %(default)s)",
+        help="advisory reports and exits 0; blocking exits 1 on any breach; ratchet exits 1 only when worse than the recorded baseline (default: %(default)s)",
     )
     parser.add_argument("--band-low", type=float, default=TARGET_BAND_LOW, help="inclusive lower band edge")
     parser.add_argument("--band-high", type=float, default=TARGET_BAND_HIGH, help="inclusive upper band edge")
+    parser.add_argument("--baseline-file", type=Path, default=BASELINE_PATH, help="ratchet baseline JSON")
+    parser.add_argument("--update", action="store_true", help="record this measurement as the baseline")
     args = parser.parse_args(argv)
 
     report = check_generation(
-        args.gen_dir, enforcement=args.enforce, band_low=args.band_low, band_high=args.band_high
+        args.gen_dir,
+        enforcement=args.enforce,
+        band_low=args.band_low,
+        band_high=args.band_high,
+        baseline=None if args.update else read_baseline(args.baseline_file),
     )
+    if args.update:
+        recorded = write_baseline(report, args.baseline_file)
+        sys.stdout.write(
+            f"check-base-rate: baseline recorded at {recorded.overall_rate:.4f} "
+            f"with {len(recorded.breaches)} breaching families from {recorded.gen_dir}\n"
+        )
+        return 0
     sys.stdout.write(format_report(report) + "\n")
     return report.exit_code
 
