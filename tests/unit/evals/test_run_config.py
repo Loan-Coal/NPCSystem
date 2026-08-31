@@ -15,7 +15,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from run_config import GoldenSetVersionError, RunConfig, resolve_golden_set_version, resolve_run_config
+from run_config import (
+    GoldenSetVersionError,
+    ModelDigestUnavailableError,
+    RunConfig,
+    resolve_golden_set_version,
+    resolve_run_config,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DIALOGUE_LLM_CONFIG = _REPO_ROOT / "src" / "npc_engine" / "engines" / "dialogue" / "llm_config.yaml"
@@ -37,6 +43,27 @@ _MINIMAL_CONFIG: dict = {
 }
 
 
+_STUB_GEN_DIGEST = "sha256:stub-generation"
+_STUB_JUDGE_DIGEST = "sha256:stub-judge"
+_STUB_OLLAMA_VERSION = "0.0.0-stub"
+
+
+def _offline_probes(**overrides: object) -> dict:
+    """Return resolve_run_config kwargs that never touch the network.
+
+    tests/unit/conftest.py blocks real socket connects, and resolve_run_config now
+    refuses a None digest, so every unit-test call injects its probes explicitly.
+    """
+    probes: dict = {
+        "fetch_generation_digest": lambda _m, _u: _STUB_GEN_DIGEST,
+        "fetch_judge_digest": lambda _m, _u: _STUB_JUDGE_DIGEST,
+        "fetch_ollama_version_fn": lambda _u: _STUB_OLLAMA_VERSION,
+        "fetch_corpus_fingerprint": lambda: None,
+    }
+    probes.update(overrides)
+    return probes
+
+
 @pytest.fixture()
 def tmp_llm_config(tmp_path: Path) -> Path:
     """Write a minimal llm_config.yaml to a temp directory and return its path."""
@@ -47,28 +74,28 @@ def tmp_llm_config(tmp_path: Path) -> Path:
 
 def test_resolve_reads_dialogue_llm_config() -> None:
     """resolve_run_config() returns generation_model matching llm_config.yaml's llm.model."""
-    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG)
+    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG, **_offline_probes())
     expected_data = yaml.safe_load(_DIALOGUE_LLM_CONFIG.read_text(encoding="utf-8"))
     assert config.generation_model == expected_data["llm"]["model"]
 
 
 def test_resolve_reads_prompt_version() -> None:
     """resolve_run_config() returns prompt_version matching llm_config.yaml's prompt.version."""
-    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG)
+    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG, **_offline_probes())
     expected_data = yaml.safe_load(_DIALOGUE_LLM_CONFIG.read_text(encoding="utf-8"))
     assert config.prompt_version == str(expected_data["prompt"]["version"])
 
 
 def test_git_sha_is_seven_chars() -> None:
     """resolve_run_config() includes a non-empty 7-char git SHA."""
-    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG)
+    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG, **_offline_probes())
     assert len(config.git_sha) == 7
     assert config.git_sha.strip()
 
 
 def test_run_config_is_frozen(tmp_llm_config: Path) -> None:
     """RunConfig is immutable — setattr raises ValidationError (Pydantic frozen model)."""
-    config = resolve_run_config(config_path=tmp_llm_config)
+    config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
     # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         setattr(config, "generation_model", "other")
@@ -82,7 +109,7 @@ def test_seed_field_present_defaults_to_none() -> None:
 
 def test_resolve_reads_seed_from_dialogue_llm_config() -> None:
     """The committed dialogue llm_config.yaml seed reaches RunConfig — guards silent removal."""
-    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG)
+    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG, **_offline_probes())
     expected_data = yaml.safe_load(_DIALOGUE_LLM_CONFIG.read_text(encoding="utf-8"))
     assert isinstance(expected_data["llm"]["seed"], int)
     assert config.seed == expected_data["llm"]["seed"]
@@ -90,7 +117,7 @@ def test_resolve_reads_seed_from_dialogue_llm_config() -> None:
 
 def test_resolve_seed_is_none_when_config_omits_it(tmp_llm_config: Path) -> None:
     """An engine config without a seed key resolves to None, not a KeyError."""
-    config = resolve_run_config(config_path=tmp_llm_config)
+    config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
     assert config.seed is None
 
 
@@ -102,6 +129,7 @@ def test_resolve_with_custom_retrieval_profile(tmp_path: Path, tmp_llm_config: P
         config_path=tmp_llm_config,
         retrieval_profile="strict",
         cases_dir=tmp_path,
+        **_offline_probes(),
     )
     assert config.retrieval_profile == "strict"
     assert len(config.golden_set_version) == 12
@@ -109,7 +137,7 @@ def test_resolve_with_custom_retrieval_profile(tmp_path: Path, tmp_llm_config: P
 
 def test_run_config_fields_from_minimal_yaml(tmp_llm_config: Path) -> None:
     """resolve_run_config() correctly maps all llm YAML fields to RunConfig attributes."""
-    config = resolve_run_config(config_path=tmp_llm_config)
+    config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
     assert config.generation_model == "test-model:7b"
     assert config.temperature == 0.5
     assert config.max_tokens == 256
@@ -127,11 +155,11 @@ def test_golden_set_version_changes_when_a_case_changes(tmp_path: Path, tmp_llm_
     case_file = tmp_path / "case_001.yaml"
     case_file.write_text("prompt: hello", encoding="utf-8")
 
-    config_before = resolve_run_config(config_path=tmp_llm_config, cases_dir=tmp_path)
+    config_before = resolve_run_config(config_path=tmp_llm_config, cases_dir=tmp_path, **_offline_probes())
 
     case_file.write_text("prompt: world", encoding="utf-8")
 
-    config_after = resolve_run_config(config_path=tmp_llm_config, cases_dir=tmp_path)
+    config_after = resolve_run_config(config_path=tmp_llm_config, cases_dir=tmp_path, **_offline_probes())
 
     assert config_before.golden_set_version != config_after.golden_set_version
 
@@ -199,6 +227,7 @@ def test_editing_a_judge_criteria_changes_harness_version(
         cases_dir=cases_dir,
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
+        **_offline_probes(),
     )
 
     judge_file.write_text("criteria: hallucination is acceptable", encoding="utf-8")
@@ -208,6 +237,7 @@ def test_editing_a_judge_criteria_changes_harness_version(
         cases_dir=cases_dir,
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
+        **_offline_probes(),
     )
 
     assert config_before.harness_version != config_after.harness_version
@@ -233,6 +263,7 @@ def test_readme_in_cases_does_not_change_harness_version(
         cases_dir=cases_dir,
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
+        **_offline_probes(),
     )
 
     (cases_dir / "README.md").write_text("# Cases documentation", encoding="utf-8")
@@ -242,6 +273,7 @@ def test_readme_in_cases_does_not_change_harness_version(
         cases_dir=cases_dir,
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
+        **_offline_probes(),
     )
 
     assert config_before.harness_version == config_after.harness_version
@@ -277,9 +309,11 @@ def test_meta_records_model_digest_not_just_tag(
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
         dialogue_prompts_dir=dialogue_prompts_dir,
-        fetch_generation_digest=lambda _m, _u: "digest-v1",
-        fetch_judge_digest=lambda _m, _u: "digest-jv1",
-        fetch_ollama_version_fn=lambda _u: "0.1.0",
+        **_offline_probes(
+            fetch_generation_digest=lambda _m, _u: "digest-v1",
+            fetch_judge_digest=lambda _m, _u: "digest-jv1",
+            fetch_ollama_version_fn=lambda _u: "0.1.0",
+        ),
     )
     config_b = resolve_run_config(
         config_path=tmp_llm_config,
@@ -287,9 +321,11 @@ def test_meta_records_model_digest_not_just_tag(
         prompts_eval_dir=prompts_eval_dir,
         matchers_path=matchers_path,
         dialogue_prompts_dir=dialogue_prompts_dir,
-        fetch_generation_digest=lambda _m, _u: "digest-v2",
-        fetch_judge_digest=lambda _m, _u: "digest-jv2",
-        fetch_ollama_version_fn=lambda _u: "0.1.0",
+        **_offline_probes(
+            fetch_generation_digest=lambda _m, _u: "digest-v2",
+            fetch_judge_digest=lambda _m, _u: "digest-jv2",
+            fetch_ollama_version_fn=lambda _u: "0.1.0",
+        ),
     )
 
     assert config_a.generation_model == config_b.generation_model  # same tag
@@ -299,3 +335,26 @@ def test_meta_records_model_digest_not_just_tag(
     assert isinstance(config_a.judge_temperature, float)
     assert isinstance(config_a.dialogue_prompt_hash, str)
     assert len(config_a.dialogue_prompt_hash) == 12
+
+
+# ---------------------------------------------------------------------------
+# R2.1: a missing model digest is fatal, not silently recorded as None
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_raises_when_digest_unavailable(tmp_llm_config: Path) -> None:
+    """A digest fetcher returning None raises instead of recording an unattributable run."""
+    with pytest.raises(ModelDigestUnavailableError):
+        resolve_run_config(
+            config_path=tmp_llm_config,
+            **_offline_probes(fetch_generation_digest=lambda _m, _u: None),
+        )
+
+
+def test_resolve_raises_when_judge_digest_unavailable(tmp_llm_config: Path) -> None:
+    """The judge digest is guarded too — self-evaluation metadata must be attributable."""
+    with pytest.raises(ModelDigestUnavailableError):
+        resolve_run_config(
+            config_path=tmp_llm_config,
+            **_offline_probes(fetch_judge_digest=lambda _m, _u: None),
+        )

@@ -64,10 +64,61 @@ _DIALOGUE_PROMPTS_DIR = _REPO_ROOT / "src" / "npc_engine" / "prompts"
 # Re-export for callers that import from run_config (e.g. test_run_config.py).
 __all__ = [
     "GoldenSetVersionError",
+    "ModelDigestUnavailableError",
     "RunConfig",
     "resolve_golden_set_version",
     "resolve_run_config",
 ]
+
+
+class ModelDigestUnavailableError(RuntimeError):
+    """Raised when Ollama could not be probed for a model's content digest.
+
+    A digest is the only field that distinguishes two runs of the same model tag
+    across a re-pull or a quantisation change, so a run recorded with a ``None``
+    digest is not attributable to a model — it merely names one. Prior behaviour
+    silently recorded ``None`` and CI published the unattributable result (R2.1).
+    Fatal everywhere, not only when publishing: a local run that cannot identify
+    its model produces numbers nobody can reproduce either.
+
+    Follows the local-typed-error idiom of ``JudgeModelCollisionError``
+    (judge_config.py) — evals/ does not depend on src/npc_engine/utils/errors.py.
+    """
+
+    def __init__(self, role: str, model: str, ollama_url: str) -> None:
+        self.role = role
+        self.model = model
+        self.ollama_url = ollama_url
+        super().__init__(
+            f"No content digest for the {role} model {model!r} from {ollama_url}. "
+            f"Ollama is unreachable or does not know the model; a run recorded "
+            f"without a digest is not attributable. Start Ollama and pull the "
+            f"model, or inject an explicit digest fetcher."
+        )
+
+
+def _require_digest(
+    role: str,
+    model: str,
+    ollama_url: str,
+    fetch: Callable[[str, str], str | None],
+) -> str:
+    """Fetch a model digest, raising rather than returning None.
+
+    Args:
+        role: 'generation' or 'judge' — names the model in the error message.
+        model: Ollama model tag.
+        ollama_url: Ollama base URL passed to the fetcher.
+        fetch: Callable(model, url) -> digest or None.
+    Returns:
+        The non-empty digest string.
+    Raises:
+        ModelDigestUnavailableError: If the fetcher returns None.
+    """
+    digest = fetch(model, ollama_url)
+    if digest is None:
+        raise ModelDigestUnavailableError(role=role, model=model, ollama_url=ollama_url)
+    return digest
 
 
 class RunConfig(BaseModel):
@@ -220,9 +271,11 @@ def resolve_run_config(
         dialogue_prompts_dir: Override path to runtime prompt tree (for testing);
             defaults to src/npc_engine/prompts/.
         fetch_generation_digest: Callable(model, url) -> digest; defaults to
-            engine_adapter.fetch_model_digest. Injectable for tests.
+            engine_adapter.fetch_model_digest. Injectable for tests. Returning None
+            raises ModelDigestUnavailableError.
         fetch_judge_digest: Callable(model, url) -> digest; defaults to
-            engine_adapter.fetch_model_digest. Injectable for tests.
+            engine_adapter.fetch_model_digest. Injectable for tests. Returning None
+            raises ModelDigestUnavailableError.
         fetch_ollama_version_fn: Callable(url) -> version; defaults to
             engine_adapter.fetch_ollama_version. Injectable for tests.
         judge_temperature: Sampling temperature used by the binary judge; defaults to
@@ -236,6 +289,8 @@ def resolve_run_config(
         Frozen RunConfig instance.
     Raises:
         JudgeModelCollisionError: If the resolved judge model equals the generation model.
+        ModelDigestUnavailableError: If either digest fetcher returns None (R2.1) — a run
+            whose model identity is unknown is not recorded, it is refused.
         GoldenSetVersionError: If cases_dir is empty or missing.
         RuntimeError: If git rev-parse fails.
         FileNotFoundError: If llm_config.yaml or matchers_path cannot be found.
@@ -261,19 +316,24 @@ def resolve_run_config(
     judge_digest_fn = fetch_judge_digest or _engine_adapter.fetch_model_digest
     version_fn = fetch_ollama_version_fn or _engine_adapter.fetch_ollama_version
 
+    generation_model_digest = _require_digest(
+        "generation", generation_model, ollama_url, gen_digest_fn
+    )
+    judge_model_digest = _require_digest("judge", judge_model, ollama_url, judge_digest_fn)
+
     resolved_cases_dir = cases_dir or _CASES_DIR
     resolved_prompts_dir = dialogue_prompts_dir or _DIALOGUE_PROMPTS_DIR
 
     return RunConfig(
         prompt_version=str(prompt[_VERSION_KEY]),
         generation_model=generation_model,
-        generation_model_digest=gen_digest_fn(generation_model, ollama_url),
+        generation_model_digest=generation_model_digest,
         temperature=float(llm[_TEMPERATURE_KEY]),
         top_p=float(llm[_TOP_P_KEY]),
         max_tokens=int(llm[_MAX_TOKENS_KEY]),
         seed=llm.get(_SEED_KEY),
         judge_model=judge_model,
-        judge_model_digest=judge_digest_fn(judge_model, ollama_url),
+        judge_model_digest=judge_model_digest,
         judge_temperature=resolved_judge_temperature,
         ollama_version=version_fn(ollama_url),
         retrieval_profile=retrieval_profile,

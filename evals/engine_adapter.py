@@ -83,8 +83,10 @@ def neo4j_uri() -> str:
 def fetch_model_digest(model: str, ollama_url: str) -> str | None:
     """Fetch the model's content digest from Ollama /api/show.
 
-    Returns None if Ollama is unavailable — callers treat None as "digest unknown"
-    and the omission is explicit in the RunConfig rather than silently missing.
+    Returns None if Ollama is unavailable. None is fatal upstream since R2.1:
+    run_config.resolve_run_config raises ModelDigestUnavailableError rather than
+    recording an unattributable run. This function stays total so callers that
+    genuinely only want a probe (health checks) keep working.
 
     Args:
         model: Ollama model tag (e.g. 'qwen2.5:7b').

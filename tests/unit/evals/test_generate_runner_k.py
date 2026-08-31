@@ -18,6 +18,24 @@ import pytest
 
 from generate_runner import run
 from generation_collection import collect_records
+from run_config import RunConfig, resolve_run_config
+
+
+
+def _offline_resolve(**kwargs: object) -> RunConfig:
+    """Resolve a real RunConfig with the Ollama probes stubbed out.
+
+    Unit tests do no network I/O (tests/unit/conftest.py), and a None digest is fatal
+    since R2.1 — so the probes are injected while everything else about the resolution
+    stays real.
+    """
+    return resolve_run_config(
+        fetch_generation_digest=lambda *_: "sha256:stub-generation",
+        fetch_judge_digest=lambda *_: "sha256:stub-judge",
+        fetch_ollama_version_fn=lambda _: None,
+        fetch_corpus_fingerprint=lambda: None,
+        **kwargs,  # type: ignore[arg-type]
+    )
 
 
 def _make_yaml_case(case_id: str = "tc001") -> dict:
@@ -90,6 +108,7 @@ def test_k_equals_one_is_default(mock_ensure: MagicMock) -> None:
     assert records_explicit[0].repetition == 0
 
 
+@patch("generate_runner.resolve_run_config", _offline_resolve)
 @patch("generation_collection.preconditions.ensure_player_node")
 def test_gen_dir_run_records_a_non_null_run_config(
     mock_ensure: MagicMock, tmp_path: Path

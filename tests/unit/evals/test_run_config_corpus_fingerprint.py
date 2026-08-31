@@ -32,8 +32,8 @@ def _resolve(tmp_path: Path, fetch) -> RunConfig:
     (cases / "case.yaml").write_text("id: c1\n", encoding="utf-8")
     return resolve_run_config(
         cases_dir=cases,
-        fetch_generation_digest=lambda *_: None,
-        fetch_judge_digest=lambda *_: None,
+        fetch_generation_digest=lambda *_: "sha256:stub-generation",
+        fetch_judge_digest=lambda *_: "sha256:stub-judge",
         fetch_ollama_version_fn=lambda _: None,
         fetch_corpus_fingerprint=fetch,
     )
