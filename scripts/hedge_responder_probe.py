@@ -55,6 +55,27 @@ HEDGE_GATE_THRESHOLD: float = 0.30
 _CAPABILITY_PREFIX: str = "case_pos_"
 _CASE_GLOB: str = "case_pos_*.yaml"
 
+#: Batteries this probe can score a null responder against, as
+#: name -> (file glob, accepted case_id prefixes).
+#:
+#: R2.5 added `adversarial`. The probe could previously score ONLY case_pos_*, and
+#: `score_case` refused anything else -- which is exactly why the null baseline for the
+#: guard battery was never taken: the instrument structurally could not measure the
+#: comparison the guarantee depends on.
+#:
+#: The gate direction is the SAME for every battery, which is why one probe covers both:
+#: a battery that a canned non-answer passes is not measuring anything, whether the canned
+#: answer is a hedge beating a capability case or a refusal beating an adversarial one.
+#:
+#: `anti_hallucination` (ah_demo_*) is absent deliberately: those cases ship as JSON in
+#: evals/cases/anti_hallucination_demo.json and are loaded by anti_hallucination_runner,
+#: so adding them needs a JSON loader, not another row here. Logged rather than faked.
+_BATTERIES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "capability": ("case_pos_*.yaml", ("case_pos_",)),
+    "adversarial": ("case_*.yaml", ("case_adv_", "case_neg_")),
+}
+_DEFAULT_BATTERY: str = "capability"
+
 _DEFAULT_CASES_DIR: Path = _REPO_ROOT / "evals" / "cases"
 
 #: Envelope fields `matchers._eval_schema` requires to be present and non-null.
@@ -69,10 +90,13 @@ _UNKNOWN_KIND: str = "unknown"
 
 
 class NotACapabilityCaseError(ValueError):
-    """Raised when a case that is not `case_pos_*` is handed to the probe.
+    """Raised when a case outside the battery being probed is handed to the probe.
 
-    The probe reports a capability rate; scoring a guard case would silently change
-    what that number means.
+    The probe reports one battery's rate at a time; mixing a case from another battery
+    would silently change what that number means -- the same conflation DEC-243 removed
+    from the published guard headline.
+
+    Name kept for its existing importers; it is no longer capability-specific.
     """
 
 
@@ -86,10 +110,13 @@ class HedgeProbeResult(BaseModel):
 
     Attributes:
         hedge: The canned response substituted for every NPC answer.
-        cases: Capability cases considered.
+        battery: Which battery the rate was measured over. Recorded because the same
+            number means different things per battery, which is the DEC-243 lesson.
+        cases: Cases of that battery considered.
         turns: Cases that produced a verdict (the rate's denominator).
-        passes: Cases the hedge passed.
-        capability_rate: `passes / turns`, or None when no case ran.
+        passes: Cases the null responder passed.
+        null_rate: `passes / turns`, or None when no case ran. A HIGH value is the
+            defect: it means the battery is passed by a canned non-answer.
         passing_case_ids: The cases the hedge beat — the authoring work-list.
         threshold: The rate the battery must hold the hedge below.
     """
@@ -97,10 +124,11 @@ class HedgeProbeResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     hedge: str
+    battery: str = _DEFAULT_BATTERY
     cases: int
     turns: int
     passes: int
-    capability_rate: float | None
+    null_rate: float | None
     passing_case_ids: tuple[str, ...]
     threshold: float
 
@@ -111,9 +139,9 @@ class HedgeProbeResult(BaseModel):
         An unmeasured battery (zero capability cases) is never a pass: "no case ran"
         and "every case held" are the same number of failures and opposite results.
         """
-        if self.capability_rate is None:
+        if self.null_rate is None:
             return False
-        return self.capability_rate < self.threshold
+        return self.null_rate < self.threshold
 
 
 # ---------------------------------------------------------------------------
@@ -160,23 +188,30 @@ def _expectation_result(expectation: dict[str, Any], response: dict[str, Any]) -
     return {"kind": kind, "passed": passed, "skipped": False, "detail": detail}
 
 
-def score_case(case: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
-    """Score one capability case against a fixed response.
+def score_case(
+    case: dict[str, Any],
+    response: dict[str, Any],
+    *,
+    prefixes: tuple[str, ...] = (_CAPABILITY_PREFIX,),
+) -> dict[str, Any]:
+    """Score one case from the battery being probed against a fixed response.
 
     Args:
+        prefixes: case_id prefixes the battery admits. Defaults to the capability
+            battery, so existing callers are unaffected.
         case: A parsed `case_pos_*` YAML document.
         response: The response envelope to score, from `synthetic_response`.
     Returns:
         A result dict in `evals/runner.py::_run_case` shape, so `summary.summarize`
         consumes it unchanged.
     Raises:
-        NotACapabilityCaseError: When the case is not a `case_pos_*` case.
+        NotACapabilityCaseError: When the case is outside `prefixes`.
     """
     case_id = str(case.get("case_id", ""))
-    if not case_id.startswith(_CAPABILITY_PREFIX):
+    if not case_id.startswith(prefixes):
         raise NotACapabilityCaseError(
-            f"'{case_id}' is not a capability case; the probe reports a capability rate "
-            f"and must be given only {_CAPABILITY_PREFIX}* cases"
+            f"'{case_id}' is outside the battery being probed; the probe reports one "
+            f"battery's rate and must be given only {'/'.join(prefixes)}* cases"
         )
     expectations = [_expectation_result(exp, response) for exp in case.get("expected", [])]
     return {
@@ -193,29 +228,34 @@ def probe(
     *,
     hedge: str = CANNED_HEDGE,
     threshold: float = HEDGE_GATE_THRESHOLD,
+    battery: str = _DEFAULT_BATTERY,
 ) -> HedgeProbeResult:
-    """Score every capability case against the always-hedge responder.
+    """Score every case of one battery against the canned null responder.
 
     Args:
-        cases: Parsed `case_pos_*` documents.
+        cases: Parsed case documents, all from `battery`.
         hedge: The canned response substituted for every NPC answer.
-        threshold: The rate the battery must hold the hedge below.
+        threshold: The rate the battery must hold the null responder below.
+        battery: Which battery is being measured; see `_BATTERIES`.
     Returns:
         The measured HedgeProbeResult.
     Raises:
-        NotACapabilityCaseError: When any case is not a `case_pos_*` case.
+        NotACapabilityCaseError: When any case is outside `battery`.
+        KeyError: When `battery` names no known battery.
     """
+    _, prefixes = _BATTERIES[battery]
     response = synthetic_response(hedge)
-    results = [score_case(case, response) for case in cases]
+    results = [score_case(case, response, prefixes=prefixes) for case in cases]
     rolled = summarize(results)
-    passing = tuple(r["case_id"] for r in results if r["passed"])
+    field = "capability" if battery == "capability" else battery
     return HedgeProbeResult(
         hedge=hedge,
-        cases=rolled.capability_cases,
-        turns=rolled.capability_turns,
-        passes=rolled.capability_passes,
-        capability_rate=rolled.capability_rate,
-        passing_case_ids=passing,
+        battery=battery,
+        cases=getattr(rolled, f"{field}_cases"),
+        turns=getattr(rolled, f"{field}_turns"),
+        passes=getattr(rolled, f"{field}_passes"),
+        null_rate=getattr(rolled, f"{field}_rate"),
+        passing_case_ids=tuple(r["case_id"] for r in results if r["passed"]),
         threshold=threshold,
     )
 
@@ -223,31 +263,40 @@ def probe(
 def load_capability_cases(
     cases_dir: Path,
     case_ids: Sequence[str] | None = None,
+    *,
+    battery: str = _DEFAULT_BATTERY,
 ) -> tuple[dict[str, Any], ...]:
-    """Load every `case_pos_*.yaml` document in a directory, sorted by filename.
+    """Load one battery's case documents from a directory, sorted by filename.
+
+    The glob alone is not enough for every battery: `adversarial` spans two prefixes
+    inside the shared `case_*.yaml` namespace, so the prefix filter is what keeps
+    `case_pos_*` out of an adversarial run.
 
     Args:
         cases_dir: Directory holding eval case YAML files.
         case_ids: When given, keep only these case_ids — used to measure the
             authored subset separately from the whole battery, which is what
             EVAL-P20.2's ratchet clause scopes validation (2) to.
+        battery: Which battery to load; see `_BATTERIES`.
     Returns:
-        The parsed capability cases.
+        The parsed cases of that battery.
     Raises:
         NotACapabilityCaseError: When `case_ids` names an id no file supplies, so a
             typo cannot quietly shrink the denominator.
     """
+    glob, prefixes = _BATTERIES[battery]
     loaded = tuple(
         yaml.safe_load(path.read_text(encoding="utf-8"))
-        for path in sorted(cases_dir.glob(_CASE_GLOB))
+        for path in sorted(cases_dir.glob(glob))
     )
+    loaded = tuple(c for c in loaded if str(c.get("case_id", "")).startswith(prefixes))
     if case_ids is None:
         return loaded
     wanted = set(case_ids)
     kept = tuple(case for case in loaded if case.get("case_id") in wanted)
     missing = sorted(wanted - {case.get("case_id") for case in kept})
     if missing:
-        raise NotACapabilityCaseError(f"no capability case found for: {', '.join(missing)}")
+        raise NotACapabilityCaseError(f"no {battery} case found for: {', '.join(missing)}")
     return kept
 
 
@@ -258,16 +307,16 @@ def load_capability_cases(
 
 def _report(result: HedgeProbeResult) -> str:
     """Render the probe result, naming every case the hedge beat."""
-    rate = "N/A (no capability case ran)" if result.capability_rate is None else f"{result.capability_rate:.3f}"
+    rate = "N/A (no case ran)" if result.null_rate is None else f"{result.null_rate:.3f}"
     verdict = "GATE MET" if result.meets_gate else "GATE NOT MET"
     lines = [
-        "always-hedge responder vs the capability battery",
+        f"canned null responder vs the {result.battery} battery",
         f"  hedge:      {result.hedge!r}",
-        f"  capability: {result.passes}/{result.turns}  rate {rate}  (gate: < {result.threshold:.2f})",
+        f"  null rate:  {result.passes}/{result.turns}  rate {rate}  (gate: < {result.threshold:.2f})",
         f"  verdict:    {verdict}",
     ]
     if result.passing_case_ids:
-        lines.append("  cases the hedge passed (these do not test capability):")
+        lines.append("  cases the null responder passed (these test nothing):")
         lines.extend(f"    - {case_id}" for case_id in result.passing_case_ids)
     return "\n".join(lines)
 
@@ -285,10 +334,14 @@ def main(argv: list[str] | None = None) -> int:
         "--threshold", type=float, default=HEDGE_GATE_THRESHOLD,
         help="capability rate the battery must hold the hedge below (default: %(default)s)",
     )
+    parser.add_argument(
+        "--battery", default=_DEFAULT_BATTERY, choices=sorted(_BATTERIES),
+        help="battery to score the null responder against (default: %(default)s)",
+    )
     args = parser.parse_args(argv)
 
-    cases = load_capability_cases(Path(args.cases), args.case_ids)
-    result = probe(cases, hedge=args.hedge, threshold=args.threshold)
+    cases = load_capability_cases(Path(args.cases), args.case_ids, battery=args.battery)
+    result = probe(cases, hedge=args.hedge, threshold=args.threshold, battery=args.battery)
     print(_report(result))
     return _EXIT_OK if result.meets_gate else _EXIT_GATE_FAILED
 

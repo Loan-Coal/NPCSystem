@@ -125,6 +125,45 @@ def test_scoring_a_non_capability_case_is_refused() -> None:
         score_case(_case("case_neg_x", [{"kind": "schema"}]), synthetic_response(CANNED_HEDGE))
 
 
+def test_the_adversarial_battery_can_now_be_scored_at_all() -> None:
+    """R2.5's unblock. Until 2026-09-01 this raised, which is WHY the baseline was missing.
+
+    `score_case` hardcoded the capability prefix and refused everything else, so the probe
+    structurally could not measure a null responder against the guard battery -- the exact
+    comparison the published guarantee depends on (engine 0.897 vs null 0.949 on guard).
+    The instrument's refusal, not an oversight, is why nobody had taken the number.
+    """
+    scored = score_case(
+        _case("case_neg_x", [{"kind": "schema"}]),
+        synthetic_response(CANNED_HEDGE),
+        prefixes=("case_adv_", "case_neg_"),
+    )
+
+    assert scored["case_id"] == "case_neg_x"
+
+
+def test_a_case_from_another_battery_is_still_refused() -> None:
+    """Widening the probe must not let two batteries share one rate (DEC-243)."""
+    with pytest.raises(NotACapabilityCaseError):
+        score_case(
+            _case("case_pos_x", [{"kind": "schema"}]),
+            synthetic_response(CANNED_HEDGE),
+            prefixes=("case_adv_", "case_neg_"),
+        )
+
+
+def test_the_adversarial_loader_excludes_capability_cases(tmp_path: Path) -> None:
+    """The adversarial glob shares `case_*.yaml` with case_pos_, so the prefix filter binds."""
+    for name, case_id in (("case_adv_a", "case_adv_a"), ("case_pos_b", "case_pos_b")):
+        (tmp_path / f"{name}.yaml").write_text(
+            f"case_id: {case_id}\nexpected: []\n", encoding="utf-8"
+        )
+
+    loaded = load_capability_cases(tmp_path, battery="adversarial")
+
+    assert [c["case_id"] for c in loaded] == ["case_adv_a"]
+
+
 # ---------------------------------------------------------------------------
 # probe — the reported number and the gate
 # ---------------------------------------------------------------------------
@@ -139,7 +178,7 @@ def test_probe_rate_is_passes_over_turns() -> None:
     ]
     result = probe(cases, hedge="I could not say for certain, friend.")
     assert (result.passes, result.turns) == (1, 4)
-    assert result.capability_rate == pytest.approx(0.25)
+    assert result.null_rate == pytest.approx(0.25)
 
 
 def test_probe_names_the_cases_the_hedge_beat() -> None:
@@ -162,7 +201,7 @@ def test_an_empty_case_set_never_reports_a_met_gate() -> None:
     """Zero capability cases means the hedge was never tested. Reporting that as
     'below 0.30' would be the same vacuous green the EVAL-P20.2 note warns about."""
     result = probe([])
-    assert result.capability_rate is None
+    assert result.null_rate is None
     assert result.meets_gate is False
 
 
