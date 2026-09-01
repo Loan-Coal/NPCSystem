@@ -87,7 +87,18 @@ def test_resolve_reads_prompt_version() -> None:
 
 
 def test_git_sha_is_seven_chars() -> None:
-    """resolve_run_config() includes a non-empty 7-char git SHA."""
+    """resolve_run_config() includes a non-empty 7-char git SHA.
+
+    This went red on 2026-09-01 without any change to `run_config.py`: with `core.abbrev`
+    unset, git auto-scales its abbreviation with the repository's object count, and the
+    repo crossed the threshold from 7 to 8. `_resolve_git_sha` now pins `--short=7`.
+
+    Do NOT repair a future failure here by loosening this to `>= 7`. The width is the
+    point: these configs are compared across runs, so a `git_sha` that silently widens
+    makes one commit record two different identities and breaks that comparison. If seven
+    characters ever become ambiguous in this repository, widen the producer and this
+    assertion together, deliberately.
+    """
     config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG, **_offline_probes())
     assert len(config.git_sha) == 7
     assert config.git_sha.strip()

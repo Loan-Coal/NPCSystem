@@ -224,13 +224,22 @@ def _read_llm_config(config_path: Path) -> dict[str, Any]:
 def _resolve_git_sha() -> str:
     """Return the short (7-char) HEAD commit hash via subprocess.
 
+    The width is pinned with `--short=7` rather than left to bare `--short`. With
+    `core.abbrev` unset, git auto-scales the abbreviation with the repository's object
+    count, so bare `--short` began returning 8 characters once this repo grew past git's
+    threshold — breaking the 7-char contract documented here and, worse, letting the same
+    commit record two different `git_sha` values depending on when it was resolved. These
+    configs are compared across runs, and a field that drifts with repository size is not
+    an identity. Seven characters remain unambiguous in this repository; should they ever
+    collide, widen this deliberately rather than restoring the auto-scaling behaviour.
+
     Returns:
         7-character hex SHA string.
     Raises:
         RuntimeError: If git is unavailable or the working tree is not a repository.
     """
     result = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
+        ["git", "rev-parse", "--short=7", "HEAD"],
         capture_output=True,
         text=True,
         check=True,
