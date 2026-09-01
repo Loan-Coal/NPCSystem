@@ -151,23 +151,34 @@ def load_unified_rows(gen_dir: Path) -> list[VerdictRow]:
     """Read both verdict sources and return a deduplicated unified list.
 
     judged.jsonl takes precedence over deterministic_judged.jsonl when both contain
-    the same record_id — the judge verdict is authoritative for any slot it covers.
+    the same slot — the judge verdict is authoritative for any slot it covers.
+
+    The dedup key is (record_id, repetition), not record_id alone (R2.6b / CR-L03-06).
+    A record_id is `<case_id>:<judge_kind>:<index>` and encodes no repetition, so keying
+    on it alone made all k repetitions of a slot collide and kept only the last one
+    written. Measured on `k3_77688e7_regen1` before the fix: 975 rows in, 325 out —
+    650 discarded, and every survivor carried repetition 2. Downstream that turned
+    `summarize_from_dir` into a case counter reporting `guard_cases == guard_turns == 78`
+    on a k=3 generation, which is the second guard denominator ISSUE-243 and the published
+    170/186 disagreed with.
 
     Args:
         gen_dir: Generation directory containing judged.jsonl and/or
                  deterministic_judged.jsonl. Missing files are silently skipped.
     Returns:
-        Combined VerdictRow list, deduplicated by record_id (judged wins ties).
+        Combined VerdictRow list, deduplicated by (record_id, repetition);
+        judged wins ties within one repetition.
     Raises:
         ValueError: If any line in either file fails to parse.
     """
     det_rows = _read_det_file(gen_dir / DET_JUDGED_FILE)
     judged_rows = _read_judged_file(gen_dir / JUDGED_FILE)
-    seen: dict[str, VerdictRow] = {}
+    seen: dict[tuple[str, int], VerdictRow] = {}
     for row in det_rows:
-        seen[row.record_id] = row
+        seen[(row.record_id, row.repetition)] = row
     for row in judged_rows:
-        seen[row.record_id] = row  # judged overwrites deterministic for same slot
+        # judged overwrites deterministic for the same slot in the same repetition
+        seen[(row.record_id, row.repetition)] = row
     return list(seen.values())
 
 
