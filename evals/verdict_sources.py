@@ -182,6 +182,24 @@ def load_unified_rows(gen_dir: Path) -> list[VerdictRow]:
     return list(seen.values())
 
 
+def judged_rows(gen_dir: Path) -> list[VerdictRow]:
+    """Return only the LLM-judged rows of a generation, without deterministic verdicts.
+
+    `load_unified_rows` merges both verdict sources, which is what a headline rate wants.
+    Some measurements are about the JUDGE rather than the run — inter-rater kappa and the
+    pass base rate that bounds it — and those are defined over judge verdicts only.
+    Mixing deterministic matcher rows into that population changes what the number means.
+
+    Args:
+        gen_dir: Generation directory containing judged.jsonl. A missing file yields [].
+    Returns:
+        VerdictRow list from judged.jsonl only.
+    Raises:
+        ValueError: If any line fails to parse.
+    """
+    return _read_judged_file(gen_dir / JUDGED_FILE)
+
+
 def source_counts(rows: Sequence[VerdictRow]) -> dict[str, int]:
     """Count rows by source label.
 

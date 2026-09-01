@@ -57,6 +57,7 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "DEFAULT_ALPHA",
     "DEFAULT_POWER",
+    "KAPPA_GENERATION",
     "RECORDED_BASE_RATE",
     "RECORDED_GUARD_FLOOR_PP",
     "RECORDED_GUARD_N",
@@ -82,12 +83,50 @@ Recorded in src/npc_engine/config/llm_config.yaml, not derived here.
 """
 
 RECORDED_GUARD_N: int = 78
-"""Paired records on the guard battery. Recorded in llm_config.yaml alongside the floor."""
+"""Guard PAIRS available to an arm comparison: 78 cases, not 234 turns (ISSUE-254).
 
-RECORDED_BASE_RATE: float = 0.951
-"""Pass base rate over the 345 records ISSUE-184 measured kappa on.
+The unit is a case, deliberately. The corpus holds 234 guard turns over 78 guard cases at
+k=3, and 78 was also — coincidentally — what the broken verdict-source join reported as
+`guard_turns` before it was fixed, so this number looks like the stale one. It is not.
 
-Its role here is a sanity bound: it caps how concordant two arms can plausibly be.
+Three repetitions of one case are not three independent observations: they share a prompt,
+an NPC and a seed, which is exactly the intra-case correlation `battery_rates` measures as
+`rho` and discounts via `n_eff`. Pairing per repetition and passing the raw 234 would
+overstate power by about sqrt(3) and make the judges look more discriminating than they
+are — the failure this phase exists to remove.
+
+Note that raising n alone would not move `observed_mde`: `implied_discordance_rate` derives
+p_d from the recorded floor AT the recorded n, so re-applying it returns the floor either
+way. What the unit changes is `required_pairs_for`, and what "a pair" means to anyone
+reading the output.
+
+If the arm design is ever changed to pair per repetition, take `n_eff` from
+`battery_rates.compute_battery_rate` rather than the raw turn count. Pinned by
+tests/unit/evals/test_guard_pairing_unit.py.
+"""
+
+KAPPA_GENERATION: str = "k3_73e6c36"
+"""The generation both RECORDED_KAPPAS and RECORDED_BASE_RATE are measured on.
+
+Named rather than implied so the pair cannot drift apart, and so a reader can re-derive
+either number from one place. All 393 calibration labels carry this gen_id.
+"""
+
+RECORDED_BASE_RATE: float = 0.9536
+"""Pass base rate over the 345 LLM-judged records of KAPPA_GENERATION.
+
+Its role here is a sanity bound: it caps how concordant two arms can plausibly be,
+via the independence bound 2p(1-p).
+
+ISSUE-253: this read 0.951 until 2026-09-01. That was not invented — it is exactly
+328/345, the rate in `judged.jsonl.pre-panel-20260817_192458.bak`. The panel re-judge of
+2026-08-18 flipped one record to 329/345 = 0.9536 and the constant was never updated, so
+a correct number went stale by a single verdict. The independence bound it feeds moves
+from 9.32% to 8.83% as a result — small, but it is the only check on a discordance rate
+that is derived rather than measured.
+
+Bound to its corpus by tests/unit/evals/test_base_rate_matches_its_corpus.py, so the same
+drift now fails `make check` instead of surviving three weeks unnoticed.
 """
 
 RECORDED_KAPPAS: tuple[tuple[str, float], ...] = (
