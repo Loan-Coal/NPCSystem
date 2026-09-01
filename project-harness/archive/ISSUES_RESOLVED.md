@@ -3320,3 +3320,52 @@ retraction banner would not appear in any diff or survive a fresh clone.
 **Why deferred:** not deferred; it is R2.5(e), decided 2026-08-31 — remove the ignore line,
 commit the reports, then banner the retracted one.
 **To fix:** as above, plus a DECISIONS entry recording the extension of DEC-158's reasoning.
+
+## [FIXED] ISSUE-243: `evals/runner.py` guard prefixes do not mirror `summary.py`, so `ah_demo_*` cases are counted but not guarded
+
+> **Corrected 2026-09-01 (R2.6b), measured.** The title and the fix this entry implies are both
+> wrong, though the problem it points at is real. Three measurements against
+> `evals/generations/k3_77688e7_regen1`:
+>
+> 1. **`ah_demo_*` cases are not unguarded.** They carry `refusal_judge` (75 rows) and
+>    `anti_hallucination_grounded` (48) — purpose-built anti-hallucination expectations. What they
+>    do not carry are the YAML battery's `tone_judge`/`affirms_judge`/`schema`/`keyword_none`/
+>    `min_length`. Two grading contracts, not one contract with a gap.
+> 2. **Aligning the two tuples would be a no-op.** `runner._load_cases` globs `*.yaml`
+>    (`runner.py:128`); every `ah_demo_*` case lives in `evals/cases/anti_hallucination_demo.json`
+>    and is loaded by `anti_hallucination_runner`. The runner cannot see them however its guard
+>    tuple is spelled — and if it ever could, injecting `min_length` into a refusal-graded case
+>    would score a correct short refusal as a guard failure.
+> 3. **`summary._GUARD_PREFIXES` does not exist.** `runner.py:37`'s comment claimed to mirror it;
+>    the canonical publishing tuple is `case_stats._GUARD_PREFIXES`. That false reference was the
+>    trap — it invited exactly the no-op fix above. Corrected in R2.6b and pinned by
+>    `tests/unit/evals/test_guard_prefix_scopes.py`.
+>
+> **The real defect, restated:** the published guard headline aggregates two populations scored by
+> different expectation sets. Measured after the R2.6b join fix: YAML guard **0.8468** (n=111),
+> `ah_demo_` **0.9106** (n=123), combined **0.8803** (n=234). The easier-scored battery is more
+> than half the denominator and lifts the headline ~3.4pp above the adversarial battery alone.
+> Whether to split the headline is a publication decision and belongs to **R2.5**, which owns the
+> retraction; it is not a tuple to align here. Nothing was changed in the scoring path.
+
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Fixed:** 2026-09-01, in the R2.5 split commit (DEC-243). NOT by the prefix alignment
+this entry proposed — that was measured as a no-op. The headline splits instead.
+**Severity:** P1 (blocking) — it makes the published guard rate a mixed population
+**Where:** `evals/runner.py:37-38` vs `evals/case_stats.py:43` and `evals/summary.py`
+**Description:** `runner.py:38` sets `_GUARD_PREFIXES = ("case_adv_", "case_neg_")` under a
+comment that reads "mirror summary._GUARD_PREFIXES". It does not mirror it. `case_stats.py:43`
+and `summary.py` both use three prefixes, adding `ah_demo_`, and the published headline is
+`Guard (adv + neg + ah_demo_*) | 170/186`. Because `_expected_with_guards` keys off runner's
+two-prefix tuple, `ah_demo_*` cases contribute to the published guard rate while receiving
+**none** of the four injected guard expectations (`min_length`, the fallback `keyword_none`,
+`tone_judge`, `affirms_judge`). The battery named anti-hallucination is the only one in the
+guard set scored on its YAML `expected:` list alone.
+Consequence for R2.5: the engine-vs-null figures (0.897 / 0.949) and the published 0.914 are
+different populations, which is the same conflation DEC-236 and R2.3 untangled for base rates.
+**Why deferred:** unifying moves the guard rate, so it must be its own commit and must be
+computed once — landing it mid-R2 would make R2.5's delta unattributable, the R2.4 error.
+**To fix:** hoist one shared prefix constant, make `runner.py` use it (three prefixes), and land
+it as its own commit **immediately before the next regeneration** so the new numbers are
+measured once under one definition. Until then R2.5 scopes its null comparison to the 37 guarded
+`case_adv_*` / `case_neg_*` cases and states the population in the retraction.

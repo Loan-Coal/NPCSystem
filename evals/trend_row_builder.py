@@ -130,19 +130,28 @@ def _scorer_kappas(labels_path: Path) -> tuple[ScorerKappa, ...]:
     )
 
 
-def _battery_rates(eval_summary: EvalSummary) -> tuple[RateWithCI, RateWithCI]:
-    """Extract the two published battery rates, each with its Wilson CI and n.
+def _battery_rates(eval_summary: EvalSummary) -> tuple[RateWithCI, RateWithCI, RateWithCI]:
+    """Extract the three published battery rates, each with its Wilson CI and n.
+
+    The guard side is two rates, never one (DEC-243): `case_adv_`/`case_neg_` are scored
+    on the YAML battery's expectations and `ah_demo_` on refusal_judge /
+    anti_hallucination_grounded, so a row carrying their union would trend a number that
+    means two things. `TrendRow.guard` is left unset for that reason.
 
     Args:
         eval_summary: The RunSummary from summary.summarize_from_dir.
     Returns:
-        (guard, capability). Either may carry rate=None when no turns of that
-        battery ran; an unmeasured rate is recorded, never skipped.
+        (adversarial, anti_hallucination, capability). Any may carry rate=None when no
+        turns of that battery ran; an unmeasured rate is recorded, never skipped.
     """
     return (
         _rate_with_ci(
-            eval_summary.guard_rate, eval_summary.guard_ci_low,
-            eval_summary.guard_ci_high, eval_summary.guard_turns,
+            eval_summary.adversarial_rate, eval_summary.adversarial_ci_low,
+            eval_summary.adversarial_ci_high, eval_summary.adversarial_turns,
+        ),
+        _rate_with_ci(
+            eval_summary.anti_hallucination_rate, eval_summary.anti_hallucination_ci_low,
+            eval_summary.anti_hallucination_ci_high, eval_summary.anti_hallucination_turns,
         ),
         _rate_with_ci(
             eval_summary.capability_rate, eval_summary.capability_ci_low,
@@ -182,23 +191,43 @@ def build_trend_row(
         inflated by the pass base rate (DEC-188).
     """
     eval_summary = summarize_from_dir(gen_dir)
-    guard, capability = _battery_rates(eval_summary)
     status = _panel_status(gen_dir, status_path)
     return TrendRow(
         gen_id=gen_id,
         harness_version=_harness_version(gen_dir),
         recorded_at=recorded_at or datetime.now(timezone.utc).isoformat(),
-        guard=guard,
-        capability=capability,
         inconclusive_rate=_inconclusive_rate(eval_summary),
         scorer_kappas=_scorer_kappas(labels_path),
-        panel_agreement_rate=status.raw_agreement if status else None,
-        panel_kappa=status.panel_kappa if status else None,
-        kappa_by_criterion=status.kappa_by_criterion if status else (),
-        repeat_flips=status.repeat_flips if status else None,
         prompt_token_budget=_receipt_token_budget(gen_dir),  # the engine's, not meta.json's
+        **_rate_fields(eval_summary),
+        **_panel_fields(status),
         **_variant_fields(gen_dir),
     )
+
+
+
+def _rate_fields(eval_summary: EvalSummary) -> dict[str, RateWithCI]:
+    """The three published battery rates as TrendRow kwargs.
+
+    `guard` is deliberately absent: DEC-243 retired the combined rate, and omitting the
+    key is what stops a new row from carrying one.
+    """
+    adversarial, anti_hallucination, capability = _battery_rates(eval_summary)
+    return {
+        "guard_adversarial": adversarial,
+        "guard_anti_hallucination": anti_hallucination,
+        "capability": capability,
+    }
+
+
+def _panel_fields(status: RunStatus | None) -> dict:
+    """Panel agreement fields as TrendRow kwargs; all None when no panel ran."""
+    return {
+        "panel_agreement_rate": status.raw_agreement if status else None,
+        "panel_kappa": status.panel_kappa if status else None,
+        "kappa_by_criterion": status.kappa_by_criterion if status else (),
+        "repeat_flips": status.repeat_flips if status else None,
+    }
 
 
 def comparability_key(gen_dir: Path) -> "ComparabilityKey":

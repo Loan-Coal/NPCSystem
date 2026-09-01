@@ -13,7 +13,7 @@ Purpose: RED anchor + mechanism for EVAL-P24.3 — every metric quoted in
          The annotation format:
            <!-- metric gen_id="<gen_id>" field="<field>" value="<num>" n="<int>" -->
          placed immediately after the sentence/table-cell it supports.
-         `field` is one of: "guard_rate", "capability_rate" (read via
+         `field` is one of: "adversarial_rate", "anti_hallucination_rate", "capability_rate" (read via
          summary.summarize_from_dir), or "kappa:<scorer>" (read via
          calibration.run_calibration against the real labels file).
 
@@ -57,7 +57,10 @@ def resolve_field(gen_id: str, field: str) -> tuple[float, int]:
 
     Args:
         gen_id: A generation directory name under evals/generations/.
-        field: "guard_rate", "capability_rate", or "kappa:<scorer>".
+        field: "adversarial_rate", "anti_hallucination_rate", "capability_rate", or
+            "kappa:<scorer>". "guard_rate" is deliberately NOT resolvable: DEC-243
+            retired the combined guard rate, so a README that cites one must fail
+            rather than silently resolve against a number nothing computes.
     Returns:
         (actual_value, actual_n) computed live from the committed artifact.
     Raises:
@@ -67,7 +70,7 @@ def resolve_field(gen_id: str, field: str) -> tuple[float, int]:
             (fewer than 2 adjudicated rows).
     """
     gen_dir = _REPO_ROOT / "evals" / "generations" / gen_id
-    if field in ("guard_rate", "capability_rate"):
+    if field in ("adversarial_rate", "anti_hallucination_rate", "capability_rate"):
         s = summarize_from_dir(gen_dir)
         value = getattr(s, field)
         n = getattr(s, field.replace("_rate", "_turns"))
@@ -127,17 +130,17 @@ def test_every_readme_metric_matches_its_cited_artifact_fixture() -> None:
     if not gen_dir.exists():
         pytest.skip("real committed artifact not present in this checkout")
 
-    real_value, real_n = resolve_field("k3_73e6c36", "guard_rate")
+    real_value, real_n = resolve_field("k3_73e6c36", "adversarial_rate")
     wrong_value = round(real_value + 0.5, 3) if real_value is not None else 0.99
 
     fixture = (
         f'The engine passes {wrong_value} of guard turns.\n'
-        f'<!-- metric gen_id="k3_73e6c36" field="guard_rate" '
+        f'<!-- metric gen_id="k3_73e6c36" field="adversarial_rate" '
         f'value="{wrong_value}" n="{real_n}" -->\n'
     )
     problems = check_readme_citations(fixture)
     assert problems, "expected a mismatch to be caught, found none"
-    assert any("guard_rate" in p for p in problems)
+    assert any("adversarial_rate" in p for p in problems)
 
 
 def test_a_correct_citation_passes() -> None:
@@ -148,10 +151,10 @@ def test_a_correct_citation_passes() -> None:
     if not gen_dir.exists():
         pytest.skip("real committed artifact not present in this checkout")
 
-    real_value, real_n = resolve_field("k3_73e6c36", "guard_rate")
+    real_value, real_n = resolve_field("k3_73e6c36", "adversarial_rate")
     fixture = (
         f'The engine passes {real_value:.3f} of guard turns.\n'
-        f'<!-- metric gen_id="k3_73e6c36" field="guard_rate" '
+        f'<!-- metric gen_id="k3_73e6c36" field="adversarial_rate" '
         f'value="{real_value:.3f}" n="{real_n}" -->\n'
     )
     assert check_readme_citations(fixture) == []
@@ -165,10 +168,10 @@ def test_cited_value_absent_from_visible_text_is_flagged() -> None:
     if not gen_dir.exists():
         pytest.skip("real committed artifact not present in this checkout")
 
-    real_value, real_n = resolve_field("k3_73e6c36", "guard_rate")
+    real_value, real_n = resolve_field("k3_73e6c36", "adversarial_rate")
     fixture = (
         "The engine passes most guard turns.\n"  # no number in the visible prose
-        f'<!-- metric gen_id="k3_73e6c36" field="guard_rate" '
+        f'<!-- metric gen_id="k3_73e6c36" field="adversarial_rate" '
         f'value="{real_value:.3f}" n="{real_n}" -->\n'
     )
     problems = check_readme_citations(fixture)

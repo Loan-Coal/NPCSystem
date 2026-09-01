@@ -195,15 +195,16 @@ def test_capability_and_guard_rates_are_reported_separately() -> None:
 
     s = summary.summarize(results)
 
-    assert s.guard_cases == 40
+    assert s.guard_cases == 40, "the COUNT still spans both populations (conservation)"
+    assert s.adversarial_cases == 40, "this fixture has no ah_demo_ cases"
     assert s.capability_cases == 42
     assert s.guard_turns == 40
     assert s.capability_turns == 42
-    assert s.guard_rate is not None
+    assert s.adversarial_rate is not None
     assert s.capability_rate is not None
     # Guard: 31 passes (16 adv + 15 neg); cap: 28 passes → different rates
-    assert s.guard_rate != s.capability_rate
-    assert 0.0 <= s.guard_ci_low <= s.guard_rate <= s.guard_ci_high <= 1.0
+    assert s.adversarial_rate != s.capability_rate
+    assert 0.0 <= s.adversarial_ci_low <= s.adversarial_rate <= s.adversarial_ci_high <= 1.0
     assert 0.0 <= s.capability_ci_low <= s.capability_rate <= s.capability_ci_high <= 1.0
 
 
@@ -244,14 +245,14 @@ def test_write_report_embeds_guarantee_section(tmp_path) -> None:
 
 
 def test_summary_without_capability_rate_raises() -> None:
-    """format_summary_lines must raise when guard_rate is set but capability_rate is absent."""
+    """format_summary_lines must raise when a guard rate is set but capability_rate is absent."""
     results = [
         _case("case_adv_x", [_exp("keyword_none", True)]),
         _case("case_neg_y", [_exp("keyword_none", True)]),
         # no case_pos_* → capability_rate will be None
     ]
     s = summary.summarize(results)
-    assert s.guard_rate is not None
+    assert s.adversarial_rate is not None
     assert s.capability_rate is None
     with pytest.raises(ValueError, match="capability"):
         summary.format_summary_lines(s)
@@ -286,20 +287,20 @@ def test_interval_is_widened_by_the_design_effect() -> None:
     s = summary.summarize(results)
 
     # Point estimate unchanged: 108/111 = 0.9730…
-    assert s.guard_passes == 108
+    assert s.adversarial_passes == 108
     assert s.guard_turns == 111
-    assert abs(s.guard_rate - 108 / 111) < 1e-6
+    assert abs(s.adversarial_rate - 108 / 111) < 1e-6
 
     # Plain Wilson (published-but-wrong) interval at n=111
     plain_low, plain_high = wilson_interval(108, 111)
 
     # Design-effect-corrected interval must be strictly wider
-    assert s.guard_ci_low < plain_low, (
-        f"Expected ci_low {s.guard_ci_low:.4f} < plain {plain_low:.4f} — "
+    assert s.adversarial_ci_low < plain_low, (
+        f"Expected ci_low {s.adversarial_ci_low:.4f} < plain {plain_low:.4f} — "
         "DEFF correction not applied"
     )
-    assert s.guard_ci_high > plain_high, (
-        f"Expected ci_high {s.guard_ci_high:.4f} > plain {plain_high:.4f} — "
+    assert s.adversarial_ci_high > plain_high, (
+        f"Expected ci_high {s.adversarial_ci_high:.4f} > plain {plain_high:.4f} — "
         "DEFF correction not applied"
     )
 

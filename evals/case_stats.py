@@ -24,6 +24,10 @@ from rate_stats import pass_rate, wilson_interval
 Classification = Literal["stable_pass", "flaky", "stable_fail"]
 Battery = Literal["guard", "capability", "excluded"]
 
+#: The two populations inside the guard battery, which are graded by different expectation
+#: sets and therefore never share a rate (DEC-243).
+GuardPopulation = Literal["adversarial", "anti_hallucination"]
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -39,8 +43,21 @@ _INSTABILITY_ORDER: dict[Classification, int] = {
     _STABLE_PASS: 2,
 }
 
-# Guard battery: adversarial + negative anti-hallucination cases, plus ah_demo_* (guard by construction).
-_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_", "ah_demo_")
+# The guard battery is TWO populations graded by different expectation sets (DEC-243).
+# They are named separately because a rate over their union is not a quantity: averaging
+# two grading contracts produces a number with no referent. `case_adv_`/`case_neg_` are
+# scored on the YAML battery's tone_judge / affirms_judge / schema / keyword_none /
+# min_length; `ah_demo_` is scored on refusal_judge / anti_hallucination_grounded, which
+# are purpose-built anti-hallucination expectations. Measured on k3_77688e7_regen1 the two
+# sit 6.4 pp apart (0.8468 over n=111 vs 0.9106 over n=123), so the union was not a
+# harmless convenience: the easier battery is more than half the denominator and lifted the
+# published figure ~3.4 pp above the adversarial battery alone.
+_ADVERSARIAL_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
+_ANTI_HALLUCINATION_PREFIXES: tuple[str, ...] = ("ah_demo_",)
+
+# Union, for the one question that is legitimately about both: "is this a guard case at
+# all", which decides guard-vs-capability-vs-excluded. Never use it to build a RATE.
+_GUARD_PREFIXES: tuple[str, ...] = _ADVERSARIAL_PREFIXES + _ANTI_HALLUCINATION_PREFIXES
 _CAPABILITY_PREFIX: str = "case_pos_"
 # Cases that belong to no published battery: counted explicitly but excluded from all rates.
 # Specific artifact prefixes are named first for documentation; "case_" catches any other
@@ -87,6 +104,32 @@ def classify_battery(case_id: str) -> Battery:
         f"Case '{case_id}' matches no known battery prefix "
         f"(guard: case_adv_*/case_neg_*/ah_demo_*, "
         f"capability: case_pos_*, excluded: {_EXCLUDED_PREFIXES})"
+    )
+
+
+def guard_population(case_id: str) -> GuardPopulation:
+    """Say which of the two guard populations a guard case belongs to (DEC-243).
+
+    The two are scored by different expectation sets, so any rate must be computed within
+    one of them. `classify_battery` answers "is this a guard case"; this answers "graded
+    how", and the pair of answers is what keeps the published rates from re-merging.
+
+    Args:
+        case_id: The case identifier string.
+    Returns:
+        ``'adversarial'`` for case_adv_*/case_neg_*; ``'anti_hallucination'`` for ah_demo_*.
+    Raises:
+        ValueError: When ``case_id`` is not a guard case at all. Returning a default here
+            would silently absorb capability or excluded cases into a guard rate, which is
+            the conflation this split exists to remove.
+    """
+    if case_id.startswith(_ADVERSARIAL_PREFIXES):
+        return "adversarial"
+    if case_id.startswith(_ANTI_HALLUCINATION_PREFIXES):
+        return "anti_hallucination"
+    raise ValueError(
+        f"Case '{case_id}' is not a guard case, so it has no guard population "
+        f"(adversarial: case_adv_*/case_neg_*, anti-hallucination: ah_demo_*)"
     )
 
 

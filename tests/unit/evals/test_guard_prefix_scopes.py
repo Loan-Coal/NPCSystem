@@ -16,6 +16,7 @@ symbol which does not exist and encodes the reason the difference is intentional
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -71,3 +72,90 @@ def test_guard_expectations_are_authored_for_the_yaml_battery() -> None:
     kinds = {e["kind"] for e in runner._guard_expectations(None)}
     assert "min_length" in kinds
     assert kinds & {"tone_judge", "keyword_none"}
+
+
+# ---------------------------------------------------------------------------
+# R2.5 / DEC-243: the two guard populations are named and never re-combined
+# ---------------------------------------------------------------------------
+
+
+def test_the_two_guard_populations_are_named_separately() -> None:
+    """DEC-243: adversarial and anti-hallucination are graded by different contracts.
+
+    `case_adv_`/`case_neg_` carry the YAML battery's tone_judge / affirms_judge / schema /
+    keyword_none / min_length. `ah_demo_` carries refusal_judge and
+    anti_hallucination_grounded instead. Two grading contracts, not one with a gap — so a
+    single tuple spanning both is what let one published rate mean two things.
+    """
+    assert case_stats._ADVERSARIAL_PREFIXES == ("case_adv_", "case_neg_")
+    assert case_stats._ANTI_HALLUCINATION_PREFIXES == ("ah_demo_",)
+    assert not set(case_stats._ADVERSARIAL_PREFIXES) & set(case_stats._ANTI_HALLUCINATION_PREFIXES)
+
+
+def test_the_runner_battery_is_exactly_the_adversarial_population() -> None:
+    """Under the split the runner's tuple stops being a subset that looks like a bug.
+
+    It was flagged as one (ISSUE-243's title) because it did not mirror the publishing
+    tuple. It now IS the adversarial population's definition, and equality pins that.
+    """
+    assert runner._GUARD_PREFIXES == case_stats._ADVERSARIAL_PREFIXES
+
+
+def test_every_guard_case_belongs_to_exactly_one_population() -> None:
+    """A case counted in both, or in neither, would silently distort both rates."""
+    for case_id in ("case_adv_x", "case_neg_x", "ah_demo_x"):
+        assert case_stats.classify_battery(case_id) == "guard"
+        assert case_stats.guard_population(case_id) in ("adversarial", "anti_hallucination")
+
+    assert case_stats.guard_population("case_adv_x") == "adversarial"
+    assert case_stats.guard_population("ah_demo_x") == "anti_hallucination"
+
+
+def test_a_non_guard_case_has_no_guard_population() -> None:
+    """Capability cases must not be silently absorbed into either guard rate."""
+    import pytest
+
+    with pytest.raises(ValueError):
+        case_stats.guard_population("case_pos_x")
+
+
+def test_no_combined_guard_rate_can_be_emitted() -> None:
+    """DEC-243's core invariant, asserted against the model rather than the call sites.
+
+    Removing the markdown row would leave the fields in place for the next caller to
+    reach for. The rate fields themselves are gone, so a combined figure cannot be
+    produced without deliberately re-adding them.
+
+    Counts are exempt on purpose: `check_conservation` needs
+    `guard_cases + capability_cases == total_cases`, and a count over two populations is
+    a count, not an average of two different grading contracts.
+    """
+    fields = {f.name for f in dataclasses.fields(summary.EvalSummary)}
+
+    assert not {"guard_rate", "guard_ci_low", "guard_ci_high", "guard_passes"} & fields
+    assert {"adversarial_rate", "anti_hallucination_rate"} <= fields
+    assert {"guard_cases", "guard_turns"} <= fields, "counts stay: conservation needs them"
+
+
+def test_the_published_markdown_names_both_populations_and_no_union() -> None:
+    """The rendered table must not carry a row spanning both expectation sets."""
+    results = (
+        [_adv_case(f"case_adv_{i}", passed=True) for i in range(3)]
+        + [_adv_case(f"ah_demo_{i}", passed=False) for i in range(2)]
+        + [_adv_case(f"case_pos_{i}", passed=True) for i in range(2)]
+    )
+
+    rendered = "\n".join(summary.format_summary_markdown(summary.summarize(results)))
+
+    assert "Guard - adversarial" in rendered
+    assert "Guard - anti-hallucination" in rendered
+    assert "adv + neg + ah_demo_*" not in rendered, "the union row is what DEC-243 retires"
+
+
+def _adv_case(case_id: str, *, passed: bool) -> dict:
+    """One result dict with a single non-skipped expectation."""
+    return {
+        "case_id": case_id,
+        "passed": passed,
+        "expectations": [{"kind": "keyword_none", "passed": passed, "skipped": False}],
+    }

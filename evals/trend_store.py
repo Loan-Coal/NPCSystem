@@ -106,7 +106,17 @@ class TrendRow(BaseModel):
             Empty when it could not be determined, which makes the row
             comparable to nothing rather than comparable to anything.
         recorded_at: ISO-8601 timestamp of when this row was appended.
-        guard: Guard battery rate with CI and n; None when no guard turns ran.
+        guard: RETIRED as of DEC-243 — the combined guard rate. Rows written before
+            2026-09-01 carry it; nothing writes it any more, and nothing should trend on
+            it. It aggregated two populations scored by different expectation sets
+            (`case_adv_`/`case_neg_` on the YAML battery, `ah_demo_` on refusal_judge and
+            anti_hallucination_grounded), which made a single number mean two things —
+            measured 6.4 pp apart, with the easier battery over half the denominator. The
+            field is kept, not deleted, so historical rows still parse and a reader can
+            see what the old number was.
+        guard_adversarial: case_adv_*/case_neg_* pass rate with CI and n; None when none
+            ran. This and `guard_anti_hallucination` replace `guard`.
+        guard_anti_hallucination: ah_demo_* pass rate with CI and n; None when none ran.
         capability: Capability battery rate with CI and n; None when none ran.
         inconclusive_rate: Fraction of judged expectations that returned
             score=None (infra failure) rather than a real verdict.
@@ -141,6 +151,8 @@ class TrendRow(BaseModel):
     recorded_at: str
     judge_identity: str = ""
     guard: RateWithCI | None = None
+    guard_adversarial: RateWithCI | None = None
+    guard_anti_hallucination: RateWithCI | None = None
     capability: RateWithCI | None = None
     inconclusive_rate: float | None = None
     scorer_kappas: tuple[ScorerKappa, ...] = ()

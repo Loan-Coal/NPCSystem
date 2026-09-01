@@ -63,7 +63,15 @@ calibration kappa, ...) must carry a machine-checked citation immediately after 
 <!-- metric gen_id="<gen_id>" field="guard_rate" value="<value>" n="<n>" -->
 ```
 
-`field` is `guard_rate`, `capability_rate`, or `kappa:<scorer>`.
+`field` is `adversarial_rate`, `anti_hallucination_rate`, `capability_rate`, or
+`kappa:<scorer>`.
+
+There is deliberately no `guard_rate`. It was retired by DEC-243: it aggregated two
+populations scored by different expectation sets — `case_adv_*`/`case_neg_*` on the YAML
+battery, `ah_demo_*` on `refusal_judge` and `anti_hallucination_grounded` — so one number
+meant two things. Measured on `k3_77688e7_regen1` the two sit 6.4 pp apart (0.8468 over
+n=111 against 0.9106 over n=123), and the easier battery was more than half the
+denominator. Cite the population you mean; a citation naming `guard_rate` fails the build.
 `tests/unit/evals/test_readme_numbers_are_sourced.py` resolves every citation against the
 committed artifact it names and fails the build on any mismatch — see
 `docs/SCORER_TRUST_POLICY.md` for what kappa licenses publication in the first place, and

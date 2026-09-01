@@ -49,8 +49,8 @@ def test_build_trend_row_against_real_k3_artifact() -> None:
     row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=_LABELS_PATH,
                            recorded_at="2026-08-17T00:00:00+00:00")
     assert row.gen_id == "k3_73e6c36"
-    assert row.guard is not None
-    assert row.guard.n > 0
+    assert row.guard_adversarial is not None
+    assert row.guard_adversarial.n > 0
     assert row.capability is not None
     assert row.inconclusive_rate is not None
     assert len(row.scorer_kappas) > 0  # every scorer with >=2 adjudicated rows
@@ -67,7 +67,7 @@ def test_build_trend_row_with_no_labels_file_yields_empty_kappas(tmp_path: Path)
         recorded_at="2026-08-17T00:00:00+00:00",
     )
     assert row.scorer_kappas == ()
-    assert row.guard is not None  # rates still computed from gen_dir alone
+    assert row.guard_adversarial is not None  # rates still computed from gen_dir alone
 
 
 # ---------------------------------------------------------------------------
@@ -436,4 +436,4 @@ def test_an_arm_with_no_receipts_still_builds_a_valid_row(tmp_path: Path) -> Non
                           recorded_at="2026-08-26T00:00:00+00:00")
 
     assert row.prompt_token_budget is None
-    assert row.guard is not None
+    assert row.guard_adversarial is not None

@@ -54,19 +54,32 @@ class EvalSummary:
         total_cases: Number of eval cases in the run.
         evaluated_cases: Non-skipped cases (guard + capability + excluded).
         total_turns: Cases that actually invoked the NPC (equals evaluated_cases).
-        guard_cases: Non-skipped guard battery cases (adv + neg + ah_demo_*).
-        guard_turns: Guard cases that actually ran (denominator of the headline).
-        guard_passes: Guard cases that both ran and passed.
-        guard_rate: Pass rate over guard turns; None when guard_turns == 0.
-        guard_ci_low: Lower bound of the 95 % Wilson CI for guard_rate; None when no turns.
-        guard_ci_high: Upper bound of the 95 % Wilson CI for guard_rate; None when no turns.
+        guard_cases: Non-skipped guard battery cases (adv + neg + ah_demo_*). A COUNT over
+            both populations, which is legitimate — `check_conservation` needs the identity
+            `guard_cases + capability_cases == total_cases`. There is deliberately no
+            combined guard RATE beside it; see DEC-243 and `adversarial_*` /
+            `anti_hallucination_*` below.
+        guard_turns: Guard cases that actually ran, both populations. A count, as above.
+        adversarial_cases: Non-skipped case_adv_*/case_neg_* cases.
+        adversarial_turns: Adversarial cases that actually ran.
+        adversarial_passes: Adversarial cases that both ran and passed.
+        adversarial_rate: Pass rate over adversarial turns; None when none ran.
+        adversarial_ci_low: Lower bound of the 95 % Wilson CI; None when no turns.
+        adversarial_ci_high: Upper bound of the 95 % Wilson CI; None when no turns.
+        adversarial_battery_rate: Full design-effect data; None when no turns.
+        anti_hallucination_cases: Non-skipped ah_demo_* cases.
+        anti_hallucination_turns: ah_demo_* cases that actually ran.
+        anti_hallucination_passes: ah_demo_* cases that both ran and passed.
+        anti_hallucination_rate: Pass rate over ah_demo_* turns; None when none ran.
+        anti_hallucination_ci_low: Lower bound of the 95 % Wilson CI; None when no turns.
+        anti_hallucination_ci_high: Upper bound of the 95 % Wilson CI; None when no turns.
+        anti_hallucination_battery_rate: Full design-effect data; None when no turns.
         capability_cases: Non-skipped positive (case_pos_*) cases in the run.
         capability_turns: Capability cases that actually ran (non-skipped denominator).
         capability_passes: Capability cases that both ran and passed.
         capability_rate: Pass rate over capability turns; None when capability_turns == 0.
         capability_ci_low: Lower bound of the 95 % Wilson CI; None when no turns.
         capability_ci_high: Upper bound of the 95 % Wilson CI; None when no turns.
-        guard_battery_rate: Full design-effect data for the guard battery; None when no turns.
         capability_battery_rate: Full design-effect data for the capability battery; None when no turns.
         hallucination_failures: keyword_none + affirms_judge failures within guard cases.
         schema_failures: Failed schema expectations across all cases.
@@ -96,18 +109,27 @@ class EvalSummary:
     skipped_cases: int
     excluded_cases: int = 0
     inconclusive_failures: int = 0
-    guard_passes: int = 0
-    guard_rate: float | None = None
-    guard_ci_low: float | None = None
-    guard_ci_high: float | None = None
     capability_cases: int = 0
     capability_turns: int = 0
     capability_passes: int = 0
     capability_rate: float | None = None
     capability_ci_low: float | None = None
     capability_ci_high: float | None = None
-    guard_battery_rate: BatteryRate | None = None
     capability_battery_rate: BatteryRate | None = None
+    adversarial_cases: int = 0
+    adversarial_turns: int = 0
+    adversarial_passes: int = 0
+    adversarial_rate: float | None = None
+    adversarial_ci_low: float | None = None
+    adversarial_ci_high: float | None = None
+    adversarial_battery_rate: BatteryRate | None = None
+    anti_hallucination_cases: int = 0
+    anti_hallucination_turns: int = 0
+    anti_hallucination_passes: int = 0
+    anti_hallucination_rate: float | None = None
+    anti_hallucination_ci_low: float | None = None
+    anti_hallucination_ci_high: float | None = None
+    anti_hallucination_battery_rate: BatteryRate | None = None
 
     @property
     def guarantee_demonstrated(self) -> bool:
@@ -199,7 +221,21 @@ def summarize(results: list[dict]) -> EvalSummary:
 
     evaluated_cases = len(guard_results) + len(cap_results) + len(excluded_results)
 
+    # The guard battery is scored as TWO populations and never as one (DEC-243). The
+    # counts below still span both, because `check_conservation`'s identity is about
+    # cases; only the RATES are kept apart.
+    adv_results = [
+        r for r in guard_results
+        if case_stats.guard_population(r.get("case_id", "")) == "adversarial"
+    ]
+    ah_results = [
+        r for r in guard_results
+        if case_stats.guard_population(r.get("case_id", "")) == "anti_hallucination"
+    ]
+
     g_br = compute_battery_rate(guard_results)
+    adv_br = compute_battery_rate(adv_results)
+    ah_br = compute_battery_rate(ah_results)
     c_br = compute_battery_rate(cap_results)
 
     tally = _tally_failures(results)
@@ -219,18 +255,27 @@ def summarize(results: list[dict]) -> EvalSummary:
         other_failures=tally["other"],
         inconclusive_failures=tally["inconclusive"],
         skipped_cases=skipped_count,
-        guard_passes=g_br.passes if g_br else 0,
-        guard_rate=g_br.pass_rate if g_br else None,
-        guard_ci_low=g_br.ci_low if g_br else None,
-        guard_ci_high=g_br.ci_high if g_br else None,
         capability_cases=c_br.n_cases if c_br else 0,
         capability_turns=c_br.n_records if c_br else 0,
         capability_passes=c_br.passes if c_br else 0,
         capability_rate=c_br.pass_rate if c_br else None,
         capability_ci_low=c_br.ci_low if c_br else None,
         capability_ci_high=c_br.ci_high if c_br else None,
-        guard_battery_rate=g_br,
         capability_battery_rate=c_br,
+        adversarial_cases=adv_br.n_cases if adv_br else 0,
+        adversarial_turns=adv_br.n_records if adv_br else 0,
+        adversarial_passes=adv_br.passes if adv_br else 0,
+        adversarial_rate=adv_br.pass_rate if adv_br else None,
+        adversarial_ci_low=adv_br.ci_low if adv_br else None,
+        adversarial_ci_high=adv_br.ci_high if adv_br else None,
+        adversarial_battery_rate=adv_br,
+        anti_hallucination_cases=ah_br.n_cases if ah_br else 0,
+        anti_hallucination_turns=ah_br.n_records if ah_br else 0,
+        anti_hallucination_passes=ah_br.passes if ah_br else 0,
+        anti_hallucination_rate=ah_br.pass_rate if ah_br else None,
+        anti_hallucination_ci_low=ah_br.ci_low if ah_br else None,
+        anti_hallucination_ci_high=ah_br.ci_high if ah_br else None,
+        anti_hallucination_battery_rate=ah_br,
     )
 
 
@@ -379,8 +424,10 @@ def _format_failure_breakdown_md(s: EvalSummary) -> list[str]:
 def _format_battery_counts_lines(s: EvalSummary) -> list[str]:
     """Build the per-battery case/turn count lines for the console summary."""
     return [
-        f"  Guard battery (adv + neg + ah_demo_*): {s.guard_cases} cases, "
-        f"{s.guard_turns} turns evaluated",
+        f"  Guard - adversarial (case_adv_* + case_neg_*): {s.adversarial_cases} cases, "
+        f"{s.adversarial_turns} turns evaluated",
+        f"  Guard - anti-hallucination (ah_demo_*): {s.anti_hallucination_cases} cases, "
+        f"{s.anti_hallucination_turns} turns evaluated",
         f"  Capability battery (case_pos_*): {s.capability_cases} cases, "
         f"{s.capability_turns} turns evaluated",
         f"  Excluded (not in any battery): {s.excluded_cases} cases",
@@ -400,17 +447,21 @@ def _format_validity_warning(s: EvalSummary) -> list[str]:
 
 
 def _assert_paired_rates(s: EvalSummary) -> None:
-    """Raise ValueError when exactly one of guard_rate / capability_rate is not None.
+    """Raise ValueError when guard rates and the capability rate are not both present.
 
-    The headline must always quote both rates together so readers cannot see the
-    guard number without its capability counterpart, and vice-versa.
+    The headline must always quote the rates together so readers cannot see a guard
+    number without its capability counterpart, and vice-versa.
+
+    Since DEC-243 "the guard rate" is two rates, and either population having data makes
+    the guard side present. The pairing rule is unchanged; only what counts as the guard
+    side is, because there is no longer a combined guard rate to test.
 
     Args:
         s: The EvalSummary to validate.
     Raises:
-        ValueError: When only one of the two paired rates has evaluated data.
+        ValueError: When only one of the two paired sides has evaluated data.
     """
-    guard_has_data = s.guard_rate is not None
+    guard_has_data = s.adversarial_rate is not None or s.anti_hallucination_rate is not None
     cap_has_data = s.capability_rate is not None
     if guard_has_data and not cap_has_data:
         raise ValueError(_UNPAIRED_GUARD_ONLY)
@@ -457,13 +508,19 @@ def format_summary_lines(
             repeat-flip decomposition are printed. Omitted when None — single-judge
             runs have no panel to agree within.
     Raises:
-        ValueError: When only one of guard_rate / capability_rate is present.
+        ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    g_rate_str = _pick_rate_str(
-        summary.guard_battery_rate,
-        summary.guard_passes, summary.guard_turns,
-        summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high,
+    adv_rate_str = _pick_rate_str(
+        summary.adversarial_battery_rate,
+        summary.adversarial_passes, summary.adversarial_turns,
+        summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
+    )
+    ah_rate_str = _pick_rate_str(
+        summary.anti_hallucination_battery_rate,
+        summary.anti_hallucination_passes, summary.anti_hallucination_turns,
+        summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
+        summary.anti_hallucination_ci_high,
     )
     c_rate_str = _pick_rate_str(
         summary.capability_battery_rate,
@@ -476,9 +533,10 @@ def format_summary_lines(
         _SEPARATOR,
         f"  {summary.headline}",
         "",
-        "  Rates (guard vs capability — k/n  rate  95% CI):",
-        f"    Guard rate:       {g_rate_str}",
-        f"    Capability rate:  {c_rate_str}",
+        "  Rates (k/n  rate  95% CI) — the two guard populations never combine (DEC-243):",
+        f"    Guard, adversarial:        {adv_rate_str}",
+        f"    Guard, anti-hallucination: {ah_rate_str}",
+        f"    Capability rate:           {c_rate_str}",
         *_format_refusal_rate_line(refusal_result),
         *console_lines(panel_metrics),
         "",
@@ -505,13 +563,19 @@ def format_summary_markdown(
         panel_metrics: Optional panel agreement statistics; when supplied, adds rows.
             See format_summary_lines for why this is optional.
     Raises:
-        ValueError: When only one of guard_rate / capability_rate is present.
+        ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    g_rate_str = _pick_rate_str(
-        summary.guard_battery_rate,
-        summary.guard_passes, summary.guard_turns,
-        summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high,
+    adv_rate_str = _pick_rate_str(
+        summary.adversarial_battery_rate,
+        summary.adversarial_passes, summary.adversarial_turns,
+        summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
+    )
+    ah_rate_str = _pick_rate_str(
+        summary.anti_hallucination_battery_rate,
+        summary.anti_hallucination_passes, summary.anti_hallucination_turns,
+        summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
+        summary.anti_hallucination_ci_high,
     )
     c_rate_str = _pick_rate_str(
         summary.capability_battery_rate,
@@ -525,7 +589,10 @@ def format_summary_markdown(
         "",
         "| Battery | k/n | Rate · 95% CI |",
         "|---|---|---|",
-        f"| Guard (adv + neg + ah_demo_*) | {summary.guard_passes}/{summary.guard_turns} | {g_rate_str} |",
+        f"| Guard - adversarial (case_adv_* + case_neg_*) | "
+        f"{summary.adversarial_passes}/{summary.adversarial_turns} | {adv_rate_str} |",
+        f"| Guard - anti-hallucination (ah_demo_*) | "
+        f"{summary.anti_hallucination_passes}/{summary.anti_hallucination_turns} | {ah_rate_str} |",
         f"| Capability (case_pos_*) | {summary.capability_passes}/{summary.capability_turns} | {c_rate_str} |",
         *_format_refusal_rate_row(refusal_result),
         *markdown_rows(panel_metrics),

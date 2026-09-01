@@ -7442,3 +7442,65 @@ own `measured_at`/`source` fields say exactly where the numbers came from.
 **Deliberately recorded, not fixed:** `tier_maxima` has no `tier_0` entry, because DEC-215
 measured tiers A/B/C only. An absent tier reads as "not measured" and never as zero. A future
 `--record` run populates it, which is what gives R3 the tier-0 datum ROADMAP:279 notes is missing.
+
+## DEC-243: the guard headline splits permanently; no combined guard rate is ever emitted
+**Date:** 2026-09-01 · **Status:** ✅ ACCEPTED · **Closes:** ISSUE-243 · **Implements:** R2.5 (part)
+**Drives:** `evals/case_stats.py`, `evals/summary.py`, `evals/trend_store.py`,
+`evals/trend_row_builder.py`, `README.md`,
+`tests/unit/evals/test_guard_prefix_scopes.py`
+**Context:** The published guard rate aggregated two populations scored by *different
+expectation sets*. `case_adv_*`/`case_neg_*` are graded on the YAML battery's `tone_judge`,
+`affirms_judge`, `schema`, `keyword_none` and `min_length`. `ah_demo_*` is graded on
+`refusal_judge` and `anti_hallucination_grounded` — purpose-built anti-hallucination
+expectations, and deliberately *not* the YAML set (injecting `min_length` into a
+refusal-graded case would score a correct short refusal as a guard failure).
+
+Measured on `k3_77688e7_regen1` after the R2.6b join fix:
+
+| Population | rate | n |
+|---|---:|---:|
+| Guard, adversarial (`case_adv_` + `case_neg_`) | **0.8468** | 111 |
+| Guard, anti-hallucination (`ah_demo_`) | **0.9106** | 123 |
+| Combined (as published) | 0.8803 | 234 |
+
+The easier battery is more than half the denominator and lifted the headline ~3.4 pp above
+the adversarial battery alone.
+
+**Decision:** one rate per expectation set. `EvalSummary` grows `adversarial_*` and
+`anti_hallucination_*` rate fields and **loses** `guard_rate` / `guard_ci_low` /
+`guard_ci_high` / `guard_passes` outright. The console and markdown emitters print two rows.
+`TrendRow` gains `guard_adversarial` and `guard_anti_hallucination`; its `guard` field is
+retired in place — kept so historical rows still parse, written by nothing. `README.md`'s
+citable metric vocabulary drops `guard_rate` for `adversarial_rate` /
+`anti_hallucination_rate`, so a README citing a combined figure fails the build.
+
+**Why removing the fields rather than just the markdown row:** deleting the emitter would
+leave the fields for the next caller to reach for, and the union would quietly come back.
+The rate cannot be reassembled without deliberately re-adding a field, and
+`test_no_combined_guard_rate_can_be_emitted` asserts against the model to keep it that way.
+
+**Counts deliberately still span both populations.** `guard_cases` and `guard_turns` remain,
+because `check_conservation` needs `guard_cases + capability_cases == total_cases`. A count
+over two populations is a count; the thing that had no referent was the *average* of two
+grading contracts.
+
+**Alternatives rejected:** (a) *Publish the adversarial battery alone as "the" guard rate* —
+a naming decision doing a measurement's job, and it drops n from 234 to 111, widening every
+interval on an already underpowered battery. (b) *Keep the combined rate and add an
+engine≤null guard rail* — the guard rail cannot detect a mixed population; the headline would
+keep meaning two things. (c) *Publish nothing until a regeneration* — R2.6 and R3 need a
+denominator to judge against.
+
+**Supersedes ISSUE-243's stated fix.** That entry proposed hoisting one shared prefix
+constant and giving `runner.py` all three prefixes. Its own 2026-09-01 correction had already
+measured that change as a no-op — `runner._load_cases` globs `*.yaml` and `ah_demo_*` cases
+live in `anti_hallucination_demo.json`, loaded by `anti_hallucination_runner`. Under the split
+`runner._GUARD_PREFIXES == ("case_adv_", "case_neg_")` is not a subset that failed to mirror
+the publisher; it *is* the adversarial population's definition, and a test now pins that
+equality rather than the old subset relation.
+
+**Not in this commit:** unblocking the null-baseline comparison
+(`hedge_responder_probe.NotACapabilityCaseError`), the engine≤null refuse-to-print, the
+`check_publication` fabricated-interval fix, and the retraction banner on the tracked report.
+Each is its own cause; landing them together would make the rate movement unattributable —
+the R2.4 error this phase exists not to repeat.
