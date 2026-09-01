@@ -3303,3 +3303,20 @@ type, not the persisted baseline.)
 re-record step; it belongs with R2.6's case-existence filter, which re-records anyway.
 **To fix:** add `n` to the baseline model and file, and assert it does not fall without a
 deliberate `make check-base-rate-update`.
+
+## [FIXED] ISSUE-247: `evals/reports/` is gitignored, so every published report is machine-local
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Fixed:** 2026-09-01, in the B5 commit (DEC-241, `make check-cited-reports`)
+**Severity:** P2 (annoying)
+**Where:** `.gitignore:26`
+**Description:** `git ls-files evals/reports/` returns nothing; `git check-ignore -v` confirms
+`evals/reports/20260825T231028Z.md` — the artifact publishing `170/186 ... 0.914`, cited as the
+source of record by `BASELINE_2026-08-28.md:93`, `FINDINGS.md:55`, `FIX_PLANS.md` and
+`TRIAGE.md` — exists on one machine only and is one `git clean -xdf` from gone. DEC-158 extended
+tracking to `evals/generations/` and `evals/calibration/` for exactly this reason
+(`.gitignore:28`: "every quoted rate rested on files that existed on one machine only") but the
+reports that *quote* those generations were never brought in. It also means R2.5's planned
+retraction banner would not appear in any diff or survive a fresh clone.
+**Why deferred:** not deferred; it is R2.5(e), decided 2026-08-31 — remove the ignore line,
+commit the reports, then banner the retracted one.
+**To fix:** as above, plus a DECISIONS entry recording the extension of DEC-158's reasoning.

@@ -7357,3 +7357,42 @@ the correction — but that is R2.6f and it is a human call. This entry only mak
 **Alternatives rejected:** (a) *Keep the panel family for continuity* — it is the family that
 produced a 1.000, which is the defect. (b) *Average the three* — averages of measurements of
 different things are not measurements.
+
+## DEC-241: eval reports are tracked when cited, not wholesale
+**Date:** 2026-09-01 · **Status:** ✅ ACCEPTED · **Closes:** ISSUE-247
+**Drives:** `.gitignore`, `scripts/check_cited_reports.py`, `make check-cited-reports`
+**Context:** `.gitignore` excluded `evals/reports/` outright. The report publishing
+`Guard (adv + neg + ah_demo_*) | 170/186 | 0.914` — named as the source of record by
+`BASELINE_2026-08-28.md:93`, and referenced again from `FINDINGS.md`, `FIX_PLANS.md` and
+`TRIAGE.md` — therefore existed on exactly one machine and was one `git clean -xdf` from gone.
+DEC-158 had already extended tracking to `evals/generations/` and `evals/calibration/` for this
+precise reason ("every quoted rate rested on files that existed on one machine only"), but the
+reports that *quote* those generations were never brought in.
+
+**Measured before deciding:** `evals/reports/` holds **421 files / 4.7 MB**. Roughly 396 are
+near-identical 824–924 byte run stubs. Exactly **one** is cited anywhere in `project-harness/`.
+
+**Decision:** reports stay ignored by default and are tracked **once cited**. A new gate,
+`make check-cited-reports`, reds when any `project-harness/**.md` names an
+`evals/reports/<timestamp>.md` that git does not track.
+
+The rule is self-enforcing rather than curated: nobody has to remember to commit a report,
+because citing one is what makes the gate demand it. It fixes the actual harm — a published
+number resting on a machine-local file — without committing 4.7 MB of stubs that would bury the
+one artifact that matters and dirty the working tree after every eval run.
+
+**Alternatives rejected:** (a) *Track all 421*, the literal reading of ISSUE-247's "To fix" —
+simplest rule, but it pays 4.7 MB and permanent working-tree noise to protect one file, and
+still would not detect a *future* citation of a report generated after the bulk commit.
+(b) *Track reports above a size threshold* — no defensible threshold exists, and size does not
+predict citation; it is a proxy for the property we can just measure directly.
+
+**Trap recorded, because it cost a debugging cycle to find:** the ignore MUST be written
+`evals/reports/*`, not `evals/reports/`. Git does not descend into an excluded **directory**, so
+a bare directory exclusion makes every `!` negation below it silently inert — the file stays
+ignored and no error is reported. Verified in a throwaway repo before committing. Both
+`.gitignore` and the gate's module docstring carry this warning.
+
+**Not in scope:** the retraction banner on the tracked report. The 0.914 figure aggregates two
+expectation sets and is retracted by R2.5/DEC-243, which owns that publication decision. This
+entry only makes the artifact exist in the repository so that retraction lands in a diff.

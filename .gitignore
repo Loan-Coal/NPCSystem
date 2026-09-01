@@ -23,7 +23,12 @@ htmlcov/
 
 # E2E and eval outputs
 e2e/transcripts/
-evals/reports/
+# Reports are ignored by default but TRACKED ONCE CITED (DEC-241, extends DEC-158).
+# The `/*` form is load-bearing: git does not descend into an excluded directory, so a
+# bare `evals/reports/` makes every negation below silently inert. Do not "tidy" it back.
+# `make check-cited-reports` reds if a document cites a report that is not committed.
+evals/reports/*
+!evals/reports/20260825T231028Z.md
 # Generation artifacts ARE tracked (DEC-158, 2026-08-09): meta.json + outputs.jsonl +
 # judged.jsonl are what make a published number reproducible and auditable. Keeping
 # them out meant every quoted rate rested on files that existed on one machine only.

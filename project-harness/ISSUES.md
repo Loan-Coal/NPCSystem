@@ -2092,22 +2092,6 @@ row 1 + row 2, so the trend re-decision would defer forever.
 i.e. the comparable series restarts at row 2 — or regenerate the baseline. Also sequence R2.6d
 (content-addressing) so it does not split the schema mid-series.
 
-## ISSUE-247: `evals/reports/` is gitignored, so every published report is machine-local
-**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
-**Severity:** P2 (annoying)
-**Where:** `.gitignore:26`
-**Description:** `git ls-files evals/reports/` returns nothing; `git check-ignore -v` confirms
-`evals/reports/20260825T231028Z.md` — the artifact publishing `170/186 ... 0.914`, cited as the
-source of record by `BASELINE_2026-08-28.md:93`, `FINDINGS.md:55`, `FIX_PLANS.md` and
-`TRIAGE.md` — exists on one machine only and is one `git clean -xdf` from gone. DEC-158 extended
-tracking to `evals/generations/` and `evals/calibration/` for exactly this reason
-(`.gitignore:28`: "every quoted rate rested on files that existed on one machine only") but the
-reports that *quote* those generations were never brought in. It also means R2.5's planned
-retraction banner would not appear in any diff or survive a fresh clone.
-**Why deferred:** not deferred; it is R2.5(e), decided 2026-08-31 — remove the ignore line,
-commit the reports, then banner the retracted one.
-**To fix:** as above, plus a DECISIONS entry recording the extension of DEC-158's reasoning.
-
 ## ISSUE-248: the resolved-issues archive reuses two ids and skips five
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
 **Severity:** P3 (nice-to-fix)

@@ -17,7 +17,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
-        check-ledger-ids \
+        check-ledger-ids check-cited-reports \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -245,6 +245,12 @@ check-base-rate:
 check-base-rate-update:
 	$(PYTHON) scripts/check_base_rate.py evals/generations/k3_77688e7_regen1 --update
 
+# check-cited-reports: reds when a project-harness document cites an eval report that is
+# not committed (B5/ISSUE-247). Reports are ignored by default and tracked once cited —
+# see DEC-241 for why "tracked when cited" beats tracking all 421 of them.
+check-cited-reports:
+	$(PYTHON) scripts/check_cited_reports.py
+
 # check-label-survival: freeze-gate check — does the labels file survive the
 # committed transcript unchanged (no drift, no orphaning)? Run before spending a
 # regeneration or a labelling pass (EVAL-P20→P24 unblock plan, Phase A1/B3).
@@ -307,7 +313,7 @@ check-engine-logs:
 # R4.5: check-ledger-ids added, 19 -> 20. Placed beside check-harness because both audit
 #        the project ledgers rather than the code, and both must fire before lint can
 #        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
-check: check-harness check-ledger-ids lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
+check: check-harness check-ledger-ids check-cited-reports lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
