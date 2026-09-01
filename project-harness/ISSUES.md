@@ -558,49 +558,6 @@ per human decision 2026-08-12; `EVAL-P17.5` ticked. ISSUE-155/ISSUE-156 remain o
 the pipeline fix still required before live tooling (`summarize_from_dir`, `compare`)
 reproduces this number.
 
-## ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
-**Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
-**Severity:** P1 (blocking) — FOR HAND REVIEW. The data exists; the reader does not return it.
-**Where:** retrieval context assembly; observed via `GET /v1/admin/debug/retrieval`
-**Description:** The `npc` context item is empty for **every** NPC tested — the five core
-demo NPCs and all nine H2.2/EXP-223 NPCs alike:
-
-```
-GET /v1/admin/debug/retrieval?npc_id=bren_smith&query=Is+the+forge+doing+all+right
-  {"beliefs": [], "emotion": {...}, "goals": [], "memories": [], "profile": {}, "top_need": null}
-  npc_known_events: []
-```
-
-Identical for `mira_innkeeper`, `captain_sorn`, `aldric_merchant`, `vex_spymaster`,
-`sera_barmaid`: `beliefs=0 goals=0 memories=0 profile_keys=[] events=0`. `captain_sorn`
-holds a *direct* `KNOWS_ABOUT northern_war_begins` edge and it does not reach the prompt.
-
-**The data is present.** The typed admin readers return it correctly:
-`GET /v1/admin/beliefs/bren_smith` returns 2 beliefs, `/goals/` returns 1, `/memories/`
-returns 2, `/secrets/` returns 1, all with the stable seeded ids. So this is a defect in
-the retrieval path or in the debug endpoint's stack, not in the seed and not in the graph.
-
-**Consequences, both measured 2026-08-10:**
-- The nine EVAL-P20.2 capability cases score **2/9** live. Every failing response is
-  generic boilerplate — `bren_smith`, asked about his own forge, answers "I've heard the
-  blacksmiths are struggling a bit this spring", speaking of blacksmiths in the third
-  person because his profile never reached the prompt.
-- The seven shipped capability cases score **6/6** live, but for the wrong reason: every
-  response is a variant of "Word travels fast around here, stranger... the northern war
-  rages on" and passes only because its `keyword_any` list contains `war`/`north`/`heard`.
-  `captain_sorn`, whose case exists to prove he answers *without* hedging, replies
-  "I've heard word of skirmishes, but nothing too serious" — hedged gossip — and passes.
-  **The current capability rate is an artifact of keyword overlap, not evidence of grounding.**
-
-**Why deferred:** EVAL-P20.2 is a case-authoring task; this is an engine/retrieval defect
-of unknown depth, and the human who owns the roadmap asked to review it by hand rather
-than have it fixed inside this commit.
-**To fix:** Determine whether the fault is in the retrieval reader, the context builder,
-or only in `/v1/admin/debug/retrieval`'s stack — the live dialogue responses corroborate
-the debug output, so a debug-only fault is unlikely but is the cheapest thing to rule out.
-Then re-run `make hedge-probe` and the nine cases live; the capability rate is not
-interpretable until this is closed.
-
 ## ISSUE-146: the legacy capability cases floor the hedge gate at 0.375
 **Found:** 2026-08-10, during EVAL-P20.2
 **Severity:** P2 (annoying)
@@ -868,26 +825,6 @@ changes and is a natural inflection point.
 new DI option in `api/dependency_singletons.py`; add Docker Compose Redis service.
 
 ---
-
-## ISSUE-122: `app` service has no restart policy — startup race vs Neo4j leaves the API permanently dead
-**Found:** 2026-06-25, while debugging DemoGame dialogue (engine appeared unreachable from the game)
-**Severity:** P2 (annoying — silently kills the whole API until a manual restart; high-confusion failure mode)
-**Where:** `docker-compose.yml` — `app` service
-**Description:** `npcsystem-app-1` exited (code 3) during FastAPI lifespan startup: `ensure_core_constraints`
-(`src/npc_engine/graph/schema_bootstrap.py:70`) opened a Neo4j session before Neo4j was accepting Bolt
-connections, raising `neo4j.exceptions.ServiceUnavailable: Couldn't connect to neo4j:7687 ... [Errno 111]`
-→ `Application startup failed. Exiting.`. Neo4j became healthy ~seconds later, but with **no `restart` policy**
-on the `app` service the container stayed dead. Result: port 8000 was never published and every client call
-connection-failed (`status -1`). From the DemoGame side this masqueraded as "the LLM is untied from dialogue"
-— the game was healthy; the API was simply down. A plain `docker compose up -d app` (which waits for
-neo4j-healthy) recovered it cleanly, confirming the only fault was the unguarded startup race + no auto-restart.
-**Why deferred:** User asked to log only, not implement. The immediate incident is resolved (container restarted,
-`/health` → 200). Recurs on any cold start where the app wins the race against Neo4j.
-**To fix:** On the `app` service in `docker-compose.yml`: (1) add `restart: on-failure` (or `unless-stopped`)
-so a lost startup race self-heals; and/or (2) ensure `depends_on: { neo4j: { condition: service_healthy } }`
-so the app never starts before Neo4j's healthcheck passes. Belt-and-suspenders: a short retry/backoff loop
-around `ensure_core_constraints` in `lifespan` (`src/npc_engine/main.py:124`) so a transient Bolt blip doesn't
-abort startup. Verify the Neo4j service actually defines a `healthcheck` for option (2) to be meaningful.
 
 ## ISSUE-132: `evals/` mixes flat and package-absolute imports
 **Found:** 2026-08-07, during EVAL-P6.3
@@ -2185,3 +2122,82 @@ same session. Both are stale prose next to live numbers, which is the class of d
 **Why deferred:** documentation-only; no gate behaviour is wrong.
 **To fix:** correct both comments to the live values, and consider extending
 `check_harness_honesty.py` to compare a ratchet comment's quoted number against its baseline file.
+
+## ISSUE-250: two documents cite ISSUE ids that were never filed
+**Found:** 2026-09-01, during R4.5 (ledger hygiene)
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/ROADMAP.md:280`, `project-harness/review-2026-08/FIX_PLANS.md:161`
+**Description:** Two planning documents cite ISSUE ids as if they were filed tickets, and neither
+exists in `ISSUES.md` or `archive/ISSUES_RESOLVED.md`:
+
+- `ROADMAP.md:280` — "Trend and sequence are **510** and **808** lines of Python, not the
+  1,309 / 1,714 quoted (ISSUE-242)." The measurement is correct and reproduces; only the ticket
+  reference is dangling. The claim is self-contained, so nothing is lost by dropping the citation.
+- `FIX_PLANS.md:161` — "The Ollama-in-CI exclusion belongs to the eval/judge path, ISSUE-240."
+  Same shape: the statement stands on its own, the ticket does not exist.
+
+Ids 239-242 were never issued in either file, so a reader chasing either citation finds nothing
+and cannot tell whether the ticket was deleted, archived, or never written. `ISSUE-248` records
+the same defect for 026-030 in the archive.
+**Why deferred:** the fix is a prose edit in `ROADMAP.md` and `FIX_PLANS.md`, and neither file is
+in R4.5's scope (`ISSUES.md`, `DECISIONS.md`, `archive/ISSUES_RESOLVED.md`, `SKILLS_QUEUE.md`,
+`scripts/`). Editing a task-spec file while executing a different task breaks single-task focus.
+**To fix:** delete the two parenthetical citations — the surrounding claims already carry their own
+evidence — or file the two tickets retroactively. Do not renumber anything.
+`make check-ledger-ids` reports both until then, and the "Never assigned" record below keeps the
+gate honest without hiding them.
+
+### Never assigned
+Recorded so the gap is not read as a deletion and the numbers are not reused.
+
+- `ISSUE-239`
+- `ISSUE-240`
+- `ISSUE-241`
+- `ISSUE-242`
+
+## ISSUE-251: two files still describe the retired SKILLS_QUEUE.md as live
+**Found:** 2026-09-01, during R4.5 (ledger hygiene)
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/CLAUDE.md:313`, `docs/overview.md:42`
+**Description:** `SKILLS_QUEUE.md` was retired in place on 2026-09-01 (R4.5), but two inbound
+references still present it as an active destination:
+
+- `CLAUDE.md:313` is **normative** — "those go in `DECISIONS.md` or `SKILLS_QUEUE.md`" — so an
+  agent following the rules file is told to append to a retired file.
+- `docs/overview.md:42` lists it in the document index as "Open questions and skill/knowledge gaps
+  to resolve", with no retirement marker.
+
+A third reference, `demo_game/ui/layout/right_panel.py:101`, cites a specific entry
+(`pygame-n-panel-cycle`) as a historical pointer. That one is correct as-is and is the reason the
+file was retired in place rather than deleted.
+**Why deferred:** both files are outside R4.5's scope (`ISSUES.md`, `DECISIONS.md`,
+`archive/ISSUES_RESOLVED.md`, `SKILLS_QUEUE.md`, `scripts/`), and `CLAUDE.md` is the subject of
+R4.4, an ask-gated rewrite. Editing it here would pre-empt that decision. The retirement banner at
+the top of `SKILLS_QUEUE.md` names both references, so a reader arriving from either is not
+misled in the meantime.
+**To fix:** in `CLAUDE.md:313` drop the `SKILLS_QUEUE.md` alternative so open questions go to
+`DECISIONS.md` only — fold this into R4.4 rather than making a separate pass. In
+`docs/overview.md:42` mark the row RETIRED. Do not delete the file.
+
+## ISSUE-252: two ungated gate scripts still default to a superseded generation
+**Found:** 2026-09-01, during R4.5 (ledger hygiene)
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_conservation.py:29,243`, `scripts/check_label_survival.py:27`
+**Description:** Both scripts hardcode `evals/generations/k3_73e6c36` as their default corpus.
+The current corpus is `k3_77688e7_regen1` — the one `scripts/base_rate_baseline.json` and
+`scripts/check_dead_keywords.py:43` both point at. Running either script without `--gen-dir`
+therefore audits a superseded generation and reports numbers that describe nothing current.
+
+**Corrects R4.5's spec**, which says "Fix the three scripts sharing one hardcoded stale corpus
+default, of which only one is tracked." Measured 2026-09-01: it is **two**, not three.
+`check_dead_keywords.py` is the third script in that family and it already points at the current
+generation. Separately, R1.3 removed `check-conservation` and `check-label-survival` from
+`make check`, so neither stale default is reachable from any gate — this is ungated debt, not a
+live gate defect, which is why it is logged rather than fixed inside R4.5.
+**Why deferred:** changing a default corpus changes what the scripts measure. Neither is gated, so
+the change buys nothing today, and doing it inside a ledger-hygiene commit would mix a measurement
+change into a documentation change — the attribution error the R2 program exists to stop.
+**To fix:** point both defaults at the current generation, or better, derive the default from a
+single shared helper so the next regeneration updates all three at once. Do it in the same commit
+as the next regeneration so the before/after is attributable.
+

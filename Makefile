@@ -17,6 +17,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
+        check-ledger-ids \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -165,6 +166,16 @@ test-integration:
 # The gate also asserts a floor of executed tests: _skip_if_no_neo4j() skips at runtime, so
 # a misconfigured job would otherwise pass green over an all-skip suite — the exact vacuity
 # R2.2 exists to remove.
+# check-ledger-ids: fail when a reused DEC/ISSUE id is undocumented, or when a planning
+# document cites an id that was never assigned (R4.5, DEC-239).
+# Contract is "document every reuse", not "no id is reused": all four colliding DEC ids are
+# cited by number from live source, so renumbering would silently repoint code comments at a
+# decision they were not written about. Counterfactual recorded in
+# tests/unit/scripts/test_check_ledger_ids.py — an undocumented collision reds, a documented
+# one greens. Measured 2026-09-01: 4 DEC + 2 ISSUE reuses, all documented; 0 undeclared citations.
+check-ledger-ids:
+	$(PYTHON) scripts/check_ledger_ids.py
+
 check-integration-baseline:
 	$(PYTHON) scripts/check_integration_baseline.py
 
@@ -293,7 +304,10 @@ check-engine-logs:
 #        coverage job into `make check` without them would have deleted two gates in
 #        the commit meant to restore gates. CI now runs this aggregate as one step, so
 #        anything added here is enforced on push without editing any YAML.
-check: check-harness lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
+# R4.5: check-ledger-ids added, 19 -> 20. Placed beside check-harness because both audit
+#        the project ledgers rather than the code, and both must fire before lint can
+#        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
+check: check-harness check-ledger-ids lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

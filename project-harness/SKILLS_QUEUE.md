@@ -1,4 +1,18 @@
-# Skills Queue
+# Skills Queue — RETIRED 2026-09-01 (R4.5)
+
+> **This file is retired and no longer accepts entries.** Last substantive update 2026-05-29
+> (`27fce35`), 95 days before retirement. It is kept, not deleted, because its content is still
+> cited by name from live source — `demo_game/ui/layout/right_panel.py:101` points at the
+> `pygame-n-panel-cycle` entry below — so deleting it would break a code comment for no gain.
+>
+> **Where things go now:** open questions and design calls go in
+> [`DECISIONS.md`](DECISIONS.md); anything you notice but are not fixing goes in
+> [`ISSUES.md`](ISSUES.md). Reusable procedures belong in a skill under `.claude/skills/`.
+>
+> Inbound references in `project-harness/CLAUDE.md` and `docs/overview.md` still describe this
+> file as live; correcting them is tracked as ISSUE-251 (both files are outside R4.5's scope).
+>
+> The entries below are preserved verbatim as a historical record.
 
 _(Populated when a skill opportunity is identified during development. Append only.)_
 

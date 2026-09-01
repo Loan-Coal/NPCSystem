@@ -7270,3 +7270,44 @@ in YAML.
 **Known cost, accepted:** that job's wall clock rises to roughly `make check`'s ~595 s and loses
 some parallelism. `ci.yml` has no `timeout-minutes` on any job today; one is added with this
 change.
+
+## DEC-239: reused ledger ids are documented, never renumbered
+**Date:** 2026-09-01 · **Status:** ✅ ACCEPTED · **Gates:** `make check-ledger-ids` (R4.5)
+**Drives:** `scripts/check_ledger_ids.py`, `tests/unit/scripts/test_check_ledger_ids.py`
+**Context:** R4.5's spec said "assign the duplicates new ids and leave a redirect line at the old
+heading". Measurement before editing showed why that is the wrong move here. All four genuinely
+colliding DEC ids are cited **by number from live source**, not merely from documents:
+`demo_game/game_controller.py:13` (DEC-052), `demo_game/runners/run_scenes.py:9` (DEC-051),
+`src/npc_engine/engines/proactive_dialogue/models.py:39,50` and three tests (DEC-073), and
+`src/npc_engine/graph/economy/currency_writer.py:10` (DEC-058). Between them the four carry 38
+citations across the repo. Renumbering either member of a pair silently repoints a code comment
+at a decision it was not written about.
+**Decision:** Do **not** renumber. Document every reuse instead, and gate that the documentation
+exists. `ISSUE-248` already reached this conclusion for `archive/ISSUES_RESOLVED.md` — "renumbering
+would break inbound references from DECISIONS.md and the review documents, which is worse than the
+ambiguity" — and the same reasoning applies with more force to a ledger whose ids appear in
+shipped source. The gate's contract is therefore *every reuse is named in a "Reused ids" note*,
+not *no id is reused*.
+**Also corrected here:** R4.5's spec counts "5 reused DEC ids and 2 reused ISSUE ids". The real
+count is **4 and 2**. `DEC-116` is a single decision written as a question heading (2026-06-13)
+plus an outcome heading (`## DEC-116 outcome (2026-06-14): ...`, 2026-06-14), not two decisions.
+A detector that counts every heading containing an id reports it as a collision, which is how the
+inflated 5 entered the spec. A declaration is now defined as an id followed **immediately by a
+colon**, so an outcome continuation is not one.
+**Alternatives rejected:** (a) *Renumber, letting the code-cited member keep its id* — no code
+reference breaks, but it requires reading all 38 citations to route each to the right meaning, and
+document references to the renumbered member still break. (b) *Renumber strictly by date* — the
+cleanest rule, and the one that breaks the most source comments.
+
+## Reused ids — documented, not renumbered (DEC-239)
+Each id below was declared twice. Both meanings are retained; cite them by title, not by number
+alone. `make check-ledger-ids` fails if a new reuse appears without an entry here.
+
+- `DEC-051` — (a) S10.3 correct rumor marks 'corrected' rather than deleting the edge;
+  (b) `run_scenes.py` accepted over the 300-line hard limit. Source cites meaning (b).
+- `DEC-052` — (a) `game_controller.py` ~535 lines, continued DEC-048 exception;
+  (b) S9.3 TTS audio delivered as base64 in WS done JSON. Source cites meaning (a).
+- `DEC-058` — (a) Delete nested infra copies under `src/npc_engine/`;
+  (b) `currency_writer.py` waived at 327 lines. Source cites meaning (b).
+- `DEC-073` — (a) `context_budget_enforcer.py` accepted at 323 lines;
+  (b) EXP-10 proactive dialogue WS `proactive_line` message shape. Source cites meaning (b).

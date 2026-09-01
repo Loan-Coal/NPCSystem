@@ -7,6 +7,28 @@ Rules:
 - IDs are still never reused — consult both this file and `../ISSUES.md` for the next id.
 - This is an append-only archive; do not edit closed entries.
 
+## Reused ids — documented, not renumbered (DEC-239, ISSUE-248)
+Two ids were declared twice in this archive. Both meanings are retained; renumbering a resolved
+archive would break inbound references from `DECISIONS.md` and the review documents, which is
+worse than the ambiguity. Cite these by title, not by number alone.
+
+- `ISSUE-035` — (a) `reputation_dialogue_tone_001` eval fails, merchant archetype shows no warmth
+  toward an allied player (found 2026-05-27); (b) `tone_judge` matcher is stubbed, so all
+  tone/voice evals silently skip (found 2026-05-26).
+- `ISSUE-056` — (a) 8 remaining pre-existing test failures in HEAD blocking `make check`
+  (fixed 2026-06-04); (b) `graph_rag.py` `MATCH (seed)` full-scan with no label filter
+  (fixed 2026-06-19).
+
+## Never assigned
+These ids were never issued in either `ISSUES.md` or this archive. The gap is recorded so a future
+session does not read it as a deletion and does not reuse the numbers.
+
+- `ISSUE-026`
+- `ISSUE-027`
+- `ISSUE-028`
+- `ISSUE-029`
+- `ISSUE-030`
+
 ---
 
 ## [FIXED] ISSUE-099: F1.6 (scheming + investigation detection) DEFERRED — needs design call (DEC-107)
@@ -3128,3 +3150,78 @@ passes. ISSUE-233 has been narrowed to the real 8, and those 8 are now the commi
 allowlist in `scripts/integration_baseline.txt`, enforced by `make check-integration-baseline`.
 R3.6 inherits a denominator that was measured rather than assumed.
 
+## [FIXED] ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
+**Fixed:** 2026-09-01, in R4.5 (ledger hygiene). Closed as superseded, not re-fixed.
+Every cause this entry names is resolved elsewhere: the `profile: {}` and empty `npc_known_events`
+half was fixed and verified at RET-P0; the empty `beliefs`/`goals` are not a defect (the demo seed
+has no `HOLDS_BELIEF`/`HAS_GOAL` edges); the `memories` half was root-caused and `[FIXED]` as
+ISSUE-163, with a further cause `[FIXED]` as ISSUE-197. The fix is live in
+`context_score_extractors.py:228` (`NPC_SELF_STATE_KEYS`) and `context_budget_enforcer.py:207,360,464`,
+and pinned by `tests/unit/retrieval/test_context_budget_starvation.py` — 6 tests, all passing on
+2026-09-01, whose acceptance shape asserts profile, memories, beliefs and goals all survive budget
+enforcement. CR-L07-01 asked for exactly this re-verification before closing.
+**Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
+**Severity:** P1 (blocking) — FOR HAND REVIEW. The data exists; the reader does not return it.
+**Where:** retrieval context assembly; observed via `GET /v1/admin/debug/retrieval`
+**Description:** The `npc` context item is empty for **every** NPC tested — the five core
+demo NPCs and all nine H2.2/EXP-223 NPCs alike:
+
+```
+GET /v1/admin/debug/retrieval?npc_id=bren_smith&query=Is+the+forge+doing+all+right
+  {"beliefs": [], "emotion": {...}, "goals": [], "memories": [], "profile": {}, "top_need": null}
+  npc_known_events: []
+```
+
+Identical for `mira_innkeeper`, `captain_sorn`, `aldric_merchant`, `vex_spymaster`,
+`sera_barmaid`: `beliefs=0 goals=0 memories=0 profile_keys=[] events=0`. `captain_sorn`
+holds a *direct* `KNOWS_ABOUT northern_war_begins` edge and it does not reach the prompt.
+
+**The data is present.** The typed admin readers return it correctly:
+`GET /v1/admin/beliefs/bren_smith` returns 2 beliefs, `/goals/` returns 1, `/memories/`
+returns 2, `/secrets/` returns 1, all with the stable seeded ids. So this is a defect in
+the retrieval path or in the debug endpoint's stack, not in the seed and not in the graph.
+
+**Consequences, both measured 2026-08-10:**
+- The nine EVAL-P20.2 capability cases score **2/9** live. Every failing response is
+  generic boilerplate — `bren_smith`, asked about his own forge, answers "I've heard the
+  blacksmiths are struggling a bit this spring", speaking of blacksmiths in the third
+  person because his profile never reached the prompt.
+- The seven shipped capability cases score **6/6** live, but for the wrong reason: every
+  response is a variant of "Word travels fast around here, stranger... the northern war
+  rages on" and passes only because its `keyword_any` list contains `war`/`north`/`heard`.
+  `captain_sorn`, whose case exists to prove he answers *without* hedging, replies
+  "I've heard word of skirmishes, but nothing too serious" — hedged gossip — and passes.
+  **The current capability rate is an artifact of keyword overlap, not evidence of grounding.**
+
+**Why deferred:** EVAL-P20.2 is a case-authoring task; this is an engine/retrieval defect
+of unknown depth, and the human who owns the roadmap asked to review it by hand rather
+than have it fixed inside this commit.
+**To fix:** Determine whether the fault is in the retrieval reader, the context builder,
+or only in `/v1/admin/debug/retrieval`'s stack — the live dialogue responses corroborate
+the debug output, so a debug-only fault is unlikely but is the cheapest thing to rule out.
+Then re-run `make hedge-probe` and the nine cases live; the capability rate is not
+interpretable until this is closed.
+
+## [FIXED] ISSUE-122: `app` service has no restart policy — startup race vs Neo4j leaves the API permanently dead
+**Fixed:** 2026-09-01, in R4.5 (ledger hygiene). Closed as already-satisfied.
+`docker-compose.yml`'s `app` service now carries both remedies this entry prescribes:
+`restart: on-failure:5` and `depends_on: neo4j: condition: service_healthy`. Verified against
+HEAD on 2026-09-01.
+**Found:** 2026-06-25, while debugging DemoGame dialogue (engine appeared unreachable from the game)
+**Severity:** P2 (annoying — silently kills the whole API until a manual restart; high-confusion failure mode)
+**Where:** `docker-compose.yml` — `app` service
+**Description:** `npcsystem-app-1` exited (code 3) during FastAPI lifespan startup: `ensure_core_constraints`
+(`src/npc_engine/graph/schema_bootstrap.py:70`) opened a Neo4j session before Neo4j was accepting Bolt
+connections, raising `neo4j.exceptions.ServiceUnavailable: Couldn't connect to neo4j:7687 ... [Errno 111]`
+→ `Application startup failed. Exiting.`. Neo4j became healthy ~seconds later, but with **no `restart` policy**
+on the `app` service the container stayed dead. Result: port 8000 was never published and every client call
+connection-failed (`status -1`). From the DemoGame side this masqueraded as "the LLM is untied from dialogue"
+— the game was healthy; the API was simply down. A plain `docker compose up -d app` (which waits for
+neo4j-healthy) recovered it cleanly, confirming the only fault was the unguarded startup race + no auto-restart.
+**Why deferred:** User asked to log only, not implement. The immediate incident is resolved (container restarted,
+`/health` → 200). Recurs on any cold start where the app wins the race against Neo4j.
+**To fix:** On the `app` service in `docker-compose.yml`: (1) add `restart: on-failure` (or `unless-stopped`)
+so a lost startup race self-heals; and/or (2) ensure `depends_on: { neo4j: { condition: service_healthy } }`
+so the app never starts before Neo4j's healthcheck passes. Belt-and-suspenders: a short retry/backoff loop
+around `ensure_core_constraints` in `lifespan` (`src/npc_engine/main.py:124`) so a transient Bolt blip doesn't
+abort startup. Verify the Neo4j service actually defines a `healthcheck` for option (2) to be meaningful.
