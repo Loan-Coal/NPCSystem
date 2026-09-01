@@ -1882,18 +1882,24 @@ swallowed before any handler saw it — the degradation fix must land first or i
 register a 503 handler; make `TokenBudgetExceededError` structured. Proof:
 `test_neo4j_outage_returns_503` — stop the container, POST dialogue, expect 503; today 500.
 
-## ISSUE-233: nine integration tests fail — the first ever run of the suite
+## ISSUE-233: eight integration tests fail — the first ever run of the suite
 **Found:** 2026-08-28, immediately after ISSUE-232 made bolt reachable from the host
 **Severity:** P1 (blocking) — unknown-severity product defects in shipped engine behaviour
 **Where:** `tests/integration/` — faction, faction-gossip, quest lifecycle, reputation, scheme
-**Description:** With Neo4j reachable, `pytest tests/integration` returns **34 passed, 9 failed**
-(99 s). The 34 are tests that have always skipped and pass on their first real execution. The 9
-have never been evaluated by anyone:
+**Description:** With Neo4j reachable, `pytest tests/integration` returns **35 passed, 8 failed**
+(109 s, re-measured 2026-09-01 by R2.2). The passing ones have always skipped and pass on their
+first real execution. The 8 below have never been evaluated by anyone.
+
+**Corrected 2026-09-01 (R2.2, settling ISSUE-236):** this entry originally listed **nine**,
+including `test_faction_integration.py::test_set_standing_independent_directions`. That test
+**passes** on re-measurement, so the real count is 8 and the list below has been narrowed to
+match. `.loop-state/gate_baseline.json`'s 8 was right; this entry's 9 was the stale one. The 8
+are now the committed allowlist in `scripts/integration_baseline.txt`, enforced on every push by
+`make check-integration-baseline` — so they can no longer grow silently while triage waits.
 
 - `test_faction_gossip_integration.py::test_same_faction_pairs_rank_higher_than_strangers`
 - `test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs`
 - `test_faction_integration.py::test_remove_member_raises_when_not_a_member`
-- `test_faction_integration.py::test_set_standing_independent_directions`
 - `test_faction_integration.py::test_remove_controls_raises_when_no_edge`
 - `test_quest_lifecycle_integration_v14.py::test_quest_lifecycle_offer_to_completion_and_rewards`
 - `test_reputation_integration.py::test_reputation_context_included_above_threshold`
@@ -1903,7 +1909,7 @@ have never been evaluated by anyone:
 **One was investigated and is a genuine product defect**, not a fixture problem:
 `test_remove_member_raises_when_not_a_member` fails `DID NOT RAISE FactionMembershipError` —
 `FactionService.remove_member()` silently no-ops when the character is not a member, where the
-contract says it raises. The other **eight are untriaged**: they may be defects, stale test
+contract says it raises. The other **seven are untriaged**: they may be defects, stale test
 expectations, or missing fixtures. Do not assume either way without opening each.
 
 This is CR-L14-02 realised. That finding showed the graph read layer could be gutted to constants
@@ -1911,27 +1917,11 @@ with `make check` staying green; this is the same hole from the other side — t
 have caught these ran for no one, and the skip reported nothing.
 **Why deferred:** out of R0's scope (a security fix plus the port mapping that exposed this).
 Triage belongs in R3 alongside the other product-correctness work.
-**To fix:** triage all nine — defect, stale expectation, or fixture gap — one line each. Fix the
+**To fix:** triage all eight — defect, stale expectation, or fixture gap — one line each. Fix the
 defects; delete or correct the stale expectations. Then wire the suite into CI (R2.2) so the
 result cannot go unobserved again. Run with:
 `docker compose -f docker-compose.yml -f docker-compose.test.yml up -d` then
 `NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password python -m pytest tests/integration`
-
-
-## ISSUE-236: two different integration-failure baselines are recorded
-**Found:** 2026-08-31, during R2 planning
-**Severity:** P2 (annoying) — R3.6 would inherit a wrong denominator
-**Where:** project-harness/ISSUES.md (ISSUE-233) vs project-harness/.loop-state/gate_baseline.json
-**Description:** ISSUE-233 lists nine failing integration tests; gate_baseline.json records
-eight. The lists differ by exactly
-`test_faction_integration.py::test_set_standing_independent_directions`. Neither has been
-re-run since 2026-08-28 and Neo4j was not running during this planning session, so which
-is current is unknown.
-**Why deferred:** R2 fixes none of these (that is R3.6) and no R2 task attributes any
-measurement to integration counts. Settling it needs the stack up.
-**To fix:** bring up `docker compose -f docker-compose.yml -f docker-compose.test.yml`,
-run `NEO4J_URI=bolt://localhost:7687 python -m pytest tests/integration`, record the real
-list, and correct whichever file is stale. Do this as R3.6's first step.
 
 
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist

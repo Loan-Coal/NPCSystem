@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-migrations check-api-stability check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
-        test-cov-evals \
+        test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -148,6 +148,28 @@ type-demo:
 
 type-demo-update:
 	$(PYTHON) scripts/mypy_ratchet.py --target demo_game/ --baseline-file .mypy_baseline_demo --label mypy-demo-ratchet --update-hint "make type-demo-update" --update
+
+# test-integration: the Neo4j-backed integration suite. Identical command locally and in
+# CI (R2.2). Requires the graph up and NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD exported:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d neo4j
+# Not a `check:` prerequisite — `make check` must stay runnable without Docker.
+test-integration:
+	$(PYTHON) -m pytest tests/integration -q --tb=no -rf -p no:cacheprovider $(ARGS)
+
+# check-integration-baseline: ratchet the integration suite against the committed
+# allowlist of known-failing node ids in scripts/integration_baseline.txt (R2.2).
+# A node-id set, not a count: a count passes when one test is fixed and another breaks in
+# the same run. Recorded 2026-09-01 at 8 known-failing, measured against a live neo4j:5 —
+# which settles ISSUE-236 in favour of .loop-state/gate_baseline.json's 8 over ISSUE-233's
+# 9 (test_set_standing_independent_directions now passes). R3.6 shrinks this file.
+# The gate also asserts a floor of executed tests: _skip_if_no_neo4j() skips at runtime, so
+# a misconfigured job would otherwise pass green over an all-skip suite — the exact vacuity
+# R2.2 exists to remove.
+check-integration-baseline:
+	$(PYTHON) scripts/check_integration_baseline.py
+
+check-integration-baseline-update:
+	$(PYTHON) scripts/check_integration_baseline.py --update-baseline
 
 # test-cov-evals: gate evals/ test coverage at ~78% measured baseline; floor 75 (EVAL-P15.4).
 # Runs evals unit tests and script tests only (fast; integration evals need real artifacts).

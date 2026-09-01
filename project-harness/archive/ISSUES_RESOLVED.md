@@ -3105,3 +3105,26 @@ permanent tests. The block is repo-wide under `tests/unit/` via a socket patch i
 function bodies in `engine_adapter.py`. Two further files (`test_run_config_corpus_fingerprint.py`,
 `test_generate_runner_k.py`) also resolved with absent digests and were fixed in the same commit.
 The CI half of the title is R2.2, which is blocked on credentials and CI-config approval.
+
+## [FIXED] ISSUE-236: two different integration-failure baselines are recorded
+**Found:** 2026-08-31, during R2 planning
+**Severity:** P2 (annoying) — R3.6 would inherit a wrong denominator
+**Where:** project-harness/ISSUES.md (ISSUE-233) vs project-harness/.loop-state/gate_baseline.json
+**Description:** ISSUE-233 lists nine failing integration tests; gate_baseline.json records
+eight. The lists differ by exactly
+`test_faction_integration.py::test_set_standing_independent_directions`. Neither has been
+re-run since 2026-08-28 and Neo4j was not running during this planning session, so which
+is current is unknown.
+**Why deferred:** R2 fixes none of these (that is R3.6) and no R2 task attributes any
+measurement to integration counts. Settling it needs the stack up.
+**To fix:** bring up `docker compose -f docker-compose.yml -f docker-compose.test.yml`,
+run `NEO4J_URI=bolt://localhost:7687 python -m pytest tests/integration`, record the real
+list, and correct whichever file is stale. Do this as R3.6's first step.
+**Fixed:** 2026-09-01, in R2.2 commit 2 (`ci: add neo4j; stop skipping the integration suite`).
+**Resolution:** measured against a live `neo4j:5` brought up with the compose override —
+`35 passed, 8 failed, 0 skipped` in 109 s. **`gate_baseline.json`'s 8 was correct; ISSUE-233's
+9 was stale.** The difference, `test_faction_integration.py::test_set_standing_independent_directions`,
+passes. ISSUE-233 has been narrowed to the real 8, and those 8 are now the committed
+allowlist in `scripts/integration_baseline.txt`, enforced by `make check-integration-baseline`.
+R3.6 inherits a denominator that was measured rather than assumed.
+

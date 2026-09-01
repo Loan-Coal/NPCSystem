@@ -1,0 +1,12 @@
+# Known-failing integration tests, by pytest node id (R2.2).
+# The gate fails only on a node id that is NOT in this list. Shrink this file as R3.6
+# fixes them (run `make check-integration-baseline-update`). Never add a line by hand
+# to dodge the gate — a new failure here is a regression, not debt.
+tests/integration/test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs
+tests/integration/test_faction_gossip_integration.py::test_same_faction_pairs_rank_higher_than_strangers
+tests/integration/test_faction_integration.py::test_remove_controls_raises_when_no_edge
+tests/integration/test_faction_integration.py::test_remove_member_raises_when_not_a_member
+tests/integration/test_quest_lifecycle_integration_v14.py::test_quest_lifecycle_offer_to_completion_and_rewards
+tests/integration/test_reputation_integration.py::test_reputation_context_included_above_threshold
+tests/integration/test_scheme_advance_tick_integration.py::test_advance_creates_covert_event_and_step
+tests/integration/test_scheme_detection_tick_integration.py::test_witnessed_scheme_is_discovered

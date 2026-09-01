@@ -440,20 +440,26 @@ CR-L14-04 is built on.
 Validation: `grep -rlc '_to_native' src/` returns 1, not 3. `make check` green.
 CR-L14-04, CR-L14-05.
 
-- [ ] **R3.6** Triage ISSUE-233's nine integration failures — report only, change nothing
+- [ ] **R3.6** Triage ISSUE-233's eight integration failures — report only, change nothing
 Files: `project-harness/ISSUES.md` (append findings only)
-Spec: with bolt reachable, `pytest tests/integration` returns 34 passed / 9 failed. The 34 pass
-on first execution ever. The 9 have never been evaluated. **Standing rule agreed 2026-08-28:
-triage and report only — change no test and fix no code.** Open each of the nine, classify it as
+Spec: with bolt reachable, `pytest tests/integration` returns **35 passed / 8 failed / 0
+skipped** (re-measured 2026-09-01 by R2.2, settling ISSUE-236 — the count was recorded as 9 and
+is really 8; `test_faction_integration.py::test_set_standing_independent_directions` passes).
+The passing ones pass on first execution ever. The 8 have never been evaluated. They are the
+committed allowlist in `scripts/integration_baseline.txt`, so they cannot grow silently while
+this triage waits: `make check-integration-baseline` reds on a ninth. **Standing rule agreed 2026-08-28:
+triage and report only — change no test and fix no code.** Open each of the eight, classify it as
 defect / stale expectation / fixture gap with one line of evidence, and append the classification
 to ISSUE-233. One is already confirmed a genuine defect
 (`FactionService.remove_member()` silently no-ops on a non-member instead of raising
-`FactionMembershipError`); the other eight are unknown and must not be assumed either way.
+`FactionMembershipError`); the other seven are unknown and must not be assumed either way.
 Do NOT edit a test to make it pass — the easiest way to green a red test is to edit it, and
 `loop_gates.py`'s own docstring calls that fraud.
 RED anchor: none — this task deliberately changes no behaviour. Its verification is that
 `git diff --stat` touches ONLY `project-harness/ISSUES.md`.
-Validation: nine classifications appended, each with a file:line or a pasted assertion.
+Validation: eight classifications appended, each with a file:line or a pasted assertion.
+When one is fixed, drop it from `scripts/integration_baseline.txt` via
+`make check-integration-baseline-update` — the gate nags until you do.
 Needs the test override running. ISSUE-233, CR-L14-02.
 
 <!-- LOOP:QUEUE end -->
