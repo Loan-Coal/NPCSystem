@@ -3288,3 +3288,18 @@ causes into one attribution.
 **To fix:** decide whether the arm pairing is per-case (78) or per-repetition (234, needing the
 design-effect correction `battery_rates.compute_battery_rate` already computes as `n_eff`), then
 derive `RECORDED_GUARD_N` from the generation rather than hardcoding it.
+
+## [FIXED] ISSUE-245: `base_rate_baseline.json` records no `n`, so a shrinking corpus passes the ratchet
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Fixed:** 2026-09-01, in the B4 commit (`overall_n` added to BaseRateBaseline)
+**Severity:** P2 (annoying)
+**Where:** `scripts/base_rate_baseline.json`, `scripts/base_rate_contract.py:124-141`
+**Description:** The persisted baseline has exactly three keys — `gen_dir`, `overall_rate`,
+`breaches`. The n=975 that DEC-236 quotes lives only in that prose. Because the ratchet compares
+a rate and a breach map but never a denominator, a corpus that shrinks while holding the same
+rate passes undetected. (`FamilyRate` does carry an `n`, but that is the per-family measurement
+type, not the persisted baseline.)
+**Why deferred:** adding the field changes the baseline file, which is a deliberate human
+re-record step; it belongs with R2.6's case-existence filter, which re-records anyway.
+**To fix:** add `n` to the baseline model and file, and assert it does not fall without a
+deliberate `make check-base-rate-update`.

@@ -1,6 +1,7 @@
 {
   "gen_dir": "evals/generations/k3_77688e7_regen1",
   "overall_rate": 0.9425641025641026,
+  "overall_n": 975,
   "breaches": {
     "keyword_none": "above_band",
     "schema": "above_band",

@@ -179,6 +179,7 @@ def write_baseline(report: BaseRateReport, path: Path = BASELINE_PATH) -> BaseRa
     baseline = BaseRateBaseline(
         gen_dir=Path(report.gen_dir).as_posix(),
         overall_rate=report.overall.pass_rate,
+        overall_n=report.overall.n,
         breaches={f.family: f.status.value for f in report.breaches},
     )
     payload = baseline.model_dump_json(indent=2)
@@ -193,9 +194,13 @@ def regressions_vs_baseline(
 ) -> tuple[str, ...]:
     """Name every way this measurement is worse than the recorded one.
 
-    Two things can regress: the whole-battery rate can rise (the band is breached from
-    above, so higher is worse), and a family can enter a breach the baseline did not
-    record — including the same family breaching in the opposite direction.
+    Three things can regress: the whole-battery rate can rise (the band is breached from
+    above, so higher is worse), the corpus can shrink (a rate is not a measurement without
+    the denominator it was taken over — ISSUE-245), and a family can enter a breach the
+    baseline did not record, including the same family breaching in the opposite direction.
+
+    A baseline with no recorded `overall_n` abstains from the denominator check rather than
+    failing: those files predate the field and are legacy, not corrupt.
 
     Args:
         overall: This run's whole-battery rate.
@@ -214,6 +219,11 @@ def regressions_vs_baseline(
         found.append(
             f"overall rate rose {baseline.overall_rate:.4f} -> {overall.pass_rate:.4f} "
             f"(higher is worse: the band is breached from above)"
+        )
+    if baseline.overall_n is not None and overall.n < baseline.overall_n:
+        found.append(
+            f"corpus shrank {baseline.overall_n} -> {overall.n} scored rows "
+            f"(a rate over fewer rows is a different measurement, not a better one)"
         )
     found.extend(
         f"{f.family} newly {f.status.value} (baseline recorded {baseline.breaches.get(f.family, 'in band')})"
@@ -331,9 +341,10 @@ def _ratchet_lines(report: BaseRateReport) -> list[str]:
     baseline = report.baseline
     if baseline is None:
         return ["  RATCHET OK - no baseline to compare against."]
+    recorded_n = "n not recorded" if baseline.overall_n is None else f"n={baseline.overall_n}"
     lines = [
         f"  RATCHET OK - at or better than baseline {baseline.overall_rate:.4f} "
-        f"({len(baseline.breaches)} breaching families) from {baseline.gen_dir}."
+        f"({recorded_n}, {len(baseline.breaches)} breaching families) from {baseline.gen_dir}."
     ]
     if report.overall.pass_rate < baseline.overall_rate or len(report.breaches) < len(baseline.breaches):
         lines.append("  Improved - re-record with `make check-base-rate-update` to lock the gain in.")

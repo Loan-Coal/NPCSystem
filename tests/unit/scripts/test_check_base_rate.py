@@ -300,6 +300,52 @@ def test_ratchet_reds_when_a_family_newly_enters_breach(tmp_path: Path) -> None:
     assert any(r.startswith("in_set newly above_band") for r in report.regressions)
 
 
+def test_ratchet_reds_when_the_corpus_shrinks_at_an_unchanged_rate(tmp_path: Path) -> None:
+    """ISSUE-245: a rate is not a measurement without the denominator it was taken over.
+
+    The recorded baseline carried `overall_rate` and `breaches` and no `n`, so a corpus
+    that halved while holding its rate was indistinguishable from one that did not move
+    at all. Deleting hard cases until the survivors agree is exactly how a battery
+    reaches the ceiling this gate exists to detect, and it was the one route the ratchet
+    could not see.
+
+    Note the anchor is an UNCHANGED rate, not a higher one. A shrunken corpus at a HIGHER
+    rate already reds on `overall rate rose` and so proves nothing about `n` — measured
+    before this test was written: 20 rows at 0.70 -> 10 rows at 0.90 exits 1 today, while
+    20 rows at 0.70 -> 10 rows at 0.70 exits 0.
+    """
+    before = _write_gen(_sub(tmp_path, "a"), [_det("keyword_any", i < 14, i) for i in range(20)])
+    baseline = read_baseline(_baseline_file(tmp_path, before))
+
+    after = _write_gen(_sub(tmp_path, "b"), [_det("keyword_any", i < 7, i) for i in range(10)])
+    report = check_generation(after, enforcement=RATCHET, baseline=baseline)
+
+    assert report.overall.pass_rate == baseline.overall_rate, "the fixture must hold the rate"
+    assert report.exit_code == 1
+    assert any("corpus shrank" in r for r in report.regressions)
+
+
+def test_a_baseline_recorded_before_overall_n_reads_as_no_n_not_as_corrupt() -> None:
+    """A legacy baseline must degrade to "n not recorded", never to a parse error.
+
+    `read_baseline` raises on anything it cannot parse, and rightly so. But the three-key
+    baselines written before this field existed are not corrupt, and turning every one of
+    them into a hard failure would push people toward re-recording — which silently
+    re-points the ratchet at whatever the corpus says today.
+    """
+    from check_base_rate import _rate  # noqa: PLC0415
+
+    legacy = BaseRateBaseline.model_validate_json(
+        '{"gen_dir": "g", "overall_rate": 0.5, "breaches": {}}'
+    )
+    shrunken = _rate("ALL", 5, 10, TARGET_BAND_LOW, TARGET_BAND_HIGH)
+
+    assert legacy.overall_n is None
+    assert regressions_vs_baseline(shrunken, (), legacy) == (), (
+        "a baseline with no recorded n cannot judge a denominator"
+    )
+
+
 def test_ratchet_reds_when_no_baseline_is_recorded(tmp_path: Path) -> None:
     """An unrecorded baseline must red, not read as green — that is the silent-pass shape."""
     gen = _write_gen(tmp_path, [_det("schema", True, i) for i in range(20)])

@@ -131,6 +131,14 @@ class BaseRateBaseline(BaseModel):
             generation launder itself into the baseline.
         overall_rate: Recorded whole-battery pass rate. A HIGHER rate is worse: the band
             is breached from above, where Pe swamps kappa.
+        overall_n: Scored rows the recorded rate was taken over. A FALLING n is worse, for
+            the same reason a rising rate is: deleting hard cases until the survivors agree
+            drives a battery to the ceiling without ever moving the rate, and that was the
+            one route to the ceiling the ratchet could not see (ISSUE-245).
+            `None` on a baseline recorded before this field existed — those are legacy, not
+            corrupt, so they read as "no n recorded" and the denominator check abstains
+            rather than forcing a re-record, which would silently re-point the ratchet at
+            whatever the corpus says today.
         breaches: family -> BandStatus value, for every family out of band when recorded.
     """
 
@@ -138,6 +146,7 @@ class BaseRateBaseline(BaseModel):
 
     gen_dir: str
     overall_rate: float
+    overall_n: int | None = None
     breaches: dict[str, str]
 
 
