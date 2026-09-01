@@ -1923,6 +1923,98 @@ result cannot go unobserved again. Run with:
 `docker compose -f docker-compose.yml -f docker-compose.test.yml up -d` then
 `NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password python -m pytest tests/integration`
 
+---
+
+### Triage, 2026-09-01 (R3.6) — all eight classified, no behaviour changed
+
+Re-measured this session: `8 failed, 35 passed, 0 skipped in 96.03s`, identical to the committed
+allowlist. Classification per the standing rule — **report only, no test edited, no code fixed.**
+
+**DEFECT (2) — one shared root cause.**
+
+1. `test_faction_integration.py::test_remove_member_raises_when_not_a_member` —
+   `Failed: DID NOT RAISE FactionMembershipError`.
+   `faction_writer.py:39` ends `RETURN count(r) AS deleted`. A Cypher aggregation with no grouping
+   key returns **exactly one row always**, `deleted = 0` when nothing matched, so
+   `result.single()` at `faction_writer.py:138` is never `None` and the
+   `if record is None: raise` guard at `:139-144` is **unreachable code**. The correct check is
+   `record["deleted"] == 0`. Measured against the live DB, not inferred: running that Cypher
+   against ids guaranteed absent returns `[{'deleted': 0}]`, while the same `MATCH` without the
+   aggregation returns `[]`.
+2. `test_faction_integration.py::test_remove_controls_raises_when_no_edge` —
+   `Failed: DID NOT RAISE FactionNotFoundError`. Identical defect, same shape:
+   `faction_writer.py:61` `RETURN count(r) AS deleted`, dead guard at `:216-218`.
+
+This supersedes this entry's earlier note that `remove_member()` "silently no-ops". It does, but
+the cause is not a missing check — the check is present and structurally unreachable. Both fix in
+one line each. Fixing them drops 2 ids from `scripts/integration_baseline.txt` via
+`make check-integration-baseline-update`.
+
+**FIXTURE GAP (3).**
+
+3. `test_faction_gossip_integration.py::test_same_faction_pairs_rank_higher_than_strangers` —
+   `AssertionError: unfactioned pairs not found in results; assert []` at `:148`.
+   The test seeds 4 characters into a **shared, unscoped** database and then calls
+   `select_pairs(repo=repo, max_pairs=20, ...)` at `:133`, which ranks globally. Measured against
+   the live DB this session: `max_pairs=20` returns **exactly 20** (cap-bound) while `max_pairs=500`
+   returns **36** — so 16 candidate pairs are being truncated away, and the test's equal-`gossipy`
+   unfactioned pairs are among them. The DB holds 23 Characters and 10 Factions from other tests.
+   Not a product defect: the same-faction pair the test cares about *did* rank (the assert at `:147`
+   passes). To fix: scope selection to the test's location, or raise the cap above the global
+   candidate count.
+4. `test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs` —
+   `AssertionError: hostile pair not found in results; assert []`. Same mechanism, same file, same
+   `max_pairs` truncation.
+5. `test_scheme_detection_tick_integration.py::test_witnessed_scheme_is_discovered` —
+   `assert 0 == 1`. **Ordering bug in the test, not the engine.** `:89-92` calls `upsert_scheme()`
+   *before* `_setup()` at `:94` creates the Character node. `scheme_writer.py:36-37` is
+   `MATCH (c:Character {id: $npc_id}) MERGE (c)-[:EXECUTES_SCHEME]->(s)` — with no Character the
+   `MATCH` yields nothing and the edge is **never created**, leaving an orphaned Scheme.
+   `scheme_reader.py:51` then opens with `MATCH (c:Character)-[:EXECUTES_SCHEME]->(s:Scheme)`, finds
+   nothing, and returns 0. Cadence is not the cause: `SCHEME_DETECTION_TICK_INTERVAL = 7`, tick 14,
+   `14 % 7 == 0`; `SCHEME_DISCOVERY_MIN_STEPS = 2` and `_setup` creates 2 steps. Swap the two calls.
+
+**STALE EXPECTATION (2).**
+
+6. `test_quest_lifecycle_integration_v14.py::test_quest_lifecycle_offer_to_completion_and_rewards` —
+   `ValueError: QuestLifecycleEngine requires a TypeRegistry injected via __init__`.
+   The test constructs `QuestLifecycleEngine(settings=settings)` at `:43` with no other argument,
+   but `quest_lifecycle_engine.py:64-72` documents `registry`, `quest_repo` and `clock` as
+   **required** and raises when any is `None` (DEC-122 / SEV-24, ISSUE-165). The test predates that
+   DI refactor and was never updated — it could not be, because it had never run. Update the
+   construction; the assertions below it are untested and may reveal more.
+7. `test_reputation_integration.py::test_reputation_context_included_above_threshold` —
+   `AssertionError: assert 'allied' == 'friendly'` at `:223`.
+   `reputation_queries.py:58-72` defines `_LABELS` as **exclusive upper bounds** —
+   `(20,"neutral"), (50,"friendly"), (101,"allied")` with `if standing < threshold: return label`.
+   So `friendly` is `[20, 50)` and `allied` is `[50, 101)`, and standing 50 correctly returns
+   `allied` under that convention. The test asserts the boundary is inclusive-friendly.
+   **The code is internally consistent; the test asserts the only other reading.** No spec states
+   which convention is intended, so this needs a one-line product decision before either is
+   changed — do not "fix" it by editing whichever artifact is cheaper.
+
+**UNRESOLVED — mechanism narrowed, cause not proven (1).**
+
+8. `test_scheme_advance_tick_integration.py::test_advance_creates_covert_event_and_step` —
+   `assert 0 == 1` at `:105` on `result["advanced"]`.
+   Every gate was checked and none explains it: `SCHEME_ADVANCE_TICK_INTERVAL = 5` with tick 10 is
+   on-cadence; `MAX_SCHEME_STEPS = 5` > the scheme's `step_count` 0, so it is eligible;
+   `SCHEME_ADVANCE_MAX_PER_TICK = 10` does not truncate. The test's own asserts at `:92` and `:94`
+   pass, proving the scheme **is** active and visible **to the test's session**. `run_tick` reads
+   through `Neo4jSchemingRepository`, which opens its **own** session
+   (`scheming_repository.py:36` "session-per-call"). So the surviving hypothesis is that the repo's
+   independent session does not observe the write committed on the test's session — a cross-session
+   visibility / causal-bookmark gap — which would make this a fixture gap rather than an engine
+   defect. `_advance_one` returning `False` on an unresolvable `get_npc_location_id` is the same
+   hypothesis at a second read site. **Not confirmed.** To settle it: log or assert what
+   `repo.get_all_active_schemes_with_steps()` returns from its own session immediately before
+   `run_tick`. Deliberately left unclassified rather than assumed.
+
+**Summary:** 2 defects (one root cause), 3 fixture gaps, 2 stale expectations, 1 unresolved.
+The 2 defects and 3 fixture gaps are safe to fix. Item 7 needs a product decision. Item 8 needs one
+more measurement. None was fixed here — this task changes only this file.
+
+
 
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning
