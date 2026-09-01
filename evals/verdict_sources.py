@@ -160,7 +160,9 @@ def load_unified_rows(gen_dir: Path) -> list[VerdictRow]:
     650 discarded, and every survivor carried repetition 2. Downstream that turned
     `summarize_from_dir` into a case counter reporting `guard_cases == guard_turns == 78`
     on a k=3 generation, which is the second guard denominator ISSUE-243 and the published
-    170/186 disagreed with.
+    170/186 disagreed with. That 170/186 figure was itself retracted on 2026-09-01
+    (DEC-243) for aggregating two expectation sets; it is named here as the historical
+    disagreement this fix explains, not as a rate anything should still cite.
 
     Args:
         gen_dir: Generation directory containing judged.jsonl and/or

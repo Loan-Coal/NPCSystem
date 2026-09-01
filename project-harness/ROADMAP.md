@@ -242,13 +242,33 @@ Validation: the published guard score is EXPECTED to fall. That is the fix worki
 regression. Diff against `BASELINE_2026-08-28.md` and state the delta.
 Depends on R2.3. Blocks R2.5. CR-L03-08.
 
-- [ ] **R2.5** ⏸️ ask-gate — publish the null baseline; retract the 0.914 claim
+- [~] **R2.5** ask-gate ANSWERED 2026-09-01 — split the headline; 0.914 retracted
 Files: `scripts/hedge_responder_probe.py`, `evals/report.py`, `evals/scorer_trust_policy.py`,
 `evals/dashboard/headline.py`, `README.md`
 Spec: **the loop stops here by agreement (2026-08-28).** Retracting a published claim is a
 product decision, and the correct action depends on what the null baseline measures *after* R2.4
 — which is not knowable in advance. The standing rule agreed is: never publish a headline where
 engine ≤ null. Detail in `FIX_PLANS.md`. CR-L03-01, CR-L03-02.
+
+**Gate answered (2026-09-01): split the headline permanently — DEC-243.** One rate per
+expectation set; no combined guard figure is emitted anywhere. Landed:
+(1) the split itself — `EvalSummary` loses `guard_rate`/`guard_ci_*`/`guard_passes`, `TrendRow`
+gains `guard_adversarial`/`guard_anti_hallucination`, README drops `guard_rate` from its citable
+vocabulary; (2) the null probe generalised so it can score guard batteries at all — its refusal
+was why the baseline had never been taken; (4) the retraction banner on the now-tracked report.
+(c) "retract 0.914 from the README" was already satisfied — verified: the README quotes no guard
+rate, only the citation policy.
+
+**Still open, and R2.5 cannot conclude without it: ISSUE-256.** The null probe scores a case's
+AUTHORED expectations only; the runner scores `_expected_with_guards` — authored plus injected
+`min_length`, fallback `keyword_none`, `tone_judge`, `affirms_judge`. So the first null
+measurement (hedge passes 37/37 = 1.000 of the adversarial battery) is **not** the engine's
+comparand and is not published as one. Until both are scored on the same expectation set, the
+"never publish where engine ≤ null" rule is not decidable for this battery.
+
+**Remaining R2.5 step (3):** the engine≤null refuse-to-print in `report.py`, plus CR-L03-02 —
+`scorer_trust_policy.check_publication` branches on kappa and ignores the `interval` it is
+handed, while `dashboard/headline.py:140` passes a fabricated `(0.0, 0.0)`.
 
 - [ ] **R2.6** ⏸️ Instrument repairs — mostly blocked behind R2.5
 Spec: unparseable-verdict handling, aggregator join, reproducibility gate, MDE vs headroom,
