@@ -5,7 +5,7 @@ Purpose: Pin the SHIPPED context window against the MEASURED assembled-context d
          so a window that is internally coherent but too small to hold its own context
          cannot ship.
 Dependencies: pytest; npc_engine.config, npc_engine.config_prompt_window,
-              npc_engine.schema.llm_schema_loader
+              npc_engine.schema.llm_schema_loader; scripts/ceiling_baseline.py
 Used by: make test (pytest discovery)
 
 WHAT THIS CATCHES THAT test_config_prompt_window DOES NOT
@@ -36,13 +36,32 @@ Does NOT: perform HTTP, hit the engine, read the graph, or call an LLM.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from npc_engine.config import MIN_PROMPT_TOKEN_BUDGET, Settings
 from npc_engine.config_prompt_window import PROMPT_WINDOW_OVERHEAD_TOKENS
 from npc_engine.schema.llm_schema_loader import load_llm_config
 
-MEASURED_ROSTER_CEILING_TOKENS = 1151
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+
+from ceiling_baseline import read_ceiling_baseline  # noqa: E402
+
+_BASELINE = read_ceiling_baseline()
+"""The recorded measurement, read from scripts/ceiling_baseline.json (B6/R2.7b).
+
+These were literals until 2026-09-01 — `1151` and a dict — hand-copied out of a probe run
+whose provenance survived only in the prose above. That is the defect this whole program
+keeps finding: a number measured once, pasted into code, and never re-bound to the corpus
+it came from, so it goes stale silently when the corpus moves under it.
+
+The artifact carries the NPC, arm, corpus sha and date, `make check-ceiling-baseline`
+reds if any of those goes blank, and `make probe-ceiling ARGS='--record'` rewrites it from
+a live measurement. Reading it here fails loudly if it is missing rather than falling back
+to a literal, which would restore the very drift the artifact removes.
+"""
+
+MEASURED_ROSTER_CEILING_TOKENS = _BASELINE.roster_ceiling_tokens
 """Largest assembled context across the 8-NPC probe roster (DEC-215).
 
 `mira_innkeeper`, default arm, clean baseline, `make probe-ceiling`. This is the LARGER
@@ -50,7 +69,7 @@ of the two totals the debug route reports — the per-item sum (1151) and the se
 blob (1130) — because a window sized to the smaller has headroom that does not exist.
 """
 
-MEASURED_TIER_MAXIMA: dict[str, int] = {"tier_a": 857, "tier_b": 96, "tier_c": 145}
+MEASURED_TIER_MAXIMA: dict[str, int] = _BASELINE.tier_maxima
 """Largest per-tier spend across the same roster and the same run (DEC-215)."""
 
 SESSION_ALLOWANCE_TOKENS = 1200
@@ -99,6 +118,18 @@ def test_the_shipped_default_budget_also_holds_a_full_session_history() -> None:
         f"budget {_code_default_budget()} does not hold the measured ceiling plus the "
         f"{SESSION_ALLOWANCE_TOKENS}-token session allowance ({required})"
     )
+
+
+def test_the_measured_constants_come_from_the_recorded_artifact_not_a_literal() -> None:
+    """B6/R2.7b: the ceiling must stay bound to a measurement that states its provenance.
+
+    Re-inlining `1151` here would pass every other assertion in this file while quietly
+    restoring the drift the artifact removes — the number would once again be a literal
+    whose corpus, arm and NPC live only in prose. This pins the binding itself.
+    """
+    assert MEASURED_ROSTER_CEILING_TOKENS == _BASELINE.roster_ceiling_tokens
+    assert MEASURED_TIER_MAXIMA == _BASELINE.tier_maxima
+    assert _BASELINE.corpus_sha and _BASELINE.npc_id, "the record must name what it measured"
 
 
 def test_the_derived_budget_is_the_window_minus_the_named_overhead() -> None:

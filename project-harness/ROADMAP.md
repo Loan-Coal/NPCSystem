@@ -280,6 +280,21 @@ note `MEASURED_TIER_MAXIMA` records tier_a/b/c and has no tier-0 entry at all. T
 are **510** and **808** lines of Python, not the 1,309 / 1,714 quoted (ISSUE-242). The trend
 re-decision needs two rows sharing a model digest, which row 1 can never satisfy (ISSUE-246).
 
+**R2.7b (ceiling re-measurement gate) — ✅ DONE 2026-09-01, DEC-242.** The measurement moved out
+of the test into `scripts/ceiling_baseline.json` with its NPC / arm / corpus_sha / date, the
+config test reads the artifact, `make check-ceiling-baseline` joined `make check` (21 → 22
+targets), and `make probe-ceiling ARGS="--record --corpus-sha <sha>"` rewrites it. The gate does
+not itself re-measure — that needs a live stack — it enforces that the number under test is a
+recorded measurement that states what it measured.
+
+**R2.7a (trend re-decision) — still blocked, and the block is structural.** ISSUE-246's exit
+condition is two rows sharing a model digest. `trend_v1.jsonl` has one row, it carries no digest
+field, and that generation's `meta.json` records `generation_model_digest: null`. Row 1 cannot
+acquire a comparand retroactively, because a digest is a property of the run that produced it.
+Unblocking needs a NEW generation run with CR-L15-01's fatal-`None`-digest fix already in place;
+until that generation exists there is no second row, nothing to compare, and nothing to test.
+It is a prerequisite, not a task — do not plan work against it.
+
 ### Phase R4
 
 Subtraction and documentation. Mechanical and well-specified. Plans: `FIX_PLANS.md#r4`.

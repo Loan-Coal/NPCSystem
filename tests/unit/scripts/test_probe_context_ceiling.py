@@ -32,6 +32,7 @@ Does NOT: perform HTTP, hit the engine, or read the graph.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -160,3 +161,72 @@ def test_a_tier_b_drop_is_not_issue_209_evidence(probe):
 def test_the_roster_is_identical_to_the_inner_life_probe(probe):
     """Two probes reporting on different NPCs cannot be read as one measurement."""
     assert probe.PROBE_NPCS == _load("probe_inner_life").PROBE_NPCS
+
+
+# ---------------------------------------------------------------------------
+# --record: writing the gated ceiling artifact (B6/R2.7b)
+# ---------------------------------------------------------------------------
+
+
+def _row(probe, npc_id: str, ceiling: int, tier_a: int = 100):
+    """One CeilingRow with only the fields the recorder reads."""
+    return probe.CeilingRow(
+        npc_id=npc_id,
+        retrieval_profile="default",
+        serialized_tokens=ceiling,
+        summed_tokens=ceiling,
+        ceiling_tokens=ceiling,
+        tiers={"tier0": (1, 10), "tierA": (1, tier_a), "tierB": (1, 20), "tierC": (1, 30)},
+        prompt_token_budget=5158,
+        dropped=(),
+        issue_209_drops=(),
+    )
+
+
+def test_the_recorded_ceiling_is_the_roster_maximum(probe, tmp_path):
+    """A per-NPC number would under-record the window the roster actually needs."""
+    rows = [_row(probe, "bren_smith", 832), _row(probe, "mira_innkeeper", 1151)]
+
+    probe._record_baseline(rows, tmp_path / "b.json", "2b19e47a")
+
+    written = json.loads((tmp_path / "b.json").read_text(encoding="utf-8"))
+    assert written["roster_ceiling_tokens"] == 1151
+
+
+def test_the_recorded_npc_is_the_one_that_produced_the_ceiling(probe, tmp_path):
+    """A ceiling attributed to the wrong NPC cannot be reproduced by re-probing it."""
+    rows = [_row(probe, "bren_smith", 832), _row(probe, "mira_innkeeper", 1151)]
+
+    probe._record_baseline(rows, tmp_path / "b.json", "2b19e47a")
+
+    assert json.loads((tmp_path / "b.json").read_text(encoding="utf-8"))["npc_id"] == "mira_innkeeper"
+
+
+def test_tier_maxima_are_per_tier_maxima_not_the_peak_npcs_row(probe, tmp_path):
+    """Each tier's worst case can land on a different NPC than the roster ceiling does."""
+    rows = [_row(probe, "bren_smith", 832, tier_a=900), _row(probe, "mira_innkeeper", 1151, tier_a=100)]
+
+    probe._record_baseline(rows, tmp_path / "b.json", "2b19e47a")
+
+    written = json.loads((tmp_path / "b.json").read_text(encoding="utf-8"))
+    assert written["tier_maxima"]["tier_a"] == 900
+
+
+def test_recording_without_a_corpus_sha_is_refused(probe, tmp_path):
+    """The ISSUE-246 shape, refused at write time rather than found a release later.
+
+    A ceiling is a property of the corpus as much as of the code, so one recorded without
+    naming its corpus cannot be compared to any later measurement — exactly how
+    `trend_v1.jsonl`'s single null-digest row became permanently uncomparable.
+    """
+    with pytest.raises(ValueError, match="corpus-sha"):
+        probe._record_baseline([_row(probe, "mira_innkeeper", 1151)], tmp_path / "b.json", "  ")
+
+    assert not (tmp_path / "b.json").exists(), "a refused record must write nothing"
+
+
+def test_the_recorded_artifact_is_written_with_lf_endings(probe, tmp_path):
+    """.gitattributes normalizes to LF; a CRLF write rewrites the whole file in git's eyes."""
+    probe._record_baseline([_row(probe, "mira_innkeeper", 1151)], tmp_path / "b.json", "2b19e47a")
+
+    assert b"\r\n" not in (tmp_path / "b.json").read_bytes()

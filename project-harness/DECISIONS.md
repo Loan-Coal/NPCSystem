@@ -7396,3 +7396,49 @@ ignored and no error is reported. Verified in a throwaway repo before committing
 **Not in scope:** the retraction banner on the tracked report. The 0.914 figure aggregates two
 expectation sets and is retracted by R2.5/DEC-243, which owns that publication decision. This
 entry only makes the artifact exist in the repository so that retraction lands in a diff.
+
+## DEC-242: the measured context ceiling is a recorded artifact, not a literal
+**Date:** 2026-09-01 · **Status:** ✅ ACCEPTED · **Implements:** R2.7b (CR-L10-01, CR-L01-07)
+**Drives:** `scripts/ceiling_baseline.json`, `scripts/ceiling_baseline.py`,
+`scripts/check_ceiling_baseline.py`, `scripts/probe_context_ceiling.py`,
+`tests/unit/config/test_shipped_window_holds_the_measured_ceiling.py`
+**Context:** `MEASURED_ROSTER_CEILING_TOKENS = 1151` and `MEASURED_TIER_MAXIMA` were literals
+hand-copied out of a DEC-215 probe run. Their provenance — `mira_innkeeper`, default arm,
+corpus_sha `2b19e47a`, 2026-08-27 — survived only as prose in a module docstring, and nothing
+connected the number to the corpus it was taken over. That is the defect this program keeps
+re-finding (ISSUE-244, ISSUE-253, the verdict-source join): a number measured once, pasted into
+code, never re-bound, going stale in silence when the thing it measured moves.
+
+**Corrected target, carried from ROADMAP:275.** The re-measurement item names
+`TIER0_MAX_TOKENS = 380` in some earlier write-ups. That is wrong: 380 is a design allocation
+summed in `docs/PROMPT_DESIGN.md:91` (world 80 + bio/emotion 120 + relation 30 + turns 150) and
+was never measured, so it cannot be *re*-measured. Whether 380 is right is a runtime question
+for R3. The hand-copied measurement is the 1151.
+
+**Decision:** the measurement moves into `scripts/ceiling_baseline.json`, carrying the ceiling,
+the per-tier maxima, and the NPC / arm / corpus_sha / date that make it reproducible. The config
+test reads the artifact instead of holding literals, and `make check-ceiling-baseline` reds when
+any provenance field goes blank or when the shipped default budget stops clearing the recorded
+ceiling. `make probe-ceiling ARGS="--record --corpus-sha <sha>"` rewrites it from a live run.
+
+**Scope stated honestly:** this gate does **not** re-measure. Re-measuring needs a live stack, an
+API key and a seeded graph, so it stays operator-run. What is now enforced on every `make check`
+is that the number under test is a recorded measurement that says what it measured — which is
+the property whose absence made the literal rot invisibly.
+
+**Why blank provenance is a hard failure rather than a warning:** ISSUE-246 is the worked
+example. `trend_v1.jsonl` holds one row whose `generation_model_digest` is null, so its exit
+condition ("two rows sharing a model digest") can never be satisfied by any future row. Nobody
+noticed until someone tried to use it, a release later. `--record` therefore refuses to write
+without `--corpus-sha`, and the gate reds on any blank field, so the same shape cannot recur here.
+
+**Alternatives rejected:** (a) *Run the probe inside `make check`* — it needs a live stack, so it
+would either be skipped in CI (a gate that never runs) or red on every developer without Docker
+up. (b) *Keep the literals and add a comment* — a comment is what already existed and is what
+rotted. (c) *Seed the artifact by re-measuring first* — no live stack was available this session;
+seeding from the DEC-215 figures the test already recorded changes no value, and the artifact's
+own `measured_at`/`source` fields say exactly where the numbers came from.
+
+**Deliberately recorded, not fixed:** `tier_maxima` has no `tier_0` entry, because DEC-215
+measured tiers A/B/C only. An absent tier reads as "not measured" and never as zero. A future
+`--record` run populates it, which is what gives R3 the tier-0 datum ROADMAP:279 notes is missing.

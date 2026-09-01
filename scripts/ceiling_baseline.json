@@ -1,0 +1,13 @@
+{
+  "roster_ceiling_tokens": 1151,
+  "tier_maxima": {
+    "tier_a": 857,
+    "tier_b": 96,
+    "tier_c": 145
+  },
+  "npc_id": "mira_innkeeper",
+  "retrieval_profile": "default",
+  "corpus_sha": "2b19e47a",
+  "measured_at": "2026-08-27",
+  "source": "DEC-215, seeded from test_shipped_window_holds_the_measured_ceiling.py"
+}

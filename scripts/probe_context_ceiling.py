@@ -49,6 +49,16 @@ import sys
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ceiling_baseline import (  # noqa: E402
+    BASELINE_PATH as CEILING_BASELINE_PATH,
+    CeilingBaseline,
+    write_ceiling_baseline,
+)
 
 DEFAULT_BASE_URL = "http://localhost:8000"
 DEFAULT_PLAYER_ID = "player_demo"
@@ -219,14 +229,59 @@ def _print_issue_209(rows: list[CeilingRow]) -> None:
     print(f"  other drops (not ISSUE-209): {other or 'none'}")
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Probe every NPC and print the cost report.
+#: Probe receipt tier name -> the name the shipped llm_config.yaml uses. `tier0` has no
+#: shipped counterpart in `tier_budget_tokens`, so it is recorded under its own key and
+#: the window assertions ignore it (ROADMAP:279 notes MEASURED_TIER_MAXIMA has no tier-0
+#: entry; whether TIER0_MAX_TOKENS = 380 is right is an R3 question, not a measurement).
+_TIER_KEY_FOR_RECORD: dict[str, str] = {
+    "tier0": "tier_0",
+    "tierA": "tier_a",
+    "tierB": "tier_b",
+    "tierC": "tier_c",
+}
+
+
+def _record_baseline(rows: list[CeilingRow], path: Path, corpus_sha: str) -> None:
+    """Write the roster ceiling and per-tier maxima to the gated artifact.
+
+    The recorded ceiling is the roster MAXIMUM, and the NPC recorded beside it is the one
+    that produced it — a ceiling attributed to the wrong NPC cannot be reproduced.
 
     Args:
-        argv: Command-line arguments; defaults to sys.argv[1:].
-    Returns:
-        0 on success, 1 when the engine could not be reached.
+        rows: One CeilingRow per probed NPC.
+        path: Artifact to write.
+        corpus_sha: Corpus the measurement was taken over.
+    Raises:
+        ValueError: When `corpus_sha` is blank. A ceiling is a property of the corpus as
+            much as of the code, so an unattributed one cannot be compared to a later
+            measurement — the ISSUE-246 failure shape, refused at the point of writing
+            rather than discovered a release later.
     """
+    if not corpus_sha.strip():
+        raise ValueError("--record requires --corpus-sha: an unattributed ceiling is not comparable")
+    peak = max(rows, key=lambda r: r.ceiling_tokens)
+    maxima = {
+        _TIER_KEY_FOR_RECORD[tier]: max(row.tiers[tier][1] for row in rows)
+        for tier in REPORTED_TIERS
+        if tier in _TIER_KEY_FOR_RECORD
+    }
+    write_ceiling_baseline(
+        CeilingBaseline(
+            roster_ceiling_tokens=peak.ceiling_tokens,
+            tier_maxima=maxima,
+            npc_id=peak.npc_id,
+            retrieval_profile=peak.retrieval_profile,
+            corpus_sha=corpus_sha.strip(),
+            measured_at=date.today().isoformat(),
+            source="make probe-ceiling --record",
+        ),
+        path,
+    )
+    print(f"\nrecorded {peak.ceiling_tokens} tokens ({peak.npc_id}) to {path}")
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """The probe's command line. Extracted from main() to stay under the 40-line gate."""
     parser = argparse.ArgumentParser(
         prog="python scripts/probe_context_ceiling.py",
         description="8-NPC assembled-context ceiling probe (no LLM call).",
@@ -237,7 +292,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--query", default=DEFAULT_QUERY)
     parser.add_argument("--retrieval-profile", default=None)
     parser.add_argument("--base-url", default=os.environ.get("EVAL_BASE_URL", DEFAULT_BASE_URL))
-    parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    parser.add_argument(
+        "--record",
+        nargs="?",
+        type=Path,
+        const=CEILING_BASELINE_PATH,
+        default=None,
+        help="Write the roster ceiling to the gated artifact (default: scripts/ceiling_baseline.json).",
+    )
+    parser.add_argument(
+        "--corpus-sha",
+        default="",
+        help="Corpus the measurement was taken over. Required with --record.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Probe every NPC and print the cost report.
+
+    Args:
+        argv: Command-line arguments; defaults to sys.argv[1:].
+    Returns:
+        0 on success, 1 when the engine could not be reached.
+    """
+    parsed = _build_parser().parse_args(sys.argv[1:] if argv is None else argv)
 
     api_key = os.environ.get("API_KEY_SECRET", "")
     if not api_key:
@@ -256,6 +335,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: probe failed against {parsed.base_url}: {exc!r}")
         return 1
     _print_report(parsed.label, rows, parsed.player_id)
+    if parsed.record is not None:
+        _record_baseline(rows, parsed.record, parsed.corpus_sha)
     return 0
 
 

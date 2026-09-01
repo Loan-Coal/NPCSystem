@@ -187,6 +187,26 @@ def write_baseline(report: BaseRateReport, path: Path = BASELINE_PATH) -> BaseRa
     return baseline
 
 
+def _measurement_regressions(overall: FamilyRate, baseline: BaseRateBaseline) -> list[str]:
+    """The two ways the whole-battery measurement itself can be worse: rate up, n down.
+
+    A baseline with no recorded `overall_n` abstains from the denominator check rather
+    than failing: those files predate the field and are legacy, not corrupt.
+    """
+    found: list[str] = []
+    if overall.pass_rate > baseline.overall_rate:
+        found.append(
+            f"overall rate rose {baseline.overall_rate:.4f} -> {overall.pass_rate:.4f} "
+            f"(higher is worse: the band is breached from above)"
+        )
+    if baseline.overall_n is not None and overall.n < baseline.overall_n:
+        found.append(
+            f"corpus shrank {baseline.overall_n} -> {overall.n} scored rows "
+            f"(a rate over fewer rows is a different measurement, not a better one)"
+        )
+    return found
+
+
 def regressions_vs_baseline(
     overall: FamilyRate,
     breaches: Sequence[FamilyRate],
@@ -198,9 +218,6 @@ def regressions_vs_baseline(
     above, so higher is worse), the corpus can shrink (a rate is not a measurement without
     the denominator it was taken over — ISSUE-245), and a family can enter a breach the
     baseline did not record, including the same family breaching in the opposite direction.
-
-    A baseline with no recorded `overall_n` abstains from the denominator check rather than
-    failing: those files predate the field and are legacy, not corrupt.
 
     Args:
         overall: This run's whole-battery rate.
@@ -214,17 +231,7 @@ def regressions_vs_baseline(
             "no baseline recorded — run `make check-base-rate-update` to record the "
             "current measurement before this gate can ratchet",
         )
-    found: list[str] = []
-    if overall.pass_rate > baseline.overall_rate:
-        found.append(
-            f"overall rate rose {baseline.overall_rate:.4f} -> {overall.pass_rate:.4f} "
-            f"(higher is worse: the band is breached from above)"
-        )
-    if baseline.overall_n is not None and overall.n < baseline.overall_n:
-        found.append(
-            f"corpus shrank {baseline.overall_n} -> {overall.n} scored rows "
-            f"(a rate over fewer rows is a different measurement, not a better one)"
-        )
+    found = _measurement_regressions(overall, baseline)
     found.extend(
         f"{f.family} newly {f.status.value} (baseline recorded {baseline.breaches.get(f.family, 'in band')})"
         for f in breaches

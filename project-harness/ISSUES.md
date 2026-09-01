@@ -2092,6 +2092,25 @@ row 1 + row 2, so the trend re-decision would defer forever.
 i.e. the comparable series restarts at row 2 — or regenerate the baseline. Also sequence R2.6d
 (content-addressing) so it does not split the schema mid-series.
 
+## ISSUE-255: `make lint` does not cover `scripts/`, and there is a live violation there
+**Found:** 2026-09-01, during B6 (measured-ceiling gate)
+**Severity:** P3 (nice-to-fix)
+**Where:** `Makefile` `lint:` recipe (`ruff check src/ evals/`), evidence at `scripts/check_rules.py:45`
+**Description:** `make lint` runs ruff over `src/` and `evals/` only. `scripts/` is excluded, and
+`python -m ruff check scripts/` reports a real violation today: `F401 sys imported but unused` at
+`scripts/check_rules.py:45`, untouched since `add99f16` (the LF normalization commit) and so
+never gated. This matters more than it did: `scripts/` now holds the gate scripts themselves —
+`check_base_rate.py`, `check_ledger_ids.py`, `check_cited_reports.py`, `check_ceiling_baseline.py`
+— so the code enforcing the project's standards is the code exempt from them. Note
+`tests/unit/evals/test_gate_scope.py` already fails if the recipe loses `evals/`, so the scope is
+deliberately pinned; widening it is a decision, not a typo fix.
+**Why deferred:** single-task focus — found while implementing B6, and adding a directory to a
+gate recipe can red the build for reasons unrelated to the task in hand. It also needs a decision
+about whether `scripts/` gets its own ratcheted baseline (as `evals/` did in EVAL-P15.4) or must
+be clean from the start.
+**To fix:** decide baseline-vs-clean, fix `check_rules.py:45`, add `scripts/` to the `lint`
+recipe, and extend `test_gate_scope.py` to pin the wider scope.
+
 ## ISSUE-248: the resolved-issues archive reuses two ids and skips five
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
 **Severity:** P3 (nice-to-fix)
