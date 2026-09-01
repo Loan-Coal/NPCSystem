@@ -192,7 +192,7 @@ returning `None`, assert it raises. Today it returns a RunConfig with `None` and
 Validation: `make test` unchanged in pass count; eval runs without Ollama now fail loudly.
 CR-L15-01.
 
-- [ ] **R2.2** ⏸️ (live) — Neo4j in CI; gate `demo_game/`
+- [x] **R2.2** ⏸️ (live) — Neo4j in CI; gate `demo_game/`
 Files: `.github/workflows/ci.yml`, `Makefile`, `.mypy_baseline_demo`,
 `scripts/check_integration_baseline.py`, `scripts/integration_baseline.txt`
 Spec: needs CI credentials and a push to observe the result, and R2.2 must model CI on
