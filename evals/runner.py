@@ -34,7 +34,24 @@ from verdicts import write_verdicts
 # Default player id when a case seed omits one (mirrors _run_case / _setup_reputation).
 _DEFAULT_PLAYER_ID = "player_eval"
 
-# Guard battery prefixes (mirror summary._GUARD_PREFIXES): adversarial + negative cases.
+# Guard battery prefixes for the cases THIS runner scores: adversarial + negative.
+#
+# Deliberately narrower than the publishing tuple in case_stats._GUARD_PREFIXES, which
+# also carries "ah_demo_". Do NOT "fix" the difference by adding it here (R2.6b/ISSUE-243):
+#   1. It would be a no-op. _load_cases globs *.yaml, and every ah_demo_ case lives in
+#      evals/cases/anti_hallucination_demo.json, loaded by anti_hallucination_runner.
+#   2. It would be wrong if that ever changed. _guard_expectations injects min_length,
+#      a fallback keyword_none, tone_judge and affirms_judge. ah_demo_ cases are authored
+#      for refusal_judge + anti_hallucination_grounded, and a correct refusal ("I wouldn't
+#      know about that") can fail min_length — scoring right behaviour as a guard failure.
+# Measured on k3_77688e7_regen1: adv/neg carry tone_judge+affirms_judge+schema+
+# keyword_none+min_length; ah_demo_ carries refusal_judge (75) + grounded (48) and no schema.
+# The two are published as one rate but score 0.8468 (n=111) and 0.9106 (n=123) — that
+# aggregation is a headline question for R2.5, not a tuple to align here.
+#
+# The previous comment here named `summary._GUARD_PREFIXES`. No such symbol exists; the
+# canonical publishing tuple is case_stats._GUARD_PREFIXES. Pinned by
+# tests/unit/evals/test_guard_prefix_scopes.py.
 _GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
 _FALLBACK_PATH = Path(__file__).resolve().parents[1] / "src/npc_engine/data/fallback_responses.json"
 

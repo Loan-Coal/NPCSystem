@@ -2010,6 +2010,32 @@ one. Land it after the next regeneration so the before/after is comparable.
 
 
 ## ISSUE-243: `evals/runner.py` guard prefixes do not mirror `summary.py`, so `ah_demo_*` cases are counted but not guarded
+
+> **Corrected 2026-09-01 (R2.6b), measured.** The title and the fix this entry implies are both
+> wrong, though the problem it points at is real. Three measurements against
+> `evals/generations/k3_77688e7_regen1`:
+>
+> 1. **`ah_demo_*` cases are not unguarded.** They carry `refusal_judge` (75 rows) and
+>    `anti_hallucination_grounded` (48) — purpose-built anti-hallucination expectations. What they
+>    do not carry are the YAML battery's `tone_judge`/`affirms_judge`/`schema`/`keyword_none`/
+>    `min_length`. Two grading contracts, not one contract with a gap.
+> 2. **Aligning the two tuples would be a no-op.** `runner._load_cases` globs `*.yaml`
+>    (`runner.py:128`); every `ah_demo_*` case lives in `evals/cases/anti_hallucination_demo.json`
+>    and is loaded by `anti_hallucination_runner`. The runner cannot see them however its guard
+>    tuple is spelled — and if it ever could, injecting `min_length` into a refusal-graded case
+>    would score a correct short refusal as a guard failure.
+> 3. **`summary._GUARD_PREFIXES` does not exist.** `runner.py:37`'s comment claimed to mirror it;
+>    the canonical publishing tuple is `case_stats._GUARD_PREFIXES`. That false reference was the
+>    trap — it invited exactly the no-op fix above. Corrected in R2.6b and pinned by
+>    `tests/unit/evals/test_guard_prefix_scopes.py`.
+>
+> **The real defect, restated:** the published guard headline aggregates two populations scored by
+> different expectation sets. Measured after the R2.6b join fix: YAML guard **0.8468** (n=111),
+> `ah_demo_` **0.9106** (n=123), combined **0.8803** (n=234). The easier-scored battery is more
+> than half the denominator and lifts the headline ~3.4pp above the adversarial battery alone.
+> Whether to split the headline is a publication decision and belongs to **R2.5**, which owns the
+> retraction; it is not a tuple to align here. Nothing was changed in the scoring path.
+
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
 **Severity:** P1 (blocking) — it makes the published guard rate a mixed population
 **Where:** `evals/runner.py:37-38` vs `evals/case_stats.py:43` and `evals/summary.py`
