@@ -16,6 +16,7 @@ Used by: pytest (make test / make check)
 
 from __future__ import annotations
 
+from battery_rates import compute_battery_rate
 from paired_stats import PairedResult
 from rate_stats import wilson_interval
 from regression_gate import check_regression, format_regression_report
@@ -201,3 +202,33 @@ def test_a_perfect_run_never_regresses_against_itself_at_any_n() -> None:
         )
         report = check_regression(row, row)
         assert report.regressed is False, f"perfect run self-fired at n={n}: {report.findings}"
+
+def test_a_perfect_battery_never_regresses_against_itself_at_any_k() -> None:
+    """The corrected-interval twin of the sweep above (R2.6b).
+
+    `rate_stats.wilson_interval` was given exact degenerate ends on 2026-08-25 (DEC-196);
+    `battery_rates._wilson_from_p_hat`, the design-effect-corrected path, was not. The gap
+    stayed invisible while the verdict-source join collapsed every generation to k=1,
+    because at k=1 the bound lands on exactly 1.0. With k real, a perfect battery's
+    ci_high came back as 0.9999999999999999 and fired a regression against itself.
+    """
+    for n_cases in (6, 7, 16, 21, 26, 78):
+        for k in (1, 2, 3, 5):
+            results = [
+                {"case_id": f"case_pos_{c}", "repetition": rep, "passed": True,
+                 "expectations": [{"kind": "schema", "passed": True, "skipped": False}]}
+                for c in range(n_cases) for rep in range(k)
+            ]
+            br = compute_battery_rate(results)
+            assert br is not None
+            perfect = RateWithCI(rate=br.pass_rate, ci_low=br.ci_low, ci_high=br.ci_high,
+                                 n=br.n_records)
+            row = TrendRow(
+                gen_id="same", harness_version="v1", recorded_at="2026-08-25T00:00:00+00:00",
+                guard=perfect, capability=perfect, inconclusive_rate=0.0,
+            )
+            report = check_regression(row, row)
+            assert report.regressed is False, (
+                f"perfect battery self-fired at n_cases={n_cases}, k={k}: "
+                f"ci_high={br.ci_high!r}"
+            )

@@ -127,11 +127,22 @@ def _wilson_from_p_hat(p_hat: float, n_eff: float) -> tuple[float, float]:
     Equivalent to wilson_interval(p_hat * n_eff, n_eff) for non-integer n_eff.
     Uses float n_eff directly without rounding so the corrected interval is exact.
 
+    Degenerate ends are made exact, as `rate_stats._exact_at_degenerate_ends` does for
+    the uncorrected interval. At p_hat == 1 the Wilson upper bound is exactly 1 in closed
+    form, but in floating point it comes back as 0.9999999999999999, and `min(1.0, ...)`
+    cannot repair a value already below 1.0. `regression_gate._rate_regressed` compares
+    `candidate.ci_high < baseline.rate`, so without this a battery scoring 100% on both
+    sides reads as a regression against ITSELF. The uncorrected path was fixed for this
+    on 2026-08-25 (DEC-196); this corrected path was not, and the omission stayed
+    invisible while the R2.6b join collapsed every generation to k=1 — at k=1 the value
+    lands on exactly 1.0. Measured 2026-09-01 with k made real: 7 cases at k=3 gave
+    ci_high 0.9999999999999999 and fired a false regression.
+
     Args:
         p_hat: Point estimate in [0, 1].
         n_eff: Effective sample size (> 0).
     Returns:
-        (ci_low, ci_high) clipped to [0, 1].
+        (ci_low, ci_high) clipped to [0, 1], with degenerate ends exact.
     """
     denom = 1.0 + _Z_SQ / n_eff
     center = (p_hat + _Z_SQ / (2.0 * n_eff)) / denom
@@ -140,7 +151,12 @@ def _wilson_from_p_hat(p_hat: float, n_eff: float) -> tuple[float, float]:
         * math.sqrt(p_hat * (1.0 - p_hat) / n_eff + _Z_SQ / (4.0 * n_eff * n_eff))
         / denom
     )
-    return max(0.0, center - margin), min(1.0, center + margin)
+    low, high = max(0.0, center - margin), min(1.0, center + margin)
+    if p_hat >= 1.0:
+        high = 1.0
+    if p_hat <= 0.0:
+        low = 0.0
+    return low, high
 
 
 def _group_results_by_case(results: list[dict]) -> dict[str, list[bool]]:
