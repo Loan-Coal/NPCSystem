@@ -2227,3 +2227,52 @@ change into a documentation change — the attribution error the R2 program exis
 single shared helper so the next regeneration updates all three at once. Do it in the same commit
 as the next regeneration so the before/after is attributable.
 
+## ISSUE-253: `RECORDED_BASE_RATE = 0.951` reproduces against no population
+**Found:** 2026-09-01, during R2.6c / DEC-240 (kappa reconciliation)
+**Severity:** P2 (annoying) — a published sanity bound that no measurement supports
+**Where:** `evals/mde.py:87`, quoted by `evals/arm_probe_report.py:94,96,119-120`
+**Description:** `mde.py` records a pass base rate of 0.951, attributed to ISSUE-184 over "the 345
+records ISSUE-184 measured kappa on". Measured 2026-09-01, no available population yields it:
+
+| Population | Rate |
+|---|---|
+| `judged.jsonl` of `k3_77688e7_regen1` (345 rows, 321 pass) | 0.9304 |
+| calibration labels, human verdicts (359 of 393) | 0.9135 |
+| `check-base-rate` overall | 0.9426 |
+| **recorded in `mde.py:87`** | **0.951** |
+
+The 345-row coincidence suggests it was meant to be the first, but 0.9304 ≠ 0.951.
+`arm_probe_report` prints it as fact and derives an independence bound
+`2p(1-p)` from it, which shifts from 9.32% (at 0.951) to 12.96% (at 0.9304) — the bound p_d is
+checked against, so this is not purely cosmetic.
+**Why deferred:** it does **not** enter the MDE arithmetic — `RECORDED_BASE_RATE` appears exactly
+twice in `mde.py`, at its definition and in `__all__`, and neither `observed_mde` nor
+`arm_pairing_mde` reads it. So it did not block DEC-240's kappa correction. Choosing which
+population it should describe is a judgment call about what the bound is for, and belongs with the
+R2.6f sizing decision rather than inside a kappa fix.
+**To fix:** decide which population the independence bound should be taken over, re-measure it
+there, and derive it in code from that population rather than hardcoding it — the same treatment
+DEC-240 gave the kappas.
+
+## ISSUE-254: `RECORDED_GUARD_N = 78` is the pre-R2.6b collapsed denominator
+**Found:** 2026-09-01, during R2.6c / DEC-240
+**Severity:** P2 (annoying) — the MDE model is sized on a number the join fix corrected
+**Where:** `evals/mde.py:84`
+**Description:** `RECORDED_GUARD_N = 78` is the guard denominator as it read before R2.6b fixed
+`load_unified_rows`. That 78 was an artifact: the join deduplicated by `record_id` alone and
+collapsed all k repetitions to one, so a k=3 generation reported 78 where it has **234** guard
+turns over **78** guard cases. The MDE model consumes it as `n_pairs`, and MDE scales as
+`1/sqrt(n)`.
+
+The correction is not simply 78 → 234, which is why this is filed rather than fixed:
+`implied_discordance_rate` derives `p_d` from the recorded floor **at the recorded n**, so raising
+n raises the implied p_d in step and `observed_mde` returns 6.4pp either way. What actually changes
+is `required_pairs_for`, and whether a "pair" is a repetition or a case — a paired design over
+k-repeated cases has 78 independent units, not 234, which is exactly the intra-case correlation
+`battery_rates` already corrects for via its design effect.
+**Why deferred:** answering it means deciding the pairing unit for the arm-probe design, which is
+the R2.6f sizing question. Changing n inside a kappa-reconciliation commit would also mix two
+causes into one attribution.
+**To fix:** decide whether the arm pairing is per-case (78) or per-repetition (234, needing the
+design-effect correction `battery_rates.compute_battery_rate` already computes as `n_eff`), then
+derive `RECORDED_GUARD_N` from the generation rather than hardcoding it.

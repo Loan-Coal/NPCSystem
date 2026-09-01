@@ -7311,3 +7311,49 @@ alone. `make check-ledger-ids` fails if a new reuse appears without an entry her
   (b) `currency_writer.py` waived at 327 lines. Source cites meaning (b).
 - `DEC-073` — (a) `context_budget_enforcer.py` accepted at 323 lines;
   (b) EXP-10 proactive dialogue WS `proactive_line` message shape. Source cites meaning (b).
+
+## DEC-240: calibration kappa is authoritative for the MDE model
+**Date:** 2026-09-01 · **Status:** ✅ ACCEPTED · **Closes:** ISSUE-244 (partially — see ISSUE-253/254)
+**Drives:** `evals/mde.py`, `evals/arm_probe_report.py`,
+`tests/unit/evals/test_kappas_match_calibration.py`
+**Context:** Three kappa families circulated for the same three scorers, and `evals/mde.py` had
+picked the wrong one:
+
+| Family | tone | affirms | refusal | What it measures |
+|---|---|---|---|---|
+| Calibration vs human labels | **0.849** | **0.530** | **0.247** | judge vs ground truth |
+| Inter-panel Fleiss | 1.000 | 0.282 | 0.225 | judge vs judge (what mde.py held) |
+| Per-criterion panel Fleiss | 0.753 | 0.519 | 0.422 | per-criterion judge vs judge |
+
+**Decision:** `RECORDED_KAPPAS` records the **calibration** family. The deciding argument is what
+the number is used for: `arm_pairing_mde` computes `true_mde = observed_mde / kappa`, undoing judge
+noise to recover the underlying effect. The noise that matters there is disagreement with ground
+truth, which only calibration measures. Inter-panel agreement measures whether three judges share a
+bias — and three judges can agree perfectly while all being wrong. `tone_judge` was unanimous
+135/135, which is precisely how it came to read 1.000; a kappa of exactly 1.000 makes the division
+a no-op and asserts the judge contributes no noise, which is never true.
+
+**Recomputed, at the recorded n=78 pairs / 6.4pp floor / implied p_d 4.07%, comparisons=1:**
+
+| criterion | κ before → after | TRUE MDE before → after | n for a 6.4pp true effect |
+|---|---|---|---|
+| tone_judge | 1.000 → 0.849 | 6.4pp → **7.5pp** | 78 → **108** |
+| affirms_judge | 0.282 → 0.530 | 22.7pp → **12.1pp** | 981 → **278** |
+| refusal_judge | 0.225 → 0.247 | 28.4pp → **25.9pp** | 1,541 → **1,278** |
+
+`observed_mde` is unchanged at 6.4pp by construction: `implied_discordance_rate` inverts the
+recorded floor at the recorded n, so re-applying it returns the floor. Only `true_mde` moves, and
+only through kappa. Note these differ from the review's quoted 17.25pp / 29.01pp, which were
+computed at a different `comparisons` (Bonferroni) setting; the values above use the default 1.
+
+**Provenance, recorded so it is not mistaken later:** all 393 calibration labels carry
+`gen_id: k3_73e6c36`, not the current `k3_77688e7_regen1`. That is correct — calibration describes
+the judge, not the generation — but it means these kappas do not move when a generation lands, and
+they go stale when the judge prompts change. Nothing currently gates that staleness.
+
+**Not decided here:** whether `refusal_judge` should be retired. At κ 0.247 it still needs ~1,278
+pairs to detect a 6.4pp true effect against the 78 available, so the retirement argument survives
+the correction — but that is R2.6f and it is a human call. This entry only makes the input honest.
+**Alternatives rejected:** (a) *Keep the panel family for continuity* — it is the family that
+produced a 1.000, which is the defect. (b) *Average the three* — averages of measurements of
+different things are not measurements.

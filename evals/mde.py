@@ -91,14 +91,31 @@ Its role here is a sanity bound: it caps how concordant two arms can plausibly b
 """
 
 RECORDED_KAPPAS: tuple[tuple[str, float], ...] = (
-    ("tone_judge", 1.000),
-    ("affirms_judge", 0.282),
-    ("refusal_judge", 0.225),
+    ("tone_judge", 0.849),
+    ("affirms_judge", 0.530),
+    ("refusal_judge", 0.247),
 )
-"""Per-criterion Fleiss kappa, from ISSUE-184's corrected panel metrics.
+"""Per-criterion kappa from CALIBRATION against human labels — the authoritative family.
 
-tone_judge was unanimous 135/135, which is why it reads 1.000 — that is a statement
-about variance to move, not about the criterion being well designed.
+ISSUE-244: three rival kappa families circulated for the same scorers.
+  * calibration vs human labels: 0.849 / 0.530 / 0.247  <- these, and the reason below
+  * inter-panel Fleiss (judge vs judge): 1.000 / 0.282 / 0.225  <- what this held before
+  * per-criterion panel Fleiss: 0.753 / 0.519 / 0.422
+
+Calibration wins because of what kappa is used for here. `arm_pairing_mde` computes
+`true_mde = observed_mde / kappa` — it undoes judge noise to ask what underlying effect
+must exist. The relevant noise is the judge's disagreement with GROUND TRUTH, which is
+what calibration measures. Inter-panel agreement measures whether three judges share a
+bias, and three judges can agree perfectly while all being wrong: tone_judge was
+unanimous 135/135, which is exactly how it came to read 1.000. A kappa of 1.000 makes
+the division a no-op and silently asserts the judge adds no noise at all.
+
+Provenance: measured on generation `k3_73e6c36` (all 393 calibration labels carry that
+gen_id), not on the current `k3_77688e7_regen1`. That is intended — calibration describes
+the judge, not the generation — but it means these numbers do not move when a new
+generation lands, and they go stale when the judge prompts change. Recorded in
+`evals/trend/trend_v1.jsonl`'s `scorer_kappas`, pinned by
+`tests/unit/evals/test_kappas_match_calibration.py`. See DEC-240.
 """
 
 _MAX_POSSIBLE_EFFECT_PP: float = 100.0
