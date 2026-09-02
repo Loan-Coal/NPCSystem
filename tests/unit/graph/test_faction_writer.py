@@ -161,7 +161,10 @@ async def test_remove_member_succeeds_when_edge_exists() -> None:
 
 @pytest.mark.asyncio
 async def test_remove_member_raises_when_edge_missing() -> None:
-    tx = _FakeTx(handler=lambda q, p: None)
+    # {"deleted": 0}, not None: the query's bare count() aggregate always returns a
+    # row, so None was a shape real Neo4j never produces here and the mock hid the
+    # bug the integration suite caught (R3.2).
+    tx = _FakeTx(handler=lambda q, p: {"deleted": 0})
 
     with pytest.raises(FactionMembershipError) as exc_info:
         await remove_member(tx, character_id="char-99", faction_id="faction-1")
@@ -228,7 +231,8 @@ async def test_remove_controls_succeeds_when_edge_exists() -> None:
 
 @pytest.mark.asyncio
 async def test_remove_controls_raises_when_edge_missing() -> None:
-    tx = _FakeTx(handler=lambda q, p: None)
+    # Same bare-aggregate shape as remove_member; see the note there.
+    tx = _FakeTx(handler=lambda q, p: {"deleted": 0})
 
     with pytest.raises(FactionNotFoundError):
         await remove_controls(tx, faction_id="faction-ghost", location_id="loc-1")

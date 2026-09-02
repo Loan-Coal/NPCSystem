@@ -136,7 +136,10 @@ async def remove_member(tx: AsyncTransaction, *, character_id: str, faction_id: 
         faction_id=faction_id,
     )
     record = await result.single()
-    if record is None:
+    # CYPHER_REMOVE_MEMBER ends in a bare `count(r)` aggregate, which always yields
+    # exactly one row -- `deleted = 0` when the MATCH matched nothing. Testing only
+    # `record is None` therefore never fired and this guard was unreachable (R3.2).
+    if record is None or record["deleted"] == 0:
         raise FactionMembershipError(
             character_id=character_id,
             faction_id=faction_id,
@@ -214,5 +217,8 @@ async def remove_controls(tx: AsyncTransaction, *, faction_id: str, location_id:
         location_id=location_id,
     )
     record = await result.single()
-    if record is None:
+    # Same bare-aggregate shape as remove_member; see the note there. Note
+    # set_controls above correctly keeps the plain `is None` check -- its query
+    # projects f.id, not an aggregate, so it really can return zero rows.
+    if record is None or record["deleted"] == 0:
         raise FactionNotFoundError(faction_id=faction_id)
