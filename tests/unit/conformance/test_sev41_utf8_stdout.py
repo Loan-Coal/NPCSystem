@@ -49,12 +49,12 @@ class _FakeStreamCp1252:
 class TestEnsureUtf8Stdout:
     """ensure_utf8_stdout() is idempotent and safe."""
 
-    def test_no_op_when_stream_has_no_reconfigure(self) -> None:
+    def test_no_op_when_stream_has_no_reconfigure(self) -> None:  # quality-ok: a stream lacking reconfigure must not raise AttributeError
         from demo_game.encoding_utils import _reconfigure_stream_if_needed
         stream = _FakeStreamNoReconfigure()
         _reconfigure_stream_if_needed(stream)  # must not raise
 
-    def test_no_op_when_already_utf8(self) -> None:
+    def test_no_op_when_already_utf8(self) -> None:  # quality-ok: _FakeStreamAlreadyUtf8.reconfigure raises AssertionError if called
         from demo_game.encoding_utils import _reconfigure_stream_if_needed
         stream = _FakeStreamAlreadyUtf8()
         _reconfigure_stream_if_needed(stream)  # must not call reconfigure

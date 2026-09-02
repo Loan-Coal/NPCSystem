@@ -133,7 +133,7 @@ async def test_emit_skips_reputation_when_no_faction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_emit_swallows_reputation_not_found() -> None:
+async def test_emit_swallows_reputation_not_found() -> None:  # quality-ok: emit_event_atomic must absorb ReputationNotFoundError, not propagate it
     """ReputationNotFoundError from a single character is caught and logged."""
     session = AsyncMock()
     with patch(f"{_SVC}.run_in_tx", new=AsyncMock(side_effect=_run_work)), \

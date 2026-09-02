@@ -192,14 +192,16 @@ async def test_nudge_not_applied_when_disabled() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_is_a_noop_when_the_engine_is_disabled() -> None:
     """A disabled engine completes its tick without touching the graph."""
-    config = _disabled_config()
+    apply = AsyncMock()
     engine = ReputationEngine(
-        config=config,
+        config=_disabled_config(),
         relation_reader=MagicMock(),
-        reputation_repo=_make_repo(AsyncMock()),
+        reputation_repo=_make_repo(apply),
     )
-    # Must not raise — session is swallowed by **_.
+
     await engine.run_tick(player_id="player", npc_ids=["S"])
+
+    apply.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

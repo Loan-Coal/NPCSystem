@@ -156,7 +156,8 @@ class TestNegotiationStore:
 
     def test_clear_noop_for_absent(self):
         store = NegotiationStore()
-        store.clear("ghost")  # should not raise
+        store.clear("ghost")  # absent key must be a no-op, not a KeyError
+        assert store.get("ghost") is None
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +247,8 @@ class TestApplyBandUpdate:
 
     def test_noop_when_no_session(self):
         store = NegotiationStore()
-        apply_band_update("ghost", trust=10, affection=0, store=store)  # should not raise
+        apply_band_update("ghost", trust=10, affection=0, store=store)
+        assert store.get("ghost") is None
 
     def test_noop_when_session_pending_confirm(self):
         store = NegotiationStore()

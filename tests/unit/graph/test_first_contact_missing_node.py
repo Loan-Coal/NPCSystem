@@ -66,7 +66,7 @@ async def test_ensure_relation_edge_raises_when_node_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ensure_relation_edge_ok_when_edge_returned() -> None:
+async def test_ensure_relation_edge_ok_when_edge_returned() -> None:  # quality-ok: ensure_relation_edge raises NodeNotFoundError when MERGE returns no row
     # MERGE returns the edge row -> both nodes exist -> no error.
     session = _FakeSession(results=[{"r": "edge"}])
     await ensure_relation_edge(session=session, src_id="npc_x", dst_id="player_demo")  # type: ignore[arg-type]

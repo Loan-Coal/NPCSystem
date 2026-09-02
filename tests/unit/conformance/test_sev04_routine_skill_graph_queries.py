@@ -42,7 +42,7 @@ def test_graph_skill_queries_has_completed_quests_function() -> None:
     assert inspect.iscoroutinefunction(skill_queries.get_completed_quests_with_skills)
 
 
-def test_skill_progression_engine_no_direct_session_run() -> None:
+def test_skill_progression_engine_no_direct_session_run() -> None:  # quality-ok: asserts by raising AssertionError inside the AST walk
     """SkillProgressionEngine.run_tick must delegate to graph/ not call session.run."""
     import ast
     import pathlib

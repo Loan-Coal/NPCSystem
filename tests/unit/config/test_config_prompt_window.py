@@ -41,7 +41,7 @@ class TestCheckPromptWindow:
         assert error.context_length == 4096
         assert error.required_tokens == 5426 + 512 + 512 + 500
 
-    def test_does_not_raise_when_the_window_is_large_enough(self) -> None:
+    def test_does_not_raise_when_the_window_is_large_enough(self) -> None:  # quality-ok: check_prompt_window raises PromptWindowError on an incoherent budget
         """The RET-P6 target configuration must be coherent."""
         check_prompt_window(
             system_prompt_tokens=1800,
@@ -51,7 +51,7 @@ class TestCheckPromptWindow:
             context_length=8192,
         )
 
-    def test_exact_fit_is_accepted(self) -> None:
+    def test_exact_fit_is_accepted(self) -> None:  # quality-ok: check_prompt_window raises when required > window; exact fit must not
         """Requiring exactly the window size is coherent, not an overflow."""
         check_prompt_window(
             system_prompt_tokens=1000,
@@ -71,7 +71,7 @@ class TestShippedDefaultsAreCoherent:
     side was the live configuration. These read Settings, so they can.
     """
 
-    def test_shipped_defaults_fit_the_default_window(self) -> None:
+    def test_shipped_defaults_fit_the_default_window(self) -> None:  # quality-ok: check_prompt_window raises if the shipped defaults overflow the window
         """Everything the engine sends must fit the shipped OLLAMA_CONTEXT_LENGTH."""
         settings = Settings()
 

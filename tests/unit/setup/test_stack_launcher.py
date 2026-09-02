@@ -77,7 +77,7 @@ class TestStackLauncherNeo4j:
 
 
 class TestStackLauncherOllama:
-    def test_skips_ollama_if_no_ollama_manager(self) -> None:
+    def test_skips_ollama_if_no_ollama_manager(self) -> None:  # quality-ok: launch() raises if it dereferences a None ollama_manager
         launcher = _make_launcher(ollama_manager=None)
         with _engine_patches():
             asyncio.run(launcher.launch())
@@ -126,7 +126,7 @@ class TestStackLauncherShutdown:
         launcher.shutdown()
         fake_proc.terminate.assert_called_once()
 
-    def test_shutdown_is_noop_when_nothing_started(self) -> None:
+    def test_shutdown_is_noop_when_nothing_started(self) -> None:  # quality-ok: shutdown() raises if it touches a process that was never started
         launcher = _make_launcher(neo4j_running=True)
         with _engine_patches():
             asyncio.run(launcher.launch())

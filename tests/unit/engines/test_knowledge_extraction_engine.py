@@ -393,7 +393,7 @@ async def test_handler_skips_engine_when_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_handler_skips_when_engine_none(monkeypatch):
+async def test_handler_skips_when_engine_none(monkeypatch):  # quality-ok: handle() raises AttributeError if it dereferences a None knowledge_engine
     """No AttributeError should occur when knowledge_engine=None."""
     from npc_engine.api.schemas import DialogueRequest
 

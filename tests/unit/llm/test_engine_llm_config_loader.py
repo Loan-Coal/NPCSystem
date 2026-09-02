@@ -232,7 +232,7 @@ def test_get_config_raises_misconfigured_on_io_error(tmp_path: Path, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-def test_validate_all_passes_when_all_llm_engines_have_configs(tmp_path: Path, monkeypatch) -> None:
+def test_validate_all_passes_when_all_llm_engines_have_configs(tmp_path: Path, monkeypatch) -> None:  # quality-ok: validate_all_engine_llm_configs raises on an invalid or missing config
     """No exception raised when every uses_llm=True contract has a valid config."""
 
     import npc_engine.engines.llm_runtime_config as loader_mod
@@ -259,7 +259,7 @@ def test_validate_all_raises_when_llm_engine_config_is_missing(tmp_path: Path, m
         validate_all_engine_llm_configs(contracts=contracts)
 
 
-def test_validate_all_skips_non_llm_contracts(tmp_path: Path, monkeypatch) -> None:
+def test_validate_all_skips_non_llm_contracts(tmp_path: Path, monkeypatch) -> None:  # quality-ok: validate_all_engine_llm_configs raises if it inspects a non-LLM contract
     """Engines with uses_llm=False are skipped even if no config file exists."""
 
     import npc_engine.engines.llm_runtime_config as loader_mod

@@ -118,6 +118,7 @@ def test_apply_mutation_produces_valid_python() -> None:
     """The mutated source can be parsed by ast.parse (no SyntaxError)."""
     mutated = apply_mutation(_SAMPLE_SOURCE, "greet", "return ''")
     ast.parse(mutated)  # raises SyntaxError if invalid
+    assert "return ''" in mutated
 
 
 def test_apply_mutation_raises_on_missing_function() -> None:

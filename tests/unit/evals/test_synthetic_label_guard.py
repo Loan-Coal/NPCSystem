@@ -75,11 +75,11 @@ def test_a_dot_segment_path_to_the_labels_file_is_still_refused() -> None:
         check_synthetic_label_target("mock-random-v1", noisy)
 
 
-def test_synthetic_model_targeting_any_other_path_is_allowed(tmp_path: Path) -> None:
+def test_synthetic_model_targeting_any_other_path_is_allowed(tmp_path: Path) -> None:  # quality-ok: check_synthetic_label_target raises on a disallowed target
     check_synthetic_label_target("oracle-matrix-v1", tmp_path / "labels_oracle.jsonl")
 
 
-def test_a_real_model_may_still_target_the_real_labels_file() -> None:
+def test_a_real_model_may_still_target_the_real_labels_file() -> None:  # quality-ok: check_synthetic_label_target raises on a disallowed target
     """The guard must not break the human labelling path it exists to protect."""
     check_synthetic_label_target("claude-opus-5", LABELS_FILE)
 

@@ -245,7 +245,7 @@ def test_no_violation_exits_zero(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:  # quality-ok: main() raises UnicodeEncodeError on a cp1252 stdout if unguarded (ISSUE-151)
     """main() survives a cp1252 stdout — belt-and-suspenders guard from ISSUE-151."""
     from check_conservation import main  # noqa: E402
 
