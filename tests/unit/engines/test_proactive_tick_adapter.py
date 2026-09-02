@@ -244,8 +244,8 @@ async def test_tick_adapter_enqueues_winner_to_queue() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tick_adapter_ignores_scheduler_session_kwarg() -> None:
-    """The scheduler passes ``session=``; run_tick must accept and ignore it (SEV-24)."""
+async def test_run_tick_returns_no_lines_when_no_pairs_are_collocated() -> None:
+    """With no co-located pairs the adapter still queries once and returns no lines."""
     from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
 
     engine = _make_engine(trigger=None)

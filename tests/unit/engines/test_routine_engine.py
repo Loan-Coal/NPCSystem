@@ -89,18 +89,6 @@ async def test_character_skipped_when_no_matching_entry():
     assert result == {"moved": 0, "skipped": 1}
 
 
-@pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
-    """The scheduler still passes session=...; the engine accepts and ignores it."""
-    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
-    repo = _make_repo([_char_record("char_a", entries, current_loc="loc_barracks")])
-    engine = RoutineEngine(routine_repo=repo)
-
-    result = await engine.run_tick(time_of_day="morning", tick_id=10)
-
-    assert result["moved"] == 1
-
-
 # ---------------------------------------------------------------------------
 # Routine override logic
 # ---------------------------------------------------------------------------

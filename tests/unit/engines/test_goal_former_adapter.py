@@ -119,18 +119,3 @@ async def test_run_tick_does_not_call_action_selector_when_no_goal() -> None:
     await _adapter(["npc-1", "npc-2"], mock_former, mock_selector).run_tick(tick_id=5)
 
     mock_selector.select_action.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
-    """The scheduler's session= kwarg is accepted and ignored during migration."""
-    mock_former = MagicMock()
-    mock_former.form_goal = AsyncMock(side_effect=[("goal-a", 60, "tavern")])
-    mock_selector = MagicMock()
-    mock_selector.select_action = AsyncMock()
-
-    result = await _adapter(["npc-1"], mock_former, mock_selector).run_tick(
-        tick_id=9
-    )
-
-    assert result["goal_formations"] == ["goal-a"]

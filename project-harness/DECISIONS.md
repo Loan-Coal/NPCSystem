@@ -7612,3 +7612,57 @@ adjusting the rule; that is a case-authoring task and is logged as ISSUE-257.
 a footnote, and the footnote is what gets dropped when the number is quoted. *Gate via a new
 `make check` target* — the comparison is a property of a rendered report, not of the tree, and
 `make check` stays at 22 targets.
+
+---
+
+## DEC-246: the session_kwarg tests are retired by rename, not deleted wholesale
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Implements:** R4.3 (part)
+**Drives:** 15 test functions across 15 files under `tests/unit/engines/` and `tests/unit/graph/`
+
+**Context:** ROADMAP:310 specifies "delete the `session_kwarg` tests", on the premise that 61
+references guard a parameter `military_engine.py:34` does not have. Two corrections, both
+measured at HEAD with `__pycache__` excluded:
+
+1. There are **16** references across **15** files, not 61. The quoted figure counted `.pyc`.
+2. The problem is worse than the ROADMAP states. **Not one of the 15 tests passes `session=`.**
+   Every one calls `run_tick(tick_id=...)` or equivalent. And no `run_tick` in `src/` accepts
+   `**_` — so a test "fixed" to actually pass `session=` would `TypeError` on all of them.
+
+They are phantom guards in the strict sense: the name and docstring assert a contract the body
+never exercises and the code no longer honours. The scheduler confirms it from the other end —
+every call it makes is `run_tick(tick_id=tick_id)`.
+
+**Decision:** delete only those that are a strict subset of a sibling; rename the rest to what
+they actually test. Deleting all 15 would discard real assertions that exist nowhere else, and
+the ROADMAP's deletion premise was reasoning from a reference count, not from the bodies.
+
+**Renamed (7)** — each asserts something no sibling does:
+
+| file | new name | what it actually covers |
+|---|---|---|
+| `test_faction_politics_engine.py` | `test_run_tick_returns_zero_counts_when_there_are_no_events` | empty input; the sibling covers *non-matching* input |
+| `test_intent_formation_engine.py` | `test_run_tick_returns_zero_counts_when_no_pairs_are_collocated` | the empty path; only the populated path existed |
+| `test_military_engine.py` | `test_run_tick_reports_zero_counts_when_nothing_resolves` | the return shape; the sibling asserts awaits only |
+| `test_need_decay_engine.py` | `test_a_single_need_decays_by_its_decay_rate` | exact arithmetic 50 → 40 for one need |
+| `test_proactive_tick_adapter.py` | `test_run_tick_returns_no_lines_when_no_pairs_are_collocated` | the empty path plus the single-query assertion |
+| `test_reputation_engine.py` | `test_run_tick_is_a_noop_when_the_engine_is_disabled` | disabled config through `run_tick` |
+| `test_story_pacing_engine.py` | `test_run_tick_defaults_to_max_severity_when_no_quests_are_active` | no quests at all; the sibling covers no *high-severity* quest |
+
+**Deleted (8)** — each verified line by line as a strict subset of a named sibling:
+`test_goal_former_adapter.py` (⊂ `test_run_tick_calls_form_goal_for_each_npc`),
+`test_gossip_n_plus_one.py` (⊂ `test_gossip_tick_result_counts_match_pairs`, which already
+asserts `tick_id`), `test_mood_contagion_engine.py` (⊂ `test_run_tick_returns_affected_count`),
+`test_routine_engine.py` (⊂ `test_character_moves_to_scheduled_location`, same fixture and a
+stronger assertion), `test_skill_progression_engine.py` (⊂ `test_awards_xp_per_completed_skill_row`),
+`test_succession_engine.py` (⊂ `test_vacant_title_triggers_succession`),
+`test_event_handler_port.py` (⊂ `test_run_tick_forwards_faction_to_emit`, which asserts the same
+`created == 1` and more), `test_player_model_tick.py` (⊂ `test_run_tick_derives_and_persists_per_pair`).
+
+**Proof:** `grep -rn session_kwarg tests/ src/ --include=*.py | grep -v __pycache__ | wc -l`
+returns 0 (16 before). The engines and graph unit suites go 1521 → 1513 passing: exactly the
+eight deletions, no collateral loss.
+
+**Rejected:** *delete all 15* — loses seven distinct assertions to satisfy a grep. *Rename all
+15* — leaves eight tests that duplicate a sibling exactly, which is the vacuity R1.2 exists to
+reduce. *Make them genuinely pass `session=`* — they would all fail, correctly: nothing accepts
+it any more. That is the finding, not a repair.

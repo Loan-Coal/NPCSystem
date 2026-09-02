@@ -75,15 +75,3 @@ async def test_highest_priority_heir_wins():
 
     assert result["successions"] == 1
     assert repo.grant_title.call_args.kwargs["character_id"] == "char-first-heir"
-
-
-@pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
-    vacant = [{"id": "t", "name": "T", "faction_id": "f"}]
-    heirs = [{"heir": {"id": "h"}, "priority": 1, "legitimacy": 50}]
-    repo = _make_repo(vacant=vacant, heirs=heirs)
-    engine = SuccessionEngine(political_repo=repo)
-
-    result = await engine.run_tick(tick_id=3)
-
-    assert result["successions"] == 1

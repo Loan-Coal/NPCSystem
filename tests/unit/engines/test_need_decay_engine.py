@@ -121,8 +121,8 @@ async def test_empty_needs_returns_zero_counts():
 
 
 @pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
-    """The scheduler still passes session=...; the engine accepts and ignores it."""
+async def test_a_single_need_decays_by_its_decay_rate():
+    """A need at level 50 with decay_rate 10 is written back at 40."""
     repo = _make_repo([_need(level=50, decay_rate=10, satisfaction_magnitude=0)])
     engine = NeedDecayEngine(need_repo=repo)
 

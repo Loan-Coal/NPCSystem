@@ -111,8 +111,8 @@ async def test_run_tick_writes_updated_world_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored() -> None:
-    """The scheduler still passes session=...; the engine accepts and ignores it."""
+async def test_run_tick_defaults_to_max_severity_when_no_quests_are_active() -> None:
+    """With no active quests at all, severity is unsuppressed at 100."""
     engine, _ = _make_engine(quests=[])
 
     result = await engine.run_tick(tick_id=1)

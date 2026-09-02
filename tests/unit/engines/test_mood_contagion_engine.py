@@ -108,17 +108,6 @@ async def test_mood_persisted_to_neo4j(emotion_store):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored(emotion_store):
-    """The scheduler still passes session=...; the engine accepts and ignores it."""
-    repo = _make_repo(pairs=[("npc_a", "npc_b")])
-    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
-
-    result = await engine.run_tick(tick_id=1)
-
-    assert result["affected"] == 1
-
-
-@pytest.mark.asyncio
 async def test_run_tick_returns_affected_count(emotion_store):
     repo = _make_repo(pairs=[("npc_a", "npc_b"), ("npc_c", "npc_d")])
     engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)

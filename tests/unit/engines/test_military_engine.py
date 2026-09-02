@@ -106,8 +106,8 @@ async def test_run_tick_calls_both_services(engine, military_repo) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg(engine, military_repo) -> None:
-    """run_tick accepts and ignores the scheduler's session= kwarg (SEV-24)."""
+async def test_run_tick_reports_zero_counts_when_nothing_resolves(engine, military_repo) -> None:
+    """With no battles and no resource yield, both counts come back zero."""
     with (
         patch(
             "npc_engine.engines.military.military_engine.resolve_battles",

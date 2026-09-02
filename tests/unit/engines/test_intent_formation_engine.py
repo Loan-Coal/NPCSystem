@@ -56,8 +56,8 @@ async def test_run_tick_scores_enqueues_and_expires():
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg():
-    """The scheduler passes ``session=``; run_tick must accept and ignore it."""
+async def test_run_tick_returns_zero_counts_when_no_pairs_are_collocated():
+    """With no co-located pairs, the tick forms nothing and expires nothing."""
     location_reader = AsyncMock()
     location_reader.get_collocated_pairs = AsyncMock(return_value=[])
     repo = AsyncMock()

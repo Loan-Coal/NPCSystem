@@ -110,17 +110,6 @@ async def test_run_tick_high_severity_sets_world_condition() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_session_kwarg() -> None:
-    template = _template()
-    repo = _event_repo()
-    handler = _make_handler([template], event_repo=repo, world_state_repo=_world_state_repo())
-
-    result = await handler.run_tick(tick_id=3)
-
-    assert result["created"] == 1
-
-
-@pytest.mark.asyncio
 async def test_run_tick_skips_when_over_severity_cap() -> None:
     template = _template(severity=90)
     repo = _event_repo()

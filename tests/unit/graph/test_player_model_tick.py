@@ -85,14 +85,3 @@ async def test_run_tick_skips_pairs_without_edge() -> None:
 
     assert result["player_models"] == []
     assert repo.captured == []
-
-
-@pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
-    """The scheduler's session= kwarg is accepted and ignored during migration."""
-    repo = _FakeModelRepo()
-    result = await _adapter([("npc_a", "player_1")], repo).run_tick(
-        tick_id=7
-    )
-
-    assert len(result["player_models"]) == 1

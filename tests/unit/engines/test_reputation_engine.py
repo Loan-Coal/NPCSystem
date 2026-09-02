@@ -186,12 +186,12 @@ async def test_nudge_not_applied_when_disabled() -> None:
 
 
 # ---------------------------------------------------------------------------
-# test_run_tick_ignores_scheduler_session_kwarg
+# test_run_tick_is_a_noop_when_the_engine_is_disabled
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
-    """run_tick accepts (and ignores) a stray session= kwarg during migration."""
+async def test_run_tick_is_a_noop_when_the_engine_is_disabled() -> None:
+    """A disabled engine completes its tick without touching the graph."""
     config = _disabled_config()
     engine = ReputationEngine(
         config=config,

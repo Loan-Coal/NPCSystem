@@ -55,13 +55,3 @@ async def test_increment_failure_is_swallowed_and_counted_out():
     result = await engine.run_tick(tick_id=2)
 
     assert result == {"xp_awards": 1}
-
-
-@pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
-    repo = _make_repo([_row()])
-    engine = SkillProgressionEngine(skill_repo=repo)
-
-    result = await engine.run_tick(tick_id=4)
-
-    assert result == {"xp_awards": 1}

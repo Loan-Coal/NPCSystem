@@ -164,20 +164,3 @@ async def test_gossip_tick_skips_pairs_with_no_event():
 
     assert result["propagated"] == 2
     assert result["pairs"] == 3
-
-
-@pytest.mark.asyncio
-async def test_gossip_tick_swallows_session_kwarg():
-    """run_tick must accept and silently discard a session= kwarg (Wave-5 cleanup guard)."""
-    pairs = _make_pairs(1)
-    batch_rows = _make_batch_rows(1)
-    repo = _make_repo(batch_rows)
-    handler = _make_handler(repo)
-
-    with (
-        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
-    ):
-        result = await handler.run_tick(tick_id=7)
-
-    assert result["tick_id"] == 7

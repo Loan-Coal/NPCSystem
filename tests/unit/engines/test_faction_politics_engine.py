@@ -219,8 +219,8 @@ async def test_run_tick_skips_decay_below_min_magnitude() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
-    """The scheduler's session= kwarg is accepted and ignored (migration shim)."""
+async def test_run_tick_returns_zero_counts_when_there_are_no_events() -> None:
+    """An empty event and standing set yields zero rule and zero decay applications."""
     rules = _make_rules(rules=[("betrayal_penalty", "betrayal", -10)])
     port = _FakePort(events=[], standings=[])
     engine = FactionPoliticsEngine(rules=rules, repo=port)
