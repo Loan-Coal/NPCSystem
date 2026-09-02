@@ -1727,6 +1727,35 @@ more measurement. None was fixed here — this task changes only this file.
 
 
 
+
+
+---
+
+### R3.6 TRIAGE — 2026-09-02, report only, nothing changed
+
+Re-measured with the documented invocation (`docker compose -f docker-compose.yml -f
+docker-compose.test.yml up -d neo4j`, then `NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j
+NEO4J_PASSWORD=password make test-integration`): **8 failed / 35 passed**, reproducing the
+baseline exactly. Note the env vars are load-bearing — without them the suite reports
+"9 passed, 34 skipped" and looks green while testing nothing.
+
+The eight failures collapse into **five causes**, three of which are already inside R3's scope:
+
+| # | Cause | Failing tests | Evidence | Lands in |
+|---|---|---|---|---|
+| **A** | **Faction error contracts are not raised.** Two remove-paths return normally where the test expects a typed error. | `test_faction_integration.py:153`, `:227` | `DID NOT RAISE FactionMembershipError`; `DID NOT RAISE FactionNotFoundError` | **R3.2** — same family as the Neo4j→503 contract: a documented error that no code raises |
+| **B** | **Two scheme ticks produce nothing.** Both assert one row and get zero. Likely one shared cause (a tick that silently no-ops), to be confirmed — not assumed. | `test_scheme_advance_tick_integration.py:105`, `test_scheme_detection_tick_integration.py:104` | `assert 0 == 1` in both | **R3.4** — the general form is R3.4(b), `tick_scheduler.py:530` silently no-opping a `None` slot |
+| **C** | **Faction-aware gossip pair selection omits expected pairs.** | `test_faction_gossip_integration.py:148`, `:200` | `unfactioned pairs not found in results`; `hostile pair not found in results` | new — nearest to ISSUE-228 (gossip), sized S–M |
+| **D** | **`QuestLifecycleEngine` is constructed without its `TypeRegistry`.** Raised from product code, but the defect is at the construction site. | `test_quest_lifecycle_integration_v14.py` | `quest_lifecycle_engine.py:76 ValueError: requires a TypeRegistry injected via __init__` | **R3.4** — engine wiring / composition root |
+| **E** | **Reputation threshold labels disagree.** | `test_reputation_integration.py:223` | `assert 'allied' == 'friendly'` | new — S, a boundary or label-map mismatch |
+
+**Sizing conclusion.** R3 is smaller than the eight-failure count suggests. A and D are already
+R3.2/R3.4 work; B is very likely one fix for two tests; only C and E are genuinely new, and both
+are S–M. **No failure indicates a structural or architectural problem** — there is no evidence
+here of a design that needs rework, only of contracts not implemented and wiring not completed.
+
+**Not done, deliberately (R3.6 is report-only):** no root cause was confirmed by debugging, and B's
+"one shared cause" is a hypothesis stated as such. Confirming it is R3.4's job, not this task's.
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning
 **Severity:** P2 (annoying) — silently overstates n and makes case deletions invisible

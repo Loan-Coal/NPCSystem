@@ -540,7 +540,12 @@ CR-L14-04 is built on.
 Validation: `grep -rlc '_to_native' src/` returns 1, not 3. `make check` green.
 CR-L14-04, CR-L14-05.
 
-- [ ] **R3.6** Triage ISSUE-233's eight integration failures — report only, change nothing
+- [x] **R3.6** ✅ DONE 2026-09-02 — 8 failures triaged to **5 causes**; recorded in ISSUE-233.
+A+D already fall inside R3.2/R3.4; B is likely one fix for two tests; only C (faction gossip
+pair selection) and E (reputation label boundary) are new, both S–M. **No structural problem
+found** — contracts not implemented and wiring not completed, not a design that needs rework.
+Note: the env vars are load-bearing — without them the suite reports "9 passed, 34 skipped"
+and looks green while testing nothing.
 Files: `project-harness/ISSUES.md` (append findings only)
 Spec: with bolt reachable, `pytest tests/integration` returns **35 passed / 8 failed / 0
 skipped** (re-measured 2026-09-01 by R2.2, settling ISSUE-236 — the count was recorded as 9 and
