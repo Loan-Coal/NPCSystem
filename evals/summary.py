@@ -15,6 +15,8 @@ from pathlib import Path
 
 from battery_rates import BatteryRate, compute_battery_rate
 import case_stats
+from headline_refusal import refusal_for_battery
+from null_baseline import load_null_baseline
 from panel_metrics import PanelMetrics
 from panel_metrics_format import console_lines, markdown_rows
 from refusal_rate import RefusalRateResult, fmt_refusal_rate
@@ -488,11 +490,53 @@ def _format_refusal_rate_row(refusal_result: RefusalRateResult | None) -> list[s
     return [f"| Over-refusal (grounded, excludes infra failures) | {fmt_refusal_rate(refusal_result)} |"]
 
 
+def _gated_rate_strs(
+    summary: EvalSummary,
+    baseline: dict[str, dict] | None,
+) -> tuple[str, str, str]:
+    """The three battery rate strings, each refused where engine <= null (R2.5 step 3c).
+
+    Applied strictly per population — adversarial, anti-hallucination and capability
+    are compared to their own recorded null and never to each other's, because
+    combining populations is the error DEC-243 removed.
+
+    Args:
+        summary: The run being rendered.
+        baseline: {battery: entry} from null_baseline.load_null_baseline; None loads
+            the recorded artifact. Pass {} to render rates ungated.
+    Returns:
+        (adversarial, anti_hallucination, capability) display strings.
+    """
+    marks = load_null_baseline() if baseline is None else baseline
+    adv = _pick_rate_str(
+        summary.adversarial_battery_rate,
+        summary.adversarial_passes, summary.adversarial_turns,
+        summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
+    )
+    ah = _pick_rate_str(
+        summary.anti_hallucination_battery_rate,
+        summary.anti_hallucination_passes, summary.anti_hallucination_turns,
+        summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
+        summary.anti_hallucination_ci_high,
+    )
+    cap = _pick_rate_str(
+        summary.capability_battery_rate,
+        summary.capability_passes, summary.capability_turns,
+        summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
+    )
+    return (
+        refusal_for_battery("adversarial", summary.adversarial_rate, marks) or adv,
+        refusal_for_battery("anti_hallucination", summary.anti_hallucination_rate, marks) or ah,
+        refusal_for_battery("capability", summary.capability_rate, marks) or cap,
+    )
+
+
 def format_summary_lines(
     summary: EvalSummary,
     *,
     refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
+    null_baseline: dict[str, dict] | None = None,
 ) -> list[str]:
     """Render as plain-text console lines; guard and capability rates adjacent.
 
@@ -511,22 +555,7 @@ def format_summary_lines(
         ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    adv_rate_str = _pick_rate_str(
-        summary.adversarial_battery_rate,
-        summary.adversarial_passes, summary.adversarial_turns,
-        summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
-    )
-    ah_rate_str = _pick_rate_str(
-        summary.anti_hallucination_battery_rate,
-        summary.anti_hallucination_passes, summary.anti_hallucination_turns,
-        summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
-        summary.anti_hallucination_ci_high,
-    )
-    c_rate_str = _pick_rate_str(
-        summary.capability_battery_rate,
-        summary.capability_passes, summary.capability_turns,
-        summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
-    )
+    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline)
     return [
         _SEPARATOR,
         "ANTI-HALLUCINATION GUARANTEE",
@@ -553,6 +582,7 @@ def format_summary_markdown(
     *,
     refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
+    null_baseline: dict[str, dict] | None = None,
 ) -> list[str]:
     """Render as markdown lines for the report; guard and capability rates adjacent.
 
@@ -566,22 +596,7 @@ def format_summary_markdown(
         ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    adv_rate_str = _pick_rate_str(
-        summary.adversarial_battery_rate,
-        summary.adversarial_passes, summary.adversarial_turns,
-        summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
-    )
-    ah_rate_str = _pick_rate_str(
-        summary.anti_hallucination_battery_rate,
-        summary.anti_hallucination_passes, summary.anti_hallucination_turns,
-        summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
-        summary.anti_hallucination_ci_high,
-    )
-    c_rate_str = _pick_rate_str(
-        summary.capability_battery_rate,
-        summary.capability_passes, summary.capability_turns,
-        summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
-    )
+    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline)
     return [
         "## Anti-Hallucination Guarantee",
         "",

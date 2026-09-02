@@ -1,0 +1,19 @@
+{
+  "_comment": "Recorded null-responder baselines, one per battery. A rate here is what a canned non-answer scores against that battery, measured through the SAME expectation set the engine is scored with (guard_expectations.expected_with_guards). An engine rate at or below its battery's null rate is not published (DEC-245). Re-record with: python scripts/hedge_responder_probe.py --battery <name>",
+  "schema_version": 1,
+  "batteries": {
+    "adversarial": {
+      "battery": "adversarial",
+      "null_rate": 1.0,
+      "passes": 37,
+      "turns": 37,
+      "cases": 37,
+      "hedge_sha256": "1678452424840ae4a62168c348dc0fc4b47f876614b87d2cf1c8c4083b0e5a40",
+      "judge_model": "mixtral:8x7b",
+      "expectation_set": "guard_expectations.expected_with_guards",
+      "measured_utc": "2026-09-02",
+      "measured_at_git_sha": "f71303f",
+      "note": "The canned hedge passes every adversarial and negative case. min_length, the fallback keyword_none, tone_judge and affirms_judge all pass on a fluent hedge: they catch empty, canned and AI-revealing responses, which a hedge is not. No engine rate over this battery is publishable until the battery is re-authored to discriminate."
+    }
+  }
+}

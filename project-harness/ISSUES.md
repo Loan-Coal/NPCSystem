@@ -2064,6 +2064,31 @@ be clean from the start.
 **To fix:** decide baseline-vs-clean, fix `check_rules.py:45`, add `scripts/` to the `lint`
 recipe, and extend `test_gate_scope.py` to pin the wider scope.
 
+## ISSUE-257: the adversarial battery does not discriminate the engine from a canned hedge
+**Found:** 2026-09-02, during R2.5 step 3c
+**Severity:** P1 (blocking) — the adversarial half of the anti-hallucination guarantee is
+unpublishable until this is fixed
+**Where:** `evals/cases/case_adv_*.yaml`, `evals/cases/case_neg_*.yaml` (37 cases)
+**Description:** Measured 2026-09-02 through the shared expectation set
+(`guard_expectations.expected_with_guards`, both LLM judges live): the canned hedge in
+`scripts/hedge_responder_probe.py` scores **37/37 = 1.000**, against the engine's 0.8468.
+Every adversarial and negative case is satisfied by a fixed string that asserts nothing.
+
+This is not a guard defect. The four injected guards catch empty, canned and AI-revealing
+responses; a fluent hedge is none of those, so they pass it correctly. The defect is in case
+authoring: the cases forbid confirming a false premise, and hedging does not confirm it, so
+refusing to answer is scored identically to knowing better. Per DEC-245 the adversarial rate
+is therefore no longer printed.
+**Why deferred:** re-authoring 37 cases is a distinct, substantial task from the comparability
+fix that revealed the problem, and it needs a stated authoring rule (what must a case require
+beyond "does not confirm the false premise"?) before any case is rewritten. Guessing that rule
+case-by-case would produce 37 inconsistent cases.
+**To fix:** decide the discrimination rule — most likely each guard case must also require a
+positive, case-specific commitment the hedge cannot supply (naming what the NPC does know, or
+who to ask) — record it as a DEC, then re-author the cases against it. Prove it by re-running
+`python scripts/hedge_responder_probe.py --battery adversarial` and requiring the null rate
+below the 0.30 gate, and re-record `evals/null_baseline.json`.
+
 ## ISSUE-248: the resolved-issues archive reuses two ids and skips five
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
 **Severity:** P3 (nice-to-fix)

@@ -7563,3 +7563,52 @@ holds — now on both axes at once.
 κ=0.55/lo=0.38 RESTRICTED case as HIDDEN, changing the show/hide contract as a side effect of
 a publication fix. *Refuse only degenerate intervals* — kills the fabricated value but leaves
 the interval still not decisive, so `tone_judge` would keep publishing on a CI spanning zero.
+
+---
+
+## DEC-245: no battery publishes a rate at or below its recorded null responder
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Implements:** R2.5 step 3c
+**Drives:** `evals/null_baseline.json`, `evals/null_baseline.py`, `evals/headline_refusal.py`,
+`evals/summary.py`, `tests/unit/evals/test_null_baseline_refusal.py`
+
+**Context:** ISSUE-256 made the engine and the null comparable for the first time, by giving
+both scorers one expectation set (`guard_expectations.expected_with_guards`). The comparison it
+unblocked is unfavourable. Over the adversarial battery — `case_adv_*` + `case_neg_*`, 37 cases
+— the canned hedge scores **37/37 = 1.000** against the engine's **0.8468**. Both LLM judges
+genuinely ran; this is a measurement, not an instrument failure.
+
+The reason is not that the guards are broken. `min_length`, the fallback `keyword_none`,
+`tone_judge` and `affirms_judge` catch empty, canned and AI-revealing responses. A fluent hedge
+is none of those, so they pass it. The battery therefore does not discriminate between the
+engine and a fixed string that answers nothing, and a rate measured over it is evidence about
+the battery, not about the engine.
+
+**Decision:** a battery's rate is not printed when the engine scores at or below the recorded
+null for that same battery. Ties refuse: matching a canned non-answer demonstrates nothing.
+
+The rule is applied **per population and never to a union** — adversarial, anti-hallucination
+and capability are each compared to their own recorded null. Forming a combined figure to
+compare is the error DEC-243 removed, and it would be doubly wrong here, since only one of the
+three has a recorded null at all.
+
+The null lives in `evals/null_baseline.json`, not in code, for the reason DEC-242 established
+for the context ceiling: a measurement embedded in a source file cannot say what it measured.
+Each entry records the hedge digest, the judge model, the expectation set, the date and the
+git sha, and a unit test refuses an entry missing any of them.
+
+**Not gated, deliberately:** a battery with no recorded null, and a battery whose engine rate is
+absent. An unmeasured null is absence of evidence; refusing on it would punish that as though it
+were evidence, and would make every battery unpublishable the moment a row is missing. Today
+only `adversarial` has a recorded null, so only the adversarial headline refuses — which is
+visible in the rendered output rather than silent.
+
+**Consequences:** the adversarial rate no longer prints anywhere the summary is rendered
+(console and markdown alike — the published artifact is markdown, so gating only the console
+would leave the citable surface ungated). The R2.5 guarantee is now, honestly, one battery
+short. Restoring it requires re-authoring the adversarial battery so a hedge fails it, not
+adjusting the rule; that is a case-authoring task and is logged as ISSUE-257.
+
+**Rejected:** *publish with a caveat* — a number that a fixed string matches is not improved by
+a footnote, and the footnote is what gets dropped when the number is quoted. *Gate via a new
+`make check` target* — the comparison is a property of a rendered report, not of the tree, and
+`make check` stays at 22 targets.
