@@ -298,7 +298,7 @@ class ContentRatingViolationError(StructuredNPCSystemError):
     rating: str
 
 
-class TokenBudgetExceededError(Exception):
+class TokenBudgetExceededError(StructuredNPCSystemError):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 
 
@@ -342,21 +342,20 @@ class PromptWindowError(StructuredNPCSystemError):
 
 
 @dataclass
-class ContextBudgetError(Exception):
-    """Raised for tier-specific context budget overflow during prompt assembly."""
+class ContextBudgetError(StructuredNPCSystemError):
+    """Raised for tier-specific context budget overflow during prompt assembly.
+
+    Attributes:
+        tier: Which context tier overflowed.
+        used_tokens: Tokens the tier actually consumed.
+        budget_tokens: Tokens the tier was allowed.
+        detail: Human-readable breakdown.
+    """
 
     tier: str
     used_tokens: int
     budget_tokens: int
     detail: str
-
-    def __str__(self) -> str:
-        """Return structured representation for logging and error propagation."""
-        return (
-            "ContextBudgetError("
-            f"tier={self.tier}, used_tokens={self.used_tokens}, "
-            f"budget_tokens={self.budget_tokens}, detail={self.detail})"
-        )
 
 
 def _enable_exception_machinery(base: type) -> None:

@@ -14,10 +14,13 @@ from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 
 from .error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
-from npc_engine.utils.errors import ContentRatingViolationError
+from npc_engine.utils.errors import ContentRatingViolationError, GraphUnavailableError
 from npc_engine.utils.logging import get_logger
 
 _handler_logger = get_logger(__name__)
+
+# Retryable: the request was fine, the graph was not (R3.2).
+GRAPH_UNAVAILABLE_STATUS: int = 503
 
 
 async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -106,6 +109,32 @@ async def _content_rating_violation_handler(request: Request, exc: ContentRating
     )
 
 
+async def _graph_unavailable_handler(request: Request, exc: GraphUnavailableError) -> JSONResponse:
+    """Convert GraphUnavailableError to a canonical ErrorEnvelope (503).
+
+    503 rather than 500 so a client can tell "retry in a moment" from "your
+    request is broken" — the Unreal DemoGame relies on that distinction (R3.2).
+
+    The message is fixed rather than str(exc): the error renders its uri and
+    cause, and echoing a domain error's __str__ leaks the internal bolt endpoint
+    (L1-02 / SEV-16). The full detail goes to the server log instead.
+
+    Args:
+        request: Incoming FastAPI request.
+        exc: The graph outage raised at the Neo4j driver boundary.
+
+    Returns:
+        JSONResponse with ErrorEnvelope shape and HTTP 503 status.
+    """
+    _handler_logger.error("graph_unavailable", extra={"exc": str(exc)})
+    return JSONResponse(
+        status_code=GRAPH_UNAVAILABLE_STATUS,
+        content=ErrorEnvelope(
+            error=ErrorBody(code="graph_unavailable", message="graph database unavailable")
+        ).model_dump(),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register the canonical ErrorEnvelope exception handlers on the app.
 
@@ -117,4 +146,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(HTTPException, _http_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ContentRatingViolationError, _content_rating_violation_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(GraphUnavailableError, _graph_unavailable_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _internal_error_handler)
