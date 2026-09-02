@@ -13,12 +13,14 @@ from pathlib import Path
 
 import pytest
 import yaml
+from neo4j.exceptions import ServiceUnavailable
 
 from npc_engine.api.schemas import ActionModel, DialogueResponse, FacialExpressionModel, RelationDeltas
 from npc_engine.engines.dialogue.degradation import (
     DEGRADATION_METRIC,
     execute_with_degradation,
 )
+from npc_engine.utils.errors import GraphUnavailableError, LLMTimeoutError
 from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
 
 
@@ -90,25 +92,61 @@ async def test_llm_timeout_falls_back_to_graph_only(canned_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_neo4j_error_falls_back_to_canned(canned_dir: Path) -> None:
-    neo4j_exc = RuntimeError("Neo4j connection refused")
+async def test_driver_outage_propagates_instead_of_degrading(canned_dir: Path) -> None:
+    """A Neo4j driver outage must escape the ladder, not become a canned 200 (R3.1).
 
-    response, level = await execute_with_degradation(
-        full_factory=lambda: _raises(neo4j_exc),
-        graph_only_factory=lambda: _raises(neo4j_exc),
-        archetype="guard",
-        canned_dir=canned_dir,
-        full_timeout=5.0,
-        graph_only_timeout=5.0,
-    )
-    assert level == "canned"
-    assert response.npc_response == "Move along."
-    assert get_counter_value(DEGRADATION_METRIC, labels={"level": "canned"}) == 1.0
+    Replaces test_neo4j_error_falls_back_to_canned, which asserted the defect: it fed a
+    generic RuntimeError through both tiers and required the canned reply. Serving a
+    successful dialogue turn while the graph is unreachable is exactly the failure the
+    Neo4j->503 contract exists to prevent.
+    """
+    outage = ServiceUnavailable("Neo4j connection refused")
+
+    with pytest.raises(ServiceUnavailable):
+        await execute_with_degradation(
+            full_factory=lambda: _raises(outage),
+            graph_only_factory=lambda: _raises(outage),
+            archetype="guard",
+            canned_dir=canned_dir,
+            full_timeout=5.0,
+            graph_only_timeout=5.0,
+        )
+    assert get_counter_value(DEGRADATION_METRIC, labels={"level": "canned"}) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_graph_unavailable_error_propagates(canned_dir: Path) -> None:
+    """The typed graph error must reach the API so the 503 handler can serve it."""
+    outage = GraphUnavailableError(uri="bolt://localhost:7687", cause="connection refused")
+
+    with pytest.raises(GraphUnavailableError):
+        await execute_with_degradation(
+            full_factory=lambda: _raises(outage),
+            graph_only_factory=lambda: _raises(outage),
+            archetype="guard",
+            canned_dir=canned_dir,
+            full_timeout=5.0,
+            graph_only_timeout=5.0,
+        )
+
+
+@pytest.mark.asyncio
+async def test_unexpected_error_propagates(canned_dir: Path) -> None:
+    """An undeclared error is a bug to surface, not a tier to skip."""
+    with pytest.raises(ValueError):
+        await execute_with_degradation(
+            full_factory=lambda: _raises(ValueError("programmer error")),
+            graph_only_factory=lambda: _raises(ValueError("programmer error")),
+            archetype="default",
+            canned_dir=canned_dir,
+            full_timeout=5.0,
+            graph_only_timeout=5.0,
+        )
 
 
 @pytest.mark.asyncio
 async def test_canned_falls_back_to_default_archetype(canned_dir: Path) -> None:
-    exc = OSError("db down")
+    exc = LLMTimeoutError(model="qwen2.5:7b", timeout_s=5.0)
 
     response, level = await execute_with_degradation(
         full_factory=lambda: _raises(exc),
@@ -124,7 +162,7 @@ async def test_canned_falls_back_to_default_archetype(canned_dir: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_canned_hardcoded_fallback_when_no_yaml(tmp_path: Path) -> None:
-    exc = OSError("db down")
+    exc = LLMTimeoutError(model="qwen2.5:7b", timeout_s=5.0)
 
     response, level = await execute_with_degradation(
         full_factory=lambda: _raises(exc),
@@ -158,7 +196,7 @@ async def test_both_tiers_timeout_falls_back_to_canned(canned_dir: Path) -> None
 
 @pytest.mark.asyncio
 async def test_relation_deltas_are_zero_for_canned(canned_dir: Path) -> None:
-    exc = RuntimeError("db down")
+    exc = LLMTimeoutError(model="qwen2.5:7b", timeout_s=5.0)
 
     response, level = await execute_with_degradation(
         full_factory=lambda: _raises(exc),
