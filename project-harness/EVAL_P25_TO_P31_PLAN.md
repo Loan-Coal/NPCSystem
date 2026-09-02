@@ -388,7 +388,8 @@ signature, `RunConfig.retrieval_profile`, and `compare`'s comparability check.
   maintainer sign-off per CLAUDE.md before it is written.** Mirrors `retrieval_profile`
   field-for-field, including the strict-resolution docstring.
   Files: `edit src/npc_engine/engines/dialogue/dialogue_models.py`,
-  `edit src/npc_engine/api/routes/...`, `edit live_openapi.json`.
+  `edit src/npc_engine/api/routes/...`. The OpenAPI schema is no longer a tracked file —
+  regenerate it with `make openapi` when you need to inspect the result (R4.7).
 
 - **EVAL-P30.3 — `RunConfig.prompt_variant` and the comparability rule.** A run records the
   variant it ran. `compare._comparability_error` treats two different prompt variants as a

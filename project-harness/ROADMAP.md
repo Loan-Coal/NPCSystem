@@ -460,15 +460,29 @@ Validation: `make harness-status` prints numbers matching `wc -l scripts/rules_b
 `cat .mypy_baseline`. CR-L13-01, CR-L13-02, CR-L13-04, CR-L13-08, CR-L13-09, CR-L10-02,
 CR-L08-08, CR-L06-12.
 
-- [ ] **R4.7** Delete the remaining one-shot artifacts
-Files: `live_openapi.json`, `Makefile`, `project-harness/`
-Spec: delete `live_openapi.json` (182,118 bytes, dated 2026-06-24, zero code consumers — verified
-by `git grep`) and add a `make openapi` target that regenerates it on demand. This replaces a
-stale committed artifact with a command, which is the R4.6 principle applied to a file.
-RED anchor: `git grep -l live_openapi.json` returns rows outside `review-2026-08/` today and must
-return none after. `make openapi` must produce a schema that differs from the deleted file —
-proving the committed one was stale.
-Validation: `make check` green. CR-L08-09, CR-L13-11.
+- [x] **R4.7** ✅ DONE 2026-09-02 — artifact deleted, `make openapi` added
+Files: `live_openapi.json` (deleted), `scripts/dump_openapi.py`, `Makefile`, `.gitignore`,
+`project-harness/EVAL_P25_TO_P31_PLAN.md`, `project-harness/CODEBASE_REVIEW.md`
+Spec: replace the stale committed schema with a command — the R4.6 principle applied to a file.
+
+**Staleness proved before deleting, which was the point of the anchor.** The committed file
+carried **128** paths against **132** live, missing `/setup/config`, `/setup/validate`,
+`/v1/admin/debug/vector-store` and `/v1/admin/vector-store/rehydrate`; nothing had been removed,
+only added. Its measured size was 182,117 bytes, not the spec's 182,118, and its last commit was
+`add9916f` on 2026-08-31, not 2026-06-24 — the "dated 2026-06-24" was a file mtime, not a
+commit. `live_openapi.json` is now gitignored so a regenerated copy cannot be re-committed, and
+`make openapi` sorts keys so two dumps of one app are byte-identical (verified with `cmp`).
+
+**The RED anchor is re-anchored, and the original is unachievable.** As written it demands
+`git grep -l live_openapi.json` return no rows outside `review-2026-08/`. Three of the six rows
+are `CODEBASE_REVIEW.md` and `archive/ROADMAP_pre-remediation_2026-08-28.md` — the review record
+that *found* this staleness and a frozen archive. Editing them to satisfy a grep would falsify
+the historical record to make a check pass, which is the exact failure the programme exists to
+stop. The achievable and meaningful condition is **no reference that instructs anyone to read or
+edit the file**, which was one row: `EVAL_P25_TO_P31_PLAN.md:391` said `edit live_openapi.json`
+in a live EVAL-P30 task spec — a genuine trap, now repointed at `make openapi`. CR-L08-09 and
+CR-L13-11 are annotated CLOSED in place, with the evidence left as written.
+Validation: `make check` green; `make openapi` exits 0 and is deterministic. CR-L08-09, CR-L13-11.
 
 ### Phase R3
 

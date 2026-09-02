@@ -96,3 +96,6 @@ evals/generations/*/*.pre-combined-*.bak
 # One-shot session prompts and handoffs (DEC-225): keep them out of the repo.
 project-harness/PROMPT_*.md
 project-harness/*HANDOFF*.md
+
+# Regenerate with `make openapi` instead of committing a copy (R4.7).
+live_openapi.json

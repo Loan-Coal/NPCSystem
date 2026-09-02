@@ -20,7 +20,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-ledger-ids check-cited-reports check-ceiling-baseline \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
-        verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
+        openapi verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
@@ -37,6 +37,14 @@ package:
 
 run:
 	uvicorn npc_engine.main:app --reload --reload-include="*.yaml" --reload-include="*.json"
+
+# openapi: print the live OpenAPI schema, or write it with OUT=<path>. Replaces the
+# tracked live_openapi.json deleted in R4.7, which had drifted four routes behind the
+# app (/setup/config, /setup/validate, /v1/admin/debug/vector-store,
+# /v1/admin/vector-store/rehydrate) while looking authoritative. Keys are sorted so two
+# dumps of the same app are byte-identical. Do not commit the output.
+openapi:
+	$(PYTHON) scripts/dump_openapi.py $(if $(OUT),--out $(OUT),)
 
 smoke:
 	$(PYTHON) -m pytest tests/unit/conformance/test_boot_smoke.py -q

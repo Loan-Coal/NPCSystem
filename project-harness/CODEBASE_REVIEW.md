@@ -1279,6 +1279,13 @@ Test files > 300 lines: **41** under `tests/` + **11** under `demo_game/tests` =
 
 ### [CR-L08-09] `live_openapi.json` is a stale, unreferenced, git-tracked generated artifact
 
+> **CLOSED 2026-09-02 (R4.7).** The file is deleted, gitignored and replaced by
+> `make openapi`. Staleness confirmed before deleting: the committed snapshot carried 128
+> paths against 132 live, missing `/setup/config`, `/setup/validate`,
+> `/v1/admin/debug/vector-store` and `/v1/admin/vector-store/rehydrate`. The evidence below
+> is left as written — it is the finding, not a description of the tree today.
+
+
 - **Severity:** LOW
 - **Confidence:** Confirmed
 - **Kind:** Waste
@@ -2211,6 +2218,13 @@ closed set.
 - **Blast radius:** None.
 
 ### [CR-L13-11] Root `live_openapi.json` snapshot is 64 days stale relative to the running server
+
+> **CLOSED 2026-09-02 (R4.7).** The file is deleted, gitignored and replaced by
+> `make openapi`. Staleness confirmed before deleting: the committed snapshot carried 128
+> paths against 132 live, missing `/setup/config`, `/setup/validate`,
+> `/v1/admin/debug/vector-store` and `/v1/admin/vector-store/rehydrate`. The evidence below
+> is left as written — it is the finding, not a description of the tree today.
+
 
 - **Severity:** LOW
 - **Confidence:** Confirmed
