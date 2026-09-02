@@ -20,9 +20,7 @@ class OathEngine:
     """Manages pledge expiry and violation checks on each tick.
 
     Graph access is injected as a PledgeGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
-    """
+    holds no Neo4j session.    """
 
     def __init__(self, pledge_repo: PledgeGraphPort) -> None:
         """Initialise the oath engine.

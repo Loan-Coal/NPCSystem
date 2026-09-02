@@ -21,9 +21,7 @@ class TreatyEngine:
     """Manages treaty expiry and condition violation checks on each tick.
 
     Graph access is injected as a TreatyGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
-    """
+    holds no Neo4j session.    """
 
     def __init__(self, treaty_repo: TreatyGraphPort) -> None:
         """Initialise the treaty engine.

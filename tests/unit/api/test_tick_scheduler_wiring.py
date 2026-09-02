@@ -18,6 +18,8 @@ from npc_engine.api.dependencies_engines import (
     get_tick_scheduler,
 )
 
+EXPECTED_ENGINE_SLOT_COUNT = 28
+
 
 def test_composition_root_wires_the_memory_consolidation_engine() -> None:
     """The tick path must actually run consolidation (R3.4a).
@@ -29,6 +31,17 @@ def test_composition_root_wires_the_memory_consolidation_engine() -> None:
     scheduler = get_tick_scheduler()
 
     assert scheduler._memory_consolidation_engine is not None
+
+
+def test_the_slot_set_is_not_silently_empty() -> None:
+    """The slot set is derived by matching annotation text, so a rename can empty it.
+
+    Renaming the engine protocol drops TICK_SCHEDULER_ENGINE_SLOTS to zero and every
+    check built on it starts iterating nothing and passing vacuously — measured
+    during R3.5, when BaseEngine became TickEngine. Pin the count so the guard
+    cannot fail open again.
+    """
+    assert len(TICK_SCHEDULER_ENGINE_SLOTS) == EXPECTED_ENGINE_SLOT_COUNT
 
 
 def test_composition_root_leaves_no_engine_slot_unwired() -> None:

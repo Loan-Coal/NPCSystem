@@ -30,9 +30,7 @@ class RoutineEngine:
     differs from the current location.
 
     Graph access is injected as a RoutineGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
-    """
+    holds no Neo4j session.    """
 
     def __init__(self, routine_repo: RoutineGraphPort) -> None:
         """Initialise the routine engine.

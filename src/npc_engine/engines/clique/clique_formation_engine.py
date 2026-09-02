@@ -31,9 +31,7 @@ class CliqueFormationEngine:
     3. Dissolves cliques older than STALE_CLIQUE_AGE_TICKS.
 
     Graph access is injected as a GroupGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
-    """
+    holds no Neo4j session.    """
 
     def __init__(self, settings: Settings, group_repo: GroupGraphPort) -> None:
         """Initialise the clique formation engine.

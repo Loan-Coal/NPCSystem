@@ -31,9 +31,7 @@ class AgendaEngine:
     - Agendas with no votes are marked 'failed' (no consensus = failure).
 
     Graph access is injected as a PoliticalGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
-    """
+    holds no Neo4j session.    """
 
     def __init__(self, political_repo: PoliticalGraphPort) -> None:
         """Initialise the agenda engine.

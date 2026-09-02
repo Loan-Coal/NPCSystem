@@ -37,8 +37,7 @@ class MoodContagionEngine:
     the EmotionStore so mood history survives server restarts.
 
     Graph access is injected as a MoodGraphPort (DEC-122 / SEV-24); the engine holds
-    no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and ignored
-    until the BaseEngine protocol drops it.
+    no Neo4j session.
     """
 
     def __init__(

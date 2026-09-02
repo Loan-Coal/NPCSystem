@@ -56,6 +56,7 @@ from npc_engine.api.dependencies_engines.tick_slots import (
 )
 from npc_engine.api.dependencies_stores import get_engine_status_store, get_game_clock
 from npc_engine.config import get_settings
+from npc_engine.api.dependencies_engines.engine_slots import AdvancedEngineSlots, CoreEngineSlots
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.utils.errors import EngineWiringError
 
@@ -94,7 +95,7 @@ __all__ = [
 ]
 
 
-def _advanced_engine_kwargs() -> dict[str, Any]:
+def _advanced_engine_kwargs() -> AdvancedEngineSlots:
     """Return advanced-engine singletons as kwargs for TickScheduler assembly."""
     from npc_engine.api.dependencies_advanced import (
         get_agenda_engine,
@@ -138,7 +139,7 @@ def _scheduler_config_kwargs(settings: Any) -> dict[str, Any]:
     }
 
 
-def _core_engine_kwargs() -> dict[str, Any]:
+def _core_engine_kwargs() -> CoreEngineSlots:
     """Return core-engine singletons as kwargs for TickScheduler assembly."""
     return {
         "gossip_handler": get_gossip_handler(),
@@ -172,7 +173,9 @@ def _tick_scheduler_engine_slots() -> frozenset[str]:
     Derived from the signature rather than copied into a list, so an engine slot
     added to TickScheduler and forgotten here reds the guard instead of silently
     no-opping on every tick (R3.4b). Engine slots are exactly the parameters
-    annotated with BaseEngine; the rest are clock, intervals and lease config.
+    annotated with a ``*TickEngine`` protocol; the rest are clock, intervals and
+    lease config. The count is pinned by test_tick_scheduler_wiring.py because a
+    protocol rename empties this set without failing anything (R3.5).
 
     Returns:
         Frozenset of parameter names.
@@ -180,7 +183,7 @@ def _tick_scheduler_engine_slots() -> frozenset[str]:
     return frozenset(
         name
         for name, param in inspect.signature(TickScheduler.__init__).parameters.items()
-        if "BaseEngine" in str(param.annotation)
+        if "TickEngine" in str(param.annotation)
     )
 
 

@@ -546,7 +546,43 @@ assert the test reds — today it passes, because it asserts on source text.
 Validation: `make check` green. Excludes CR-L01-08 (EngineFallbackPolicy wire-or-delete is a
 decision) and CR-L01-10 (touches gossip). CR-L01-03, CR-L01-09, CR-L01-11, CR-L01-05.
 
-- [ ] **R3.5** Give `BaseEngine.run_tick` a real signature
+- [x] **R3.5** ✅ DONE 2026-09-02 — `TickEngine` + two narrow protocols; DEC-252
+**Two more of this spec's premises do not reproduce, both measured at HEAD.**
+(a) "it touches all 28 engines" and "24 of 30 are exactly `run_tick(*, tick_id)`": an AST scan
+of every `run_tick` in `src/` finds **18** exactly `(self, *, tick_id: int)`, **5** taking
+`tick_id` positionally and **1** widened to `str | int` — 24 protocol-compatible, but not for
+the stated reason, and **no engine signature had to change at all**.
+(b) "5 real outliers" is **3**. `gossip_handler` and `event_handler` declare extra parameters
+that all carry defaults, so they already satisfy `run_tick(*, tick_id)`; and
+`ReputationEngine.run_tick(player_id, npc_ids)` is not a scheduler slot — the slot is filled by
+`ReputationTickAdapter` (`tick_slots.py:244`). The genuine outliers are `routine` (`time_of_day`)
+and `memory_consolidation` (`game_time`).
+
+**The RED anchor as written does not reproduce even after the fix**, which is the finding this
+task turned on. Measured three ways: with the protocol left as `*args, **kwargs` an incompatible
+engine gives mypy `Success`; with the protocol tightened to `run_tick(*, tick_id: int)` it
+*still* gives `Success`; only once the composition root's engine kwargs are typed by a TypedDict
+does `make type` exit non-zero and name the conflict. Cause: `_engine_kwargs() -> dict[str, Any]`
+and `TickScheduler(**engines)` erase every type, so a protocol with no checked assignment site
+enforces nothing. Landed as `engine_slots.py` (`CoreEngineSlots`/`AdvancedEngineSlots`).
+
+Landed also: a fail-open found by running the guard rather than reading it. The R3.4b wiring
+guard derives its slot set from `"BaseEngine" in str(param.annotation)`; renaming the protocol
+drops `TICK_SCHEDULER_ENGINE_SLOTS` from 28 to **0**, and
+`test_composition_root_leaves_no_engine_slot_unwired` then iterates an empty set and passes.
+The count is now pinned by `test_the_slot_set_is_not_silently_empty`, which reds at 0 ≠ 28.
+The 8 remaining "the ``session`` kwarg is accepted and ignored until the BaseEngine protocol
+drops it" docstrings are deleted — the protocol has now dropped it. Zero `BaseEngine`
+references remain in `src/`.
+Files: `src/npc_engine/engines/base_engine.py`,
+`src/npc_engine/api/dependencies_engines/engine_slots.py`,
+`src/npc_engine/api/dependencies_engines/__init__.py`,
+`src/npc_engine/scheduler/tick_scheduler.py`, `tests/unit/api/test_tick_scheduler_wiring.py`
+Validation: `make check` green; 1,275 unit tests in `tests/unit/api` + `tests/unit/engines` pass.
+CR-L14-04. (CR-L14-05 is void — see DEC-251.)
+
+<!-- superseded spec below, kept for the record -->
+- [x] ~~**R3.5** Give `BaseEngine.run_tick` a real signature~~
 **Spec corrected 2026-09-02 (DEC-251): the converter half is already true and is struck from
 this task.** `_to_native` is defined once, at `graph_reader.py:199`, and used only in that file;
 the validation command `grep -rlc '_to_native' src/` already returns 1, not 3. There is no

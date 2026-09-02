@@ -1,7 +1,7 @@
 """
 Module: goal_former_adapter
 Layer: engines
-Purpose: Adapts GoalFormer to the BaseEngine protocol — on each tick fetches all
+Purpose: Adapts GoalFormer to the TickEngine protocol — on each tick fetches all
          active NPC ids, reads the current game time from WorldState, calls
          GoalFormer.form_goal for each NPC, then passes each formed goal to
          ActionSelector to optionally dispatch a move.
@@ -33,7 +33,7 @@ from npc_engine.world.time_utils import TimePoint
 
 
 class GoalFormerAdapter:
-    """Wraps GoalFormer + ActionSelector in the BaseEngine protocol for tick-scheduler integration.
+    """Wraps GoalFormer + ActionSelector in the TickEngine protocol for tick-scheduler integration.
 
     On each ``run_tick``:
     1. Fetches all active NPC ids from the graph.

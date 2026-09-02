@@ -35,8 +35,7 @@ class NeedDecayEngine:
     If the character has no location or no satisfier, satisfaction_magnitude = 0.
 
     Graph access is injected as a NeedGraphPort (DEC-122 / SEV-24), so the engine
-    holds no Neo4j session; the tick scheduler's ``session`` kwarg is accepted and
-    ignored until the BaseEngine protocol drops it.
+    holds no Neo4j session.
     """
 
     def __init__(self, need_repo: NeedGraphPort) -> None:

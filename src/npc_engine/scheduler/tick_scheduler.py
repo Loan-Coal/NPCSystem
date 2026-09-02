@@ -28,7 +28,7 @@ from collections.abc import Awaitable, Callable
 
 from neo4j import AsyncSession
 
-from npc_engine.engines.base_engine import BaseEngine
+from npc_engine.engines.base_engine import ConsolidationTickEngine, RoutineTickEngine, TickEngine
 from npc_engine.graph.scheduling.tick_scheduler_queries import is_tick_done, mark_tick_done
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import ClockState, GameClock
@@ -49,37 +49,37 @@ class TickScheduler:
     def __init__(
         self,
         clock: GameClock,
-        gossip_handler: BaseEngine,
-        event_handler: BaseEngine,
+        gossip_handler: TickEngine,
+        event_handler: TickEngine,
         gossip_interval: int,
         event_interval: int,
         *,
-        routine_engine: BaseEngine | None = None,
-        faction_politics_engine: BaseEngine | None = None,
-        story_pacing_engine: BaseEngine | None = None,
-        memory_consolidation_engine: BaseEngine | None = None,
-        clique_formation_engine: BaseEngine | None = None,
-        skill_progression_engine: BaseEngine | None = None,
-        oath_engine: BaseEngine | None = None,
-        treaty_engine: BaseEngine | None = None,
-        mood_contagion_engine: BaseEngine | None = None,
-        chapter_engine: BaseEngine | None = None,
-        succession_engine: BaseEngine | None = None,
-        agenda_engine: BaseEngine | None = None,
-        need_decay_engine: BaseEngine | None = None,
-        military_engine: BaseEngine | None = None,
-        event_quest_trigger: BaseEngine | None = None,
-        need_quest_trigger: BaseEngine | None = None,
-        world_state_quest_trigger: BaseEngine | None = None,
-        proactive_dialogue_engine: BaseEngine | None = None,
-        reputation_engine: BaseEngine | None = None,
-        intent_formation_engine: BaseEngine | None = None,
-        goal_formation_engine: BaseEngine | None = None,
-        player_model_engine: BaseEngine | None = None,
-        director_engine: BaseEngine | None = None,
-        memory_decay_engine: BaseEngine | None = None,
-        scheme_advance_engine: BaseEngine | None = None,
-        scheme_detection_engine: BaseEngine | None = None,
+        routine_engine: RoutineTickEngine | None = None,
+        faction_politics_engine: TickEngine | None = None,
+        story_pacing_engine: TickEngine | None = None,
+        memory_consolidation_engine: ConsolidationTickEngine | None = None,
+        clique_formation_engine: TickEngine | None = None,
+        skill_progression_engine: TickEngine | None = None,
+        oath_engine: TickEngine | None = None,
+        treaty_engine: TickEngine | None = None,
+        mood_contagion_engine: TickEngine | None = None,
+        chapter_engine: TickEngine | None = None,
+        succession_engine: TickEngine | None = None,
+        agenda_engine: TickEngine | None = None,
+        need_decay_engine: TickEngine | None = None,
+        military_engine: TickEngine | None = None,
+        event_quest_trigger: TickEngine | None = None,
+        need_quest_trigger: TickEngine | None = None,
+        world_state_quest_trigger: TickEngine | None = None,
+        proactive_dialogue_engine: TickEngine | None = None,
+        reputation_engine: TickEngine | None = None,
+        intent_formation_engine: TickEngine | None = None,
+        goal_formation_engine: TickEngine | None = None,
+        player_model_engine: TickEngine | None = None,
+        director_engine: TickEngine | None = None,
+        memory_decay_engine: TickEngine | None = None,
+        scheme_advance_engine: TickEngine | None = None,
+        scheme_detection_engine: TickEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -339,7 +339,7 @@ class TickScheduler:
             "scheme_detection": [],
         }
 
-    def _ordered_tick_engines(self) -> list[tuple[str, BaseEngine | None]]:
+    def _ordered_tick_engines(self) -> list[tuple[str, TickEngine | None]]:
         """Return (name, engine) pairs for all simple per-tick engines, in execution order."""
         return [
             ("faction_politics", self._faction_politics_engine),
@@ -372,7 +372,7 @@ class TickScheduler:
         session: AsyncSession,
         name: str,
         tick_id: int,
-        engine: BaseEngine,
+        engine: TickEngine,
         response: dict[str, Any],
     ) -> bool:
         """Run one interval engine via distributed lease; return True if tick is unresolved."""
@@ -402,7 +402,7 @@ class TickScheduler:
         name: str,
         cypher_key: str,
         tick_id: int,
-        engine: BaseEngine,
+        engine: TickEngine,
         response: dict[str, Any],
     ) -> None:
         """Handle Cypher-state dedup for an interval engine; skips if already recorded done."""
@@ -421,7 +421,7 @@ class TickScheduler:
         cypher_key: str,
         tick_id: int,
         interval: int,
-        engine: BaseEngine,
+        engine: TickEngine,
         response: dict[str, Any],
     ) -> bool:
         """Run an interval engine (gossip/event) if tick is due; return True if unresolved."""
