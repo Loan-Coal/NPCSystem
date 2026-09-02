@@ -42,12 +42,25 @@ A game backend service that gives non-player characters persistent knowledge, re
 ```bash
 # Requirements: Python 3.14+, Neo4j 5, Ollama with qwen2.5:7b
 
+# On Windows, BEFORE cloning. Without it the checkout aborts with
+# "fatal: unable to checkout working tree" and leaves the tree incomplete:
+# some paths under project-harness/archive/ exceed the 260-character default.
+git config --global core.longpaths true
+
+cp .env.example .env   # .env is gitignored; only .env.example is tracked
+pip install -e .[dev]
+
 docker-compose up -d   # start Neo4j + API server
 make demo-seed         # seed demo world (idempotent)
 make demo              # open interactive pygame window
 
 # Run unit tests:
 make test
+
+# Run integration tests (needs the test compose override, DEC-232 — the base
+# compose alone does not publish bolt to the host):
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d neo4j
+NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password   make test-integration
 
 # Run eval cases (requires running server):
 make eval

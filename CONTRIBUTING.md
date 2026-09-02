@@ -20,26 +20,47 @@ Note this leaves five tracked files dirty in your working copy — do not commit
 ## Setup
 
 ```bash
+# On Windows, BEFORE cloning. Some paths under project-harness/archive/ exceed the
+# 260-character default; without this the checkout aborts with "fatal: unable to
+# checkout working tree" and silently leaves thousands of files missing.
+git config --global core.longpaths true
+
 pip install -e .[dev]
 cp .env.example .env        # fill in NEO4J_URI, API_KEY_SECRET
 ```
 
+`.env` is gitignored — only `.env.example` is tracked — so a fresh clone has no `.env` at
+all and the server will not start until you copy it.
+
 ## Running the server
 
 ```bash
-docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5
+docker compose up -d neo4j
 uvicorn npc_engine.main:app --reload
-# seed the graph in a second terminal:
-python -m npc_engine.scripts.seed
+# seed the demo world in a second terminal:
+make demo-seed
 ```
 
 ## Tests
 
 ```bash
-make test       # unit + integration (no live server needed)
-make eval       # eval harness (requires running server + Neo4j)
-make smoke      # gateway smoke test (requires running server)
+make test              # unit suite
+make test-integration  # needs Neo4j reachable on bolt — see below
+make eval              # eval harness (requires running server + Neo4j)
+make smoke             # boot smoke test
 ```
+
+Integration tests need the **test compose override** (DEC-232). The base compose does not
+publish bolt to the host, so without it the suite reports passes and skips while testing
+nothing:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d neo4j
+NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password   make test-integration
+```
+
+Three integration tests are known-failing and allowlisted in
+`scripts/integration_baseline.txt`; `make check-integration-baseline` fails on a fourth.
 
 All tests must be green before merging. See `project/CLAUDE.md` § "Pre-merge checklist"
 for the full list of required checks.

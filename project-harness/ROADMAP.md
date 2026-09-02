@@ -337,16 +337,27 @@ It is a prerequisite, not a task — do not plan work against it.
 Subtraction and documentation. Mechanical and well-specified. Plans: `FIX_PLANS.md#r4`.
 
 - [x] **R4.1** Delete the unreferenced archive; gitignore the one-shot prompt pattern ✅ AUTO (2026-08-28) — 229 files / 26,794 lines, DEC-225
-- [ ] **R4.2** Document the two fresh-clone steps
+- [x] **R4.2** ✅ DONE 2026-09-02 — fresh-clone steps documented and verified in a real clone
 Files: `README.md`, `CONTRIBUTING.md`
-Spec: a fresh clone cannot boot. Two undocumented steps: `git config core.longpaths true` (the
-archive deletion removed the deep paths, but the setting is still needed on Windows) and
+Spec: a fresh clone cannot boot. Two undocumented steps: `git config core.longpaths true` and
 `cp .env.example .env` — `.gitignore:61` ignores `.env` and only `.env.example` is tracked.
 Add both to the quickstart. Also add the integration-test invocation from DEC-232.
-RED anchor: verification command, not a test — `grep -c longpaths README.md CONTRIBUTING.md`
-returns 0 today and must return ≥1 after.
-Validation: follow the quickstart verbatim in a fresh clone and reach a running server.
-CR-L16-01.
+RED anchor: `grep -c longpaths README.md CONTRIBUTING.md` returned 0/0, now 1/1.
+
+**One premise corrected.** The spec says "the archive deletion removed the deep paths, but the
+setting is still needed on Windows". The deep paths are **still present** — R4.1 deleted a
+different archive. Measured by cloning with the setting off:
+`error: unable to create file
+project-harness/archive/2026-06-18-shipped-programs/expansion/briefs/EXP-21-slice2-world-state-quest-trigger-wire.md:
+Filename too long`, then `fatal: unable to checkout working tree`, leaving **2,132** files
+missing from the working tree. With `core.longpaths=true` the same clone leaves **0**. So the
+setting is not a leftover precaution; it is load-bearing today.
+Also corrected while here: `CONTRIBUTING.md` told newcomers to seed with
+`python -m npc_engine.scripts.seed`, a module that does not exist (`find_spec` → `None`). It is
+`make demo-seed`.
+Validation: quickstart followed verbatim in a real fresh clone —
+`tests/unit/conformance/test_boot_smoke.py` 2 passed, and the documented integration invocation
+gave 43 passed / 3 failed, matching the recorded baseline exactly. CR-L16-01.
 
 - [x] **R4.3** Delete dead code and phantom guards ✅ DONE 2026-09-02, DEC-246/247
 Files: `tests/unit/engines/test_military_engine.py`, `src/npc_engine/engines/military/`,
