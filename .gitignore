@@ -61,7 +61,12 @@ project-harness/review-evidence/
 
 # Local agent tooling + caches (not product code)
 .cache/
-.claude/
+# `.claude/*`, not `.claude/` — a negation under a directory-form exclusion is inert,
+# so `.claude/` + `!.claude/skills/` would leave the skills ignored (R4.4, DEC-248).
+# Everything under .claude/ stays ignored except the two tracked, shared directories.
+.claude/*
+!.claude/commands/
+!.claude/skills/
 
 # Docker / env files
 *.env

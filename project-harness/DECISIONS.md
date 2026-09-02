@@ -7725,3 +7725,45 @@ body, its sibling tests, or its fixtures, so no ISSUE was raised.
 wrong: it exits **0**, because the baseline of 25 absorbed exactly the 25 findings. Anchoring on
 the exit code would have been a green-today anchor. The anchor is the finding count plus the
 baseline re-record.
+
+---
+
+## DEC-248: `.claude/` is excluded as `.claude/*`, because a negation under a directory-form exclusion is inert
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Implements:** R4.4 (prerequisite)
+**Drives:** `.gitignore`
+
+**Context:** R4.4 moves CLAUDE.md's narrative into `.claude/skills/`. That directory has never
+existed in this repo, and `.gitignore:64` was `.claude/` — the **directory form**. A new file
+under it is ignored, and no `!` negation can rescue it: git does not descend into an excluded
+directory, so the negation is never consulted.
+
+Verified rather than assumed, in a throwaway repo:
+
+| form | `git check-ignore .claude/skills/foo/SKILL.md` |
+|---|---|
+| `.claude/` + `!.claude/skills/` + `!.claude/skills/**` | **still ignored** |
+| `.claude/*` + `!.claude/skills/` | **not ignored** |
+
+Without this change every skill file R4.4 writes would have been silently untracked — present
+locally, absent from a fresh clone, and therefore a binding rule that exists on one machine
+only. That is the same class of defect as `evals/reports/` + `!evals/reports/x.md` (ISSUE-247).
+
+**Decision:** exclude `.claude/*` and negate the two directories that are genuinely shared
+project tooling — `!.claude/commands/` and `!.claude/skills/`. `.claude/worktrees/` and every
+other entry stay ignored, verified after the change.
+
+**Consequences:** `.claude/settings.local.json` is no longer matched by an ignore rule. It was
+already tracked, and a tracked file's ignore status has no effect on git's behaviour, so nothing
+changes in practice.
+
+Two command files that existed locally but were hidden by the old rule became visible:
+`.claude/commands/continue.md` and `.claude/commands/full-review.md`. Both are generic project
+tooling of exactly the class of the five already-tracked commands — no machine-specific paths —
+and both are slash commands the project uses, so they are committed rather than re-hidden.
+Surfacing them is the point: the old rule was concealing shared tooling, not protecting secrets.
+
+**Rejected:** *`git add -f` each skill file* — tracks them once and leaves the directory ignored,
+so every later skill is silently missed by `git add .`. That is a trap of exactly the kind this
+programme exists to remove. *Put the skills in `project-harness/skills/`* — tracked by default
+and needs no ignore change, but nothing discovers them as skills, so they become ordinary docs
+and R4.4's mechanism claim would be false.
