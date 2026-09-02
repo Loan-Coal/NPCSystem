@@ -220,7 +220,8 @@ async def test_reputation_context_included_above_threshold() -> None:
             )
             assert len(items) == 1
             assert items[0]["standing"] == 50
-            assert items[0]["label"] == "friendly"
+            # Standing 50 is the allied floor, not the friendly ceiling (DEC-252/ISSUE-261).
+            assert items[0]["label"] == "allied"
     finally:
         async with driver.session() as session:
             async with await session.begin_transaction() as tx:

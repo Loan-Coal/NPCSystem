@@ -55,6 +55,10 @@ _PROPAGATED_REP_LIMIT: int = 5
 # Standing label
 # ---------------------------------------------------------------------------
 
+# Exclusive upper bounds: a standing strictly BELOW the threshold gets that label.
+# Every boundary therefore belongs to the more positive band -- -50 is unfriendly, not
+# hostile, and 50 is allied, not friendly. Settled by DEC-252 (ISSUE-261); the code was
+# already internally consistent and one integration test asserted the other reading.
 _LABELS: list[tuple[int, str]] = [
     (-50, "hostile"),
     (-20, "unfriendly"),
@@ -65,6 +69,18 @@ _LABELS: list[tuple[int, str]] = [
 
 
 def _standing_label(standing: int) -> str:
+    """Return the reputation band for a standing, boundaries falling in the higher band.
+
+    The bands are hostile below -50, unfriendly [-50, -20), neutral [-20, 20),
+    friendly [20, 50) and allied at 50 and above. Do not re-litigate the boundary
+    without amending DEC-252 -- both readings are defensible and this one is chosen.
+
+    Args:
+        standing: Signed reputation score.
+
+    Returns:
+        One of hostile, unfriendly, neutral, friendly, allied.
+    """
     for threshold, label in _LABELS:
         if standing < threshold:
             return label

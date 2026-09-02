@@ -8010,3 +8010,62 @@ editing whichever artifact is cheaper is how an unexamined convention becomes pe
 *Start R3.5* — its converter half is already done and its signature half touches all 28 engines;
 it is its own session. *Suppress the `check-test-quality` finding* on the new wiring test — the
 gate was right, and the test was strengthened instead.
+
+## DEC-252: R3 close-out and R4 — the four signed-off calls, and two deviations from DEC-250
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED (signed off 2026-09-02) · **Gates:** R3.5, ISSUE-258,
+ISSUE-261, R4.2/R4.5/R4.6/R4.7 · **Drives:** `src/npc_engine/engines/base_engine.py`,
+`src/npc_engine/api/dependencies_engines/engine_slots.py`,
+`src/npc_engine/graph/character/character_reader.py`,
+`src/npc_engine/graph/reputation/reputation_queries.py`, `Makefile`
+
+**Context:** R3 ended with two product questions deliberately left open (ISSUE-258, ISSUE-261) because
+each encodes a convention rather than a fix, and R4 is the last phase of the 2026-08 remediation
+programme. One decision record covers the whole phase, per DEC-250.
+
+**Decision — four calls:**
+
+1. **`is_active` is strict everywhere (ISSUE-258).** An absent `is_active` means *not active*. The one
+   forgiving reader, `character_reader.py:25`'s `coalesce(c.is_active, true) = true`, becomes a bare
+   `c.is_active = true`, so all 37 predicates in `src/` agree. **No backfill migration**: measured
+   against the live graph, Character is 23/23 and Faction is 10/10 already carrying the field, so a
+   migration would be a no-op. The obligation is prevention, not repair.
+2. **Standing 50 is `allied` (ISSUE-261).** `_LABELS` are exclusive upper bounds and every boundary
+   falls in the more positive band. The code was already internally consistent; the losing artifact is
+   `tests/integration/test_reputation_integration.py:223`, which asserted `friendly`. The convention is
+   now stated in `_standing_label`'s docstring so it cannot be re-litigated by whoever next reads only
+   one of the two files.
+3. **All four remaining R4 items are in scope**: R4.2, R4.5, R4.6, R4.7. The programme ends when R4
+   does; there is nothing after it.
+4. **The DEC-250 apparatus freeze extends to end-of-R4**, and R4.5's duplicate-id detector is granted an
+   explicit exception to DEC-224's "no new gate without retiring one".
+
+**Both parts of (4) are deviations from DEC-250 as written and are recorded as such**, because a rule
+whose exceptions go unrecorded is not a rule. The freeze extension is live and binding: `evals/`,
+`scripts/check_*`, `prompts/eval/`, `docs/EVAL_*` and `docs/SCORER_*` stay frozen through R4.
+
+**The gate exception turned out to be unnecessary, and that is worth recording rather than quietly
+dropping.** R4.5's detector already exists: `scripts/check_ledger_ids.py` landed in `9247e8f3` on
+2026-09-01 — the day *before* DEC-250 froze the apparatus — is already the 20th target in `make check`,
+and exits 0 today reporting "4 reused DEC ids, 0 undocumented; 2 reused ISSUE ids, 0 undocumented". So
+the exception is **granted but unused**. No gate was added under it. `make check` stays at 22 targets;
+R4.6's new `make harness-status` is a reporting target, not a gate, and is deliberately not in `check`.
+
+**Rationale:**
+
+*(1)* `coalesce` treats a contract violation as active and the bare predicate treats it as deleted; both
+are defensible, which is why R3 deferred it. Strictness wins on one ground: `character.yaml:9` declares
+the field `required: true`, so a node without it is already outside the contract, and a reader that
+silently repairs a contract violation is a reader that hides one. That is precisely the failure mode that
+cost ISSUE-233 item 8 an entire programme phase — the read failed at DEBUG and nobody could name the
+cause. 36 of the 37 predicates already agreed; the choice is really whether to fix the outlier or
+propagate it to 36 sites.
+
+*(2)* Neither reading is more correct, so the tie-break is blast radius. `_standing_label` is consumed by
+`get_reputation_context_for_npc`, which feeds dialogue context; the test is consumed by nobody. Changing
+the code would also mean changing a band that has been live since the reputation engine shipped, for no
+gain beyond making one assertion pass.
+
+**Trade-off accepted:** strict `is_active` means any Character written outside the validated API path,
+without the field, becomes invisible to all 37 readers rather than to 36 of them. That is the intended
+behaviour and it is louder than the alternative, but it does move the failure earlier for raw-Cypher
+writers — see ISSUE-263.

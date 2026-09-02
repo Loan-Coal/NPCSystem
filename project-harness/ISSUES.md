@@ -1795,13 +1795,15 @@ Confirmed false: two tests, two unrelated causes. Neither was the `tick_schedule
 bug the table linked them to — that link was thematic, and R3.4(b) fixed it without touching
 either test.
 
-**Still failing (4), each explained and logged separately.**
+**Still failing (3), each explained and logged separately.**
 
 | Test(s) | Cause | Issue |
 |---|---|---|
 | 2 faction gossip | global pair-selection truncation at `max_pairs` | **ISSUE-260** |
 | 1 quest lifecycle | test targets a removed API; needs a rewrite, not a repair | **ISSUE-259** |
-| 1 reputation | `allied` vs `friendly` at standing 50; needs a product decision | **ISSUE-261** |
+
+Closed since: the reputation label boundary, decided as `allied` by DEC-252 (**ISSUE-261**,
+2026-09-02), which ratcheted `scripts/integration_baseline.txt` from 4 to 3.
 
 Per DEC-250 the programme exit condition is zero *unexplained* failures, not zero failures. That
 condition is met: every remaining failure has a measured cause and an owning issue.
@@ -1952,6 +1954,24 @@ same session. Both are stale prose next to live numbers, which is the class of d
 **To fix:** correct both comments to the live values, and consider extending
 `check_harness_honesty.py` to compare a ratchet comment's quoted number against its baseline file.
 
+## ISSUE-262: `check-integration-baseline-update` writes CRLF into a LF-normalised file
+**Found:** 2026-09-02, during R3 close-out (ISSUE-261)
+**Severity:** P3 (nice-to-fix) — costs one manual normalisation per use, never wrong output
+**Where:** `scripts/check_integration_baseline.py` (the `--update` write path)
+**Description:** `.gitattributes` normalises the repo to LF, but the update path writes with
+Python's default text mode, which is CRLF on Windows. Git then sees the whole file rewritten
+rather than one line removed. Measured twice now: once during R2.2 and again ratcheting
+4 → 3 for ISSUE-261, where a carriage-return grep over `scripts/integration_baseline.txt` matched
+immediately after `make check-integration-baseline-update` exited 0.
+**Why deferred:** the gate itself is correct and the workaround is one command; fixing the
+writer is a `scripts/` change and `scripts/` is outside `make lint`'s scan set (ISSUE-255), so
+it wants doing alongside that rather than as a drive-by in a product-correctness commit.
+**To fix:** write the baseline with `newline="
+"` (or `write_bytes`). Then check the other
+`--update` writers for the same defect: `check_rules.py`, `check_test_quality.py`,
+`check_engine_logs.py` and `check_migrations.py` all rewrite a tracked text file.
+
+
 ## ISSUE-250: two documents cite ISSUE ids that were never filed
 **Found:** 2026-09-01, during R4.5 (ledger hygiene)
 **Severity:** P3 (nice-to-fix)
@@ -2070,20 +2090,3 @@ it.
 **To fix:** scope pair selection to the test's location, or raise the cap above the global
 candidate count. Prefer scoping — a test that depends on global DB state is order-dependent
 whatever the cap.
-
-
-## ISSUE-261: reputation label boundary at standing 50 is undecided
-**Found:** 2026-09-02, during R3 (triage cause E, carried from ISSUE-233)
-**Severity:** P2 (annoying) — one baselined integration failure; needs a product decision, not a fix
-**Where:** `src/npc_engine/graph/reputation/reputation_queries.py:58-72`,
-`tests/integration/test_reputation_integration.py:223`
-**Description:** `_LABELS` are exclusive upper bounds — `(20,"neutral"), (50,"friendly"),
-(101,"allied")` with `if standing < threshold: return label` — so `friendly` is `[20, 50)` and
-`allied` is `[50, 101)`, and standing 50 returns `allied`. The test asserts `friendly`, i.e. an
-inclusive-friendly boundary. The code is internally consistent; the test asserts the only other
-reading, and **no spec states which convention is intended**.
-**Why deferred:** whichever artifact is edited, the edit encodes a product decision about when an
-NPC counts as allied. That decision is not R3's to make in passing, and "fix whichever is
-cheaper" is precisely how an unexamined convention becomes permanent.
-**To fix:** decide whether standing 50 is `friendly` or `allied`, record it in `DECISIONS.md`,
-then change the losing artifact. Do not change either before the decision exists.

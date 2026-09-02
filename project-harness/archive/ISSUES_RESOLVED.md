@@ -3686,3 +3686,30 @@ number; refuse to publish a headline where engine ≤ null; retract 0.914 until 
 not find this entry among 82 open issues. That duplication is the primary evidence cited in
 DEC-250 for collapsing the ledger. 257 is retained as the live successor because it states the
 remaining work concretely; this entry is the closed original.
+
+
+## [FIXED] ISSUE-261: reputation label boundary at standing 50 is undecided
+**Found:** 2026-09-02, during R3 (triage cause E, carried from ISSUE-233)
+**Fixed:** 2026-09-02, in R3 close-out — standing 50 is `allied` (DEC-252)
+**Severity:** P2 (annoying) — one baselined integration failure; needs a product decision, not a fix
+**Where:** `src/npc_engine/graph/reputation/reputation_queries.py:58-72`,
+`tests/integration/test_reputation_integration.py:223`
+**Description:** `_LABELS` are exclusive upper bounds — `(20,"neutral"), (50,"friendly"),
+(101,"allied")` with `if standing < threshold: return label` — so `friendly` is `[20, 50)` and
+`allied` is `[50, 101)`, and standing 50 returns `allied`. The test asserts `friendly`, i.e. an
+inclusive-friendly boundary. The code is internally consistent; the test asserts the only other
+reading, and **no spec states which convention is intended**.
+**Why deferred:** whichever artifact is edited, the edit encodes a product decision about when an
+NPC counts as allied. That decision is not R3's to make in passing, and "fix whichever is
+cheaper" is precisely how an unexamined convention becomes permanent.
+**To fix:** decide whether standing 50 is `friendly` or `allied`, record it in `DECISIONS.md`,
+then change the losing artifact. Do not change either before the decision exists.
+**Resolution:** DEC-252 chose `allied`. The convention — exclusive upper bounds, every boundary
+falling in the more positive band — is now stated in `_standing_label`'s docstring and beside
+`_LABELS`, so the next reader of either file sees it. The test at
+`tests/integration/test_reputation_integration.py:223` was the losing artifact and now asserts
+`allied`. `test_reputation_context_included_above_threshold` failed with
+`AssertionError: assert 'allied' == 'friendly'` before the change and the file's 5 tests pass after;
+`scripts/integration_baseline.txt` ratchets 4 → 3.
+
+
