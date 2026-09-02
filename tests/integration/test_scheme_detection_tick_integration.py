@@ -37,8 +37,15 @@ def _skip_if_no_neo4j() -> tuple[str, str, str]:
     return uri, user, password
 
 
-async def _setup(tx, schemer: str, witness: str, loc_id: str, scheme_id: str) -> None:
-    # Schemer + a co-located witness at the same location.
+# _setup was one function, and the test called it AFTER upsert_scheme. That order
+# cannot work in either direction: upsert_scheme needs the Character to exist
+# (scheme_writer.py MATCHes it before MERGEing EXECUTES_SCHEME), while the step
+# events need the Scheme to exist. Split so the real dependency order can be used:
+# characters -> scheme -> steps.
+
+
+async def _setup_characters(tx, schemer: str, witness: str, loc_id: str) -> None:
+    """Create the schemer and a co-located witness. Must precede upsert_scheme."""
     await tx.run(
         "MERGE (c:Character {id: $schemer}) "
         "MERGE (w:Character {id: $witness}) "
@@ -47,7 +54,10 @@ async def _setup(tx, schemer: str, witness: str, loc_id: str, scheme_id: str) ->
         "MERGE (w)-[:LOCATED_AT]->(l)",
         schemer=schemer, witness=witness, loc_id=loc_id,
     )
-    # Two covert step events linked to the scheme (>= SCHEME_DISCOVERY_MIN_STEPS=2).
+
+
+async def _setup_scheme_steps(tx, scheme_id: str) -> None:
+    """Link two covert step events (>= SCHEME_DISCOVERY_MIN_STEPS). Must follow upsert_scheme."""
     for i in range(2):
         await tx.run(
             "MATCH (s:Scheme {id: $sid}) "
@@ -86,12 +96,17 @@ async def test_witnessed_scheme_is_discovered() -> None:
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
+            async with await session.begin_transaction() as tx:
+                await _setup_characters(tx, schemer, witness, loc_id)
+                await tx.commit()
+
             await upsert_scheme(
                 session=session, scheme_id=scheme_id,
                 npc_id=schemer, goal="rob the vault", tick=1,
             )
+
             async with await session.begin_transaction() as tx:
-                await _setup(tx, schemer, witness, loc_id, scheme_id)
+                await _setup_scheme_steps(tx, scheme_id)
                 await tx.commit()
 
         graph_db = GraphDB(settings)
