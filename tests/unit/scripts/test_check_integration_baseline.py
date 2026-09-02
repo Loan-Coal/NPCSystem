@@ -125,10 +125,17 @@ def test_a_missing_baseline_is_strictest(tmp_path: Path) -> None:
 
 
 def test_the_committed_baseline_matches_the_measured_failures() -> None:
-    """The shipped allowlist holds the 8 measured on 2026-09-01 (ISSUE-236)."""
+    """The shipped allowlist holds the 4 remaining after R3 (was 8; ISSUE-233).
+
+    R3 fixed four of the eight: both faction remove-path contracts (a bare count()
+    aggregate made their raise guards unreachable) and both scheme tick tests.
+    _NODE_A is one of the fixed ones, so it is now asserted ABSENT; it survives
+    above only as a synthetic node id for the parsing tests.
+    """
     baseline = load_baseline()
-    assert len(baseline) == 8
-    assert _NODE_A in baseline and _NODE_B in baseline
+    assert len(baseline) == 4
+    assert _NODE_B in baseline
+    assert _NODE_A not in baseline
     assert all(node.startswith("tests/integration/") for node in baseline)
 
 

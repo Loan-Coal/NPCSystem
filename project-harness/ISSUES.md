@@ -1756,6 +1756,57 @@ here of a design that needs rework, only of contracts not implemented and wiring
 
 **Not done, deliberately (R3.6 is report-only):** no root cause was confirmed by debugging, and B's
 "one shared cause" is a hypothesis stated as such. Confirming it is R3.4's job, not this task's.
+### R3 RESOLUTION — 2026-09-02. 8 failures -> 4, and all four remaining are explained.
+
+Measured with the documented invocation: **4 failed / 41 passed**, from 8 failed / 35 passed.
+`scripts/integration_baseline.txt` ratcheted from 8 ids to 4.
+
+**Fixed (4 tests, 3 causes).**
+
+- **Cause A, 2 tests** — `faction_writer.py` `CYPHER_REMOVE_MEMBER` and `CYPHER_REMOVE_CONTROLS`
+  end in a bare `RETURN count(r)`. A Cypher aggregate with no grouping key always returns one
+  row, so `result.single()` was never `None` and both `raise` guards were unreachable. Now also
+  tested `record["deleted"] == 0`. The unit tests had mocked `single() -> None`, a shape real
+  Neo4j never produces for these queries, which is why they passed against the defect.
+- **Cause B, detection half, 1 test** — a setup-ordering bug. The triage's prescription ("swap the
+  two calls") does not work: `_setup` also creates the SCHEME_STEP events, which need the Scheme,
+  while `upsert_scheme` needs the Character. Split into `_setup_characters` and
+  `_setup_scheme_steps` so the real order — characters, scheme, steps — can be used.
+- **Item 8 / cause B advance half, 1 test** — solved, and **not** the hypothesis recorded here.
+
+**Item 8's cross-session hypothesis is refuted.** Measured at the test's exact state:
+`get_all_active_schemes_with_steps` returns 1 from the **test's** session and 1 from the
+**repository's own** session. Cross-session visibility works. The real cause is the second read
+site: `get_npc_location_id` returned `None`. Isolated —
+
+| Character as written | `get_npc_location_id` |
+|---|---|
+| `MERGE (c:Character {id: ...})` — as the test wrote it | `None` |
+| the same node plus `SET c.is_active = true` | `'loc-...'` |
+
+`graph_reader.py:47` filters `WHERE c.is_active = true`; `null = true` is null. `is_active` is
+`required: true` on the Character contract (`character.yaml:9`) and the real seeder sets it, so
+the test was creating a contract-violating node. A fixture gap. The detection fixture had the
+same omission and passed only because `scheme_reader` does not filter on it — a latent invalid
+fixture, now also fixed. The reader divergence behind this is **ISSUE-258**.
+
+**Corrects the R3.6 table.** Cause B was recorded as "likely one shared cause, to be confirmed".
+Confirmed false: two tests, two unrelated causes. Neither was the `tick_scheduler.py` `None`-slot
+bug the table linked them to — that link was thematic, and R3.4(b) fixed it without touching
+either test.
+
+**Still failing (4), each explained and logged separately.**
+
+| Test(s) | Cause | Issue |
+|---|---|---|
+| 2 faction gossip | global pair-selection truncation at `max_pairs` | **ISSUE-260** |
+| 1 quest lifecycle | test targets a removed API; needs a rewrite, not a repair | **ISSUE-259** |
+| 1 reputation | `allied` vs `friendly` at standing 50; needs a product decision | **ISSUE-261** |
+
+Per DEC-250 the programme exit condition is zero *unexplained* failures, not zero failures. That
+condition is met: every remaining failure has a measured cause and an owning issue.
+
+
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning
 **Severity:** P2 (annoying) — silently overstates n and makes case deletions invisible
@@ -1954,3 +2005,85 @@ change into a documentation change — the attribution error the R2 program exis
 **To fix:** point both defaults at the current generation, or better, derive the default from a
 single shared helper so the next regeneration updates all three at once. Do it in the same commit
 as the next regeneration so the before/after is attributable.
+
+
+## ISSUE-258: three readers disagree about a Character with no `is_active`
+**Found:** 2026-09-02, during R3.4 (settling ISSUE-233 item 8)
+**Severity:** P2 (annoying) — silent, and it already cost one integration failure
+**Where:** `src/npc_engine/graph/graph_reader.py:47`,
+`src/npc_engine/graph/character/skill_queries.py:64`,
+`src/npc_engine/graph/character/character_reader.py:25`
+**Description:** `character.yaml:9` declares `is_active` `required: true`, but the three readers
+handle its absence differently. `character_reader.py:25` is forgiving —
+`AND coalesce(c.is_active, true) = true`, so a Character without the field is visible.
+`graph_reader.py:47` and `skill_queries.py:64` use a bare `WHERE c.is_active = true`, and
+`null = true` is null, so the same node is invisible. Measured 2026-09-02: a Character merged
+without the field returns `get_npc_location_id -> None`; the identical node with
+`is_active = true` returns its location. That divergence is exactly what made
+`test_advance_creates_covert_event_and_step` fail for a whole programme phase without anyone
+being able to name the cause — the read failed silently at DEBUG.
+**Why deferred:** picking a convention is a product decision, not a cleanup. `coalesce` treats a
+contract violation as active, the bare predicate treats it as deleted, and either is defensible.
+Changing it also changes which nodes existing queries return, so it needs its own commit with a
+before/after count, not a slot inside a test-fixture fix.
+**To fix:** decide whether an absent `is_active` means active or inactive, apply the same
+predicate in all three readers, and add a migration or a schema check if existing nodes lack the
+field. `make check-migrations` is the natural gate.
+
+
+## ISSUE-259: the quest lifecycle integration test targets an API that no longer exists
+**Found:** 2026-09-02, during R3.4 (triage cause D)
+**Severity:** P2 (annoying) — one baselined integration failure, no product defect behind it
+**Where:** `tests/integration/test_quest_lifecycle_integration_v14.py:43` and below
+**Description:** R3.6 classified this as "construct the engine correctly and the assertions below
+may reveal more". Measured 2026-09-02: they reveal a great deal more. The test calls
+`engine.offer_quest(session=..., ...)`, `engine.accept_quest(session=...)` and
+`engine.update_objective(session=...)`. `QuestLifecycleEngine` has **no `offer_quest` method at
+all** — offering moved to `QuestOfferService` (`quest_offer_service.py`) — and the methods it does
+have (`accept_quest:175`, `update_objective:228`, `evaluate_completion:284`, `fail_quest:340`) no
+longer take a `session`, per DEC-122 / SEV-24. The composition root
+(`dependencies_engines/quest.py:64`) is correctly wired; this is entirely test-side.
+**Why deferred:** this is not a repair, it is writing a new integration test. Every assertion in
+the body is unverified — the test has never executed — so it must be re-derived against
+`QuestOfferService` + `QuestLifecycleEngine`, not patched line by line. R3.4 bounded cause D to
+"fix the constructor and stop if it balloons"; it balloons.
+**To fix:** rewrite against the current API: construct `QuestLifecycleEngine` with `registry`,
+`quest_repo` and `clock` (see `tests/unit/engines/test_quest_lifecycle_engine.py:118`), construct
+a `QuestOfferService` for the offer step, and drop every `session=` kwarg. Expect the assertions
+to need re-deriving rather than porting.
+
+
+## ISSUE-260: faction-aware gossip pair selection truncates the pairs its test asserts on
+**Found:** 2026-09-02, during R3 (triage cause C, carried from ISSUE-233)
+**Severity:** P2 (annoying) — two baselined integration failures
+**Where:** `tests/integration/test_faction_gossip_integration.py:148`, `:200`
+**Description:** Both tests fail with "pairs not found in results". The earlier triage measured
+the mechanism: the tests seed 4 characters into a shared, unscoped database and call
+`select_pairs(repo=repo, max_pairs=20, ...)`, which ranks globally. `max_pairs=20` returned
+exactly 20 (cap-bound) while `max_pairs=500` returned 36, so 16 candidate pairs were truncated
+away and the tests' equal-`gossipy` pairs were among them. Not a product defect: the same-faction
+pair the first test cares about does rank, and its neighbouring assert passes.
+**Why deferred:** out of R3's scope by DEC-250 — R3.3 is gossip, and the loop's scope excludes it.
+Fixing it means either scoping selection to a location or raising the cap, and the second choice
+changes ranking behaviour for real callers, so it belongs with the gossip work rather than beside
+it.
+**To fix:** scope pair selection to the test's location, or raise the cap above the global
+candidate count. Prefer scoping — a test that depends on global DB state is order-dependent
+whatever the cap.
+
+
+## ISSUE-261: reputation label boundary at standing 50 is undecided
+**Found:** 2026-09-02, during R3 (triage cause E, carried from ISSUE-233)
+**Severity:** P2 (annoying) — one baselined integration failure; needs a product decision, not a fix
+**Where:** `src/npc_engine/graph/reputation/reputation_queries.py:58-72`,
+`tests/integration/test_reputation_integration.py:223`
+**Description:** `_LABELS` are exclusive upper bounds — `(20,"neutral"), (50,"friendly"),
+(101,"allied")` with `if standing < threshold: return label` — so `friendly` is `[20, 50)` and
+`allied` is `[50, 101)`, and standing 50 returns `allied`. The test asserts `friendly`, i.e. an
+inclusive-friendly boundary. The code is internally consistent; the test asserts the only other
+reading, and **no spec states which convention is intended**.
+**Why deferred:** whichever artifact is edited, the edit encodes a product decision about when an
+NPC counts as allied. That decision is not R3's to make in passing, and "fix whichever is
+cheaper" is precisely how an unexamined convention becomes permanent.
+**To fix:** decide whether standing 50 is `friendly` or `allied`, record it in `DECISIONS.md`,
+then change the losing artifact. Do not change either before the decision exists.

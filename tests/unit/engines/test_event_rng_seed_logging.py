@@ -10,39 +10,64 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Iterator
 
-import pytest
-
+from npc_engine.engines.events import event_handler as eh
 from npc_engine.engines.events.event_handler import _rng_for_tick
 
 
-def test_configured_seed_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+def _captured_debug_logs() -> Iterator[list[str]]:
+    """Capture on the module logger directly, not via caplog.
+
+    utils/logging.py:83 sets propagate=False on the npc_engine logger, so once any
+    earlier test in the session calls configure_logging(), root-based capture sees
+    nothing and a caplog assertion passes or fails by test order. Same idiom as
+    test_sev22_rng_determinism.py:80 and test_ollama_prompt_eval_logging.py:91.
+    """
+    captured: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record.getMessage())
+
+    handler = _Capture(level=logging.DEBUG)
+    previous_level = eh.LOGGER.level
+    eh.LOGGER.addHandler(handler)
+    eh.LOGGER.setLevel(logging.DEBUG)
+    try:
+        yield captured
+    finally:
+        eh.LOGGER.removeHandler(handler)
+        eh.LOGGER.setLevel(previous_level)
+
+
+def test_configured_seed_is_logged() -> None:
     """A configured EVENT_RNG_SEED must be recorded, as gossip already records its own.
 
     npc-coding-principles makes seed logging strict for event sampling. Without it
     a surprising event draw cannot be replayed.
     """
-    configured = random.Random(42)
+    for captured in _captured_debug_logs():
+        _rng_for_tick(configured=random.Random(42), seed=42, tick_id=7)
 
-    with caplog.at_level(logging.DEBUG, logger="npc_engine.engines.events.event_handler"):
-        _rng_for_tick(configured=configured, seed=42, tick_id=7)
-
-    assert "event_sampling_rng" in caplog.text
-    assert "seed=42" in caplog.text
+    logs = [m for m in captured if "event_sampling_rng" in m]
+    assert logs, "expected an event_sampling_rng debug log line"
+    assert "seed=42" in logs[0]
 
 
-def test_tick_id_fallback_seed_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+def test_tick_id_fallback_seed_is_logged() -> None:
     """With no configured seed the tick id is the seed, and that must be visible.
 
     `self._rng or random.Random(tick_id)` silently swapped between a global seed
     and a per-tick one and recorded neither, so a log reader could not tell which
     branch produced a draw.
     """
-    with caplog.at_level(logging.DEBUG, logger="npc_engine.engines.events.event_handler"):
+    for captured in _captured_debug_logs():
         _rng_for_tick(configured=None, seed=None, tick_id=7)
 
-    assert "event_sampling_rng" in caplog.text
-    assert "seed=7" in caplog.text
+    logs = [m for m in captured if "event_sampling_rng" in m]
+    assert logs, "expected an event_sampling_rng debug log line"
+    assert "seed=7" in logs[0]
 
 
 def test_configured_rng_is_returned_unchanged() -> None:

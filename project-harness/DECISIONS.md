@@ -7945,3 +7945,68 @@ and raising n is weeks more apparatus work before product correctness starts. *P
 dated review* — a dated review is a scheduled re-decision, which is the churn this DEC exists to
 stop. *Leave governance alone* — the duplicate-logging and spec-drift failure modes would persist
 unchanged.
+
+
+---
+
+## DEC-251: R3 product-correctness choices, and four specs that did not reproduce
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Scope:** phase-level — one DEC for R3, per DEC-250
+**Closes:** R3.1, R3.2, R3.4 · **Opens:** ISSUE-258, ISSUE-259, ISSUE-260, ISSUE-261
+**Drives:** `project-harness/ROADMAP.md`, `project-harness/ISSUES.md`
+
+### The four choices
+
+1. **The Neo4j→503 contract ships as written, across every graph-backed route.** Confirmed with
+   the maintainer before landing, because it changes a client-visible status code and the Unreal
+   DemoGame is a real client. `check-api-stability` was verified not to gate status codes — it
+   pins response-model fields only — so no existing gate covers this. The new
+   `tests/unit/api/test_graph_outage_503.py` is the guard, and it asserts the **body** as well as
+   the code, because a 503 carrying a canned dialogue reply would be R3.1's bug wearing R3.2's
+   status.
+
+2. **The degradation ladder degrades on `(TimeoutError, LLMTimeoutError, LLMRequestError)` and
+   nothing else.** Only `TimeoutError` is reachable today (see below). The two LLM errors are named
+   anyway so the contract survives if `llm_client` stops swallowing them; naming an unreachable
+   error is cheap, and rediscovering the intent later is not.
+
+3. **Both bare-`Exception` error classes are fixed, not just the one the spec named.** The spec's
+   `TokenBudgetExceededError` is raised nowhere. `ContextBudgetError` is raised at 7 sites and had
+   the identical defect. Fixing only the named one would have satisfied the spec and changed
+   nothing at runtime.
+
+4. **The composition-root guard derives its slot list from `inspect.signature`, not a hand-written
+   list.** A copied list of 28 names is a copy that rots (DEC-249); a derived one means an engine
+   slot added later and left unwired reds the guard on its own.
+
+### Four spec claims that did not reproduce
+
+Measured at HEAD before any code was written. This is the fifth consecutive phase in which specs
+contained factual errors, which is mechanism 2 in DEC-250.
+
+| Spec claim | Verdict |
+|---|---|
+| R3.1: narrow the catch to "LLM timeout, retrieval miss" | **Both unreachable.** `llm_client.py:102-107` already catches `LLMTimeoutError`/`LLMRequestError` and returns a fallback as a *successful* `full` tier, so neither ever reaches the ladder — Ollama being down yields `degradation_level="full"`. And a retrieval miss is an empty list, not an exception. |
+| R3.2: make `TokenBudgetExceededError` structured | **True but inert.** Raised nowhere; one dead test import. `ContextBudgetError` is the live twin. |
+| R3.2 RED anchor: "stop the neo4j container, POST /v1/dialogue" | **Not executable.** `tests/integration/` has no `conftest.py`, no shared fixtures and no `TestClient` anywhere; stopping the container also breaks every other test in the run. Re-anchored on an unreachable bolt port, measured to raise a genuine `ServiceUnavailable`. |
+| R3.5: "collapse the three copies of the Neo4j→native converter" | **False.** `_to_native` is defined once (`graph_reader.py:199`) and used only in that file. The validation command already returns 1. That half of R3.5 is a no-op; R3.5's spec is corrected in place. |
+
+### Consequences worth recording
+
+- **R3.1 revived a dead code path.** `RetrievalProfileNotFoundError` is raised inside
+  `build_context`, i.e. inside the ladder's try. It was swallowed twice and served as a canned
+  HTTP 200, so `dialogue.py:97`'s 400 handler had never once executed. Narrowing the catch made it
+  live, and R3.4(d) is the first test that exercises it.
+- **Four degradation unit tests asserted the bug.** One — `test_neo4j_error_falls_back_to_canned` —
+  had the defect as its subject and was inverted. Three used a generic error only as a vehicle to
+  reach the canned tier and kept their assertions.
+- **Two more test families encoded bugs they were meant to catch**: the faction writer's unit tests
+  mocked a result shape real Neo4j never returns, and the retrieval-profile "guard" asserted a
+  substring that its own import line satisfied. Mock/real divergence is an LSP violation, and
+  `check-test-quality`'s NO_ASSERTION rule does not catch a test that asserts the wrong thing.
+
+**Rejected:** *fix all 8 integration failures* — two need product decisions nobody has made
+(ISSUE-258, ISSUE-261) and one needs a test rewritten against an API it predates (ISSUE-259);
+editing whichever artifact is cheaper is how an unexamined convention becomes permanent.
+*Start R3.5* — its converter half is already done and its signature half touches all 28 engines;
+it is its own session. *Suppress the `check-test-quality` finding* on the new wiring test — the
+gate was right, and the test was strengthened instead.

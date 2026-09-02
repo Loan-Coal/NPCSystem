@@ -474,7 +474,13 @@ backlog, not programme scope.
 Product correctness — the safe half. Gossip (R3.3) and the fallback-policy decision are outside
 the loop's scope. Needs services: bring up the test override first. Plans: `FIX_PLANS.md#r3`.
 
-- [ ] **R3.1** Stop the degradation ladder swallowing infrastructure errors
+- [x] **R3.1** ✅ DONE 2026-09-02 — Stop the degradation ladder swallowing infrastructure errors
+Landed as `DEGRADABLE_EXCEPTIONS = (TimeoutError, LLMTimeoutError, LLMRequestError)`; everything
+else propagates. **Spec corrected (DEC-251):** "LLM timeout, retrieval miss" names two things
+that cannot arrive — `llm_client.py:102-107` already converts both LLM errors into a successful
+`full` tier, and a retrieval miss is an empty list, not an exception. Only `TimeoutError` is
+reachable. Four unit tests asserted the bug and were rewritten. Side effect and a fix:
+`dialogue.py:97`'s 400 handler was unreachable dead code and is now live.
 Files: `src/npc_engine/engines/dialogue/degradation.py`,
 `src/npc_engine/api/routes/dialogue/dialogue.py`
 Spec: `degradation.py:107` and `:119` are bare `except Exception` blocks that log and fall
@@ -489,7 +495,16 @@ HTTP 200 with the canned tier.
 Validation: `make check` green. Errors that used to degrade silently now surface — that is the
 point, and it will look like new breakage. CR-L01-04.
 
-- [ ] **R3.2** CRITICAL — implement the Neo4j→503 contract
+- [x] **R3.2** ✅ DONE 2026-09-02 — CRITICAL — implement the Neo4j→503 contract
+Wrapped `GraphDB.get_session()`, the single driver boundary: an exception in any caller's
+`async with` body returns at the `yield`, so one narrow catch covers ~250 repository sites and 87
+`run_in_tx` paths. 503 handler returns the canonical `ErrorEnvelope` with a **redacted** message
+(never `str(exc)` — it renders the bolt URI, L1-02/SEV-16). **RED anchor re-anchored:**
+`tests/integration/` has no conftest, no fixtures and no `TestClient`, so "stop the container" was
+not executable; an unreachable bolt port raises a genuine `ServiceUnavailable` instead.
+`TokenBudgetExceededError` fixed as specified **and** `ContextBudgetError`, the twin that is
+actually raised. Also closed triage cause A (2 tests): a bare `count(r)` aggregate always returns
+one row, so both faction `raise` guards were unreachable.
 Files: `src/npc_engine/graph/` driver boundary,
 `src/npc_engine/api/errors/exception_handlers.py`, `src/npc_engine/utils/errors.py`
 Spec: `grep -rn "raise GraphUnavailableError" src/` returns 0 rows; so does
@@ -506,7 +521,14 @@ neo4j container, POST `/v1/dialogue`, assert 503. Today it returns 500. Assert t
 Validation: needs `docker compose -f docker-compose.yml -f docker-compose.test.yml up -d`.
 Depends on R3.1. CR-L08-03, CR-L02-01, CR-L01-06, CR-L05-01.
 
-- [ ] **R3.4** Engine wiring — the four independent fixes
+- [x] **R3.4** ✅ DONE 2026-09-02 — Engine wiring — the four independent fixes
+(a) `memory_consolidation_engine` wired; its `run_tick` was dead in production — the HTTP route
+is `POST /memories/consolidate/{npc_id}` and calls `consolidate()`, not `run_tick()`. (b) Guard
+at the composition root, not `TickScheduler.__init__` — 26 of 28 slots are legitimately Optional
+for tests. Slot list derived from `inspect.signature`, so a future unwired slot reds it
+automatically. (c) Event-sampling seed logged. (d) Source-string test replaced; counterfactual
+measured — with the mapping deleted the new test reds and the old one stayed green.
+**Triage cause B refuted:** two tests, two unrelated causes, neither the `None`-slot bug.
 Files: `src/npc_engine/api/dependencies_engines/__init__.py`,
 `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/engines/`, `tests/`
 Spec: four small independent fixes. (a) Pass
@@ -524,21 +546,23 @@ assert the test reds — today it passes, because it asserts on source text.
 Validation: `make check` green. Excludes CR-L01-08 (EngineFallbackPolicy wire-or-delete is a
 decision) and CR-L01-10 (touches gossip). CR-L01-03, CR-L01-09, CR-L01-11, CR-L01-05.
 
-- [ ] **R3.5** Give `BaseEngine.run_tick` a real signature; collapse the converter triplication
+- [ ] **R3.5** Give `BaseEngine.run_tick` a real signature
+**Spec corrected 2026-09-02 (DEC-251): the converter half is already true and is struck from
+this task.** `_to_native` is defined once, at `graph_reader.py:199`, and used only in that file;
+the validation command `grep -rlc '_to_native' src/` already returns 1, not 3. There is no
+triplication to collapse. Only the `BaseEngine.run_tick` signature half is real, and it touches
+all 28 engines — treat it as its own session.
 Files: `src/npc_engine/engines/base_engine.py`,
 `src/npc_engine/retrieval/context/context_builder_helpers.py`,
 `src/npc_engine/graph/graph_reader.py`
 Spec: `base_engine.py:24` is `async def run_tick(self, *args: Any, **kwargs: Any) -> dict[str,
 Any]` — it types 33 scheduler parameters and enforces nothing, so mypy stays clean with an
-incompatible engine. Replace with an explicit signature or a Protocol with real parameters. Then
-collapse the three copies of the Neo4j→native converter, each with divergent error paths that
-silently swallow around a call to itself. Excludes CR-L02-05 (raw dicts at 145 functions) — that
-is R7.1.
+incompatible engine. Replace with an explicit signature or a Protocol with real parameters. Excludes CR-L02-05 (raw
+dicts at 145 functions) — that is R7.1. The converter half is struck; see the note above.
 RED anchor: add an engine whose `run_tick` takes an incompatible parameter and assert `make type`
 reds. Today mypy passes — `*args, **kwargs` accepts anything. This is the counterfactual
 CR-L14-04 is built on.
-Validation: `grep -rlc '_to_native' src/` returns 1, not 3. `make check` green.
-CR-L14-04, CR-L14-05.
+Validation: `make check` green. CR-L14-04. (CR-L14-05 is void — see the note above.)
 
 - [x] **R3.6** ✅ DONE 2026-09-02 — 8 failures triaged to **5 causes**; recorded in ISSUE-233.
 A+D already fall inside R3.2/R3.4; B is likely one fix for two tests; only C (faction gossip

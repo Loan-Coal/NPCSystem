@@ -137,3 +137,40 @@ final = parsed.model_copy(update={
     "context_receipt": _selected_receipt(request, receipts_captured),
 })
 ```
+
+---
+
+## Pattern: Capture on the module logger, never `caplog`, when asserting a log line
+**When to use:** Any test that asserts an `npc_engine.*` module actually logged something.
+**Why:** `utils/logging.py:83` sets `root_logger.propagate = False` on the `npc_engine` logger.
+`caplog` attaches its handler to the true root, so once **any** earlier test in the session calls
+`configure_logging()`, records never reach it. A `caplog` assertion therefore passes in isolation
+and fails in a full run — it is order-dependent, and it fails *open*: the log line can be deleted
+and the test still passes if it happens to run early. Measured 2026-09-02: two new seed-logging
+tests passed alone and under `pytest tests/unit/engines`, then failed under `pytest tests/`,
+which is what `make check` runs.
+**Example:**
+```python
+captured: list[str] = []
+
+class _Capture(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        captured.append(record.getMessage())
+
+handler = _Capture(level=logging.DEBUG)
+previous_level = mod.LOGGER.level
+mod.LOGGER.addHandler(handler)
+mod.LOGGER.setLevel(logging.DEBUG)
+try:
+    ...                       # drive the code under test
+finally:
+    mod.LOGGER.removeHandler(handler)
+    mod.LOGGER.setLevel(previous_level)
+
+logs = [m for m in captured if "event_sampling_rng" in m]
+assert logs, "expected an event_sampling_rng debug log line"
+```
+Restore the level in a `finally` — leaving the module logger at DEBUG leaks into later tests.
+**Applied in:** `tests/unit/conformance/test_sev22_rng_determinism.py:80`,
+`tests/unit/llm/test_ollama_prompt_eval_logging.py:91`,
+`tests/unit/engines/test_event_rng_seed_logging.py` (R3.4c).
