@@ -3713,3 +3713,46 @@ falling in the more positive band — is now stated in `_standing_label`'s docst
 `scripts/integration_baseline.txt` ratchets 4 → 3.
 
 
+## [FIXED] ISSUE-258: three readers disagree about a Character with no `is_active`
+**Found:** 2026-09-02, during R3.4 (settling ISSUE-233 item 8)
+**Fixed:** 2026-09-02, in R3 close-out — strict everywhere (DEC-252)
+**Severity:** P2 (annoying) — silent, and it already cost one integration failure
+**Where:** `src/npc_engine/graph/graph_reader.py:47`,
+`src/npc_engine/graph/character/skill_queries.py:64`,
+`src/npc_engine/graph/character/character_reader.py:25`
+**Description:** `character.yaml:9` declares `is_active` `required: true`, but the three readers
+handle its absence differently. `character_reader.py:25` is forgiving —
+`AND coalesce(c.is_active, true) = true`, so a Character without the field is visible.
+`graph_reader.py:47` and `skill_queries.py:64` use a bare `WHERE c.is_active = true`, and
+`null = true` is null, so the same node is invisible. Measured 2026-09-02: a Character merged
+without the field returns `get_npc_location_id -> None`; the identical node with
+`is_active = true` returns its location. That divergence is exactly what made
+`test_advance_creates_covert_event_and_step` fail for a whole programme phase without anyone
+being able to name the cause — the read failed silently at DEBUG.
+**Why deferred:** picking a convention is a product decision, not a cleanup. `coalesce` treats a
+contract violation as active, the bare predicate treats it as deleted, and either is defensible.
+Changing it also changes which nodes existing queries return, so it needs its own commit with a
+before/after count, not a slot inside a test-fixture fix.
+**To fix:** decide whether an absent `is_active` means active or inactive, apply the same
+predicate in all three readers, and add a migration or a schema check if existing nodes lack the
+field. `make check-migrations` is the natural gate.
+**Resolution:** DEC-252 chose strict. `character_reader.py:25` now uses a bare
+`c.is_active = true`, so all **37** predicates in `src/` agree and zero `coalesce` remain.
+Three of this entry's own claims did not reproduce and are corrected here:
+  * "three readers disagree" undercounts — it was **36 strict against 1 forgiving**, not 3.
+  * "add a migration ... if existing nodes lack the field" — **no node lacks it.** Measured
+    against the live graph with cypher-shell: Character 23/23 and Faction 10/10 carry it, so a
+    backfill would have been a no-op. The deliverable was prevention, not repair.
+  * "`make check-migrations` is the natural gate" — **it is not.** That gate fires when a node
+    type *gains* a required field with no migration claiming it; `is_active` has been in
+    `scripts/node_type_snapshot.json` for both types all along, so it has nothing to say about
+    this. Prevention already lived at the API write boundary instead:
+    `validate_node_payload(..., CREATE)` raises `REQUIRED_FIELD_MISSING` on a Character or
+    Faction with no `is_active` — measured, then pinned by
+    `tests/unit/conformance/test_is_active_write_boundary.py` (4 tests) so it stays true.
+RED anchor: `tests/integration/test_is_active_reader_agreement_integration.py` failed with
+"a Character without is_active must not appear in the NPC roster" before the change and passes
+after. Integration suite 43 passed / 3 failed, the 3 being the recorded baseline.
+The remaining gap — fixtures that MERGE raw Cypher and never reach validation — is ISSUE-263.
+
+

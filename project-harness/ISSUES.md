@@ -1954,6 +1954,36 @@ same session. Both are stale prose next to live numbers, which is the class of d
 **To fix:** correct both comments to the live values, and consider extending
 `check_harness_honesty.py` to compare a ratchet comment's quoted number against its baseline file.
 
+## ISSUE-263: integration fixtures MERGE Characters with raw Cypher, bypassing registry validation
+**Found:** 2026-09-02, during ISSUE-258 (the strict `is_active` change)
+**Severity:** P3 (nice-to-fix) — no longer silent after DEC-252, but still easy to get wrong
+**Where:** 10 files under `tests/integration/` — `test_belief_deception_flag_integration.py`,
+`test_director_tick_integration.py`, `test_faction_gossip_integration.py`,
+`test_faction_integration.py`, `test_gossip_event_selection_integration.py`,
+`test_player_model_tick_integration.py`, `test_relation_phase_transition_integration.py`,
+`test_reputation_integration.py`, `test_scheme_advance_tick_integration.py`,
+`test_scheme_detection_tick_integration.py`
+**Description:** These fixtures build Characters and Factions with `MERGE (c:Character {id: $id})
+SET ...` run straight against the driver. That path never reaches
+`validate_node_payload`, so a fixture may omit a `required: true` field and the write
+succeeds. This is the real-world trigger behind ISSUE-233 item 8: the fixture omitted
+`is_active`, the node was written, and every strict reader then skipped it while the read
+logged nothing above DEBUG. Confirmed as the mechanism rather than assumed —
+`tests/unit/conformance/test_is_active_write_boundary.py` shows the validated path rejects
+exactly that payload, and `tests/integration/test_is_active_reader_agreement_integration.py`
+shows the raw path accepts it.
+**Why deferred:** DEC-252 removes the silence, which was the harmful half — after it, a
+Character missing `is_active` is invisible to all 37 readers instead of visible to one and
+hidden from 36, so the failure is consistent and reproducible instead of a phantom. Routing
+the fixtures through the validated path is a separate, larger change: each would have to
+supply all 11 required Character fields, coupling every test to the node schema, and it
+touches 10 files across features this task is not otherwise in. Single-task focus.
+**To fix:** add one shared fixture helper (e.g. `tests/integration/conftest.py`) that builds a
+registry-valid Character/Faction payload, validates it through `validate_node_payload`, and
+writes the result — then repoint the 10 files at it. Once that exists, a `check-rules` pattern
+banning a raw `:Character`/`:Faction` MERGE under `tests/integration/` would keep it true.
+
+
 ## ISSUE-262: `check-integration-baseline-update` writes CRLF into a LF-normalised file
 **Found:** 2026-09-02, during R3 close-out (ISSUE-261)
 **Severity:** P3 (nice-to-fix) — costs one manual normalisation per use, never wrong output
@@ -2025,30 +2055,6 @@ change into a documentation change — the attribution error the R2 program exis
 **To fix:** point both defaults at the current generation, or better, derive the default from a
 single shared helper so the next regeneration updates all three at once. Do it in the same commit
 as the next regeneration so the before/after is attributable.
-
-
-## ISSUE-258: three readers disagree about a Character with no `is_active`
-**Found:** 2026-09-02, during R3.4 (settling ISSUE-233 item 8)
-**Severity:** P2 (annoying) — silent, and it already cost one integration failure
-**Where:** `src/npc_engine/graph/graph_reader.py:47`,
-`src/npc_engine/graph/character/skill_queries.py:64`,
-`src/npc_engine/graph/character/character_reader.py:25`
-**Description:** `character.yaml:9` declares `is_active` `required: true`, but the three readers
-handle its absence differently. `character_reader.py:25` is forgiving —
-`AND coalesce(c.is_active, true) = true`, so a Character without the field is visible.
-`graph_reader.py:47` and `skill_queries.py:64` use a bare `WHERE c.is_active = true`, and
-`null = true` is null, so the same node is invisible. Measured 2026-09-02: a Character merged
-without the field returns `get_npc_location_id -> None`; the identical node with
-`is_active = true` returns its location. That divergence is exactly what made
-`test_advance_creates_covert_event_and_step` fail for a whole programme phase without anyone
-being able to name the cause — the read failed silently at DEBUG.
-**Why deferred:** picking a convention is a product decision, not a cleanup. `coalesce` treats a
-contract violation as active, the bare predicate treats it as deleted, and either is defensible.
-Changing it also changes which nodes existing queries return, so it needs its own commit with a
-before/after count, not a slot inside a test-fixture fix.
-**To fix:** decide whether an absent `is_active` means active or inactive, apply the same
-predicate in all three readers, and add a migration or a schema check if existing nodes lack the
-field. `make check-migrations` is the natural gate.
 
 
 ## ISSUE-259: the quest lifecycle integration test targets an API that no longer exists

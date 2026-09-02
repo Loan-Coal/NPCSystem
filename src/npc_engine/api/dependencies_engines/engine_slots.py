@@ -3,7 +3,10 @@ Module: engine_slots
 Layer: api
 Purpose: Types every TickScheduler engine slot by the protocol that slot must satisfy,
          so mypy checks the concrete engine against its contract at the wiring site.
+Does NOT: construct engines, hold state, or reach the graph.
+
 Dependencies: npc_engine.engines.base_engine
+Dependencies injected: None.
 Used by: npc_engine.api.dependencies_engines
 """
 from __future__ import annotations
