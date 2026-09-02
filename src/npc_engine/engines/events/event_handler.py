@@ -53,6 +53,32 @@ def _build_rng(settings: Settings) -> random.Random | None:
     return random.Random(settings.EVENT_RNG_SEED)
 
 
+def _rng_for_tick(*, configured: random.Random | None, seed: int | None, tick_id: int) -> random.Random:
+    """Return the RNG for this tick's event draw, logging the seed behind it.
+
+    Seed logging is strict for event sampling (npc-coding-principles), as it
+    already is for gossip pair selection. Without it a surprising draw cannot be
+    replayed, and the caller silently alternates between a configured global seed
+    and a per-tick one with nothing recording which applied (R3.4c).
+
+    Args:
+        configured: The process-wide RNG built from EVENT_RNG_SEED, or None.
+        seed: The configured EVENT_RNG_SEED, or None when unset.
+        tick_id: Current game tick, used as the seed when none is configured.
+
+    Returns:
+        The configured RNG when present, otherwise one seeded from tick_id.
+    """
+    effective_seed = tick_id if seed is None else seed
+    LOGGER.debug(
+        "event_sampling_rng seed=%d tick=%d source=%s",
+        effective_seed,
+        tick_id,
+        "config" if seed is not None else "tick_id",
+    )
+    return configured if configured is not None else random.Random(tick_id)
+
+
 def _resolve_disruption_rules_path(settings: Settings, override: str | None) -> Path:
     if override is not None:
         return Path(override)
@@ -126,7 +152,9 @@ class EventHandler:
         ]
 
     def _select_template(self, tick_id: int) -> EventTemplate:
-        rng = self._rng or random.Random(tick_id)
+        rng = _rng_for_tick(
+            configured=self._rng, seed=self._settings.EVENT_RNG_SEED, tick_id=tick_id
+        )
         weights = [template.weight for template in self._templates]
         return rng.choices(self._templates, weights=weights, k=1)[0]
 
