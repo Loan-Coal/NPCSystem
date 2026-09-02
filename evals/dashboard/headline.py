@@ -6,7 +6,8 @@ Purpose: Render the paired-rates headline card for the run detail page (EVAL-P13
          calibration kappas, and gates the LLM-judge rate behind the EVAL-P11.1
          publication policy (scorer_trust_policy.check_publication).
 Dependencies: html, json, pathlib (stdlib), calibration (_kappa_from_matrix,
-              UndefinedKappaError), rate_stats (wilson_interval), scorer_trust_policy.
+              UndefinedKappaError, kappa_interval, BOOTSTRAP_*), calibration_records
+              (CalibrationLabel), rate_stats (wilson_interval), scorer_trust_policy.
 Used by: evals.dashboard.app (GET /runs/{gen_id} route).
 """
 
@@ -17,7 +18,16 @@ import json
 from pathlib import Path
 from typing import Any
 
-from calibration import UndefinedKappaError, _kappa_from_matrix
+from pydantic import ValidationError
+
+from calibration import (
+    BOOTSTRAP_RESAMPLES,
+    BOOTSTRAP_SEED,
+    UndefinedKappaError,
+    _kappa_from_matrix,
+    kappa_interval,
+)
+from calibration_records import CalibrationLabel
 from rate_stats import wilson_interval
 from scorer_trust_policy import check_publication
 
@@ -87,6 +97,71 @@ def _kappas_from_labels(labels_path: Path) -> dict[str, float]:
     return _compute_kappas(rows_by_scorer)
 
 
+def _intervals_from_labels(labels_path: Path) -> dict[str, tuple[float, float]]:
+    """Return {scorer: (lo, hi)} real 95 % bootstrap CIs on κ, from the labels file.
+
+    CR-L03-02: this replaced a hardcoded `(0.0, 0.0)` handed to `check_publication`.
+    Scorers whose interval is not computable (fewer than 2 clean adjudicated rows once
+    drifted rows are excluded, or a degenerate bootstrap) are simply absent from the
+    result — the caller refuses them rather than inventing a bound.
+
+    Args:
+        labels_path: Full path to labels_v1.jsonl.
+    Returns:
+        {scorer: (lo, hi)}; empty when the file is absent or unreadable.
+    """
+    if not labels_path.exists():
+        return {}
+    rows_by_scorer: dict[str, list[Any]] = {}
+    for line in labels_path.read_text(encoding="utf-8").splitlines():
+        row = _label_row_or_none(line)
+        if row is None:
+            continue
+        rows_by_scorer.setdefault(str(row.scorer), []).append(row)
+    intervals: dict[str, tuple[float, float]] = {}
+    for scorer, rows in rows_by_scorer.items():
+        try:
+            ci = kappa_interval(rows, BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED)
+        except ValueError:
+            continue
+        intervals[scorer] = (ci.lo, ci.hi)
+    return intervals
+
+
+def _label_row_or_none(line: str) -> CalibrationLabel | None:
+    """Parse one labels line into a CalibrationLabel, or None if it does not validate.
+
+    Deliberately lenient, matching `_adjudicated_row_or_none`: labels_v1.jsonl is a
+    hand-edited boundary file, and one malformed row must degrade a single scorer's
+    interval, never blank the whole page. `read_calibration_labels` is the strict
+    reader and raises on the first bad row, which is right for the calibration CLI
+    and wrong for a dashboard render.
+    """
+    stripped = line.strip()
+    if not stripped:
+        return None
+    try:
+        return CalibrationLabel.model_validate(json.loads(stripped))
+    except (json.JSONDecodeError, ValidationError):
+        return None
+
+
+def _refusal_part(scorer: str, kappa: float, interval: tuple[float, float] | None) -> str | None:
+    """Render one scorer's refusal, or None when it is licensed for publication.
+
+    A scorer with no computable interval is refused: publication requires a measured
+    bound, and the absence of one is not evidence that the bound would clear the
+    threshold. Synthesising a placeholder here is exactly the defect CR-L03-02 names.
+    """
+    if interval is None:
+        return _html.escape(
+            f"PolicyRefusal(scorer={scorer!r}, kappa={kappa}, interval=unmeasured, "
+            f"trust_level='restricted')"
+        )
+    refusal = check_publication(scorer, kappa, interval)
+    return None if refusal is None else _html.escape(str(refusal))
+
+
 def _adjudicated_row_or_none(line: str) -> dict[str, Any] | None:
     """Parse one calibration line, or None if blank, malformed, or unadjudicated.
 
@@ -132,14 +207,15 @@ def _refusal_html(judged_rows: list[dict[str, Any]], cal_dir: Path) -> str | Non
     kappas = _kappas_from_labels(cal_dir / "labels_v1.jsonl")
     if not kappas:
         return None
+    intervals = _intervals_from_labels(cal_dir / "labels_v1.jsonl")
     refusal_parts: list[str] = []
     for scorer in sorted(scorers):
         kappa = kappas.get(scorer)
         if kappa is None:
             continue
-        refusal = check_publication(scorer, kappa, (0.0, 0.0))
-        if refusal is not None:
-            refusal_parts.append(_html.escape(str(refusal)))
+        part = _refusal_part(scorer, kappa, intervals.get(scorer))
+        if part is not None:
+            refusal_parts.append(part)
     if not refusal_parts:
         return None
     inner = " | ".join(refusal_parts)

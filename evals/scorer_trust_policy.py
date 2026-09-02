@@ -62,6 +62,11 @@ class PolicyRefusal:
 # ---------------------------------------------------------------------------
 
 
+def _trust_level_for(kappa: float) -> TrustLevel:
+    """Bucket a point estimate into its trust tier (HIDDEN below 0.40, else RESTRICTED)."""
+    return TrustLevel.HIDDEN if kappa < HIDDEN_THRESHOLD else TrustLevel.RESTRICTED
+
+
 def check_publication(
     scorer: str,
     kappa: float,
@@ -69,28 +74,30 @@ def check_publication(
 ) -> PolicyRefusal | None:
     """Return a refusal if the scorer cannot be published; None if it can.
 
-    Thresholds (from docs/SCORER_TRUST_POLICY.md):
-    - kappa < 0.40 → HIDDEN: not shown at all.
-    - 0.40 <= kappa < 0.60 → RESTRICTED: shown but not published.
-    - kappa >= 0.60 → PUBLISHABLE: no refusal returned.
+    Thresholds (docs/SCORER_TRUST_POLICY.md): kappa < 0.40 → HIDDEN, not shown at
+    all; 0.40 <= kappa < 0.60 → RESTRICTED, shown but not published; kappa >= 0.60
+    → publishable **only if the interval agrees**.
+
+    The interval decides (CR-L03-02, DEC-244): publication requires the point
+    estimate AND the CI lower bound to clear PUBLISH_THRESHOLD. A CI floor below
+    the threshold caps the scorer at RESTRICTED rather than HIDDEN — the point
+    estimate is real evidence, so the scorer may still be shown; it is the
+    *publication* claim the interval refuses to license.
 
     Args:
         scorer: Identifier of the scorer being checked.
         kappa: Point-estimate Cohen's κ from the calibration run.
-        interval: (lo, hi) 95 % bootstrap CI on kappa.
+        interval: (lo, hi) 95 % bootstrap CI on kappa. Must be a real measurement —
+            callers may not synthesise a placeholder (DEC-244).
 
     Returns:
         None when the scorer is fully publishable; a PolicyRefusal otherwise.
     """
-    if kappa >= PUBLISH_THRESHOLD:
+    if kappa >= PUBLISH_THRESHOLD and interval[0] >= PUBLISH_THRESHOLD:
         return None
-    if kappa < HIDDEN_THRESHOLD:
-        trust_level = TrustLevel.HIDDEN
-    else:
-        trust_level = TrustLevel.RESTRICTED
     return PolicyRefusal(
         scorer=scorer,
         kappa=kappa,
         interval=interval,
-        trust_level=trust_level,
+        trust_level=_trust_level_for(kappa),
     )

@@ -7504,3 +7504,62 @@ equality rather than the old subset relation.
 `check_publication` fabricated-interval fix, and the retraction banner on the tracked report.
 Each is its own cause; landing them together would make the rate movement unattributable —
 the R2.4 error this phase exists not to repeat.
+
+---
+
+## DEC-244: the calibration interval decides publication, and no caller may synthesise one
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Closes:** CR-L03-02 · **Implements:** R2.5 step 3b
+**Drives:** `evals/scorer_trust_policy.py`, `evals/dashboard/headline.py`,
+`tests/unit/evals/test_trust_policy.py`
+
+**Context:** `check_publication(scorer, kappa, interval)` accepted an interval, stored it on
+the returned `PolicyRefusal`, and branched on `kappa` alone — `if kappa >= PUBLISH_THRESHOLD:
+return None`. The interval was recorded but never decisive. Worse, `dashboard/headline.py:140`
+called it with a hardcoded `(0.0, 0.0)`. The value presented on the dashboard as the scorer's
+confidence interval was therefore both inert and fabricated.
+
+FIX_PLANS phrased this as "it ignores the interval it is handed". That understates it: an
+ignored argument is dead code, whereas a fabricated one that is rendered to a reader is a
+false measurement. Both halves had to be fixed — fixing only the policy would have let
+`(0.0, 0.0)` flow in and refuse every scorer, which is a different bug, not a fix.
+
+**Decision:** publication requires the point estimate **and** the 95 % CI lower bound to clear
+`PUBLISH_THRESHOLD` (0.60). A CI floor below the threshold caps the scorer at `RESTRICTED`
+rather than `HIDDEN`: the point estimate is real evidence of agreement, so the scorer may still
+be *shown*; it is the *publication* claim the interval refuses to license.
+
+`headline.py` now computes real per-scorer CIs with `calibration.kappa_interval` at the
+existing `BOOTSTRAP_RESAMPLES`/`BOOTSTRAP_SEED`, over rows parsed leniently
+(`_label_row_or_none`) so one malformed line degrades a single scorer's interval instead of
+blanking the page — `read_calibration_labels` is the strict reader and is right for the
+calibration CLI, wrong for a render. A scorer whose interval is **not computable** is refused,
+not published: the absence of a bound is not evidence that the bound would clear the threshold.
+
+**Measured blast radius** on `evals/calibration/labels_v1.jsonl` (393 rows, 4 scorers), the
+before/after this change actually produces:
+
+| scorer | κ | CI lo | CI hi | before | after |
+|---|---:|---:|---:|---|---|
+| `anti_hallucination_grounded` | 1.0000 | 1.0000 | 1.0000 | PUBLISH | PUBLISH |
+| `tone_judge` | 0.8493 | **−0.0100** | 1.0000 | PUBLISH | **refused (restricted)** |
+| `affirms_judge` | 0.5303 | 0.0000 | 1.0000 | refused | refused (restricted) |
+| `refusal_judge` | 0.2475 | −0.1233 | 0.7028 | refused | refused (hidden) |
+
+One scorer flips: `tone_judge`. Its κ of 0.8493 reads as strong agreement, but its bootstrap
+CI spans [−0.0100, 1.0000] — it is consistent with no agreement at all. That is precisely the
+claim the old rule licensed and the new one refuses, and it matters beyond the dashboard:
+`tone_judge` is one of the four expectations `guard_expectations.py` injects into every guard
+case (ISSUE-256), so a headline built on it was resting on an unresolved measurement.
+
+**Consequences:** the dashboard will show a refusal for `tone_judge` where it previously
+printed a rate. That is the intended effect, not a regression. Two tests
+(`test_publishable_scorer_has_no_refusal`, `test_boundary_exactly_at_publish_threshold`)
+asserted `None` while passing intervals whose lower bounds were 0.55 and 0.42; their interval
+arguments were decorative, which is the defect in miniature. Their floors were raised so each
+still pins the case it was written for — a well-calibrated scorer publishes, and the boundary
+holds — now on both axes at once.
+
+**Rejected:** *bucket by `min(kappa, lo)`* — it would have reclassified the existing
+κ=0.55/lo=0.38 RESTRICTED case as HIDDEN, changing the show/hide contract as a side effect of
+a publication fix. *Refuse only degenerate intervals* — kills the fabricated value but leaves
+the interval still not decisive, so `tone_judge` would keep publishing on a CI spanning zero.
