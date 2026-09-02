@@ -14,8 +14,10 @@ from typing import AsyncIterator
 import asyncio
 
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
+from neo4j.exceptions import ServiceUnavailable, SessionExpired
 
 from npc_engine.config import Settings
+from npc_engine.utils.errors import GraphUnavailableError
 
 
 class GraphDB:
@@ -61,13 +63,30 @@ class GraphDB:
     async def get_session(self) -> AsyncIterator[AsyncSession]:
         """Yield an async Neo4j session for graph operations.
 
+        This is the single driver boundary: because it is an async context manager,
+        an exception raised in any caller's ``async with`` body is thrown back in at
+        the ``yield``. Translating the driver's outage exceptions here therefore
+        covers every repository session and every run_in_tx write path without
+        touching their ~300 individual ``session.run`` calls (R3.2).
+
+        The catch is deliberately narrow. FastAPI rethrows route-body exceptions
+        into this same ``yield``, so a broad catch would relabel every unrelated
+        route error as a graph outage.
+
         Returns:
             AsyncIterator yielding a single AsyncSession for the duration of the block.
 
         Raises:
             RuntimeError: If connect() has not been called before this method.
+            GraphUnavailableError: If the Neo4j driver cannot reach the server, or
+                the session expired mid-operation. Mapped to HTTP 503 by
+                api.errors.exception_handlers so clients can distinguish "retry"
+                from "your request is broken".
         """
         if self._driver is None:
             raise RuntimeError("GraphDB is not connected")
-        async with self._driver.session() as session:
-            yield session
+        try:
+            async with self._driver.session() as session:
+                yield session
+        except (ServiceUnavailable, SessionExpired) as exc:
+            raise GraphUnavailableError(uri=self._settings.NEO4J_URI, cause=str(exc)) from exc
