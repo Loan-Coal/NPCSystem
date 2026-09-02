@@ -15,6 +15,7 @@ from __future__ import annotations
 import pygame
 
 from demo_game.constants import PALETTE
+from demo_game.ui.widgets.no_data import draw_wrapped_no_data
 
 # ---------------------------------------------------------------------------
 # Colour aliases
@@ -120,7 +121,7 @@ class RetrievalPanelWidget:
         y += 8
 
         if not self._items:
-            _draw_no_data(surface, self._font_label, _EMPTY_HINT, _CLR_NO_DATA, rect)
+            draw_wrapped_no_data(surface, self._font_label, _EMPTY_HINT, _CLR_NO_DATA, rect)
             return
 
         for item in self._items:
@@ -205,43 +206,3 @@ class RetrievalPanelWidget:
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
-
-
-def _draw_no_data(
-    surface: pygame.Surface,
-    font: pygame.font.Font,
-    text: str,
-    clr: tuple[int, int, int],
-    rect: pygame.Rect,
-) -> None:
-    """Render hint text word-wrapped and centered inside rect.
-
-    Args:
-        surface: Target pygame surface.
-        font: Font used for rendering.
-        text: Hint text to display.
-        clr: Text colour tuple.
-        rect: Bounding rect to centre text within.
-    """
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        trial = f"{current} {word}".strip()
-        if font.size(trial)[0] <= rect.width - 2 * _PAD_X:
-            current = trial
-        else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-
-    total_h = len(lines) * font.get_linesize()
-    start_y = rect.centery - total_h // 2
-    for i, line in enumerate(lines):
-        surf = font.render(line, True, clr)
-        surface.blit(
-            surf,
-            (rect.centerx - surf.get_width() // 2, start_y + i * font.get_linesize()),
-        )

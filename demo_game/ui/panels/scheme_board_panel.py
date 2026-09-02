@@ -14,6 +14,7 @@ from __future__ import annotations
 import pygame
 
 from demo_game.constants import PALETTE
+from demo_game.ui.widgets.no_data import draw_centered_no_data
 
 _CLR_BG = PALETTE["bg"]
 _CLR_AMBER = PALETTE["amber"]
@@ -100,7 +101,9 @@ class SchemeBoardPanelWidget:
         y += 8
 
         if not self._schemes:
-            self._draw_no_data(surface, rect)
+            draw_centered_no_data(
+                surface, self._font_label, _NO_DATA_MSG, _CLR_NO_DATA, rect
+            )
             return
 
         for scheme in self._schemes:
@@ -140,11 +143,3 @@ class SchemeBoardPanelWidget:
         surf = self._font_label.render(text, True, _CLR_MUTED)
         surface.blit(surf, (x, y))
         return y + surf.get_height() + _ROW_GAP
-
-    def _draw_no_data(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render a centred 'no schemes' message."""
-        surf = self._font_label.render(_NO_DATA_MSG, True, _CLR_NO_DATA)
-        surface.blit(surf, (
-            rect.centerx - surf.get_width() // 2,
-            rect.centery - surf.get_height() // 2,
-        ))

@@ -14,6 +14,7 @@ from __future__ import annotations
 import pygame
 
 from demo_game.constants import PALETTE
+from demo_game.ui.widgets.no_data import draw_wrapped_no_data
 
 _CLR_BG = PALETTE["bg"]
 _CLR_AMBER = PALETTE["amber"]
@@ -142,7 +143,7 @@ class MemoryPanelWidget:
         y += 8
 
         if not self._memories:
-            _draw_no_data(surface, self._font_label, _HINT, _CLR_NO_DATA, rect)
+            draw_wrapped_no_data(surface, self._font_label, _HINT, _CLR_NO_DATA, rect)
             return
 
         bar_total_w = rect.width - 2 * _PAD_X
@@ -259,32 +260,3 @@ class MemoryPanelWidget:
         lbl_surf = self._font_label.render(label, True, clr)
         surface.blit(lbl_surf, (x, y))
         return y + lbl_surf.get_height() + 2
-
-
-def _draw_no_data(
-    surface: pygame.Surface,
-    font: pygame.font.Font,
-    text: str,
-    clr: tuple[int, int, int],
-    rect: pygame.Rect,
-) -> None:
-    """Render hint text centered inside rect, wrapping at word boundaries."""
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        trial = f"{current} {word}".strip()
-        if font.size(trial)[0] <= rect.width - 2 * _PAD_X:
-            current = trial
-        else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-
-    total_h = len(lines) * font.get_linesize()
-    start_y = rect.centery - total_h // 2
-    for i, line in enumerate(lines):
-        surf = font.render(line, True, clr)
-        surface.blit(surf, (rect.centerx - surf.get_width() // 2, start_y + i * font.get_linesize()))

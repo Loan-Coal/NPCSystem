@@ -14,6 +14,7 @@ from __future__ import annotations
 import pygame
 
 from demo_game.constants import PALETTE
+from demo_game.ui.widgets.no_data import draw_centered_no_data
 
 _CLR_BG = PALETTE["bg"]
 _CLR_AMBER = PALETTE["amber"]
@@ -110,7 +111,9 @@ class PlayerModelPanelWidget:
         y += 8
 
         if self._model is None:
-            self._draw_no_data(surface, rect)
+            draw_centered_no_data(
+                surface, self._font_label, _NO_DATA_MSG, _CLR_NO_DATA, rect
+            )
             return
 
         y = self._draw_trust_row(surface, x, y, rect.width - 2 * _PAD_X)
@@ -156,11 +159,3 @@ class PlayerModelPanelWidget:
 
         intent_surf = self._font_label.render(intent, True, _CLR_AMBER)
         surface.blit(intent_surf, (x + lbl_surf.get_width() + 10, y))
-
-    def _draw_no_data(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render a centred 'no data' message."""
-        surf = self._font_label.render(_NO_DATA_MSG, True, _CLR_NO_DATA)
-        surface.blit(surf, (
-            rect.centerx - surf.get_width() // 2,
-            rect.centery - surf.get_height() // 2,
-        ))
