@@ -39,8 +39,13 @@ def _skip_if_no_neo4j() -> tuple[str, str, str]:
 
 
 async def _setup(tx, npc_id: str, loc_id: str) -> None:
+    # is_active is `required: true` on the Character node contract
+    # (type_registry/base_nodes/character.yaml:9) and the real seeder sets it.
+    # graph_reader.CYPHER_GET_NPC_LOCATION_ID filters `WHERE c.is_active = true`,
+    # so a Character merged without it is invisible to the location read and the
+    # advance tick silently finds nowhere to place its covert event (ISSUE-233).
     await tx.run(
-        "MERGE (c:Character {id: $npc_id}) "
+        "MERGE (c:Character {id: $npc_id}) SET c.is_active = true "
         "MERGE (l:Location {id: $loc_id}) "
         "MERGE (c)-[:LOCATED_AT]->(l)",
         npc_id=npc_id, loc_id=loc_id,

@@ -47,8 +47,8 @@ def _skip_if_no_neo4j() -> tuple[str, str, str]:
 async def _setup_characters(tx, schemer: str, witness: str, loc_id: str) -> None:
     """Create the schemer and a co-located witness. Must precede upsert_scheme."""
     await tx.run(
-        "MERGE (c:Character {id: $schemer}) "
-        "MERGE (w:Character {id: $witness}) "
+        "MERGE (c:Character {id: $schemer}) SET c.is_active = true "
+        "MERGE (w:Character {id: $witness}) SET w.is_active = true "
         "MERGE (l:Location {id: $loc_id}) "
         "MERGE (c)-[:LOCATED_AT]->(l) "
         "MERGE (w)-[:LOCATED_AT]->(l)",
