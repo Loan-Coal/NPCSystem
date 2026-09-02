@@ -59,8 +59,6 @@ class StoryPacingEngine:
 
         Args:
             tick_id: Current game tick identifier.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; graph access is via
-                the injected ports, DEC-122 / SEV-24).
 
         Returns:
             Dict with max_event_severity (int), quest_generation_rate (float),

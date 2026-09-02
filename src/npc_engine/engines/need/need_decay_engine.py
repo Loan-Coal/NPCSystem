@@ -56,7 +56,6 @@ class NeedDecayEngine:
 
         Args:
             tick_id: Current game tick ID.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``needs_updated`` (total updated) and

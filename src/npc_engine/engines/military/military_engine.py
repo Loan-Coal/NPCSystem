@@ -42,8 +42,6 @@ class MilitaryEngine:
 
         Args:
             tick_id: Current game tick ID.
-            **_: Swallows the scheduler's ``session=`` kwarg during the SEV-24
-                migration (the repository owns sessions now).
 
         Returns:
             Dict with ``battles_resolved`` count and ``factions_yielded`` count.

@@ -125,7 +125,6 @@ class GossipHandler:
             tick_id: Current game tick identifier.
             max_pairs: Maximum number of NPC pairs to process.
             npc_ids: Optional allowlist; only pairs containing at least one listed ID are processed.
-            **_: Swallows legacy ``session=`` kwarg from the tick scheduler during migration.
 
         Returns:
             Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), ``propagated``

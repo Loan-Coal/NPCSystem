@@ -75,7 +75,6 @@ class GoalFormerAdapter:
 
         Args:
             tick_id: Current tick ID (passed through to logs; not used for logic).
-            **_: Swallows the scheduler's session= kwarg during the SEV-24 migration.
 
         Returns:
             Dict with ``goal_formations``: list of goal node IDs created this tick

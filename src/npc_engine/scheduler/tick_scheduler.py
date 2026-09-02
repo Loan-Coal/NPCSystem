@@ -93,64 +93,64 @@ class TickScheduler:
 
         Args:
             clock: GameClock instance tracking tick and game-time progress.
-            gossip_handler: Engine exposing ``run_tick(session, tick_id)``; called every
+            gossip_handler: Engine exposing ``run_tick(tick_id)``; called every
                 ``gossip_interval`` ticks.
-            event_handler: Engine exposing ``run_tick(session, tick_id)``; called every
+            event_handler: Engine exposing ``run_tick(tick_id)``; called every
                 ``event_interval`` ticks.
             gossip_interval: Run gossip every N ticks; clamped to a minimum of 1.
             event_interval: Run events every N ticks; clamped to a minimum of 1.
-            routine_engine: Optional engine exposing ``run_tick(session, time_of_day, tick_id)``
+            routine_engine: Optional engine exposing ``run_tick(time_of_day, tick_id)``
                 called every tick to move characters per their schedules.
-            faction_politics_engine: Optional engine exposing ``run_tick(session)``
+            faction_politics_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick to adjust faction standings from events and apply decay.
-            story_pacing_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            story_pacing_engine: Optional engine exposing ``run_tick(tick_id)``
                 called before gossip/event sampling to write pacing multipliers to WorldState.
-            memory_consolidation_engine: Optional engine exposing ``run_tick(session, game_time)``
+            memory_consolidation_engine: Optional engine exposing ``run_tick(game_time)``
                 called once per advance on the configured cadence.
-            clique_formation_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            clique_formation_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; self-skips when the configured interval is not met.
-            skill_progression_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            skill_progression_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; awards XP to characters for completed quests.
-            oath_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            oath_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; expires pledges and runs stub violation checks.
-            treaty_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            treaty_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; expires treaties and checks mechanical conditions.
-            mood_contagion_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            mood_contagion_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; blends mood states between co-located affectionate NPCs.
-            chapter_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            chapter_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; detects chapter transitions and labels them via LLM.
-            succession_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            succession_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; grants vacant inheritable titles to the first eligible heir.
-            agenda_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            agenda_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; resolves open agendas whose deadline has passed.
-            need_decay_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            need_decay_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; decays character need levels and applies location restoration.
-            military_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            military_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; currently a no-op stub (see ISSUES.md ISSUE-001).
-            event_quest_trigger: Optional engine exposing ``run_tick(session, tick_id)``
+            event_quest_trigger: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; generates draft quests from unprocessed trigger events.
-            need_quest_trigger: Optional engine exposing ``run_tick(session, tick_id)``
+            need_quest_trigger: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; generates draft quests for NPCs with critically low needs.
-            world_state_quest_trigger: Optional engine exposing ``run_tick(session, tick_id)``
+            world_state_quest_trigger: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; generates draft quests driven by the current world-state epoch.
-            proactive_dialogue_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            proactive_dialogue_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; checks co-located NPCs/players and emits proactive lines.
-            reputation_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            reputation_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; propagates 1-hop personal reputation through the social graph.
-            intent_formation_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            intent_formation_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; scores and enqueues proactive dialogue intents (Phase 14).
-            player_model_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            player_model_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; updates each co-located NPC's model of the player (F1.4).
-            director_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            director_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; evaluates the drama director decide() on idle/plateau
                 signals and emits a beat via the events engine when a decision fires (F1.5).
-            memory_decay_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            memory_decay_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; self-gates on its interval to apply charge-weighted
                 vividness decay so low-salience memories fade over ticks (F1.7).
-            scheme_advance_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            scheme_advance_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; self-gates on its interval to advance active schemes
                 by minting a covert Event per step (F1.6 / DEC-107 Option A).
-            scheme_detection_engine: Optional engine exposing ``run_tick(session, tick_id)``
+            scheme_detection_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; self-gates on its interval to discover witnessed,
                 sufficiently-advanced schemes (status active→discovered) (F1.6).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.

@@ -63,8 +63,7 @@ class SchemeAdvanceTick:
     async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Advance eligible active schemes one covert step, on cadence.
 
-        The scheduler passes ``session=`` as a keyword arg; it is swallowed by
-        ``**_`` and ignored — the port manages its own sessions (DEC-122).
+        The port manages its own sessions (DEC-122).
 
         Args:
             tick_id: Current game tick.

@@ -82,8 +82,7 @@ class ReputationEngine:
     ) -> None:
         """Run one propagation tick for all candidate source NPCs.
 
-        No-op when config.enabled is False. The trailing ``**_`` swallows the
-        scheduler's legacy ``session=`` kwarg during the SEV-24 migration.
+        No-op when config.enabled is False.
 
         Args:
             player_id: ID of the player character whose reputation propagates.

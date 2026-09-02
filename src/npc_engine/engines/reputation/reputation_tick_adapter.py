@@ -35,10 +35,9 @@ class ReputationTickAdapter:
     """Tick-scheduler adapter for ReputationEngine.
 
     Bridges the mismatch between TickScheduler's expected
-    ``run_tick(session, tick_id) -> dict`` signature and
-    ReputationEngine's ``run_tick(player_id, npc_ids) -> None``. The scheduler's
-    legacy ``session=`` kwarg is accepted and ignored (``**_``) during the SEV-24
-    migration; neither the adapter nor the engine holds a Neo4j session.
+    ``run_tick(tick_id) -> dict`` signature and ReputationEngine's
+    ``run_tick(player_id, npc_ids) -> None``. Neither the adapter nor the engine
+    holds a Neo4j session (DEC-122 / SEV-24).
 
     On each tick:
     1. Returns {"nudges": 0} immediately when config.enabled is False.
@@ -80,8 +79,7 @@ class ReputationTickAdapter:
         """Run one reputation propagation tick.
 
         Returns {"nudges": 0} immediately when engine is disabled to avoid any
-        graph I/O. Otherwise fetches NPC IDs and delegates to the engine. The
-        trailing ``**_`` swallows the scheduler's legacy ``session=`` kwarg.
+        graph I/O. Otherwise fetches NPC IDs and delegates to the engine.
 
         Args:
             tick_id: Current game tick (logged for observability).

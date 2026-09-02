@@ -54,7 +54,6 @@ class FactionPoliticsEngine:
 
         Args:
             tick_id: Current game tick; written onto FactionStandingEvent nodes.
-            **_: Swallows the scheduler's ``session=`` kwarg during the SEV-24 migration.
 
         Returns:
             Dict with keys ``rule_applications`` (int) and ``decay_applications`` (int).

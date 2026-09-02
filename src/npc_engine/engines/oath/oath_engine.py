@@ -45,7 +45,6 @@ class OathEngine:
 
         Args:
             tick_id: Current game tick ID.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with ``expired_pledges`` and ``violated_pledges`` counts.

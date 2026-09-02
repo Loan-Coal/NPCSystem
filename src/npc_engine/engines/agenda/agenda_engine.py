@@ -52,7 +52,6 @@ class AgendaEngine:
 
         Args:
             tick_id: Current game tick ID.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``resolved`` (total count), ``passed`` (count),

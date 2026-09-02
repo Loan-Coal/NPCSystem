@@ -88,7 +88,6 @@ class ProactiveDialogueTick:
 
         Args:
             tick_id: Current game tick.
-            **_: Swallows the scheduler's ``session=`` kwarg (DEC-122 / SEV-24).
 
         Returns:
             Dict ``{"proactive_lines": [<serialised winner>]}`` (0 or 1 item).

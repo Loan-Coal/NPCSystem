@@ -55,7 +55,6 @@ class CliqueFormationEngine:
 
         Args:
             tick_id: Current game tick identifier.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``formed`` (groups created), ``dissolved`` (groups dissolved),

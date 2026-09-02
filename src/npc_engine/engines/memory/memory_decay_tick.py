@@ -42,8 +42,6 @@ class MemoryDecayTick:
 
         Args:
             tick_id: Current game tick.
-            **_: Swallows the scheduler's ``session=`` kwarg during the SEV-24
-                migration; the memory engine holds its own graph port.
 
         Returns:
             Dict with ``memories_decayed``: number of Memory nodes decayed (0 when skipped).

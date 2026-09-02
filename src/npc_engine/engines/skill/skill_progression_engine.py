@@ -44,8 +44,6 @@ class SkillProgressionEngine:
 
         Args:
             tick_id: Current game tick.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; graph access is
-                via the injected SkillGraphPort, DEC-122 / SEV-24).
 
         Returns:
             Dict with key ``xp_awards`` (number of (character, skill) XP grants made).

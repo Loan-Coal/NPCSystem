@@ -47,7 +47,6 @@ class TreatyEngine:
 
         Args:
             tick_id: Current game tick ID.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with ``expired_treaties`` count and ``violations_detected`` count.

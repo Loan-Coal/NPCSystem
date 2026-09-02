@@ -60,7 +60,6 @@ class RoutineEngine:
         Args:
             time_of_day: Current game time slot (morning/midday/afternoon/evening/night).
             tick_id: Current game tick, used to evaluate override expiry.
-            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``moved`` (characters relocated) and ``skipped``

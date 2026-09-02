@@ -65,7 +65,6 @@ class IntentFormationEngine:
 
         Args:
             tick_id: Current game tick.
-            **_: Swallows the scheduler's ``session=`` kwarg (DEC-122 / SEV-24).
 
         Returns:
             Dict with ``intents_formed`` (count above threshold) and

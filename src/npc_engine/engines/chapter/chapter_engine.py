@@ -108,8 +108,7 @@ class ChapterEngine:
         """Run chapter detection and optional transition logic for the current tick.
 
         Reads/writes flow through the injected ChapterGraphPort + WorldStateGraphPort,
-        which own their Neo4j sessions (DEC-122 / SEV-24); the scheduler's ``session=``
-        kwarg is accepted via ``**_`` and ignored.
+        which own their Neo4j sessions (DEC-122 / SEV-24).
 
         Args:
             tick_id: Current game tick identifier.

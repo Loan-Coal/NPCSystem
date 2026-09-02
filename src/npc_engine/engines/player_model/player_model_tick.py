@@ -66,7 +66,6 @@ class PlayerModelTick:
 
         Args:
             tick_id: Current game tick (stored on each PlayerModel node).
-            **_: Swallows the scheduler's session= kwarg during the SEV-24 migration.
 
         Returns:
             Dict with key ``player_models``: list of serialised PlayerModelUpdate dicts.
