@@ -7767,3 +7767,79 @@ so every later skill is silently missed by `git add .`. That is a trap of exactl
 programme exists to remove. *Put the skills in `project-harness/skills/`* — tracked by default
 and needs no ignore change, but nothing discovers them as skills, so they become ordinary docs
 and R4.4's mechanism claim would be false.
+
+---
+
+## DEC-249: CLAUDE.md names every binding rule and states no fact it does not own
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Closes:** ISSUE-251 · **Implements:** R4.4
+**Drives:** `project-harness/CLAUDE.md`, `.claude/skills/npc-{code-style,documentation,testing,coding-principles}/SKILL.md`, `docs/overview.md`
+**Depends on:** DEC-248 (without it the skills would be untracked)
+
+**Context:** `project-harness/CLAUDE.md` was **483 lines** (ROADMAP:326 says 476; measured).
+It is auto-loaded into every session, so its length is a per-session cost, and it had drifted
+into restating facts owned elsewhere — commands, paths, seed data, layer lists — each of which
+is a copy that rots independently of its source.
+
+**Decision — four moves.**
+
+**1. Narrative moves to skills.** Code style, documentation formats, testing discipline and
+coding principles now live in `.claude/skills/`. CLAUDE.md keeps **one line per strict rule**
+naming the obligation and its skill.
+
+**2. Facts become pointers.** Commands point at the `Makefile`, seed data at
+`demo_game/seeds/seed.py`, layout at `docs/overview.md`, the layer edge list at
+`scripts/check_layers.py`. Correcting a number in a copy only schedules the next drift; the
+copy is the defect. The layer model itself is the deliberate exception — stated in full,
+because an agent must not have to look it up to know which way dependencies point.
+
+**3. Three deletions of things that describe no code.**
+- *The four-field engine-log mandate* ("include `npc_id`, `player_id`, `tick` and
+  `duration_ms` in all engine log entries"). Measured across ~76 engine logger call sites:
+  **zero** carry all four. It was aspiration written as law. `make check-engine-logs` gates
+  the part that is real — `duration_ms`, ratcheted against
+  `scripts/engine_logs_baseline.txt` at 42 non-compliant sites. The skill now says: follow
+  the gate, not the aspiration. (The review's "0/118" had the wrong denominator and the right
+  numerator.)
+- *"Every session reads ISSUES.md"* — an unverifiable mandate on the agent's behaviour rather
+  than on the code. The ledger protocol that matters survives; the ritual does not.
+- *The pre-merge item naming `STATUS.md`* — no such file exists at the root or in
+  `project-harness/`. `PATTERNS.md` does exist, so its item stays.
+
+**4. DIP-strict rescoped.** Was "engines import the protocol, never the concrete class",
+unconditionally. Now: abstract behind a protocol at **2+ implementors or 3+ callers**; below
+that, inject the concrete class. A protocol with one implementor and one caller is
+indirection, not inversion, and the old wording mandated it everywhere.
+
+**ISSUE-251 closed.** `CLAUDE.md:313` normatively sent open questions to the retired
+`SKILLS_QUEUE.md`; the rewritten file sends them to `DECISIONS.md` alone. `docs/overview.md:42`
+now carries a RETIRED marker naming `demo_game/ui/layout/right_panel.py:101` as the reason the
+file is kept. `SKILLS_QUEUE.md` is **not** deleted — that citation is why it was retired in
+place rather than removed.
+
+**The skills loading contract, and its failure mode.** CLAUDE.md is auto-loaded into every
+session. A skill is **invoked, not auto-loaded**. So:
+
+> **If a skill does not load, the rule it holds silently stops being enforced by the agent,
+> and nothing announces it.**
+
+This is the real risk of R4.4 and it is not fully mitigable by writing. Two mitigations are in
+place. First, every strict rule stays *named* in CLAUDE.md, so the file alone tells you the
+obligation exists and what it requires; the skill supplies detail, format and rationale, never
+the existence of the obligation. Second, and load-bearing: **`make check` is the backstop.** A
+rule with a gate survives an unloaded skill; a rule without one depends on the agent reading
+the list. The standing consequence is a preference — when a rule matters, add a gate rather
+than more prose.
+
+**One fact stays, deliberately.** The Stack table's LLM row (`Ollama (`qwen2.5:7b`)`) is kept
+verbatim, because `tests/unit/evals/test_model_identity.py` parses it and fails when it disagrees
+with any engine's `llm_config.yaml`. Removing it in the first draft reddened that test in
+`make check` — which is the rule proving itself: a copy a **gate** pins cannot drift silently,
+and silent drift is the whole reason copies are dangerous. The pointer-isation rule therefore
+reads "no *ungated* copies", and the file says so at that row.
+
+**Validation:** `wc -l project-harness/CLAUDE.md` → **230** (was 483), against a ≤250 target.
+
+**Rejected:** *Correct the stale facts in place* — leaves 483 lines and schedules the next
+drift. *Move the rules to skills without leaving a line each* — makes an unloaded skill an
+invisible loss of a binding rule, the exact failure mode above. *Delete `SKILLS_QUEUE.md`* —
+`right_panel.py:101` cites a specific entry.

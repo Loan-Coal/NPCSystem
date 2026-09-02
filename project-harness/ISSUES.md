@@ -2148,30 +2148,6 @@ Recorded so the gap is not read as a deletion and the numbers are not reused.
 - `ISSUE-241`
 - `ISSUE-242`
 
-## ISSUE-251: two files still describe the retired SKILLS_QUEUE.md as live
-**Found:** 2026-09-01, during R4.5 (ledger hygiene)
-**Severity:** P3 (nice-to-fix)
-**Where:** `project-harness/CLAUDE.md:313`, `docs/overview.md:42`
-**Description:** `SKILLS_QUEUE.md` was retired in place on 2026-09-01 (R4.5), but two inbound
-references still present it as an active destination:
-
-- `CLAUDE.md:313` is **normative** — "those go in `DECISIONS.md` or `SKILLS_QUEUE.md`" — so an
-  agent following the rules file is told to append to a retired file.
-- `docs/overview.md:42` lists it in the document index as "Open questions and skill/knowledge gaps
-  to resolve", with no retirement marker.
-
-A third reference, `demo_game/ui/layout/right_panel.py:101`, cites a specific entry
-(`pygame-n-panel-cycle`) as a historical pointer. That one is correct as-is and is the reason the
-file was retired in place rather than deleted.
-**Why deferred:** both files are outside R4.5's scope (`ISSUES.md`, `DECISIONS.md`,
-`archive/ISSUES_RESOLVED.md`, `SKILLS_QUEUE.md`, `scripts/`), and `CLAUDE.md` is the subject of
-R4.4, an ask-gated rewrite. Editing it here would pre-empt that decision. The retirement banner at
-the top of `SKILLS_QUEUE.md` names both references, so a reader arriving from either is not
-misled in the meantime.
-**To fix:** in `CLAUDE.md:313` drop the `SKILLS_QUEUE.md` alternative so open questions go to
-`DECISIONS.md` only — fold this into R4.4 rather than making a separate pass. In
-`docs/overview.md:42` mark the row RETIRED. Do not delete the file.
-
 ## ISSUE-252: two ungated gate scripts still default to a superseded generation
 **Found:** 2026-09-01, during R4.5 (ledger hygiene)
 **Severity:** P3 (nice-to-fix)

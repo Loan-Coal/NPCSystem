@@ -39,7 +39,7 @@ read at the start of every session and are not intended for external audiences.
 | [ISSUES.md](../project-harness/ISSUES.md) | Persistent issue log — read at the start of every session, updated throughout |
 | [DECISIONS.md](../project-harness/DECISIONS.md) | Architecture decision log — append-only; records context, options, and consequences |
 | [PATTERNS.md](../project-harness/PATTERNS.md) | Reusable code patterns and anti-patterns discovered during development |
-| [SKILLS_QUEUE.md](../project-harness/SKILLS_QUEUE.md) | Open questions and skill/knowledge gaps to resolve |
+| [SKILLS_QUEUE.md](../project-harness/SKILLS_QUEUE.md) | **RETIRED 2026-09-01 (R4.5).** Kept read-only — `demo_game/ui/layout/right_panel.py:101` cites a specific entry. Do not append; open questions go in [DECISIONS.md](../project-harness/DECISIONS.md). |
 | [proposals/](../project-harness/proposals/) | Active design proposals awaiting decision |
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for setup, test commands, and the pre-merge checklist.
