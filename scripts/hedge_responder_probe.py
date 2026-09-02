@@ -4,7 +4,7 @@ Layer: harness (eval tooling — imports evals/, never src/)
 Purpose: Score the capability battery against a scripted always-hedge responder,
     which is EVAL-P20.2 validation (2) and the only one of its three validations a
     ratchet cannot fake.
-Dependencies: stdlib argparse/pathlib/sys; pydantic; yaml; evals/ `matchers` and `summary`.
+Dependencies: stdlib argparse/pathlib/sys; pydantic; yaml; evals/ `guard_expectations`, `matchers` and `summary`.
 Used by: `make hedge-probe`, tests/unit/scripts/test_hedge_responder_probe.py.
 
 Substitutes the response *after* the engine would have produced it, then runs the real
@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "evals"))
 
+from guard_expectations import expected_with_guards  # noqa: E402
 from matchers import EvalConfigError, JudgeResult, evaluate  # noqa: E402
 from summary import summarize  # noqa: E402
 
@@ -196,10 +197,17 @@ def score_case(
 ) -> dict[str, Any]:
     """Score one case from the battery being probed against a fixed response.
 
+    Expectations come from `guard_expectations.expected_with_guards`, the same
+    function `evals/runner.py` scores the engine with, so the null rate and the
+    engine rate are measured over the same expectation set. Scoring the authored
+    `expected` list alone would flatter the null responder on guard batteries,
+    where the runner injects min_length, a fallback keyword_none, tone_judge and
+    affirms_judge (ISSUE-256).
+
     Args:
         prefixes: case_id prefixes the battery admits. Defaults to the capability
             battery, so existing callers are unaffected.
-        case: A parsed `case_pos_*` YAML document.
+        case: A parsed case YAML document from the battery being probed.
         response: The response envelope to score, from `synthetic_response`.
     Returns:
         A result dict in `evals/runner.py::_run_case` shape, so `summary.summarize`
@@ -213,7 +221,7 @@ def score_case(
             f"'{case_id}' is outside the battery being probed; the probe reports one "
             f"battery's rate and must be given only {'/'.join(prefixes)}* cases"
         )
-    expectations = [_expectation_result(exp, response) for exp in case.get("expected", [])]
+    expectations = [_expectation_result(exp, response) for exp in expected_with_guards(case)]
     return {
         "case_id": case_id,
         "description": case.get("description", ""),

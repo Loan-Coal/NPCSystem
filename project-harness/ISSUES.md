@@ -2064,31 +2064,6 @@ be clean from the start.
 **To fix:** decide baseline-vs-clean, fix `check_rules.py:45`, add `scripts/` to the `lint`
 recipe, and extend `test_gate_scope.py` to pin the wider scope.
 
-## ISSUE-256: the null probe scores authored expectations only, so its rate is not yet the engine's comparand
-**Found:** 2026-09-01, during R2.5 step 2 (unblocking the null baseline)
-**Severity:** P1 (blocking) — R2.5's engine-vs-null conclusion cannot be drawn until it is fixed
-**Where:** `scripts/hedge_responder_probe.py::score_case` vs `evals/runner.py:230`
-(`_expected_with_guards`)
-**Description:** The probe can now score guard cases (the structural refusal was removed this
-task), and the first measurement is stark: the canned hedge passes **37/37 = 1.000** of the
-adversarial battery. But that number is NOT the engine's comparand, and must not be published
-beside it. `score_case` evaluates `case.get("expected", [])` only. The runner evaluates
-`_expected_with_guards(case)` — the authored list PLUS the four injected guard expectations
-(`min_length`, the fallback `keyword_none`, `tone_judge`, `affirms_judge`). The engine's 0.8468
-is measured against the larger set; the null's 1.000 against the smaller. Comparing them would
-be the same different-populations error DEC-243 just removed from the guard headline, and it
-would flatter the null responder, which is the direction that makes the guarantee look worst.
-The measurement is still informative on its own terms: every adversarial case's AUTHORED
-expectations are satisfiable by a fixed string that answers nothing, which is a real authoring
-defect independent of the comparison.
-**Why deferred:** the unblock is its own commit by design (landing scoring changes together with
-the comparison would make the rate movement unattributable — the R2.4 error). Injecting the guard
-expectations into the probe also moves the null rate, so it must be measured once, on its own.
-**To fix:** have the probe score `_expected_with_guards(case)` for guard batteries — hoisting
-that helper out of `runner.py` so both callers share one definition rather than copying it — then
-re-measure and record engine-vs-null on the same expectation set. Only then is the
-"never publish a headline where engine <= null" rule decidable for the adversarial battery.
-
 ## ISSUE-248: the resolved-issues archive reuses two ids and skips five
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
 **Severity:** P3 (nice-to-fix)

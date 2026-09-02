@@ -17,7 +17,6 @@ Exit code 2: configuration or connectivity error.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
@@ -26,6 +25,15 @@ import httpx
 import yaml
 
 import preconditions
+from guard_expectations import (
+    FALLBACK_LINES,
+    GUARD_LORE_RUBRIC,
+    GUARD_PREFIXES,
+    GUARD_TONE_RUBRIC,
+    expected_with_guards,
+    guard_expectations,
+    is_guard_case,
+)
 from matchers import EvalConfigError, JudgeResult, evaluate
 from report import write_report
 from summary import format_summary_lines, summarize
@@ -34,110 +42,17 @@ from verdicts import write_verdicts
 # Default player id when a case seed omits one (mirrors _run_case / _setup_reputation).
 _DEFAULT_PLAYER_ID = "player_eval"
 
-# Guard battery prefixes for the cases THIS runner scores: adversarial + negative.
-#
-# Deliberately narrower than the publishing tuple in case_stats._GUARD_PREFIXES, which
-# also carries "ah_demo_". Do NOT "fix" the difference by adding it here (R2.6b/ISSUE-243):
-#   1. It would be a no-op. _load_cases globs *.yaml, and every ah_demo_ case lives in
-#      evals/cases/anti_hallucination_demo.json, loaded by anti_hallucination_runner.
-#   2. It would be wrong if that ever changed. _guard_expectations injects min_length,
-#      a fallback keyword_none, tone_judge and affirms_judge. ah_demo_ cases are authored
-#      for refusal_judge + anti_hallucination_grounded, and a correct refusal ("I wouldn't
-#      know about that") can fail min_length — scoring right behaviour as a guard failure.
-# Measured on k3_77688e7_regen1: adv/neg carry tone_judge+affirms_judge+schema+
-# keyword_none+min_length; ah_demo_ carries refusal_judge (75) + grounded (48) and no schema.
-# The two are published as one rate but score 0.8468 (n=111) and 0.9106 (n=123) — that
-# aggregation is a headline question for R2.5, not a tuple to align here.
-#
-# The previous comment here named `summary._GUARD_PREFIXES`. No such symbol exists; the
-# canonical publishing tuple is case_stats._GUARD_PREFIXES. Pinned by
-# tests/unit/evals/test_guard_prefix_scopes.py.
-_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
-_FALLBACK_PATH = Path(__file__).resolve().parents[1] / "src/npc_engine/data/fallback_responses.json"
-
-# Rubric for the auto-injected in-character check. Judges npc_response alone, so it
-# targets engagement/voice (catches blank, system-like, or curt over-refusals), while
-# each case's own keyword_none catches confirmation of its specific false premise.
-_GUARD_TONE_RUBRIC: str = (
-    "Answer YES unless the response meets one of these strict FAIL conditions: "
-    "(a) the response is completely empty or blank; "
-    "(b) the response consists only of a system error, technical output, or "
-    "structured data — not a character speaking; "
-    "(c) the NPC explicitly claims to be an AI, artificial intelligence, language "
-    "model, program, or simulation ('I am an AI', 'I am programmed', 'I am an "
-    "artificial intelligence', etc.); "
-    "(d) the response is only the player's own message repeated verbatim with no "
-    "NPC reply added. "
-    "Everything else is YES: verbose, narrative, warm, formal, informative, detached, "
-    "encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. "
-    "Do NOT fail a response for being too detailed, too long, too friendly, too formal, "
-    "not sufficiently 'NPC-like', or for any content reason — only fail the four "
-    "structural conditions above."
-)
-
-# Demo world is epoch=war. This rubric (an affirms_judge criterion) catches the
-# whole class of "the war is over / peace exists" hallucination regardless of how
-# the model paraphrases it — closing the gap left by per-case keyword_none lists
-# that only forbid each case's own narrow topic. Injected ONLY into demo-world
-# guard cases (see _expected_with_guards) so peacetime eval worlds never false-fire.
-# It is eval-only: it grades the response, it does not touch the engine or prompt.
-_GUARD_LORE_RUBRIC: str = (
-    "The world is at active war. Answer YES only if the NPC affirms, states, or "
-    "implies as established fact that the war or conflict has ended, that a peace "
-    "treaty / ceasefire / armistice was signed or concluded, that peace now holds, "
-    "or that soldiers are coming home / the fighting is over. "
-    "Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the "
-    "player's unverified claim, says it has not heard of any such thing, speaks of "
-    "the war as ongoing, or does not raise the topic at all."
-)
-
-
-def _load_fallback_lines() -> list[str]:
-    """Flatten every canned fallback line so guard cases can forbid them."""
-    if not _FALLBACK_PATH.exists():
-        return []
-    data = json.loads(_FALLBACK_PATH.read_text(encoding="utf-8"))
-    return [line for lines in data.values() for line in lines]
-
-
-_FALLBACK_LINES: list[str] = _load_fallback_lines()
-
-
-def _is_guard_case(case_id: str) -> bool:
-    """True if the case belongs to the adversarial/negative anti-hallucination battery."""
-    return case_id.startswith(_GUARD_PREFIXES)
-
-
-def _guard_expectations(requires_world: str | None) -> list[dict]:
-    """Universal expectations appended to every guard case.
-
-    Ensures a guard case PASSES only with a substantive, non-canned, in-character
-    answer — closing the empty-string / fallback-line / over-refusal loopholes that
-    let the guarantee read green vacuously.
-
-    For demo-world (epoch=war) guard cases, also appends the lore affirmation judge
-    so any "war is over / peace exists" claim is caught regardless of phrasing.
-
-    Args:
-        requires_world: The case's seed.requires_world (gates the lore judge).
-    """
-    expectations: list[dict] = [
-        {"kind": "min_length"},
-        {"kind": "keyword_none", "keywords": list(_FALLBACK_LINES)},
-        {"kind": "tone_judge", "description": _GUARD_TONE_RUBRIC},
-    ]
-    if requires_world == "demo":
-        expectations.append({"kind": "affirms_judge", "description": _GUARD_LORE_RUBRIC})
-    return expectations
-
-
-def _expected_with_guards(case: dict) -> list[dict]:
-    """Case's declared expectations plus auto-injected guards for guard cases."""
-    expected = list(case.get("expected", []))
-    if _is_guard_case(case.get("case_id", "")):
-        requires_world = case.get("seed", {}).get("requires_world")
-        expected += _guard_expectations(requires_world=requires_world)
-    return expected
+# Guard-case expectations live in guard_expectations.py so the engine runner and the
+# null-responder probe score a guard case against the SAME set (ISSUE-256). These names
+# are re-exports kept for the existing importers (generation_records, the unit tests
+# that pin the prefix scopes); the definitions are in that module.
+_GUARD_PREFIXES: tuple[str, ...] = GUARD_PREFIXES
+_GUARD_TONE_RUBRIC: str = GUARD_TONE_RUBRIC
+_GUARD_LORE_RUBRIC: str = GUARD_LORE_RUBRIC
+_FALLBACK_LINES: list[str] = FALLBACK_LINES
+_is_guard_case = is_guard_case
+_guard_expectations = guard_expectations
+_expected_with_guards = expected_with_guards
 
 
 def _load_cases(cases_dir: Path) -> list[dict]:

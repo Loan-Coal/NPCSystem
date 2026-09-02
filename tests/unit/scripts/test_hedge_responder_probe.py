@@ -247,3 +247,35 @@ def test_load_capability_cases_reads_the_real_case_directory() -> None:
     loaded = load_capability_cases(REPO_ROOT / "evals" / "cases")
     assert len(loaded) >= 7
     assert all(c["case_id"].startswith("case_pos_") for c in loaded)
+
+
+# ---------------------------------------------------------------------------
+# ISSUE-256 — the probe and the runner must score guard cases identically
+# ---------------------------------------------------------------------------
+
+
+def test_probe_and_runner_score_a_guard_case_against_the_same_expectations(monkeypatch) -> None:
+    """The null probe and the engine runner must apply ONE expectation set.
+
+    The runner injects min_length, a fallback keyword_none, tone_judge and (for
+    demo-world cases) affirms_judge into every guard case. Until the probe injects
+    the same set, the two rates are measured over different expectations, and
+    publishing them side by side repeats the different-populations error DEC-243
+    removed — in the direction that flatters the null responder.
+
+    `evaluate` is stubbed so this asserts the expectation SET, not judge verdicts;
+    the real judges need a live LLM and have no place in a unit test.
+    """
+    import hedge_responder_probe as probe_mod
+    import runner as runner_mod
+
+    monkeypatch.setattr(probe_mod, "evaluate", lambda *, expectation, response: (True, ""))
+    case = _case("case_adv_probe_runner_parity", [{"kind": "schema"}])
+
+    result = probe_mod.score_case(
+        case, synthetic_response(CANNED_HEDGE), prefixes=("case_adv_",)
+    )
+
+    assert [e["kind"] for e in result["expectations"]] == [
+        e["kind"] for e in runner_mod._expected_with_guards(case)
+    ]
