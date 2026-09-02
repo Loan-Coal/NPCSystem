@@ -11,7 +11,7 @@ Dependencies injected: GameClock, GossipHandler, EventHandler, RoutineEngine,
                        MemoryConsolidationEngine (optional), EngineStatusStore (optional).
 Used by: api.dependency_singletons (singleton), api.routes.clock.
 
-Line-count note: This orchestrator coordinates 16 independent tick engines.
+Line-count note: This orchestrator coordinates 28 independent tick engines.
 Splitting the advance() loop would create artificial coupling. See DEC-042.
 """
 

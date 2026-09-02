@@ -321,6 +321,21 @@ class RetrievalProfileNotFoundError(StructuredNPCSystemError):
 
 
 @dataclass(frozen=True)
+class EngineWiringError(StructuredNPCSystemError):
+    """Raised when the composition root leaves a TickScheduler engine slot unfilled.
+
+    TickScheduler types most engine slots Optional so tests can wire a subset. That
+    makes an unwired slot a silent no-op in production, which is how memory
+    consolidation never ran on a tick (R3.4).
+
+    Attributes:
+        slots: Names of the slots that were missing or None, sorted.
+    """
+
+    slots: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PromptWindowError(StructuredNPCSystemError):
     """Raised when the configured LLM context window cannot hold the prompt it must serve.
 

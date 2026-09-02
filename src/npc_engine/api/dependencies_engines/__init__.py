@@ -14,6 +14,7 @@ Used by: api.dependency_singletons, api.routes.quest, api.routes.dialogue,
 
 from __future__ import annotations
 
+import inspect
 from functools import lru_cache
 from typing import Any
 
@@ -56,6 +57,7 @@ from npc_engine.api.dependencies_engines.tick_slots import (
 from npc_engine.api.dependencies_stores import get_engine_status_store, get_game_clock
 from npc_engine.config import get_settings
 from npc_engine.scheduler.tick_scheduler import TickScheduler
+from npc_engine.utils.errors import EngineWiringError
 
 __all__ = [
     "get_director_beat_log",
@@ -99,6 +101,7 @@ def _advanced_engine_kwargs() -> dict[str, Any]:
         get_chapter_engine,
         get_clique_formation_engine,
         get_military_engine,
+        get_memory_consolidation_engine,
         get_mood_contagion_engine,
         get_need_decay_engine,
         get_oath_engine,
@@ -112,6 +115,7 @@ def _advanced_engine_kwargs() -> dict[str, Any]:
         "skill_progression_engine": get_skill_progression_engine(),
         "oath_engine": get_oath_engine(),
         "treaty_engine": get_treaty_engine(),
+        "memory_consolidation_engine": get_memory_consolidation_engine(),
         "mood_contagion_engine": get_mood_contagion_engine(),
         "chapter_engine": get_chapter_engine(),
         "succession_engine": get_succession_engine(),
@@ -134,30 +138,85 @@ def _scheduler_config_kwargs(settings: Any) -> dict[str, Any]:
     }
 
 
+def _core_engine_kwargs() -> dict[str, Any]:
+    """Return core-engine singletons as kwargs for TickScheduler assembly."""
+    return {
+        "gossip_handler": get_gossip_handler(),
+        "event_handler": get_event_handler(),
+        "routine_engine": get_routine_engine(),
+        "faction_politics_engine": get_faction_politics_engine(),
+        "story_pacing_engine": get_story_pacing_engine(),
+        "event_quest_trigger": get_event_quest_trigger(),
+        "need_quest_trigger": get_need_quest_trigger(),
+        "world_state_quest_trigger": get_world_state_quest_trigger(),
+        "proactive_dialogue_engine": get_proactive_dialogue_engine(),
+        "reputation_engine": get_reputation_engine(),
+        "intent_formation_engine": get_intent_formation_engine(),
+        "goal_formation_engine": get_goal_formation_engine(),
+        "player_model_engine": get_player_model_tick(),
+        "director_engine": get_director_tick(),
+        "memory_decay_engine": get_memory_decay_tick(),
+        "scheme_advance_engine": get_scheme_advance_tick(),
+        "scheme_detection_engine": get_scheme_detection_tick(),
+    }
+
+
+def _engine_kwargs() -> dict[str, Any]:
+    """Return every engine slot this composition root is responsible for filling."""
+    return {**_core_engine_kwargs(), **_advanced_engine_kwargs()}
+
+
+def _tick_scheduler_engine_slots() -> frozenset[str]:
+    """Return every TickScheduler parameter that takes an engine.
+
+    Derived from the signature rather than copied into a list, so an engine slot
+    added to TickScheduler and forgotten here reds the guard instead of silently
+    no-opping on every tick (R3.4b). Engine slots are exactly the parameters
+    annotated with BaseEngine; the rest are clock, intervals and lease config.
+
+    Returns:
+        Frozenset of parameter names.
+    """
+    return frozenset(
+        name
+        for name, param in inspect.signature(TickScheduler.__init__).parameters.items()
+        if "BaseEngine" in str(param.annotation)
+    )
+
+
+TICK_SCHEDULER_ENGINE_SLOTS: frozenset[str] = _tick_scheduler_engine_slots()
+
+
+def _assert_every_engine_slot_wired(engines: dict[str, Any], *, expected: frozenset[str] | None = None) -> None:
+    """Fail fast when an engine slot is missing or None.
+
+    Args:
+        engines: The engine kwargs about to be passed to TickScheduler.
+        expected: Slot names that must all be present; defaults to every slot
+            TickScheduler declares.
+
+    Raises:
+        EngineWiringError: If any expected slot is absent or None.
+    """
+    required = TICK_SCHEDULER_ENGINE_SLOTS if expected is None else expected
+    unwired = tuple(sorted(name for name in required if engines.get(name) is None))
+    if unwired:
+        raise EngineWiringError(slots=unwired)
+
+
 @lru_cache
 def get_tick_scheduler() -> TickScheduler:
-    """Return the singleton TickScheduler wired to all shared engine singletons."""
+    """Return the singleton TickScheduler wired to all shared engine singletons.
+
+    Raises:
+        EngineWiringError: If any TickScheduler engine slot would be left None.
+    """
     settings = get_settings()
+    engines = _engine_kwargs()
+    _assert_every_engine_slot_wired(engines)
     return TickScheduler(
         clock=get_game_clock(),
-        gossip_handler=get_gossip_handler(),
-        event_handler=get_event_handler(),
-        routine_engine=get_routine_engine(),
-        faction_politics_engine=get_faction_politics_engine(),
-        story_pacing_engine=get_story_pacing_engine(),
-        event_quest_trigger=get_event_quest_trigger(),
-        need_quest_trigger=get_need_quest_trigger(),
-        world_state_quest_trigger=get_world_state_quest_trigger(),
-        proactive_dialogue_engine=get_proactive_dialogue_engine(),
-        reputation_engine=get_reputation_engine(),
-        intent_formation_engine=get_intent_formation_engine(),
-        goal_formation_engine=get_goal_formation_engine(),
-        player_model_engine=get_player_model_tick(),
-        director_engine=get_director_tick(),
-        memory_decay_engine=get_memory_decay_tick(),
-        scheme_advance_engine=get_scheme_advance_tick(),
-        scheme_detection_engine=get_scheme_detection_tick(),
         engine_status_store=get_engine_status_store(),
-        **_advanced_engine_kwargs(),
+        **engines,
         **_scheduler_config_kwargs(settings),
     )
