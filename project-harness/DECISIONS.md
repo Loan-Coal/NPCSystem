@@ -7868,10 +7868,21 @@ at 0 of 5** and holds the one item marked CRITICAL.
 
 Five mechanisms were identified, each with evidence:
 
-1. **The ledger exceeded working memory.** 82 open issues, 168 archived, 245 decisions, 92 files.
-   Proof: on 2026-09-02 ISSUE-257 was logged for a defect already open as **ISSUE-229** since
-   2026-08-28 — same battery, same fixed string. A literal `## ISSUE-NNN: <short title>` template
-   sat at `ISSUES.md:791` and was counted as a live P1.
+1. **The ledger was literally invisible — corrected 2026-09-02, and the true cause is sharper
+   than first written.** The first draft of this DEC blamed ledger *size* and cited a template
+   "counted as a live P1". Both were wrong. On investigation: `ISSUES.md` line 759 opened an HTML
+   comment `<!--` that was **never closed**, so **46 of 78 open issues — 59% of the ledger — did
+   not render in any markdown view.** The mechanism: the archive split mandated by DEC-130 cut the
+   issue template's comment in half, leaving the opener in `ISSUES.md:759` and carrying its closer
+   `-->` into `archive/ISSUES_RESOLVED.md:1110`. From that commit onward everything below line 759
+   was hidden.
+
+   **ISSUE-229 sat at line 1789 — inside the hidden region.** That is why it was re-logged as
+   ISSUE-257 on 2026-09-02: an agent reading the rendered file could not see it. The duplicate was
+   not carelessness and not volume; it was a broken file. Both ledgers are now comment-balanced,
+   the duplicated template is deleted (CLAUDE.md owns the canonical one), and a stray `-->` was
+   removed from the archive. Size is still a real pressure — 77 open, 171 archived, 245 decisions,
+   92 files — but it is the second cause here, not the first.
 2. **Specs are written from unverified numbers**, so each task starts by re-measuring its own
    spec. In one session: 61→16, 76→23, 47/23→25/0, 476→483, 118→76. Five for five.
    `DECISIONS.md` carries 27 corrected/superseded markers.

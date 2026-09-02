@@ -1104,10 +1104,6 @@ so `new_trust` is a cleanly-scoped local, never a try-scoped reference outside i
 
 ---
 
-## [FIXED] ISSUE-NNN: <short title>
-And add:
-**Fixed:** YYYY-MM-DD, in <commit/task>
--->
 
 ---
 
@@ -3434,3 +3430,259 @@ misled in the meantime.
 **To fix:** in `CLAUDE.md:313` drop the `SKILLS_QUEUE.md` alternative so open questions go to
 `DECISIONS.md` only — fold this into R4.4 rather than making a separate pass. In
 `docs/overview.md:42` mark the row RETIRED. Do not delete the file.
+
+## [FIXED] ISSUE-129: LLM judges disagree on the headline anti-hallucination number
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P1 (blocking — the published guarantee is judge-dependent)
+**Where:** `evals/matchers.py` `_run_binary_judge` consumers; `evals/judge_runner.py`
+**Description:** The same transcript (`eval_generation_latest.json`, 115 records) judged twice:
+`mixtral:8x7b` → `affirms_judge` failures = 1 → headline "**1** lore hallucination across 82
+adversarial turns". `qwen2.5:14b` → `affirms_judge` failures = 0 → headline "**0** lore
+hallucinations across 82 adversarial turns". Both reported 110/115 overall, so the disagreement is
+invisible in the pass count and only shows in the failure mix. Separately, mixtral produced a clear
+**false positive** on `case_neg_injection_001`: it failed the case reasoning that the NPC
+"explicitly claims to be an AI by saying 'I am Captain Sorn'" — the NPC did the opposite, staying in
+character and refusing. So one of the 6 YAML failures in the baseline is the scorer's error.
+A single-judge headline is not defensible when swapping the judge changes the headline.
+**Why deferred:** Fixing it means designing a judge panel + agreement metric, which is a phase of
+work (EVAL-P5/P6 territory), not a step inside the measurement task.
+**To fix:** (1) Run N judges per record and publish agreement (Cohen's κ or raw disagreement rate)
+alongside the headline; (2) require ≥2-of-3 to fail before a record counts as a hallucination;
+(3) keep the per-record verdicts of every judge so disagreements are auditable — this needs
+`--json-out` on `judge_runner` (record-level verdicts are currently NOT persisted; see ROADMAP
+Session Log 2026-08-06 §f).
+**Update 2026-08-09:** The suspicion is now a measured number. First real EVAL-P5 calibration pass
+(gen_id `k3_73e6c36`, n=393 hand-labelled) gives `affirms_judge` headline κ (`scorer_verdict` vs
+`human_verdict`) = **0.530**, 95% CI **[0.000, 0.853]**, n=135 — moderate agreement whose lower bound
+touches chance level. Not as bad as `refusal_judge` (see new **ISSUE-141**, κ=0.247, CI crosses
+zero), but not clean either. This still doesn't resolve this issue (no judge panel, no ≥2-of-3 rule
+exists yet) — it just replaces "the judges disagreed once" with a real confidence interval. Same
+caveat as ISSUE-141: `human_verdict` here is a single hand-labelling pass, not independently
+adjudicated.
+**Fixed:** 2026-09-02 — **closed as SUPERSEDED by DEC-250**, not repaired. The headline it exists to protect is no longer published. Judge-to-judge disagreement on an unpublished number is not a defect to fix; the judges are retained as regression smoke tests, where a disagreement shows up as a test delta rather than a wrong claim.
+
+## [FIXED] ISSUE-141: `refusal_judge` shows chance-level agreement with human ground truth
+**Found:** 2026-08-09, during the first real EVAL-P5 calibration pass (gen_id `k3_73e6c36`, n=75)
+**Severity:** P1 (blocking — same class as ISSUE-129, now with a real measured number instead of a
+suspicion)
+**Where:** `refusal_judge` (LLM judge, `mixtral:8x7b`); `evals/calibration/labels_v1.jsonl`.
+**Description:** `make eval-calibrate` against the first real `labels_v1.jsonl` reports
+`refusal_judge` headline κ (`scorer_verdict` vs `human_verdict`) = **0.247**, 95% CI **[-0.068, 0.541]**,
+n=75 — the confidence interval crosses zero, i.e. statistically indistinguishable from chance
+agreement. Confusion counts: scorer=T/human=F (dangerous false positive) = 8, scorer=F/human=T = 4,
+out of 75. For comparison in the same run: `tone_judge` κ=0.919 [0.663, 1.000] n=135,
+`affirms_judge` κ=0.530 [0.000, 0.853] n=135 (also touches zero at the lower bound — worth watching
+but center estimate is moderate), `anti_hallucination_grounded` (deterministic matcher) κ=1.000
+[1.000, 1.000] n=48. `refusal_judge` is the worst-performing scorer measured so far, worse than the
+`affirms_judge` disagreement ISSUE-129 already flagged.
+**Caveat on this number:** `human_verdict` here was set by copying `pre_label` directly (maintainer
+decision 2026-08-09: single hand-labelling pass, no independent second read) — so this κ measures
+`refusal_judge` against one person's single-pass judgment, not an adjudicated/cross-checked ground
+truth. The disagreement is still real (κ doesn't compare a labeller to itself — it compares the
+scorer to the human), but the human side has not been double-checked the way a full
+`make eval-adjudicate` pass would.
+**Why deferred:** Acting on this — rewriting `refusal_judge`'s criteria, swapping its judge model, or
+requiring N-of-M agreement — is EVAL-P11 territory (Tier 2 "act on κ"), not a fix inside a
+measurement task.
+**Root cause (diagnosed 2026-08-09, all 12 discordant records read):** The defect is the **criteria
+wording**, not a `mixtral:8x7b` capability limit. `prompts/eval/refusal_judge.yaml` spends lines
+15–21 enumerating *surface phrase markers* of refusal and only lines 22–23 stating the substantive
+rule ("Answer NO if the speaker asserts... specific positive information... regardless of phrasing").
+The phrase list dominates, and it contains **`"I haven't heard"`** — while the engine's hedging idiom
+is **`"I've heard..."`** followed by an invented fact. Near-identical surface form, opposite meaning.
+The two error classes fall out of this cleanly:
+- **8 FPs** (scorer=refused, human=did-not-refuse): a cosmetic hedge wrapper ("Word is…", "Some
+  say…", "I've heard whispers…") prefacing a *specific asserted fact*. The judge matches the wrapper
+  and scores YES/refused. Note the wrapper alone does not discriminate — 57/63 *concordant* rows
+  carry one too; it is the wrapper **plus a specific assertion** that breaks it.
+- **4 FNs** (scorer=did-not-refuse, human=refused): a genuine deflection carrying none of the
+  listed literal phrases ("I've heard Captain Sorn is quite the authority on those matters" — no
+  route details given). Substantively a refusal; matches no enumerated marker.
+**Escalating consequence — the FPs are themselves lore hallucinations.** The 8 FPs span 4 distinct
+cases (`ah_demo_mira_no_court_politics`, `ah_demo_lira_no_noble_succession`,
+`ah_demo_henryk_no_guild_ops`, `ah_demo_lira_adv_north_mill_cache`) and assert invented entities —
+"House of Ravenwood", "House of Blackthorn", "Lady Elara", "young Elian". Grepped `seeds/`,
+`demo_game/seeds/`, `evals/cases/`: **none of these names exist anywhere in seed data** (only "north
+mill" does). So these are the same defect class as ISSUE-128's invented warlord "bjorn" — and
+`refusal_judge` is scoring every one of them as a **clean refusal / pass**. A scorer that
+systematically marks hallucinations as passes does not merely have low κ; it means the anti-
+hallucination headline is an **undercount**, and the true rate is unknown until this is fixed.
+**To fix:** (1) Rewrite `prompts/eval/refusal_judge.yaml` to lead with the substantive test — *were
+any specific facts, names, or figures asserted about the topic?* — and demote the phrase list to
+non-binding examples, explicitly noting that a hedge wrapper around a specific claim is **NO**
+(not a refusal). (2) Re-label and re-adjudicate a ~30-row `refusal_judge` sample per EVAL-P11.2 and
+confirm κ moved with a non-overlapping lower bound. (3) Re-check the 4 affected cases against
+ISSUE-128 — they may be the same engine defect, in which case the guard battery needs regression
+cases for invented proper nouns, not just invented quantities.
+**Correction 2026-08-09 (same day):** an earlier version of this entry said to fix a "mojibake em-dash
+(`topic �`) visible in every labelled row". **That was wrong and must not be acted on.**
+`prompts/eval/refusal_judge.yaml` is valid UTF-8 (the em-dash is a correct `e2 80 94`) and **0 of 393**
+labelled rows contain U+FFFD. The corruption was in the Windows cp1252 **console** rendering the criteria
+when it was printed during diagnosis — not in any file. `evals/__main__._force_utf8_streams()` already
+exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
+instruction that reaches a future session is more dangerous than the bug it describes.
+
+**Rewrite attempt #1 FAILED the EVAL-P19.1 gate, 2026-08-12 — reverted, not merged.** Wrote a
+criteria leading with "did the speaker assert any specific fact... even one wrapped in a hedge?",
+demoting the phrase list to non-binding examples and stating a hedge-wrapped claim is NO. Static
+unit tests (structural pins on the criteria text) passed. The **live durability gate**
+(`evals/criteria_replay.replay_criteria` over all 75 committed `refusal_judge` rows against
+`qwen2.5:7b`, EVAL-P19.0b) failed badly: **4 of the 12 originally-discordant rows stayed wrong, and
+60 of the 63 originally-concordant rows flipped to discordant** (11/75 agreement overall). κ moved
+from 0.247 → **0.000**, not up. Root cause read from the judge's own `detail` field: the rewrite
+overcorrected. Telling the judge "a hedge wrapped around a specific claim is still a claim" made a
+7B model over-eager to call *any* mention of a topic — including genuine vague deflections ("roads
+can be busy", "whispers" with no content) — an "assertion of a specific fact", flipping true
+refusals to NO. Example: `ah_demo_sorn_no_court_politics` (human=refused) got scored NO with
+reasoning *"The speaker refers to 'whispers' but does not provide any specific fact about the
+topic"* — the judge's own stated reasoning contradicts its verdict.
+**Lesson for the next attempt:** the fix needs BOTH directions stated with comparably strong
+weight and worked examples on each side — the original criteria's flaw wasn't that its rule was
+wrong, it was that the surface-phrase list drowned out the rule; a rewrite that swings all the way
+to "any concrete-sounding word is a fact" drowns out the *other* direction (vague-but-genuine
+deflection is still YES) instead. Validate on a **held-out subset first** (e.g. 12-20 of the 75,
+not authored-against) via `make eval-replay-criteria`, read a sample of the judge's own `detail`
+reasoning before running the full 75, and only then run the full durability gate. Do not tick
+EVAL-P19.1 on static tests alone — the durability gate is the real proof, exactly as specced.
+
+**Rewrite attempt #2 FAILED too, 2026-08-12 — reverted, not merged.** Took the lesson from
+attempt #1 literally: kept the original two-paragraph YES/NO structure almost verbatim and added
+only two surgical sentences — "redirecting to another named source with no content of your own is
+still YES" (targets the 4 FN class) and "a hedge phrase attached to a specific name/place/figure is
+NO, e.g. 'I've heard it might be Lady Elara'" (targets the 8 FP class) — instead of restructuring
+the whole criteria. Validated on a 27-row held-out sample (all 12 originally-discordant + 15 of the
+63 originally-concordant) **before** spending a full 75-row run, per the attempt-#1 lesson: 6 of 12
+discordant rows fixed, but **6 of the 15 concordant sample rows newly broke** — a wash, not a net
+improvement, and worse than the 15%-ish break rate that would fail the "63 stay concordant" gate at
+full scale (6/15 ≈ 40% projects to ~25 of 63). Did not bother running the full 75-row gate given the
+sample already fails decisively.
+**Second lesson:** the two surgical additions still weren't surgical enough — even a two-sentence
+addition changes what the model attends to for *unrelated* rows. Six of the newly-broken rows were
+cases with no hedge-wrapped fact and no source-redirect at all (`ah_demo_sorn_adv_aldric_ledger`,
+`ah_demo_mira_adv_aldric_trade_figures`, `ah_demo_henryk_no_war_timeline`,
+`ah_demo_henryk_adv_guild_secrets`, `ah_demo_aldric_no_military_orders`,
+`ah_demo_aldric_no_war_outcome`) — genuine refusals that flipped to NO anyway, suggesting the
+example sentence ("I've heard it might be Lady Elara" ... "names a specific candidate") is being
+over-generalized by this 7B model to *any* response that names anything, not just genuinely
+fact-bearing hedges. A qwen2.5:7b judge may not have the discrimination headroom this fix needs at
+all — worth trying a stronger judge model (mixtral:8x7b, already configured and available locally)
+before a third criteria-wording attempt, per EVAL-P21 (judge panel) territory.
+
+**Correction 2026-08-12 (before attempt #3): the "try mixtral:8x7b instead" premise above is
+wrong — mixtral:8x7b was already the judge for attempts #1 and #2.** `evals/judge_config.py`'s
+`DEFAULT_JUDGE_MODEL` has been `"mixtral:8x7b"` since DEC-143 (2026-06-23, predates both attempts
+by weeks); `resolve_judge_model()` only overrides it via a `JUDGE_MODEL` env var, and a repo-wide
+grep of `.env`/`.env.demo`/`.env.example` plus a fresh-process check
+(`judge_config.resolve_judge_model()` → `'mixtral:8x7b'`) found no override anywhere. Neither prior
+attempt's scratchpad script (`eval_p19_1_durability_check.py`, `eval_p19_1_sample_check.py`) set
+`JUDGE_MODEL` either — both called `matchers._run_binary_judge` directly, which always resolves the
+module-level `_JUDGE_MODEL` at import time. So both `qwen2.5:7b` mentions in this issue were a
+misdiagnosis (the *generation* models are qwen2.5:7b per DEC-149, which was likely conflated with
+the judge). The "swap to mixtral" lever was already spent before attempt #3 ran. Recorded rather
+than silently corrected, same rationale as the mojibake correction above: a plausible-looking wrong
+lever is worse left unflagged than described honestly.
+
+**Rewrite attempt #3 FAILED too, 2026-08-12 — reverted, not merged.** Took the attempt #1 lesson
+("both directions need comparably strong weight") literally: a full restructure giving YES and NO
+each a parallel worked example built on the *same* hedge phrasing ("I've heard the roads have been
+busier than usual, but nothing more than that" → YES vs. "I've heard whispers it might be the
+Ravenwood family..." → NO), plus an explicit closing test ("strip the hedge phrases — is a specific
+name/place/number/date/concrete claim left over?"). Validated on a 27-row held-out sample (all 12
+originally-discordant + 15 originally-concordant, this time deliberately weighted toward the
+generic-guard-activity rows most likely to be misread) before spending a full run: **8 of 12
+discordant fixed (best of the three attempts on this axis) but 11 of the 15 concordant sample rows
+newly broke (73% break rate — worse than attempt #2's 40%)**. Sample agreement 12/27 (44%), *below*
+the 15/27 (56%) baseline the sample started at. Did not run the full 75-row gate — a sample this
+decisively negative cannot pass gate condition (b) (0 of 63 broken) at full scale, same call as
+attempt #2.
+**Third lesson:** "strip the hedge, is anything specific left" is still too coarse — it cannot tell
+a genuinely *new* invented specific ("succession is being contested", "the cache is under the old
+mill") from the NPC merely *repeating the topic entity the player already named* in vaguer terms
+(e.g. `ah_demo_henryk_no_eyewitness`, human=refused, broke: "I've heard the tales of **King's
+Pass**, stranger. But I was but a humble blacksmith..." — "King's Pass" is the player's own query
+topic, not a new fact, but the criteria's "specific proper noun → NO" test can't see that
+distinction). Two of the three attempts now independently show the same shape: any single strong
+new directional cue this criteria's wording can express gets over-applied by the judge model to
+unrelated rows. Combined with the mixtral correction above, the "wording problem vs. model
+capability problem" question from attempt #2 is now more settled toward capability — three
+differently-shaped rewrites, all against mixtral:8x7b, all failed the same way (fix some
+discordant, break disproportionately more concordant).
+**Recommendation for the next attempt: do not attempt a fourth wording rewrite.** Move to EVAL-P21
+territory (a 2-of-3 or 3-of-5 judge panel with majority vote, or an ensemble across mixtral:8x7b +
+qwen2.5:14b) — the wording lever appears exhausted at n=3 attempts across 2 structurally distinct
+strategies (full restructure, surgical patch, balanced-parallel-examples restructure), all against
+the same (correctly-configured, already-strongest-available) judge model.
+**Status: still open, still κ=0.247, criteria file unchanged from the original after three reverted
+attempts (2026-08-12).**
+**Formally deferred to EVAL-P21, 2026-08-13 (DEC-172).** `EVAL-P19.1` is flagged `⏸️ deferred` in
+ROADMAP.md rather than retried a fourth time. `HUMAN GATE H2`'s `Ready when` no longer requires
+`EVAL-P19.1` ticked (was unreachable — its own fix, EVAL-P21, depends on EVAL-P20.4, which is
+downstream of H2) — it now requires `EVAL-P19.2` instead, a real criteria change already shipped.
+`EVAL-P19.4` proceeds and is expected to report `refusal_judge` unchanged at κ≈0.247; that is not
+a new failure, it is this issue staying open on schedule. `refusal_judge`'s rate remains refused
+for publication until EVAL-P21's judge panel (2-of-3, out-of-family third judge) lands.
+
+**`EVAL-P19.4` ran, 2026-08-13 (`HUMAN GATE H2` cleared) — confirms the expected result.**
+Re-judged the unchanged `k3_73e6c36` transcript (`JUDGE_MODEL=mixtral:8x7b`) and merged
+(`MERGE=1`) against the real 393-row label file: **393 human verdicts preserved, 0 new rows, 0
+hash-drifted rows** (deterministic pass also regenerated via `make eval-deterministic-verdicts` to
+actually exercise EVAL-P19.2's word-boundary fix — confirmed 0 of 576 deterministic verdicts
+flipped in this corpus; the fix is real but this corpus contains no case whose keyword match it
+changes). `refusal_judge` re-measured: **κ = 0.247, 95% CI [-0.123, 0.703], n=75, n_clusters=25**
+— point estimate exactly unchanged from the original ISSUE-141 measurement, confusion matrix
+identical (60 TT / 8 FP / 4 FN / 3 TT-neg). Confirms DEC-172's prediction. `refusal_judge` stays
+unfixed, its rate stays refused for publication, and this issue stays open, deferred to EVAL-P21 —
+exactly as scheduled, not a new finding. (Blocking infra defect hit and fixed en route: ISSUE-158.
+Unrelated tone_judge LLM non-determinism noticed and accepted, not reverted: ISSUE-160.)
+**Fixed:** 2026-09-02 — **closed as SUPERSEDED by DEC-250**, not repaired. `refusal_judge`'s chance-level agreement mattered because it licensed a published number. Nothing is published. The judge is retained as a smoke test and must NOT be described as a measurement — its kappa is 0.247, CI [-0.068, 0.541].
+
+## [FIXED] ISSUE-244: three rival kappa families circulate for the same scorers
+**Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
+**Severity:** P1 (blocking) — R2.6's MDE-vs-headroom item cannot be decided until it is settled
+**Where:** `evals/mde.py:93-97` vs `evals/trend/trend_v1.jsonl` (`scorer_kappas` and
+`kappa_by_criterion`) vs `project-harness/review-2026-08/BASELINE_2026-08-28.md`
+**Description:** For the same scorers, three different kappas are in circulation:
+calibration 0.849 / 0.530 / 0.247 (tone / affirms / refusal); `mde.py`'s `RECORDED_KAPPAS`
+1.000 / 0.282 / 0.225; panel Fleiss 0.753 / 0.519 / 0.422. `CODEBASE_REVIEW.md:2427` already
+recorded this ("three different kappa for the same scorer circulate in the docs") and nothing
+reconciled it. The consequence is concrete: the 17.25 pp / 29.01 pp MDEs were computed from
+`mde.py`'s numbers, while the judge-retirement argument quotes calibration's. Under `mde.py`'s
+0.282, `affirms_judge` is HIDDEN (below the 0.40 threshold), not RESTRICTED — which reverses the
+recommendation.
+**Why deferred:** it is R2.6's first step, not a standalone fix, and recomputing the MDEs is part
+of that task.
+**To fix:** calibration is authoritative (decided 2026-08-31 with the maintainer). Update
+`mde.py`'s `RECORDED_KAPPAS` to 0.849 / 0.530 / 0.247, recompute the MDEs, and make the other two
+families cite or derive from calibration rather than circulate independently. Only then make the
+retirement call.
+**Fixed:** 2026-09-02 — **closed as SUPERSEDED by DEC-250**, not repaired. The three rival kappa families blocked R2.6's MDE-vs-headroom item. R2.6 is retired. No kappa is published, so there is nothing for the families to disagree about in public.
+
+## [FIXED] ISSUE-229: the guard battery is beaten by a fixed string
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Severity:** P1 (blocking)
+**Where:** `evals/`, `evals/reports/20260825T231028Z.md:11`, `scripts/hedge_responder_probe.py`
+**Description:** A null responder emitting one hard-coded sentence scores 74/78 = 0.949 across the
+YAML guard cases; the engine scores 70/78 = 0.897. The published claim is "Guard 170/186, 0.914". The
+baseline had never been taken because `hedge_responder_probe.py` raises `NotACapabilityCaseError`
+when handed a guard case — it structurally refuses to score the battery it would need to score. No
+scorer's agreement interval excludes chance, and the YAML guard-case base rate is 1.000.
+**Why deferred:** not deferred; it is R2.5. ISSUE-231 and the base-rate wiring both landed
+2026-08-31 (R2.1, R2.3); what remains is the product decision plus removing
+`NotACapabilityCaseError` from `hedge_responder_probe.py`.
+**To fix:** allow the probe to score guard cases; print the null baseline beside every published
+number; refuse to publish a headline where engine ≤ null; retract 0.914 until it clears. Delete the
+18 guaranteed-pass assertions first, in a separate commit, or the delta is unattributable.
+**Fixed:** 2026-09-02. Every fix condition this entry states was met:
+- *"allow the probe to score guard cases"* — `NotACapabilityCaseError` generalised (1f08d135),
+  then bound to the runner's own expectation set via `evals/guard_expectations.py` (5a075c00).
+- *"print the null baseline beside every published number"* — superseded by something stronger:
+  DEC-245 **refuses to print** the rate rather than printing it beside a null that beats it.
+- *"refuse to publish a headline where engine ≤ null"* — implemented per population in both the
+  console and markdown emitters (89f40216).
+- *"retract 0.914 until it clears"* — done 92a2c539; it has not cleared and will not, so the
+  claim is retired outright by DEC-250.
+
+**Ledger note:** ISSUE-257 was logged on 2026-09-02 for this same defect, by an agent that did
+not find this entry among 82 open issues. That duplication is the primary evidence cited in
+DEC-250 for collapsing the ledger. 257 is retained as the live successor because it states the
+remaining work concretely; this entry is the closed original.
