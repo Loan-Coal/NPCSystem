@@ -242,7 +242,7 @@ Validation: the published guard score is EXPECTED to fall. That is the fix worki
 regression. Diff against `BASELINE_2026-08-28.md` and state the delta.
 Depends on R2.3. Blocks R2.5. CR-L03-08.
 
-- [~] **R2.5** ask-gate ANSWERED 2026-09-01 — split the headline; 0.914 retracted
+- [x] **R2.5** ✅ DONE 2026-09-02 — headline split, 0.914 retracted, engine≤null enforced
 Files: `scripts/hedge_responder_probe.py`, `evals/report.py`, `evals/scorer_trust_policy.py`,
 `evals/dashboard/headline.py`, `README.md`
 Spec: **the loop stops here by agreement (2026-08-28).** Retracting a published claim is a
@@ -259,16 +259,33 @@ was why the baseline had never been taken; (4) the retraction banner on the now-
 (c) "retract 0.914 from the README" was already satisfied — verified: the README quotes no guard
 rate, only the citation policy.
 
-**Still open, and R2.5 cannot conclude without it: ISSUE-256.** The null probe scores a case's
-AUTHORED expectations only; the runner scores `_expected_with_guards` — authored plus injected
-`min_length`, fallback `keyword_none`, `tone_judge`, `affirms_judge`. So the first null
-measurement (hedge passes 37/37 = 1.000 of the adversarial battery) is **not** the engine's
-comparand and is not published as one. Until both are scored on the same expectation set, the
-"never publish where engine ≤ null" rule is not decidable for this battery.
+**ISSUE-256 — FIXED 2026-09-02 (step 3a below).** The null probe scored a case's AUTHORED
+expectations only; the runner scored `_expected_with_guards` — authored plus injected
+`min_length`, fallback `keyword_none`, `tone_judge`, `affirms_judge`. The first null measurement
+was therefore not the engine's comparand. Both now score through one shared definition.
 
-**Remaining R2.5 step (3):** the engine≤null refuse-to-print in `report.py`, plus CR-L03-02 —
-`scorer_trust_policy.check_publication` branches on kappa and ignores the `interval` it is
-handed, while `dashboard/headline.py:140` passes a fabricated `(0.0, 0.0)`.
+**Step 3 landed 2026-09-02, and it closes R2.5 — unfavourably, which is the point.**
+
+*3a (ISSUE-256, now FIXED):* `expected_with_guards` hoisted into `evals/guard_expectations.py`;
+the runner and the null probe import one definition. Re-measured once on the shared expectation
+set with both LLM judges live: the canned hedge still scores **37/37 = 1.000** on the adversarial
+battery. The rate did not move; its meaning did. The guards catch empty, canned and AI-revealing
+responses, and a fluent hedge is none of those, so they do not discriminate against this null.
+
+*3b (CR-L03-02, DEC-244):* the interval now decides — publication needs κ **and** the CI lower
+bound ≥ 0.60 — and `headline.py` computes a real CI via `calibration.kappa_interval` instead of
+passing `(0.0, 0.0)`. Note the review's phrasing understated this: the interval was not merely
+ignored, it was **fabricated at the call site**. Measured blast radius: `tone_judge` flips
+PUBLISH → refused, at κ=0.8493 with a CI of [−0.0100, 1.0000].
+
+*3c (DEC-245):* no battery publishes a rate at or below its recorded null, per population and
+never a union, in both the console and the markdown emitter. The null lives in
+`evals/null_baseline.json` with its provenance (DEC-242's rule). Today only `adversarial` has a
+recorded null, so only that headline refuses.
+
+**Consequence:** the adversarial rate is no longer publishable at all, and R2.5 concludes with
+the guarantee one battery short. Restoring it is case authoring, not a rule change — logged as
+**ISSUE-257** (re-author the 37 adversarial cases so a hedge fails them).
 
 - [ ] **R2.6** ⏸️ Instrument repairs — mostly blocked behind R2.5
 Spec: unparseable-verdict handling, aggregator join, reproducibility gate, MDE vs headroom,
@@ -331,7 +348,7 @@ returns 0 today and must return ≥1 after.
 Validation: follow the quickstart verbatim in a fresh clone and reach a running server.
 CR-L16-01.
 
-- [ ] **R4.3** Delete dead code and phantom guards
+- [x] **R4.3** Delete dead code and phantom guards ✅ DONE 2026-09-02, DEC-246/247
 Files: `tests/unit/engines/test_military_engine.py`, `src/npc_engine/engines/military/`,
 `demo_game/` UI panels, `scripts/migrations/add_faction_support.py`, `docs/API.md`,
 `docs/DATA_MODELS.md`, dead tests across `tests/`
@@ -342,12 +359,34 @@ helpers. Delete `add_faction_support.py` (dead since 2026-06-04) and its two doc
 decision 2026-08-28, delete the 47 zero-call and 23 assertion-free tests — a test that calls
 nothing or asserts nothing cannot fail — but **HALT and log a question on any test whose intent
 is ambiguous** rather than guessing.
-RED anchor: verification commands — `grep -rc session_kwarg tests/ src/` returns 61 today, 0
-after; `grep -rc add_faction_support docs/` returns 2 files today, 0 after.
+
+**Corrected 2026-09-02 — three of this spec's numbers do not reproduce, and one premise is
+false.** Measured at HEAD with `__pycache__` excluded (its inclusion is what produced them):
+`session_kwarg` references are **16 across 15 files**, not 61; phantom `**_` docstring lines are
+**23 across 22 files**, not 76; the test-quality scan reports **25 NO_ASSERTION and 0 zero-call**,
+not 47/23. And "a test that asserts nothing cannot fail" is **false for this population** — all
+25 call the SUT and fail when it raises, which is the entire contract of
+`test_save_swallows_graph_error`, `test_exception_does_not_propagate` and
+`test_main_does_not_crash_on_cp1252_stdout`.
+
+Two findings sharpen the trap rather than soften it: **no `run_tick` in `src/` accepts `**_`**
+(the shim is gone from every signature), and **not one of the 15 tests passes `session=`** — so
+a test "fixed" to actually pass it would `TypeError` on all 15. Both ends documented a contract
+false at both ends; `tick_scheduler.py` carried 27 more of the same.
+
+Landed: 23 phantom docstrings + 27 scheduler signatures corrected; 7 tests renamed to what they
+actually assert and 8 deleted as verified strict subsets (DEC-246); `_draw_no_data` collapsed to
+two shared helpers, not one — the three wrapping copies and the two single-line copies render
+differently; `add_faction_support.py` deleted with both doc mentions repointed at
+`schema_bootstrap.py`; 25 assertion-free tests annotated and the baseline ratcheted 25 → 0
+(DEC-247). Nothing was ambiguous, so no HALT was needed.
+RED anchor (corrected): `grep -rn session_kwarg tests/ src/ --include=*.py | grep -v __pycache__
+| wc -l` returned 16, now 0; `grep -rn add_faction_support docs/` returned 2 files, now 0;
+`python scripts/check_test_quality.py` reported 25 findings, now 0.
 Validation: `make test-demo` still passes 1,116 tests after the `_draw_no_data` collapse; `make
 check` green. CR-L14-01, CR-L09-06, CR-L08-07, CR-L14-06, CR-L04-02.
 
-- [ ] **R4.4** ⏸️ ask-gate — rewrite `CLAUDE.md` 476 → ~250, move narrative to skills
+- [x] **R4.4** ✅ DONE 2026-09-02 — `CLAUDE.md` 483 → 230, narrative moved to skills, DEC-248/249
 Files: `project-harness/CLAUDE.md`, `.claude/skills/*`
 Spec: scope agreed 2026-08-28 — **stays in CLAUDE.md** (paid every session): the layer model and
 forbidden cross-layer patterns, and the ask-before-doing list plus the issues/decisions protocol.
@@ -358,6 +397,22 @@ things that do not exist. Rewrite DIP-strict to require 2+ implementors or 3+ ca
 every factual claim with a pointer to the file holding the truth.
 Skipped by the loop: deciding what an agent must read before its first tool call is a judgment
 call, and getting it wrong degrades every later session. Depends on R1 complete.
+
+**Landed 2026-09-02 at 483 → 230 lines** (the spec's "476" was measured wrong; it was 483).
+Two corrections to the spec's assumptions. First, `.claude/skills/` **had never existed**, and
+`.gitignore:64` was `.claude/` — the directory form — so every skill file would have been
+silently untracked; a negation under a directory-form exclusion is inert, verified in a throwaway
+repo. `.gitignore` now excludes `.claude/*` and negates the two shared directories (DEC-248).
+Second, the engine-log mandate's compliance is 0 of **~76** engine logger sites, not 118 — the
+numerator was right, the denominator was not.
+
+One factual claim was **kept, not pointer-ised**: the Stack table's LLM row, because
+`tests/unit/evals/test_model_identity.py` parses it and reds when it disagrees with any engine's
+`llm_config.yaml`. Removing it in the first draft reddened `make check`. The rule is therefore
+"no *ungated* copies" — a copy a gate pins cannot drift silently. DEC-249 also records the
+skills failure mode: CLAUDE.md is auto-loaded, a skill is only invoked, so an unloaded skill
+silently stops enforcing its rule. Every strict rule stays named in CLAUDE.md for that reason,
+with `make check` as the real backstop. Closes ISSUE-251.
 Validation: `wc -l project-harness/CLAUDE.md` ≤ 250 (476 today); every remaining numeric claim
 reproduces from its cited command (26 of 109 fail today). CR-L09-04 +7.
 
