@@ -57,8 +57,25 @@ def test_unwired_slot_is_rejected() -> None:
 
 
 def test_fully_wired_kwargs_are_accepted() -> None:
-    """The happy path stays silent."""
-    _assert_every_engine_slot_wired(
+    """The happy path stays silent and returns nothing."""
+    result = _assert_every_engine_slot_wired(
         {"gossip_handler": object(), "chapter_engine": object()},
         expected=frozenset({"gossip_handler", "chapter_engine"}),
     )
+
+    assert result is None
+
+
+def test_missing_slot_is_rejected_like_an_explicit_none() -> None:
+    """An absent key is as unwired as a key set to None.
+
+    The composition root builds its kwargs by dict merge, so a forgotten entry
+    shows up as a missing key rather than a None value.
+    """
+    with pytest.raises(EngineWiringError) as caught:
+        _assert_every_engine_slot_wired(
+            {"gossip_handler": object()},
+            expected=frozenset({"gossip_handler", "chapter_engine"}),
+        )
+
+    assert caught.value.slots == ("chapter_engine",)
