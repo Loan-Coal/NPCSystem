@@ -287,7 +287,7 @@ recorded null, so only that headline refuses.
 the guarantee one battery short. Restoring it is case authoring, not a rule change — logged as
 **ISSUE-257** (re-author the 37 adversarial cases so a hedge fails them).
 
-- [ ] **R2.6** ⏸️ Instrument repairs — mostly blocked behind R2.5
+- [x] **R2.6** ❌ RETIRED 2026-09-02 by DEC-250 — instrument repairs stop; the claim is retired
 Spec: unparseable-verdict handling, aggregator join, reproducibility gate, MDE vs headroom,
 model-digest content addressing, plus the case-existence filter (ISSUE-237). Each changes a
 number, so none may run before the baseline is trustworthy.
@@ -306,7 +306,7 @@ reconcile and recompute before any judge-retirement call.
 **rises** — and `check-base-rate` reds on a rise. Its baseline re-record belongs there, not on
 the case-existence filter, which moves the rate down where the ratchet is already content.
 
-- [ ] **R2.7** ⏸️ Deferred-value eval subsystems — blocked behind R2.5
+- [x] **R2.7** ❌ RETIRED 2026-09-02 by DEC-250 — apparatus frozen until R3 is green
 Spec: trend stack (integrate then re-decide — 1 row today), sequence subsystem (keep and split,
 8 consumers), token-budget re-measurement gate. CR-L03-05, CR-L03-12, CR-L10-01, CR-L01-07.
 Corrected 2026-08-31: the re-measurement gate targets **`MEASURED_ROSTER_CEILING_TOKENS = 1151`**
@@ -460,6 +460,16 @@ proving the committed one was stale.
 Validation: `make check` green. CR-L08-09, CR-L13-11.
 
 ### Phase R3
+
+**THIS IS THE ACTIVE PHASE (DEC-250, 2026-09-02).** Everything before it is done, retired or
+frozen. Work order is fixed: **R3.6 → R3.1 → R3.2 → R3.4**. R3.6 is report-only and goes first so
+the eight unknown integration failures are sized before anything is committed to. R3.1 must
+precede R3.2 — the degradation ladder's bare `except Exception` would swallow a
+`GraphUnavailableError` before any handler saw it.
+
+**Programme exit condition (DEC-250):** R3 green and the integration suite at zero unexplained
+failures. Not an empty issue list — that never happens. Anything found after that is ordinary
+backlog, not programme scope.
 
 Product correctness — the safe half. Gossip (R3.3) and the fallback-policy decision are outside
 the loop's scope. Needs services: bring up the test override first. Plans: `FIX_PLANS.md#r3`.

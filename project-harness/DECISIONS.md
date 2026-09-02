@@ -7843,3 +7843,94 @@ reads "no *ungated* copies", and the file says so at that row.
 drift. *Move the rules to skills without leaving a line each* — makes an unloaded skill an
 invisible loss of a binding rule, the exact failure mode above. *Delete `SKILLS_QUEUE.md`* —
 `right_panel.py:101` cites a specific entry.
+
+---
+
+## DEC-250: retire the anti-hallucination CLAIM, freeze the apparatus, and go to product correctness
+**Date:** 2026-09-02 · **Status:** ✅ ACCEPTED · **Scope:** programme-level — supersedes the R2 remainder
+**Closes:** R2.6, R2.7, ISSUE-129, ISSUE-141, ISSUE-244 · **Downgrades:** ISSUE-155, ISSUE-156, ISSUE-238, ISSUE-257
+**Drives:** `project-harness/ROADMAP.md`, `README.md`, `project-harness/ISSUES.md`
+
+**Context — measured 2026-09-02, not asserted.**
+
+| | |
+|---|---|
+| product code | 105,126 lines |
+| tests | 82,694 |
+| paperwork (`project-harness/`, 92 files) | 48,375 |
+| apparatus (`evals/` + `scripts/`) | 30,039 |
+| **overhead : product** | **1.53 : 1** |
+
+Since 2026-W31, `project-harness/` is the **most-edited area of the repository** — 642
+file-touches, ahead of `tests/` (600), `evals/` (579) and `src/npc_engine/` (543). The most
+worked-on artifact is the writing about the work. Meanwhile **phase R3, product correctness, is
+at 0 of 5** and holds the one item marked CRITICAL.
+
+Five mechanisms were identified, each with evidence:
+
+1. **The ledger exceeded working memory.** 82 open issues, 168 archived, 245 decisions, 92 files.
+   Proof: on 2026-09-02 ISSUE-257 was logged for a defect already open as **ISSUE-229** since
+   2026-08-28 — same battery, same fixed string. A literal `## ISSUE-NNN: <short title>` template
+   sat at `ISSUES.md:791` and was counted as a live P1.
+2. **Specs are written from unverified numbers**, so each task starts by re-measuring its own
+   spec. In one session: 61→16, 76→23, 47/23→25/0, 476→483, 118→76. Five for five.
+   `DECISIONS.md` carries 27 corrected/superseded markers.
+3. **The instrument is perfected instead of used.** 12 of 22 gates protect the eval harness and
+   the paperwork, not the product. R2 consumed the whole programme and concluded the instrument
+   still cannot certify the claim.
+4. **Governance grew one gate per incident** — each justified, collectively a ~10-minute tax plus
+   its own maintenance surface.
+5. **No exit condition.** Every phase emitted issues faster than it closed them.
+
+**Decision — three parts, taken together.**
+
+**(1) The anti-hallucination guarantee is retired as a published claim. The tests are kept.**
+Measured 2026-09-02 on the shared expectation set with both judges live: a canned hedge scores
+**37/37 = 1.000** against the engine's 0.8468 on the adversarial battery, and `tone_judge` carries
+κ=0.8493 with a 95% CI of **[−0.0100, 1.0000]**. The battery does not discriminate and the judge
+licenses nothing. No number is published; the battery, judges and calibration remain as
+regression tests — a smoke alarm, not a measuring instrument, and they are to be described that
+way. This is reversible: if a studio contract later requires the guarantee, reopen R2 with
+ISSUE-257 as the entry point.
+
+**(2) The apparatus is frozen until R3 is green.** No new gates, no eval refactors, no
+measurement decisions. All 22 existing gates keep running — freezing means no new *work* on it,
+not less cover. Explicitly frozen: `evals/`, `scripts/check_*`, `prompts/eval/`, and every
+`docs/EVAL_*` / `docs/SCORER_*` file. A change there needs this DEC reopened.
+
+**(3) The work order is R3.6 → R3.1 → R3.2 → R3.4.** R3.6 is report-only and changes nothing, so
+it sizes the eight unknown integration failures before anything is committed to. R3.1 must
+precede R3.2: the degradation ladder's bare `except Exception` would swallow a
+`GraphUnavailableError` before any handler saw it.
+
+**Governance changes, effective now.** One decision record per phase, not per choice — DEC-250 is
+the first written that way. The ledger collapses to a live working set; everything else is
+archived, never deleted. No new gate without retiring one.
+
+**Exit condition — the thing that was missing.** The remediation programme ends when R3 is green
+and `make check` passes with the integration suite at zero unexplained failures. Not when the
+issue list is empty; it never will be. Issues found after that point are ordinary backlog, not
+programme scope.
+
+**Adversarially reviewed before sign-off**, per standing instruction. The objections and their
+answers:
+
+- *"Freezing the harness loses regression cover."* It does not — all 22 gates keep running; only
+  new work on them stops.
+- *"Retiring the claim throws away six weeks."* Partly conceded. The battery, judges and
+  calibration survive as regression tests; what is abandoned is the publishable *number*, which
+  the 2026-09-02 measurement showed does not exist and cannot be cheaply obtained.
+- *"R3 may be larger than it looks."* Real risk — R3.2 needs live Docker and depends on R3.1, and
+  R3.6 triages eight unknowns. Mitigated by making R3.6 report-only and first, so the rest is
+  sized before it is committed to.
+- *"Collapsing the ledger loses information."* Real, and mitigated by merge-and-archive with no
+  deletions. The ISSUE-229/257 duplicate is evidence the ledger already loses information more
+  reliably than an archive would.
+- *"Where this is wrong":* if the anti-hallucination guarantee is a sale requirement, part (1) is
+  wrong and R2 must continue. That was put to the maintainer explicitly and answered: retire it.
+
+**Rejected:** *keep pursuing the claim* — re-authoring 37 cases, reconciling three kappa families
+and raising n is weeks more apparatus work before product correctness starts. *Park it with a
+dated review* — a dated review is a scheduled re-decision, which is the churn this DEC exists to
+stop. *Leave governance alone* — the duplicate-logging and spec-drift failure modes would persist
+unchanged.

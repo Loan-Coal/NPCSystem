@@ -53,6 +53,20 @@ make test
 make eval
 ```
 
+## The anti-hallucination guarantee is not currently published
+
+Retired as a claim on 2026-09-02 (DEC-250). Measured on that date, through the same
+expectation set the engine is scored with and with both LLM judges live: a canned hedge that
+asserts nothing scores **37/37 = 1.000** on the adversarial battery, against the engine's
+0.8468 — and `tone_judge`, one of the four expectations injected into every guard case, has
+κ=0.8493 with a 95% CI of [−0.0100, 1.0000].
+
+The battery therefore does not distinguish the engine from a fixed string, and the judge
+licenses no publication. **No anti-hallucination rate is published anywhere, and none should be
+quoted.** The battery, the judges and the calibration are retained as regression tests — a
+smoke alarm, not a measuring instrument. The citation policy below still governs any number
+that is quoted.
+
 ## Quoting eval metrics
 
 Any published rate or kappa in this file (guard rate, capability rate, per-scorer
