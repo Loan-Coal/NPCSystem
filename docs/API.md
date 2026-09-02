@@ -489,7 +489,7 @@ Migration scripts connect to Neo4j directly via Bolt (default `bolt://localhost:
 the exposed Docker port).
 
 ```bash
-NEO4J_PASSWORD=password python scripts/migrations/add_faction_support.py
+NEO4J_PASSWORD=password python scripts/migrations/add_political_schema.py
 ```
 
 > **Warning:** Do not `source`/`export` the project `.env` before running these — `.env`

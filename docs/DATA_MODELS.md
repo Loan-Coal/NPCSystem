@@ -650,7 +650,7 @@ Neo4j label: `Faction`
 | `created_at` | string (ISO-8601) | yes | Node creation timestamp |
 | `last_graph_updated_at` | string (ISO-8601) | yes | Last write timestamp, used for embedding reconciliation |
 
-Uniqueness constraint: `Faction.id` (applied by `scripts/migrations/add_faction_support.py`).
+Uniqueness constraint: `Faction.id` (applied at startup by `src/npc_engine/graph/infra/schema_bootstrap.py`).
 
 Admin API: `POST /v1/admin/factions/` to create, `GET /v1/admin/factions/` to list,
 `GET /v1/admin/factions/{faction_id}` to fetch by ID.
