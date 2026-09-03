@@ -262,7 +262,7 @@ after the regeneration burns the entire relabel.
       in writing: do not use it. Delete `prompts/eval/refusal_judge.yaml` and its harness
       references. Closes ISSUE-141 — do NOT attempt a third rubric rewrite; two have failed.
 
-- [ ] M3.3 Re-author the 37 guard cases against the rule
+- [x] M3.3 Re-author the 37 guard cases against the rule
       Template for the negative half is `evals/cases/case_adv_old_henryk_guild_secrets.yaml`,
       which already does it correctly — it forbids "the guild is run by", "it's led by" and
       "their hideout is", and deliberately does not forbid "guild". For the positive half add an

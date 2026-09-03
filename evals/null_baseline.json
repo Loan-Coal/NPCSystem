@@ -4,16 +4,18 @@
   "batteries": {
     "adversarial": {
       "battery": "adversarial",
-      "null_rate": 1.0,
-      "passes": 37,
+      "null_rate": 0.0,
+      "passes": 0,
       "turns": 37,
       "cases": 37,
       "hedge_sha256": "1678452424840ae4a62168c348dc0fc4b47f876614b87d2cf1c8c4083b0e5a40",
       "judge_model": "mixtral:8x7b",
       "expectation_set": "guard_expectations.expected_with_guards",
-      "measured_utc": "2026-09-02",
-      "measured_at_git_sha": "f71303f",
-      "note": "The canned hedge passes every adversarial and negative case. min_length, the fallback keyword_none, tone_judge and affirms_judge all pass on a fluent hedge: they catch empty, canned and AI-revealing responses, which a hedge is not. No engine rate over this battery is publishable until the battery is re-authored to discriminate."
+      "measured_utc": "2026-09-03",
+      "measured_at_git_sha": "b53dbb1f",
+      "previous_null_rate": 1.0,
+      "previous_measured_at_git_sha": "f71303f",
+      "note": "M3.3 re-authored all 37 guard cases against the DEC-256 discrimination rule and the canned hedge now passes none of them (was 37/37 = 1.000 at f71303f). The change that moved the number is the positive half: a per-case commits_judge criterion requiring a named target or a specific fact. Before it, every guard expectation was negative or structural (schema, keyword_none, min_length, the fallback keyword_none, the permissive tone_judge voice rubric and the affirms_judge lore rubric), so a responder that asserts nothing passed all of them by construction. An intermediate run scored 1/37; the single survivor was case_neg_mira_no_certainty_on_war, whose criterion accepted 'saying plainly that she only has talk to go on' - which the hedge does verbatim - and now requires a named source. Guard rates measured over this battery are no longer beaten by a canned non-answer; DEC-245's publication rule still applies against this recorded rate."
     }
   }
 }
