@@ -137,7 +137,7 @@ class GenerationRecord(BaseModel):
     player_message: str
     npc_response: str
     criteria: str
-    judge_kind: Literal["tone_judge", "affirms_judge", "refusal_judge"] | None
+    judge_kind: Literal["tone_judge", "affirms_judge", "refusal_judge", "commits_judge"] | None
     matcher_kind: DeterministicMatcherKind | None = None
     expected_polarity: Literal["pass_on_yes", "pass_on_no"]
     active_conditions: tuple[str, ...] = ()

@@ -23,7 +23,7 @@ from deterministic_records import (
 # Guard: every non-judge matcher in matchers.py has a recorder here.
 # ---------------------------------------------------------------------------
 
-_JUDGE_ONLY_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge"})
+_JUDGE_ONLY_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge", "commits_judge"})
 
 
 def test_every_matcher_kind_has_a_recorder() -> None:

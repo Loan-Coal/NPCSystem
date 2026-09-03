@@ -314,3 +314,77 @@ class TestJudgeRefusal:
         )
         assert isinstance(matchers._REFUSAL_CRITERIA, str)
         assert len(matchers._REFUSAL_CRITERIA.strip()) > 0
+
+
+# ---------------------------------------------------------------------------
+# commits_judge — positive-polarity commitment judge (M3.3 / DEC-256)
+# ---------------------------------------------------------------------------
+
+
+class TestCommitsJudge:
+    """The guard battery's positive half: YES = the NPC supplied the commitment = PASS.
+
+    The whole point of this scorer is that its polarity is the OPPOSITE of
+    affirms_judge. affirms_judge can only fail a response that asserts something,
+    so a canned hedge passes every criterion it is given — which is why the null
+    responder scored 37/37 against a battery whose every assertion was negative.
+    """
+
+    @staticmethod
+    def _exp(**over: object) -> dict:
+        exp = {"kind": "commits_judge", "judge_prompt": "Answer YES only if the NPC names who to ask."}
+        exp.update(over)
+        return exp
+
+    def test_yes_verdict_passes(self) -> None:
+        """commits_judge: YES (commitment supplied) -> pass. Opposite of affirms_judge."""
+        with patch.object(matchers, "_run_binary_judge", return_value=JudgeResult(score=True, error="")):
+            result = evaluate(self._exp(), {"npc_response": "Ask Lira down at the fence."})
+        assert isinstance(result, JudgeResult)
+        assert result.score is True
+
+    def test_no_verdict_fails(self) -> None:
+        """commits_judge: NO (no commitment) -> fail. This is what fails the canned hedge."""
+        with patch.object(matchers, "_run_binary_judge", return_value=JudgeResult(score=False, error="")):
+            result = evaluate(self._exp(), {"npc_response": "I could not say. Hard times all round."})
+        assert isinstance(result, JudgeResult)
+        assert result.score is False
+
+    def test_polarity_is_inverse_of_affirms_judge(self) -> None:
+        """The same YES verdict passes commits_judge and fails affirms_judge.
+
+        Regression anchor for DEC-256: swapping the two kinds silently inverts every
+        guard case's positive half, which is exactly the defect that made the stated
+        M3.3 instrument unable to reach its own acceptance threshold.
+        """
+        yes = JudgeResult(score=True, error="")
+        resp = {"npc_response": "The guild is run by Lira."}
+        with patch.object(matchers, "_run_binary_judge", return_value=yes):
+            commits = evaluate({"kind": "commits_judge", "judge_prompt": "x"}, resp)
+            affirms = evaluate({"kind": "affirms_judge", "claim": "x"}, resp)
+        assert commits.score is True
+        assert affirms.score is False
+
+    def test_infra_failure_is_inconclusive(self) -> None:
+        """commits_judge: infra failure -> score=None, never counted as a pass."""
+        infra = JudgeResult(score=None, error="infra_failure")
+        with patch.object(matchers, "_run_binary_judge", return_value=infra):
+            result = evaluate(self._exp(), {"npc_response": "Ask Lira."})
+        assert result.score is None
+
+    def test_empty_response_fails(self) -> None:
+        """commits_judge: an empty npc_response cannot supply a commitment."""
+        result = evaluate(self._exp(), {"npc_response": ""})
+        assert result.score is False
+
+    def test_missing_criteria_fails(self) -> None:
+        """commits_judge with neither judge_prompt nor description is a fail, not a pass."""
+        result = evaluate({"kind": "commits_judge"}, {"npc_response": "Ask Lira."})
+        assert result.score is False
+        assert "judge_prompt" in (result.error or "")
+
+    def test_description_is_accepted_as_fallback(self) -> None:
+        """commits_judge reads `description` when no judge_prompt is given."""
+        with patch.object(matchers, "_run_binary_judge", return_value=JudgeResult(score=True, error="")):
+            result = evaluate({"kind": "commits_judge", "description": "names who to ask"}, {"npc_response": "Ask Lira."})
+        assert result.score is True

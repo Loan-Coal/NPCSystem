@@ -48,7 +48,7 @@ RETIRED_EDGE_ALIASES: dict[str, str] = {
 
 #: Expectation kinds whose verdict comes from an LLM. Excluded from the offline
 #: gameability checks and reported as unmeasured, never as clean.
-JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "refusal_judge", "affirms_judge"})
+JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "refusal_judge", "affirms_judge", "commits_judge"})
 
 #: Expectation kinds carrying a token list that should be drawn from the grounded fact.
 TOKEN_KINDS: frozenset[str] = frozenset({"keyword_any", "keyword_all"})

@@ -26,7 +26,7 @@ from runner import _expected_with_guards
 # Constants
 # ---------------------------------------------------------------------------
 
-LLM_JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge"})
+LLM_JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge", "commits_judge"})
 
 
 # ---------------------------------------------------------------------------
@@ -62,13 +62,18 @@ def build_judge_record(
     index: int,
     exp: dict,
 ) -> GenerationRecord:
-    """Build one LLM-judge GenerationRecord (tone_judge or affirms_judge)."""
-    if kind == "tone_judge":
-        criteria = _criteria_for_tone(exp)
-        polarity = "pass_on_yes"
-    else:  # affirms_judge
+    """Build one LLM-judge GenerationRecord (tone_judge, affirms_judge or commits_judge).
+
+    commits_judge shares tone_judge's criteria shape and polarity (pass_on_yes); only
+    affirms_judge inverts (pass_on_no). See DEC-256 for why the guard battery's positive
+    half could not be an affirms_judge criterion.
+    """
+    if kind == "affirms_judge":
         criteria = _criteria_for_affirms(exp)
         polarity = "pass_on_no"
+    else:  # tone_judge, commits_judge
+        criteria = _criteria_for_tone(exp)
+        polarity = "pass_on_yes"
 
     return GenerationRecord(
         record_id=f"{case_id}:{kind}:{index}",

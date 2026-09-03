@@ -196,6 +196,8 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResul
         return _eval_tone_judge(expectation, response)
     if kind == "affirms_judge":
         return _eval_affirms_judge(expectation, response)
+    if kind == "commits_judge":
+        return _eval_commits_judge(expectation, response)
     if kind == "context_block_expected":
         return _eval_context_block_expected(expectation, response)
 
@@ -325,6 +327,40 @@ def _eval_affirms_judge(exp: dict, resp: dict) -> JudgeResult:
     if affirmed:
         return JudgeResult(score=False, error=f"NPC affirmed false claim: {verdict.error}")
     return JudgeResult(score=True, error="")
+
+
+def _eval_commits_judge(exp: dict, resp: dict) -> JudgeResult:
+    """Commitment judge: passes when the NPC supplies the case-specific commitment.
+
+    The guard battery's positive half (DEC-256). Polarity matches tone_judge and is
+    the INVERSE of affirms_judge: a YES verdict (the NPC named what it does know, or
+    who to ask) is a PASS; NO (it committed to nothing) is a FAIL.
+
+    This is the only guard expectation that requires the response to *contain*
+    something. Every other one — the authored keyword_none, the injected min_length,
+    fallback keyword_none, tone_judge voice rubric and affirms_judge lore rubric — is
+    negative or structural, which is why a canned hedge that asserts nothing scored
+    37/37 against the battery (ISSUE-257). affirms_judge cannot serve here: it fails
+    only a response that asserts something, so a hedge passes any criterion it is
+    given.
+
+    Args:
+        exp: Expectation dict with a ``judge_prompt`` (per-case) or ``description``.
+        resp: API response dict.
+
+    Returns:
+        JudgeResult: score=True when the commitment is present, score=False when it
+        is absent or the response is empty, score=None on infra failure.
+    """
+    npc_response: str = _get_nested(resp, "npc_response") or ""
+    if not npc_response:
+        return JudgeResult(score=False, error="npc_response is empty")
+
+    criteria = exp.get("judge_prompt") or exp.get("description", "")
+    if not criteria:
+        return JudgeResult(score=False, error="no judge_prompt or description in expectation")
+
+    return _run_binary_judge(criteria=str(criteria).strip(), content=npc_response)
 
 
 def judge_refusal(content: str) -> JudgeResult:
