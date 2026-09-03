@@ -17,7 +17,10 @@
 
 from pathlib import Path
 
-REPO_ROOT = Path(SPECPATH)
+# SPECPATH is the directory CONTAINING this spec (packaging/), not the repo root.
+# Without .parent every path below resolved under packaging/ and the build died on
+# the entry script before it ever read datas (R5.3, CR-L12-02).
+REPO_ROOT = Path(SPECPATH).parent
 SRC_ROOT = REPO_ROOT / "src"
 
 a = Analysis(

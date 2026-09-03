@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
@@ -26,6 +26,15 @@ COPY src/ ./src/
 COPY . .
 
 EXPOSE 8000
+
+# Run as a non-root user (CR-L16-07). Created after the installs so pip can still write
+# to site-packages during the build; /app is chowned so the app can read its own source.
+RUN useradd --create-home --uid 10001 npcengine     && chown -R npcengine:npcengine /app
+USER npcengine
+
+# The container reports its own liveness, so `depends_on: service_healthy` and any
+# orchestrator can tell "process up" from "actually serving". /health is auth-exempt.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"
 
 # Build identifier surfaced on GET /health (L9-05) so a stale image is detectable.
 # Pass via: docker build --build-arg BUILD_SHA=$(git rev-parse --short HEAD)

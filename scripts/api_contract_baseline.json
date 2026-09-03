@@ -1,0 +1,5280 @@
+{
+  "api_v1_prefix": "/v1",
+  "operations": {
+    "DELETE {v1}/admin/beliefs/{belief_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "belief_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/beliefs/{belief_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/factions/{faction_id}/controls/{location_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/controls/{location_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/factions/{faction_id}/members/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/members/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/goals/{goal_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "goal_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/goals/{goal_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/graph/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/graph/characters/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/graph/events/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/graph/events/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/graph/locations/{location_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/graph/locations/{location_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/groups/{group_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "group_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "tick",
+          "required": true,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/groups/{group_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/items/{item_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "item_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/items/{item_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/location-history/{character_id}/prune": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "older_than_ticks",
+          "required": true,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/location-history/{character_id}/prune",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/locations/{child_id}/part_of/{parent_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "child_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "parent_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/locations/{child_id}/part_of/{parent_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/memories/{memory_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "memory_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/memories/{memory_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/schedules/{character_id}/unassign": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/{character_id}/unassign",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/secrets/{secret_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "secret_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/secrets/{secret_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/admin/traits/characters/{character_id}/{trait_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "trait_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/traits/characters/{character_id}/{trait_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "DELETE {v1}/graph/edges/{edge_type}/{src_id}/{dst_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "DELETE",
+      "params": [
+        {
+          "location": "path",
+          "name": "dst_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "edge_type",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "src_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/edges/{edge_type}/{src_id}/{dst_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET /health": {
+      "auth_required": false,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "/health",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET /readiness": {
+      "auth_required": false,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "/readiness",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET /setup/config": {
+      "auth_required": false,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "/setup/config",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_WizardConfig_"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/beliefs/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "k",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/beliefs/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_BeliefsPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/causality/causes/{node_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "node_type",
+          "required": false,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/causality/causes/{node_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/causality/chain/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "max_depth",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/causality/chain/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/debts/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/debts/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/debug/retrieval": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "player_id",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "query",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "retrieval_profile",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "session_id",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "session_turn",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "use_context_cache",
+          "required": false,
+          "type_name": "boolean"
+        }
+      ],
+      "path": "{v1}/admin/debug/retrieval",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "DebugRetrievalResponse",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/debug/vector-store": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "include_sha",
+          "required": false,
+          "type_name": "boolean"
+        }
+      ],
+      "path": "{v1}/admin/debug/vector-store",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_CorpusFingerprint_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/economy/price": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "item_type",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/economy/price",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_PricePayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/factions/": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "is_active",
+          "required": false,
+          "type_name": "any"
+        }
+      ],
+      "path": "{v1}/admin/factions/",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_FactionRow__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/factions/{faction_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/factions/{faction_id}/members": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/members",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_dict_str__Any___",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/factions/{faction_id}/standings": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/standings",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_FactionStandingRow__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/goals/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "k",
+          "required": false,
+          "type_name": "integer"
+        },
+        {
+          "location": "query",
+          "name": "status",
+          "required": false,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/goals/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_GoalsPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/gossip/trace/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/gossip/trace/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_RumorTracePayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/graph/audit_log": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/graph/audit_log",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_dict_str__Any___",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/graph/reindex/{job_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "job_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/graph/reindex/{job_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/groups/members/{group_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "group_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/groups/members/{group_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/groups/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "include_dissolved",
+          "required": false,
+          "type_name": "boolean"
+        }
+      ],
+      "path": "{v1}/admin/groups/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/items/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/items/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_ItemsPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/location-history/alibi/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "from_tick",
+          "required": true,
+          "type_name": "integer"
+        },
+        {
+          "location": "query",
+          "name": "to_tick",
+          "required": true,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/location-history/alibi/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/location-history/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/location-history/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/memories/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "k",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/memories/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_MemoriesPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/pledges/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "active_only",
+          "required": false,
+          "type_name": "boolean"
+        }
+      ],
+      "path": "{v1}/admin/pledges/characters/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_PledgesPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/protected": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/protected",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/quests/drafts": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "quest_giver_id",
+          "required": false,
+          "type_name": "any"
+        }
+      ],
+      "path": "{v1}/admin/quests/drafts",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_DraftQuestsPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/quests/{quest_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "quest_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/quests/{quest_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_QuestNodePayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/rumors/event/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/rumors/event/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/rumors/tree/{rumor_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "rumor_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/rumors/tree/{rumor_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/rumors/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "min_confidence",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/rumors/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/schedules/character/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/character/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/schedules/character/{character_id}/at": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "time_of_day",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/character/{character_id}/at",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/schedules/location/{location_id}/at": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "time_of_day",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/location/{location_id}/at",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/schedules/{schedule_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "schedule_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/{schedule_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/schema": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/schema",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/schema/registry": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/schema/registry",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/secrets/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "k",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/secrets/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/skills/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/skills/characters/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/skills/characters/{character_id}/{skill_id}/check": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "skill_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "min_level",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/skills/characters/{character_id}/{skill_id}/check",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/skills/{skill_id}/characters": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "skill_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "min_level",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/skills/{skill_id}/characters",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/system/config": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/system/config",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/system/engines": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/system/engines",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_EngineStatusRecord__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/system/events": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/system/events",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_EventFeedRow__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/system/metrics": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/admin/system/metrics",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/admin/traits/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/traits/characters/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/treaties/factions/{faction_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/treaties/factions/{faction_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_TreatiesPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/witnessed/by/{subject_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "subject_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/admin/witnessed/by/{subject_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/admin/witnessed/event/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/witnessed/event/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/chapters/current": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/chapters/current",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_ChapterPayload_"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/clock/state": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [],
+      "path": "{v1}/clock/state",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "GET {v1}/dialogue/director-beats": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/dialogue/director-beats",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "DirectorBeatRecord",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/dialogue/pending": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "query",
+          "name": "player_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/dialogue/pending",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "ConversationIntentResponse",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/characters/{character_id}/reputation": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/characters/{character_id}/reputation",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_ReputationRow__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/characters/{character_id}/reputation/{faction_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/characters/{character_id}/reputation/{faction_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/edges/{edge_type}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "edge_type",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "dst_id",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "offset",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "src_id",
+          "required": false,
+          "type_name": "any"
+        }
+      ],
+      "path": "{v1}/graph/edges/{edge_type}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_dict_str__Any___",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/edges/{edge_type}/{src_id}/{dst_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "dst_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "edge_type",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "src_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/edges/{edge_type}/{src_id}/{dst_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/nodes/{node_type}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_type",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "any"
+        },
+        {
+          "location": "query",
+          "name": "offset",
+          "required": false,
+          "type_name": "any"
+        }
+      ],
+      "path": "{v1}/graph/nodes/{node_type}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_list_dict_str__Any___",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/graph/nodes/{node_type}/{node_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "node_type",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/nodes/{node_type}/{node_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/investigations/{investigator_id}/{event_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "investigator_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/investigations/{investigator_id}/{event_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_InvestigationPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/locations/{location_id}/ancestors": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/locations/{location_id}/ancestors",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/locations/{location_id}/descendants": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/locations/{location_id}/descendants",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/npc/{npc_id}/emotion": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/npc/{npc_id}/emotion",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "EmotionResponse",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/npc/{npc_id}/player-model/{player_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "player_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/npc/{npc_id}/player-model/{player_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_PlayerModelResponse_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/npc/{npc_id}/relationship/{other_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "other_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/npc/{npc_id}/relationship/{other_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_RelationshipResponse_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/npc/{npc_id}/schemes": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/npc/{npc_id}/schemes",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_SchemesPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/npc/{npc_id}/state": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "include_events",
+          "required": false,
+          "type_name": "boolean"
+        },
+        {
+          "location": "query",
+          "name": "include_relations",
+          "required": false,
+          "type_name": "boolean"
+        }
+      ],
+      "path": "{v1}/npc/{npc_id}/state",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "NPCStateResponse",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "GET {v1}/player/{player_id}/events": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "GET",
+      "params": [
+        {
+          "location": "path",
+          "name": "player_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "type_name": "integer"
+        }
+      ],
+      "path": "{v1}/player/{player_id}/events",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_PlayerEventsData_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/admin/beliefs/{belief_id}/confidence": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "belief_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/beliefs/{belief_id}/confidence",
+      "request_schema": "UpdateConfidenceRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/admin/debts/{debtor_id}/{creditor_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "creditor_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "debtor_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/debts/{debtor_id}/{creditor_id}",
+      "request_schema": "UpdateDebtStatusRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/admin/goals/{goal_id}/status": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "goal_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/goals/{goal_id}/status",
+      "request_schema": "UpdateGoalStatusRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/admin/items/{item_id}/owner": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "item_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "from_character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/items/{item_id}/owner",
+      "request_schema": "TransferOwnerRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/admin/witnessed/disclose": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "query",
+          "name": "event_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "subject_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "query",
+          "name": "witness_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/witnessed/disclose",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PATCH {v1}/graph/nodes/{node_type}/{node_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "node_type",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/nodes/{node_type}/{node_id}",
+      "request_schema": "NodeWriteBody",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST /setup/config": {
+      "auth_required": false,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "/setup/config",
+      "request_schema": "WizardConfig",
+      "response_schemas": {
+        "200": "OkEnvelope_WizardConfig_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST /setup/validate": {
+      "auth_required": false,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "/setup/validate",
+      "request_schema": "ValidateRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_ValidationResult_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/action": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/action",
+      "request_schema": "ActionReportRequest",
+      "response_schemas": {
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/batch/event_tick": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/batch/event_tick",
+      "request_schema": "EventTickRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/batch/gossip_tick": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/batch/gossip_tick",
+      "request_schema": "GossipTickRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/beliefs/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/beliefs/{character_id}",
+      "request_schema": "CreateBeliefRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/characters/{character_id}/reputation/{faction_id}/adjust": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/characters/{character_id}/reputation/{faction_id}/adjust",
+      "request_schema": "AdjustReputationRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_ReputationStandingPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/debts/{debtor_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "debtor_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/debts/{debtor_id}",
+      "request_schema": "CreateDebtRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/economy/trade": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/economy/trade",
+      "request_schema": "TradeOfferRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_TradeResultPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/factions/": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/factions/",
+      "request_schema": "CreateFactionRequest",
+      "response_schemas": {
+        "201": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "201",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/factions/{faction_id}/controls/{location_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "location_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/controls/{location_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "201": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "201",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/factions/{faction_id}/members": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/members",
+      "request_schema": "npc_engine__api__routes__faction_politics__factions__AddMemberRequest",
+      "response_schemas": {
+        "201": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "201",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/goals/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/goals/{character_id}",
+      "request_schema": "CreateGoalRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/gossip/correct": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/gossip/correct",
+      "request_schema": "CorrectRumorRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_CorrectRumorPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/gossip/spread": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/gossip/spread",
+      "request_schema": "SpreadRumorRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_SpreadRumorPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/graph/reindex": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/graph/reindex",
+      "request_schema": "ReindexRequest",
+      "response_schemas": {
+        "202": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "202",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/graph/relations/delta": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/graph/relations/delta",
+      "request_schema": "DeltaRelationRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/groups": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/groups",
+      "request_schema": "CreateGroupRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/groups/{group_id}/members": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "group_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/groups/{group_id}/members",
+      "request_schema": "npc_engine__api__routes__economy__groups__AddMemberRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/items/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/items/{character_id}",
+      "request_schema": "CreateItemRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/locations/{child_id}/part_of": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "child_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/locations/{child_id}/part_of",
+      "request_schema": "CreatePartOfRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/memories/consolidate/{npc_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "npc_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/memories/consolidate/{npc_id}",
+      "request_schema": "ConsolidateRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_ConsolidatePayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/memories/decay": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/memories/decay",
+      "request_schema": "DecayRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/memories/from-arousal/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/memories/from-arousal/{character_id}",
+      "request_schema": "CreateMemoryFromArousalRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/memories/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/memories/{character_id}",
+      "request_schema": "CreateMemoryRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/pledges/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/pledges/characters/{character_id}",
+      "request_schema": "CreatePledgeRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/pledges/characters/{character_id}/break": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/pledges/characters/{character_id}/break",
+      "request_schema": "BreakPledgeRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/quests/generate": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/quests/generate",
+      "request_schema": "GenerateQuestRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_GenerateQuestPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/quests/{quest_id}/offer": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "quest_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/quests/{quest_id}/offer",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_OfferedQuestPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/rumors": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/rumors",
+      "request_schema": "CreateRumorRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/rumors/{rumor_id}/believe": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "rumor_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/rumors/{rumor_id}/believe",
+      "request_schema": "BelieveRumorRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/schedules/": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/schedules/",
+      "request_schema": "CreateScheduleRequest",
+      "response_schemas": {
+        "201": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "201",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/schedules/{schedule_id}/assign/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "schedule_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/schedules/{schedule_id}/assign/{character_id}",
+      "request_schema": null,
+      "response_schemas": {
+        "201": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "201",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/secrets/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/secrets/{character_id}",
+      "request_schema": "CreateSecretRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/skills/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/skills/characters/{character_id}",
+      "request_schema": "AddSkillRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/skills/characters/{character_id}/xp": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/skills/characters/{character_id}/xp",
+      "request_schema": "IncrementXpRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/skills/characters/{character_id}/{skill_id}/xp": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "skill_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/skills/characters/{character_id}/{skill_id}/xp",
+      "request_schema": "IncrementXpRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/traits/characters/{character_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/traits/characters/{character_id}",
+      "request_schema": "AddTraitRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/treaties/": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/treaties/",
+      "request_schema": "CreateTreatyRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/treaties/{treaty_id}/break": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "treaty_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/treaties/{treaty_id}/break",
+      "request_schema": "BreakTreatyRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/treaties/{treaty_id}/expire": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "treaty_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/treaties/{treaty_id}/expire",
+      "request_schema": "ExpireTreatyRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/admin/vector-store/rehydrate": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/admin/vector-store/rehydrate",
+      "request_schema": null,
+      "response_schemas": {
+        "200": "OkEnvelope_CorpusReport_"
+      },
+      "status_codes": [
+        "200"
+      ]
+    },
+    "POST {v1}/clock/advance": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/clock/advance",
+      "request_schema": "ClockAdvanceRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/dialogue": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/dialogue",
+      "request_schema": "DialogueRequest",
+      "response_schemas": {
+        "200": "DialogueResponse",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/graph/edges/{edge_type}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "edge_type",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/edges/{edge_type}",
+      "request_schema": "EdgeWriteBody",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/graph/nodes/{node_type}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_type",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/nodes/{node_type}",
+      "request_schema": "NodeWriteBody",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/interaction": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/interaction",
+      "request_schema": "InteractionRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/interaction/band": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/interaction/band",
+      "request_schema": "BandUpdateRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/accept": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/accept",
+      "request_schema": "QuestAcceptRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/evaluate": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/evaluate",
+      "request_schema": "QuestEvaluateRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/objective": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/objective",
+      "request_schema": "QuestObjectiveUpdateRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/offer": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/offer",
+      "request_schema": "QuestOfferRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/offer-draft": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/offer-draft",
+      "request_schema": "QuestOfferRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/reward": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [],
+      "path": "{v1}/quest/reward",
+      "request_schema": "QuestRewardApplyRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "POST {v1}/quest/{quest_id}/choose": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "POST",
+      "params": [
+        {
+          "location": "path",
+          "name": "quest_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/quest/{quest_id}/choose",
+      "request_schema": "QuestChooseRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_QuestChooseResponse_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PUT {v1}/admin/characters/{character_id}/reputation/{faction_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PUT",
+      "params": [
+        {
+          "location": "path",
+          "name": "character_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/characters/{character_id}/reputation/{faction_id}",
+      "request_schema": "SetReputationRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_ReputationStandingPayload_",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PUT {v1}/admin/factions/{faction_id}/standings/{target_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PUT",
+      "params": [
+        {
+          "location": "path",
+          "name": "faction_id",
+          "required": true,
+          "type_name": "string"
+        },
+        {
+          "location": "path",
+          "name": "target_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/admin/factions/{faction_id}/standings/{target_id}",
+      "request_schema": "SetStandingRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "PUT {v1}/admin/graph/relations/absolute": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PUT",
+      "params": [],
+      "path": "{v1}/admin/graph/relations/absolute",
+      "request_schema": "AbsoluteRelationRequest",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
+    "WEBSOCKET {v1}/ws/dialogue": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "WEBSOCKET",
+      "params": [],
+      "path": "{v1}/ws/dialogue",
+      "request_schema": null,
+      "response_schemas": {},
+      "status_codes": []
+    }
+  },
+  "schemas": {
+    "AbsoluteRelationRequest": {
+      "enums": {},
+      "fields": {
+        "affection": "integer!",
+        "dst_id": "string!",
+        "fear": "integer!",
+        "src_id": "string!",
+        "trust": "integer!"
+      },
+      "name": "AbsoluteRelationRequest",
+      "refs": []
+    },
+    "ActionModel": {
+      "enums": {
+        "type": [
+          "attack",
+          "buy_item",
+          "claim_completion",
+          "gesture",
+          "give_item",
+          "move",
+          "none",
+          "propose_quest",
+          "propose_trade",
+          "sell_item",
+          "speak"
+        ]
+      },
+      "fields": {
+        "parameters": "object?",
+        "target_id": "any?",
+        "type": "string?"
+      },
+      "name": "ActionModel",
+      "refs": []
+    },
+    "ActionReportRequest": {
+      "enums": {
+        "action_type": [
+          "attack",
+          "buy_item",
+          "give_item",
+          "help",
+          "observe",
+          "sell_item",
+          "steal"
+        ]
+      },
+      "fields": {
+        "action_type": "string!",
+        "counterparty_id": "any?",
+        "currency_amount": "any?",
+        "currency_reason": "any?",
+        "intensity": "integer?",
+        "npc_id": "string!",
+        "player_id": "string!",
+        "session_scope": "any?"
+      },
+      "name": "ActionReportRequest",
+      "refs": []
+    },
+    "AddSkillRequest": {
+      "enums": {},
+      "fields": {
+        "level": "integer!",
+        "skill_id": "string!",
+        "xp": "integer?"
+      },
+      "name": "AddSkillRequest",
+      "refs": []
+    },
+    "AddTraitRequest": {
+      "enums": {},
+      "fields": {
+        "intensity": "integer!",
+        "is_secret": "boolean?",
+        "trait_id": "string!"
+      },
+      "name": "AddTraitRequest",
+      "refs": []
+    },
+    "AdjustReputationRequest": {
+      "enums": {},
+      "fields": {
+        "delta": "integer!",
+        "location_id": "any?",
+        "tick_id": "any?"
+      },
+      "name": "AdjustReputationRequest",
+      "refs": []
+    },
+    "BandUpdateRequest": {
+      "enums": {},
+      "fields": {
+        "affection": "integer?",
+        "player_id": "string!",
+        "trust": "integer?"
+      },
+      "name": "BandUpdateRequest",
+      "refs": []
+    },
+    "BeliefsPayload": {
+      "enums": {},
+      "fields": {
+        "beliefs": "array!"
+      },
+      "name": "BeliefsPayload",
+      "refs": []
+    },
+    "BelieveRumorRequest": {
+      "enums": {},
+      "fields": {
+        "character_id": "string!",
+        "confidence": "integer!",
+        "from_character_id": "any?",
+        "tick": "any?"
+      },
+      "name": "BelieveRumorRequest",
+      "refs": []
+    },
+    "BreakPledgeRequest": {
+      "enums": {
+        "pledge_type": [
+          "fealty",
+          "kill",
+          "marry",
+          "mentor",
+          "protect",
+          "serve",
+          "vendetta"
+        ]
+      },
+      "fields": {
+        "pledge_type": "string!",
+        "pledgee_id": "string!",
+        "tick": "any?"
+      },
+      "name": "BreakPledgeRequest",
+      "refs": []
+    },
+    "BreakTreatyRequest": {
+      "enums": {},
+      "fields": {
+        "breaking_faction_id": "string!",
+        "tick": "any?"
+      },
+      "name": "BreakTreatyRequest",
+      "refs": []
+    },
+    "ChapterPayload": {
+      "enums": {},
+      "fields": {
+        "id": "string!",
+        "name": "string!",
+        "started_at_tick": "integer!",
+        "status": "string!",
+        "theme": "any?"
+      },
+      "name": "ChapterPayload",
+      "refs": []
+    },
+    "CharacterNode": {
+      "enums": {},
+      "fields": {
+        "id": "string!"
+      },
+      "name": "CharacterNode",
+      "refs": []
+    },
+    "ClockAdvanceRequest": {
+      "enums": {},
+      "fields": {
+        "advance_time_field": "any?",
+        "delta_ticks": "integer?",
+        "game_time_seconds": "integer?"
+      },
+      "name": "ClockAdvanceRequest",
+      "refs": []
+    },
+    "ConsolidatePayload": {
+      "enums": {},
+      "fields": {
+        "memory_id": "any?"
+      },
+      "name": "ConsolidatePayload",
+      "refs": []
+    },
+    "ConsolidateRequest": {
+      "enums": {},
+      "fields": {
+        "game_time": "object?",
+        "player_id": "string!",
+        "turn_threshold": "integer?"
+      },
+      "name": "ConsolidateRequest",
+      "refs": []
+    },
+    "ContextItemView": {
+      "enums": {},
+      "fields": {
+        "key": "string!",
+        "priority": "integer!",
+        "text": "string!",
+        "tier": "string!"
+      },
+      "name": "ContextItemView",
+      "refs": []
+    },
+    "ContextReceipt": {
+      "enums": {},
+      "fields": {
+        "budget_trimmed": "boolean?",
+        "dropped": "array?",
+        "dropped_keys": "array!",
+        "item_keys": "array?",
+        "prompt_token_budget": "integer?",
+        "retrieval_profile": "string!",
+        "tier_spend": "array?",
+        "total_tokens": "integer?"
+      },
+      "name": "ContextReceipt",
+      "refs": [
+        "DroppedItem",
+        "TierSpend"
+      ]
+    },
+    "ConversationIntentResponse": {
+      "enums": {
+        "trigger_type": [
+          "event",
+          "goal",
+          "need"
+        ]
+      },
+      "fields": {
+        "intent_id": "string!",
+        "npc_id": "string!",
+        "reason": "string!",
+        "score": "number!",
+        "tick": "integer!",
+        "trigger_ref": "string!",
+        "trigger_type": "string!"
+      },
+      "name": "ConversationIntentResponse",
+      "refs": []
+    },
+    "CorpusFingerprint": {
+      "enums": {},
+      "fields": {
+        "corpus_sha": "string!",
+        "embedding_dim": "integer!",
+        "embedding_model": "string!",
+        "item_count": "integer!"
+      },
+      "name": "CorpusFingerprint",
+      "refs": []
+    },
+    "CorpusReport": {
+      "enums": {},
+      "fields": {
+        "fingerprint": "CorpusFingerprint!",
+        "missing_embedding": "integer!",
+        "nodes_read": "integer!",
+        "reconcile_passes": "integer!",
+        "upserted": "integer!"
+      },
+      "name": "CorpusReport",
+      "refs": [
+        "CorpusFingerprint"
+      ]
+    },
+    "CorrectRumorPayload": {
+      "enums": {},
+      "fields": {
+        "corrected": "boolean!",
+        "event_id": "string!",
+        "npc_id": "string!"
+      },
+      "name": "CorrectRumorPayload",
+      "refs": []
+    },
+    "CorrectRumorRequest": {
+      "enums": {},
+      "fields": {
+        "event_id": "string!",
+        "npc_id": "string!"
+      },
+      "name": "CorrectRumorRequest",
+      "refs": []
+    },
+    "CreateBeliefRequest": {
+      "enums": {},
+      "fields": {
+        "confidence": "integer!",
+        "content": "string!",
+        "game_time": "object?",
+        "id": "any?"
+      },
+      "name": "CreateBeliefRequest",
+      "refs": []
+    },
+    "CreateDebtRequest": {
+      "enums": {},
+      "fields": {
+        "creditor_id": "string!",
+        "due_by": "string?",
+        "kind": "string!",
+        "magnitude": "string!"
+      },
+      "name": "CreateDebtRequest",
+      "refs": []
+    },
+    "CreateFactionRequest": {
+      "enums": {
+        "archetype": [
+          "criminal",
+          "mercantile",
+          "military",
+          "other",
+          "political",
+          "religious",
+          "social"
+        ]
+      },
+      "fields": {
+        "archetype": "string!",
+        "description": "any?",
+        "id": "string!",
+        "is_active": "boolean?",
+        "name": "string!"
+      },
+      "name": "CreateFactionRequest",
+      "refs": []
+    },
+    "CreateGoalRequest": {
+      "enums": {},
+      "fields": {
+        "description": "string!",
+        "game_time": "object?",
+        "id": "any?",
+        "target_id": "any?",
+        "urgency": "integer!"
+      },
+      "name": "CreateGoalRequest",
+      "refs": []
+    },
+    "CreateGroupRequest": {
+      "enums": {},
+      "fields": {
+        "cohesion": "integer!",
+        "formed_at_tick": "any?",
+        "home_location_id": "any?",
+        "is_secret": "boolean?",
+        "kind": "string!",
+        "name": "string!"
+      },
+      "name": "CreateGroupRequest",
+      "refs": []
+    },
+    "CreateItemRequest": {
+      "enums": {},
+      "fields": {
+        "description": "string!",
+        "game_time": "object?",
+        "is_unique": "boolean?",
+        "name": "string!",
+        "properties": "any?",
+        "rarity": "string!",
+        "type": "string!",
+        "value": "integer!"
+      },
+      "name": "CreateItemRequest",
+      "refs": []
+    },
+    "CreateMemoryFromArousalRequest": {
+      "enums": {},
+      "fields": {
+        "arousal": "integer!",
+        "content": "string!",
+        "game_time": "object?"
+      },
+      "name": "CreateMemoryFromArousalRequest",
+      "refs": []
+    },
+    "CreateMemoryRequest": {
+      "enums": {},
+      "fields": {
+        "content": "string!",
+        "emotional_charge": "integer!",
+        "game_time": "object?",
+        "id": "any?",
+        "is_historical": "boolean?",
+        "occurred_at_game_time": "any?",
+        "vividness": "integer!"
+      },
+      "name": "CreateMemoryRequest",
+      "refs": []
+    },
+    "CreatePartOfRequest": {
+      "enums": {},
+      "fields": {
+        "hierarchy_level": "integer!",
+        "parent_id": "string!"
+      },
+      "name": "CreatePartOfRequest",
+      "refs": []
+    },
+    "CreatePledgeRequest": {
+      "enums": {
+        "pledge_type": [
+          "fealty",
+          "kill",
+          "marry",
+          "mentor",
+          "protect",
+          "serve",
+          "vendetta"
+        ]
+      },
+      "fields": {
+        "binding_event_id": "any?",
+        "expires_at_tick": "any?",
+        "pledge_type": "string!",
+        "pledgee_id": "string!",
+        "severity": "integer?",
+        "tick": "any?",
+        "witness_id": "any?"
+      },
+      "name": "CreatePledgeRequest",
+      "refs": []
+    },
+    "CreateRumorRequest": {
+      "enums": {},
+      "fields": {
+        "content": "string!",
+        "created_at_tick": "any?",
+        "is_fabricated": "boolean?",
+        "origin_event_id": "any?",
+        "severity": "integer!"
+      },
+      "name": "CreateRumorRequest",
+      "refs": []
+    },
+    "CreateScheduleRequest": {
+      "enums": {},
+      "fields": {
+        "description": "any?",
+        "entries": "array!",
+        "id": "string!",
+        "name": "string!"
+      },
+      "name": "CreateScheduleRequest",
+      "refs": [
+        "ScheduleEntry"
+      ]
+    },
+    "CreateSecretRequest": {
+      "enums": {},
+      "fields": {
+        "content": "string!",
+        "game_time": "object?",
+        "id": "any?",
+        "severity": "integer!"
+      },
+      "name": "CreateSecretRequest",
+      "refs": []
+    },
+    "CreateTreatyRequest": {
+      "enums": {},
+      "fields": {
+        "binding_event_id": "any?",
+        "expires_at_tick": "any?",
+        "parties": "array!",
+        "signed_at_tick": "any?",
+        "terms_conditions": "array?",
+        "terms_narrative": "string!"
+      },
+      "name": "CreateTreatyRequest",
+      "refs": [
+        "TreatyCondition"
+      ]
+    },
+    "DebugRetrievalResponse": {
+      "enums": {},
+      "fields": {
+        "context_items": "array!",
+        "context_receipt": "ContextReceipt?",
+        "npc_id": "string!",
+        "player_id": "any?",
+        "query": "string!",
+        "retrieval_profile": "string?",
+        "total_tokens": "integer!"
+      },
+      "name": "DebugRetrievalResponse",
+      "refs": [
+        "ContextItemView",
+        "ContextReceipt"
+      ]
+    },
+    "DecayRequest": {
+      "enums": {},
+      "fields": {
+        "decay_per_day": "integer?"
+      },
+      "name": "DecayRequest",
+      "refs": []
+    },
+    "DeltaRelationRequest": {
+      "enums": {},
+      "fields": {
+        "affection": "integer?",
+        "dst_id": "string!",
+        "fear": "integer?",
+        "src_id": "string!",
+        "trust": "integer?"
+      },
+      "name": "DeltaRelationRequest",
+      "refs": []
+    },
+    "DialogueRequest": {
+      "enums": {},
+      "fields": {
+        "explicit_node_ids": "array?",
+        "include_context_receipt": "boolean?",
+        "location_id": "any?",
+        "npc_id": "string!",
+        "player_id": "string!",
+        "player_message": "string!",
+        "retrieval_profile": "any?",
+        "session_id": "any?"
+      },
+      "name": "DialogueRequest",
+      "refs": []
+    },
+    "DialogueResponse": {
+      "enums": {},
+      "fields": {
+        "action": "ActionModel?",
+        "audio_bytes": "any?",
+        "cached": "boolean?",
+        "context_receipt": "ContextReceipt?",
+        "degradation_level": "string?",
+        "emotion": "any?",
+        "facial_expression": "FacialExpressionModel?",
+        "learned_facts": "array?",
+        "memories_recalled": "array?",
+        "mood_update": "any?",
+        "npc_response": "string!",
+        "relation_deltas": "RelationDeltas?",
+        "session_id": "any?"
+      },
+      "name": "DialogueResponse",
+      "refs": [
+        "ActionModel",
+        "ContextReceipt",
+        "FacialExpressionModel",
+        "RelationDeltas"
+      ]
+    },
+    "DirectorBeatRecord": {
+      "enums": {},
+      "fields": {
+        "beat_kind": "string!",
+        "npc_id": "string!",
+        "player_id": "string!",
+        "reason": "string!",
+        "tick": "integer!"
+      },
+      "name": "DirectorBeatRecord",
+      "refs": []
+    },
+    "DraftQuestsPayload": {
+      "enums": {},
+      "fields": {
+        "count": "integer!",
+        "drafts": "array!"
+      },
+      "name": "DraftQuestsPayload",
+      "refs": []
+    },
+    "DroppedItem": {
+      "enums": {
+        "reason": [
+          "final_trim",
+          "prompt_budget",
+          "tier_soft_cap"
+        ],
+        "tier": [
+          "tier0",
+          "tierA",
+          "tierB",
+          "tierC"
+        ]
+      },
+      "fields": {
+        "key": "string!",
+        "reason": "string!",
+        "tier": "string!"
+      },
+      "name": "DroppedItem",
+      "refs": []
+    },
+    "EdgeWriteBody": {
+      "enums": {},
+      "fields": {
+        "dst_id": "string!",
+        "properties": "object?",
+        "src_id": "string!"
+      },
+      "name": "EdgeWriteBody",
+      "refs": []
+    },
+    "EmotionResponse": {
+      "enums": {},
+      "fields": {
+        "arousal": "integer!",
+        "label": "string!",
+        "npc_id": "string!",
+        "updated_at": "string!",
+        "valence": "integer!"
+      },
+      "name": "EmotionResponse",
+      "refs": []
+    },
+    "EngineStatusRecord": {
+      "enums": {},
+      "fields": {
+        "engine_name": "string!",
+        "error_count": "integer?",
+        "last_error": "any?",
+        "last_error_tick": "any?",
+        "last_tick_id": "any?"
+      },
+      "name": "EngineStatusRecord",
+      "refs": []
+    },
+    "EventFeedRow": {
+      "enums": {},
+      "fields": {
+        "event_id": "string!",
+        "event_type": "string!",
+        "label": "string!",
+        "location_id": "string!",
+        "severity": "any!",
+        "src_character_id": "string!",
+        "tick_id": "integer!"
+      },
+      "name": "EventFeedRow",
+      "refs": []
+    },
+    "EventNode": {
+      "enums": {},
+      "fields": {
+        "distorted_summary": "any?",
+        "event": "object?",
+        "knowledge_state": "any?"
+      },
+      "name": "EventNode",
+      "refs": []
+    },
+    "EventTickRequest": {
+      "enums": {},
+      "fields": {
+        "location_ids": "array?",
+        "tick_override": "any?"
+      },
+      "name": "EventTickRequest",
+      "refs": []
+    },
+    "ExpireTreatyRequest": {
+      "enums": {},
+      "fields": {
+        "tick": "any?"
+      },
+      "name": "ExpireTreatyRequest",
+      "refs": []
+    },
+    "FacialExpressionModel": {
+      "enums": {
+        "type": [
+          "angry",
+          "frown",
+          "neutral",
+          "sad",
+          "smile",
+          "surprised"
+        ]
+      },
+      "fields": {
+        "intensity": "integer?",
+        "type": "string?"
+      },
+      "name": "FacialExpressionModel",
+      "refs": []
+    },
+    "FactionRow": {
+      "enums": {},
+      "fields": {
+        "id": "string!",
+        "name": "string!"
+      },
+      "name": "FactionRow",
+      "refs": []
+    },
+    "FactionStandingRow": {
+      "enums": {},
+      "fields": {
+        "standing": "integer!",
+        "target": "string!"
+      },
+      "name": "FactionStandingRow",
+      "refs": []
+    },
+    "GenerateQuestPayload": {
+      "enums": {},
+      "fields": {
+        "description": "string!",
+        "quest_id": "string!"
+      },
+      "name": "GenerateQuestPayload",
+      "refs": []
+    },
+    "GenerateQuestRequest": {
+      "enums": {},
+      "fields": {
+        "quest_giver_id": "string!"
+      },
+      "name": "GenerateQuestRequest",
+      "refs": []
+    },
+    "GoalsPayload": {
+      "enums": {},
+      "fields": {
+        "goals": "array!"
+      },
+      "name": "GoalsPayload",
+      "refs": []
+    },
+    "GossipTickRequest": {
+      "enums": {},
+      "fields": {
+        "max_pairs": "integer?",
+        "npc_ids": "array?",
+        "tick_override": "any?"
+      },
+      "name": "GossipTickRequest",
+      "refs": []
+    },
+    "HTTPValidationError": {
+      "enums": {},
+      "fields": {
+        "detail": "array?"
+      },
+      "name": "HTTPValidationError",
+      "refs": [
+        "ValidationError"
+      ]
+    },
+    "IncrementXpRequest": {
+      "enums": {},
+      "fields": {
+        "tick": "any?",
+        "xp_delta": "integer!"
+      },
+      "name": "IncrementXpRequest",
+      "refs": []
+    },
+    "InteractionRequest": {
+      "enums": {},
+      "fields": {
+        "npc_id": "string!",
+        "player_id": "string!",
+        "proposal": "ProposalBody!"
+      },
+      "name": "InteractionRequest",
+      "refs": [
+        "ProposalBody"
+      ]
+    },
+    "InvestigationPayload": {
+      "enums": {},
+      "fields": {
+        "alibi_contradictions": "array!",
+        "deductions": "array!",
+        "evidence": "array!",
+        "rumor_contradictions": "array!",
+        "suspects": "array!",
+        "witnesses": "array!"
+      },
+      "name": "InvestigationPayload",
+      "refs": []
+    },
+    "ItemsPayload": {
+      "enums": {},
+      "fields": {
+        "items": "array!"
+      },
+      "name": "ItemsPayload",
+      "refs": []
+    },
+    "LLMPath": {
+      "enums": {},
+      "fields": {},
+      "name": "LLMPath",
+      "refs": []
+    },
+    "MemoriesPayload": {
+      "enums": {},
+      "fields": {
+        "memories": "array!"
+      },
+      "name": "MemoriesPayload",
+      "refs": []
+    },
+    "NPCStateResponse": {
+      "enums": {},
+      "fields": {
+        "character": "CharacterNode!",
+        "events": "array!",
+        "relations": "array!"
+      },
+      "name": "NPCStateResponse",
+      "refs": [
+        "CharacterNode",
+        "EventNode",
+        "RelationEdge"
+      ]
+    },
+    "NodeWriteBody": {
+      "enums": {},
+      "fields": {
+        "properties": "object?"
+      },
+      "name": "NodeWriteBody",
+      "refs": []
+    },
+    "OfferedQuestPayload": {
+      "enums": {},
+      "fields": {
+        "quest_id": "string!",
+        "status": "string!"
+      },
+      "name": "OfferedQuestPayload",
+      "refs": []
+    },
+    "OkEnvelope_BeliefsPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "BeliefsPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_BeliefsPayload_",
+      "refs": [
+        "BeliefsPayload"
+      ]
+    },
+    "OkEnvelope_ChapterPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "ChapterPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_ChapterPayload_",
+      "refs": [
+        "ChapterPayload"
+      ]
+    },
+    "OkEnvelope_ConsolidatePayload_": {
+      "enums": {},
+      "fields": {
+        "data": "ConsolidatePayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_ConsolidatePayload_",
+      "refs": [
+        "ConsolidatePayload"
+      ]
+    },
+    "OkEnvelope_CorpusFingerprint_": {
+      "enums": {},
+      "fields": {
+        "data": "CorpusFingerprint!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_CorpusFingerprint_",
+      "refs": [
+        "CorpusFingerprint"
+      ]
+    },
+    "OkEnvelope_CorpusReport_": {
+      "enums": {},
+      "fields": {
+        "data": "CorpusReport!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_CorpusReport_",
+      "refs": [
+        "CorpusReport"
+      ]
+    },
+    "OkEnvelope_CorrectRumorPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "CorrectRumorPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_CorrectRumorPayload_",
+      "refs": [
+        "CorrectRumorPayload"
+      ]
+    },
+    "OkEnvelope_DraftQuestsPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "DraftQuestsPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_DraftQuestsPayload_",
+      "refs": [
+        "DraftQuestsPayload"
+      ]
+    },
+    "OkEnvelope_GenerateQuestPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "GenerateQuestPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_GenerateQuestPayload_",
+      "refs": [
+        "GenerateQuestPayload"
+      ]
+    },
+    "OkEnvelope_GoalsPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "GoalsPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_GoalsPayload_",
+      "refs": [
+        "GoalsPayload"
+      ]
+    },
+    "OkEnvelope_InvestigationPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "InvestigationPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_InvestigationPayload_",
+      "refs": [
+        "InvestigationPayload"
+      ]
+    },
+    "OkEnvelope_ItemsPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "ItemsPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_ItemsPayload_",
+      "refs": [
+        "ItemsPayload"
+      ]
+    },
+    "OkEnvelope_MemoriesPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "MemoriesPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_MemoriesPayload_",
+      "refs": [
+        "MemoriesPayload"
+      ]
+    },
+    "OkEnvelope_OfferedQuestPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "OfferedQuestPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_OfferedQuestPayload_",
+      "refs": [
+        "OfferedQuestPayload"
+      ]
+    },
+    "OkEnvelope_PlayerEventsData_": {
+      "enums": {},
+      "fields": {
+        "data": "PlayerEventsData!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_PlayerEventsData_",
+      "refs": [
+        "PlayerEventsData"
+      ]
+    },
+    "OkEnvelope_PlayerModelResponse_": {
+      "enums": {},
+      "fields": {
+        "data": "PlayerModelResponse!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_PlayerModelResponse_",
+      "refs": [
+        "PlayerModelResponse"
+      ]
+    },
+    "OkEnvelope_PledgesPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "PledgesPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_PledgesPayload_",
+      "refs": [
+        "PledgesPayload"
+      ]
+    },
+    "OkEnvelope_PricePayload_": {
+      "enums": {},
+      "fields": {
+        "data": "PricePayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_PricePayload_",
+      "refs": [
+        "PricePayload"
+      ]
+    },
+    "OkEnvelope_QuestChooseResponse_": {
+      "enums": {},
+      "fields": {
+        "data": "QuestChooseResponse!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_QuestChooseResponse_",
+      "refs": [
+        "QuestChooseResponse"
+      ]
+    },
+    "OkEnvelope_QuestNodePayload_": {
+      "enums": {},
+      "fields": {
+        "data": "QuestNodePayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_QuestNodePayload_",
+      "refs": [
+        "QuestNodePayload"
+      ]
+    },
+    "OkEnvelope_RelationshipResponse_": {
+      "enums": {},
+      "fields": {
+        "data": "RelationshipResponse!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_RelationshipResponse_",
+      "refs": [
+        "RelationshipResponse"
+      ]
+    },
+    "OkEnvelope_ReputationStandingPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "ReputationStandingPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_ReputationStandingPayload_",
+      "refs": [
+        "ReputationStandingPayload"
+      ]
+    },
+    "OkEnvelope_RumorTracePayload_": {
+      "enums": {},
+      "fields": {
+        "data": "RumorTracePayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_RumorTracePayload_",
+      "refs": [
+        "RumorTracePayload"
+      ]
+    },
+    "OkEnvelope_SchemesPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "SchemesPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_SchemesPayload_",
+      "refs": [
+        "SchemesPayload"
+      ]
+    },
+    "OkEnvelope_SpreadRumorPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "SpreadRumorPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_SpreadRumorPayload_",
+      "refs": [
+        "SpreadRumorPayload"
+      ]
+    },
+    "OkEnvelope_TradeResultPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "TradeResultPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_TradeResultPayload_",
+      "refs": [
+        "TradeResultPayload"
+      ]
+    },
+    "OkEnvelope_TreatiesPayload_": {
+      "enums": {},
+      "fields": {
+        "data": "TreatiesPayload!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_TreatiesPayload_",
+      "refs": [
+        "TreatiesPayload"
+      ]
+    },
+    "OkEnvelope_ValidationResult_": {
+      "enums": {},
+      "fields": {
+        "data": "ValidationResult!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_ValidationResult_",
+      "refs": [
+        "ValidationResult"
+      ]
+    },
+    "OkEnvelope_WizardConfig_": {
+      "enums": {},
+      "fields": {
+        "data": "WizardConfig!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_WizardConfig_",
+      "refs": [
+        "WizardConfig"
+      ]
+    },
+    "OkEnvelope_dict_str__Any__": {
+      "enums": {},
+      "fields": {
+        "data": "object!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_dict_str__Any__",
+      "refs": []
+    },
+    "OkEnvelope_list_EngineStatusRecord__": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_EngineStatusRecord__",
+      "refs": [
+        "EngineStatusRecord"
+      ]
+    },
+    "OkEnvelope_list_EventFeedRow__": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_EventFeedRow__",
+      "refs": [
+        "EventFeedRow"
+      ]
+    },
+    "OkEnvelope_list_FactionRow__": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_FactionRow__",
+      "refs": [
+        "FactionRow"
+      ]
+    },
+    "OkEnvelope_list_FactionStandingRow__": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_FactionStandingRow__",
+      "refs": [
+        "FactionStandingRow"
+      ]
+    },
+    "OkEnvelope_list_ReputationRow__": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_ReputationRow__",
+      "refs": [
+        "ReputationRow"
+      ]
+    },
+    "OkEnvelope_list_dict_str__Any___": {
+      "enums": {},
+      "fields": {
+        "data": "array!",
+        "meta": "any?",
+        "success": "boolean?"
+      },
+      "name": "OkEnvelope_list_dict_str__Any___",
+      "refs": []
+    },
+    "PlayerEventRow": {
+      "enums": {},
+      "fields": {
+        "event_id": "string!",
+        "event_type": "string!",
+        "label": "string!",
+        "location_id": "string!",
+        "severity": "any!",
+        "src_character_id": "string!",
+        "tick_id": "integer!"
+      },
+      "name": "PlayerEventRow",
+      "refs": []
+    },
+    "PlayerEventsData": {
+      "enums": {},
+      "fields": {
+        "events": "array!"
+      },
+      "name": "PlayerEventsData",
+      "refs": [
+        "PlayerEventRow"
+      ]
+    },
+    "PlayerModelResponse": {
+      "enums": {},
+      "fields": {
+        "last_updated_at": "any?",
+        "npc_id": "string!",
+        "perceived_intent": "any?",
+        "perceived_trust": "any?",
+        "player_id": "string!"
+      },
+      "name": "PlayerModelResponse",
+      "refs": []
+    },
+    "PledgesPayload": {
+      "enums": {},
+      "fields": {
+        "pledges": "array!"
+      },
+      "name": "PledgesPayload",
+      "refs": []
+    },
+    "PricePayload": {
+      "enums": {},
+      "fields": {
+        "price": "integer!"
+      },
+      "name": "PricePayload",
+      "refs": []
+    },
+    "ProposalBody": {
+      "enums": {},
+      "fields": {
+        "kind": "string!",
+        "payload": "object?",
+        "target_id": "any?"
+      },
+      "name": "ProposalBody",
+      "refs": []
+    },
+    "QuestAcceptRequest": {
+      "enums": {},
+      "fields": {
+        "player_id": "string!",
+        "quest_id": "string!"
+      },
+      "name": "QuestAcceptRequest",
+      "refs": []
+    },
+    "QuestChooseRequest": {
+      "enums": {},
+      "fields": {
+        "choice_id": "string!",
+        "player_id": "string!"
+      },
+      "name": "QuestChooseRequest",
+      "refs": []
+    },
+    "QuestChooseResponse": {
+      "enums": {},
+      "fields": {
+        "next_quest_id": "any!",
+        "player_id": "string!",
+        "quest_id": "string!"
+      },
+      "name": "QuestChooseResponse",
+      "refs": []
+    },
+    "QuestEvaluateRequest": {
+      "enums": {},
+      "fields": {
+        "player_id": "string!",
+        "quest_id": "string!"
+      },
+      "name": "QuestEvaluateRequest",
+      "refs": []
+    },
+    "QuestNodePayload": {
+      "enums": {},
+      "fields": {
+        "quest": "object!"
+      },
+      "name": "QuestNodePayload",
+      "refs": []
+    },
+    "QuestObjectiveBody": {
+      "enums": {
+        "objective_type": [
+          "deliver",
+          "kill",
+          "talk",
+          "visit"
+        ]
+      },
+      "fields": {
+        "objective_id": "string!",
+        "objective_type": "string?",
+        "target_count": "integer!",
+        "target_id": "any?"
+      },
+      "name": "QuestObjectiveBody",
+      "refs": []
+    },
+    "QuestObjectiveUpdateRequest": {
+      "enums": {},
+      "fields": {
+        "objective_id": "string!",
+        "player_id": "string!",
+        "progress_delta": "integer?",
+        "quest_id": "string!"
+      },
+      "name": "QuestObjectiveUpdateRequest",
+      "refs": []
+    },
+    "QuestOfferRequest": {
+      "enums": {},
+      "fields": {
+        "currency_reward": "QuestRewardCurrencyBody?",
+        "item_rewards": "array?",
+        "objectives": "array!",
+        "player_id": "string!",
+        "quest_id": "string!",
+        "reward_source_id": "string?",
+        "title": "string!"
+      },
+      "name": "QuestOfferRequest",
+      "refs": [
+        "QuestObjectiveBody",
+        "QuestRewardCurrencyBody",
+        "QuestRewardItemBody"
+      ]
+    },
+    "QuestRewardApplyRequest": {
+      "enums": {},
+      "fields": {
+        "player_id": "string!",
+        "quest_id": "string!"
+      },
+      "name": "QuestRewardApplyRequest",
+      "refs": []
+    },
+    "QuestRewardCurrencyBody": {
+      "enums": {},
+      "fields": {
+        "amount": "integer!"
+      },
+      "name": "QuestRewardCurrencyBody",
+      "refs": []
+    },
+    "QuestRewardItemBody": {
+      "enums": {},
+      "fields": {
+        "item_id": "string!",
+        "quantity": "integer?"
+      },
+      "name": "QuestRewardItemBody",
+      "refs": []
+    },
+    "ReindexRequest": {
+      "enums": {},
+      "fields": {
+        "npc_ids": "array?"
+      },
+      "name": "ReindexRequest",
+      "refs": []
+    },
+    "RelationDeltas": {
+      "enums": {},
+      "fields": {
+        "affection": "integer?",
+        "fear": "integer?",
+        "trust": "integer?"
+      },
+      "name": "RelationDeltas",
+      "refs": []
+    },
+    "RelationEdge": {
+      "enums": {},
+      "fields": {
+        "character": "CharacterNode!",
+        "relation": "object?"
+      },
+      "name": "RelationEdge",
+      "refs": [
+        "CharacterNode"
+      ]
+    },
+    "RelationshipResponse": {
+      "enums": {},
+      "fields": {
+        "affection": "integer!",
+        "fear": "integer!",
+        "phase_started_at_tick": "any?",
+        "relationship_phase": "any?",
+        "standing": "Standing!",
+        "trust": "integer!"
+      },
+      "name": "RelationshipResponse",
+      "refs": [
+        "Standing"
+      ]
+    },
+    "ReputationRow": {
+      "enums": {},
+      "fields": {
+        "faction_id": "string!",
+        "standing": "integer!"
+      },
+      "name": "ReputationRow",
+      "refs": []
+    },
+    "ReputationStandingPayload": {
+      "enums": {},
+      "fields": {
+        "character_id": "string!",
+        "faction_id": "string!",
+        "standing": "integer!"
+      },
+      "name": "ReputationStandingPayload",
+      "refs": []
+    },
+    "RumorTracePayload": {
+      "enums": {},
+      "fields": {
+        "chain": "array!",
+        "event_id": "string!"
+      },
+      "name": "RumorTracePayload",
+      "refs": []
+    },
+    "ScheduleEntry": {
+      "enums": {
+        "time_of_day": [
+          "afternoon",
+          "evening",
+          "midday",
+          "morning",
+          "night"
+        ]
+      },
+      "fields": {
+        "activity": "any?",
+        "location_id": "string!",
+        "time_of_day": "string!"
+      },
+      "name": "ScheduleEntry",
+      "refs": []
+    },
+    "SchemeStepView": {
+      "enums": {},
+      "fields": {
+        "completed": "boolean!",
+        "step_order": "integer!",
+        "summary": "any?"
+      },
+      "name": "SchemeStepView",
+      "refs": []
+    },
+    "SchemeWithSteps": {
+      "enums": {},
+      "fields": {
+        "discovered": "boolean?",
+        "goal": "string!",
+        "scheme_id": "string!",
+        "status": "any?",
+        "steps": "array?"
+      },
+      "name": "SchemeWithSteps",
+      "refs": [
+        "SchemeStepView"
+      ]
+    },
+    "SchemesPayload": {
+      "enums": {},
+      "fields": {
+        "npc_id": "string!",
+        "schemes": "array!"
+      },
+      "name": "SchemesPayload",
+      "refs": [
+        "SchemeWithSteps"
+      ]
+    },
+    "SetReputationRequest": {
+      "enums": {},
+      "fields": {
+        "standing": "integer!"
+      },
+      "name": "SetReputationRequest",
+      "refs": []
+    },
+    "SetStandingRequest": {
+      "enums": {},
+      "fields": {
+        "standing": "integer!"
+      },
+      "name": "SetStandingRequest",
+      "refs": []
+    },
+    "SpreadRumorPayload": {
+      "enums": {},
+      "fields": {
+        "event_id": "string!",
+        "npc_id": "string!"
+      },
+      "name": "SpreadRumorPayload",
+      "refs": []
+    },
+    "SpreadRumorRequest": {
+      "enums": {},
+      "fields": {
+        "rumor_text": "string!",
+        "severity": "integer?",
+        "target_npc_id": "string!",
+        "tick_id": "any?"
+      },
+      "name": "SpreadRumorRequest",
+      "refs": []
+    },
+    "Standing": {
+      "enums": {},
+      "fields": {},
+      "name": "Standing",
+      "refs": []
+    },
+    "TierSpend": {
+      "enums": {
+        "tier": [
+          "tier0",
+          "tierA",
+          "tierB",
+          "tierC"
+        ]
+      },
+      "fields": {
+        "items": "integer!",
+        "tier": "string!",
+        "tokens": "integer!"
+      },
+      "name": "TierSpend",
+      "refs": []
+    },
+    "TradeOfferRequest": {
+      "enums": {},
+      "fields": {
+        "buyer_id": "string!",
+        "current_tick": "any?",
+        "item_id": "string!",
+        "item_type": "string!",
+        "offered_price": "integer!",
+        "seller_id": "string!"
+      },
+      "name": "TradeOfferRequest",
+      "refs": []
+    },
+    "TradeResultPayload": {
+      "enums": {},
+      "fields": {
+        "accepted": "boolean!",
+        "fair_price": "integer!",
+        "final_price": "any?",
+        "rejection_reason": "any?"
+      },
+      "name": "TradeResultPayload",
+      "refs": []
+    },
+    "TransferOwnerRequest": {
+      "enums": {},
+      "fields": {
+        "game_time": "object?",
+        "to_character_id": "string!"
+      },
+      "name": "TransferOwnerRequest",
+      "refs": []
+    },
+    "TreatiesPayload": {
+      "enums": {},
+      "fields": {
+        "treaties": "array!"
+      },
+      "name": "TreatiesPayload",
+      "refs": []
+    },
+    "TreatyCondition": {
+      "enums": {
+        "type": [
+          "military_support",
+          "no_attack",
+          "non_interference",
+          "tribute"
+        ]
+      },
+      "fields": {
+        "amount": "any?",
+        "interval_ticks": "any?",
+        "target_faction_id": "any?",
+        "type": "string!"
+      },
+      "name": "TreatyCondition",
+      "refs": []
+    },
+    "UpdateConfidenceRequest": {
+      "enums": {},
+      "fields": {
+        "confidence": "integer!"
+      },
+      "name": "UpdateConfidenceRequest",
+      "refs": []
+    },
+    "UpdateDebtStatusRequest": {
+      "enums": {},
+      "fields": {
+        "status": "string!"
+      },
+      "name": "UpdateDebtStatusRequest",
+      "refs": []
+    },
+    "UpdateGoalStatusRequest": {
+      "enums": {},
+      "fields": {
+        "status": "string!"
+      },
+      "name": "UpdateGoalStatusRequest",
+      "refs": []
+    },
+    "ValidateRequest": {
+      "enums": {
+        "path": [
+          "a",
+          "b"
+        ]
+      },
+      "fields": {
+        "config": "WizardConfig!",
+        "path": "string!"
+      },
+      "name": "ValidateRequest",
+      "refs": [
+        "WizardConfig"
+      ]
+    },
+    "ValidationError": {
+      "enums": {},
+      "fields": {
+        "loc": "array!",
+        "msg": "string!",
+        "type": "string!"
+      },
+      "name": "ValidationError",
+      "refs": []
+    },
+    "ValidationResult": {
+      "enums": {},
+      "fields": {
+        "message": "string?",
+        "status": "ValidationStatus!"
+      },
+      "name": "ValidationResult",
+      "refs": [
+        "ValidationStatus"
+      ]
+    },
+    "ValidationStatus": {
+      "enums": {},
+      "fields": {},
+      "name": "ValidationStatus",
+      "refs": []
+    },
+    "WizardConfig": {
+      "enums": {},
+      "fields": {
+        "api_key": "any?",
+        "api_model": "string?",
+        "api_url": "string?",
+        "llm_path": "LLMPath!",
+        "local_model": "any?"
+      },
+      "name": "WizardConfig",
+      "refs": [
+        "LLMPath"
+      ]
+    },
+    "npc_engine__api__routes__economy__groups__AddMemberRequest": {
+      "enums": {},
+      "fields": {
+        "character_id": "string!",
+        "commitment": "integer!",
+        "joined_at_tick": "any?",
+        "role": "string!"
+      },
+      "name": "npc_engine__api__routes__economy__groups__AddMemberRequest",
+      "refs": []
+    },
+    "npc_engine__api__routes__faction_politics__factions__AddMemberRequest": {
+      "enums": {
+        "role": [
+          "leader",
+          "member",
+          "officer",
+          "recruit"
+        ],
+        "status": [
+          "active",
+          "deceased",
+          "exiled"
+        ]
+      },
+      "fields": {
+        "character_id": "string!",
+        "role": "string!",
+        "status": "string!"
+      },
+      "name": "npc_engine__api__routes__faction_politics__factions__AddMemberRequest",
+      "refs": []
+    }
+  }
+}

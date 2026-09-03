@@ -35,7 +35,11 @@ services:
   neo4j:
     image: neo4j:5
     environment:
-      NEO4J_AUTH: neo4j/password
+      # Sourced from the environment, never shipped (CR-L16-09). The `:?` form makes the
+      # stack refuse to start unconfigured rather than come up on a known credential.
+      # config_validators.py only rejects the default in staging/prod, so ENV=dev was
+      # the gap. Set NEO4J_PASSWORD in .env (see .env.example).
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set - see .env.example}
     # No ports published here on purpose: neo4j sits only on the `internal`
     # network, which is declared `internal: true` (no external connectivity), so a
     # `ports:` stanza here would be SILENTLY INERT. To reach bolt from the host for
@@ -88,6 +92,12 @@ services:
         condition: service_healthy
     restart: on-failure:5
     command: uvicorn npc_engine.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - internal
       - public

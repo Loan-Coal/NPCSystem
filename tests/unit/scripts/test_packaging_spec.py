@@ -48,8 +48,12 @@ def _path_bindings() -> dict[str, Path]:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
         target = node.targets[0]
-        if isinstance(target, ast.Name):
+        if not isinstance(target, ast.Name):
+            continue
+        try:
             bindings[target.id] = _eval_path(node.value, bindings)
+        except AssertionError:
+            continue  # not a path assignment (e.g. a = Analysis(...)); not a binding
     return bindings
 
 
@@ -71,6 +75,8 @@ def _eval_path(node: ast.expr, bindings: dict[str, Path]) -> Path:
     if isinstance(node, ast.Name):
         assert node.id in bindings, f"spec uses unknown path name {node.id!r}"
         return bindings[node.id]
+    if isinstance(node, ast.Attribute) and node.attr == "parent":
+        return _eval_path(node.value, bindings).parent
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
         right = node.right
         assert isinstance(right, ast.Constant) and isinstance(right.value, str), (

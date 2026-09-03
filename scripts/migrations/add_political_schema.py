@@ -139,6 +139,40 @@ async def _backfill_faction_fields(session, *, dry_run: bool, mode: str) -> None
         print(f"  [DRY-RUN] Would backfill {cnt} Faction node(s). No changes made.")
 
 
+# ---------------------------------------------------------------------------
+# R5.4 migration contract — identity, claimed fields, and the down path.
+# ---------------------------------------------------------------------------
+
+MIGRATION_ID = "add_political_schema"
+MIGRATES = [("faction", "power_score"), ("faction", "treasury"), ("faction", "military_strength")]
+REVERSIBLE = "partial"
+IRREVERSIBLE_REASON = (
+    "up() backfilled power_score/treasury/military_strength to 0 on Factions that lacked them. 0 is also a legitimate authored value, so down() cannot distinguish a defaulted field from a real one and leaves every property in place; it drops only the three constraints it created."
+)
+
+_CREATED_CONSTRAINTS: tuple[str, ...] = ('title_id_unique', 'agenda_id_unique', 'leverage_id_unique')
+
+
+async def down(session, *, dry_run: bool = False) -> None:
+    """Undo this migration as far as it can honestly be undone.
+
+    Args:
+        session: Active Neo4j async session (write access required).
+        dry_run: When True, print the plan and write nothing.
+    """
+    from _support import drop_constraints, record_run
+
+    await drop_constraints(session, _CREATED_CONSTRAINTS, dry_run=dry_run)
+    if not dry_run:
+        await record_run(
+            session,
+            migration_id=MIGRATION_ID,
+            direction="down",
+            reversible=REVERSIBLE,
+            notes='up() backfilled power_score/treasury/military_strength to 0 on Factions that lacked them. 0 is also a legitimate authored value, so down() cannot distinguish a defaulted field from a real one and leaves every property in place; it drops only the three constraints it created.',
+        )
+
+
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
     asyncio.run(run_migration(dry_run=dry_run))

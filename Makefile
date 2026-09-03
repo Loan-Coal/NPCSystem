@@ -15,16 +15,16 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
-        check-migrations check-api-stability check-engine-logs \
+        check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         check-ledger-ids check-cited-reports check-ceiling-baseline \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
-        demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
+        demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
-        seed-tavern-world seed-village-world package eval-dashboard
+        seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
 
 install:
 	pip install -e .[dev]
@@ -314,8 +314,31 @@ check-migrations:
 	$(PYTHON) scripts/check_migrations.py
 
 # check-api-stability: a /v1 response model lost a field it had in the baseline.
+# Narrow by construction: an AST field-drop ratchet over api/response_models/ and
+# api/schemas.py only (17 of 105 api/ models). check-api-contract is the real contract
+# gate; this one is kept because it sees a source-level rename before a route is wired.
 check-api-stability:
 	$(PYTHON) scripts/check_api_stability.py
+
+# bench-nfr: put a number on the NFRs in docs/BUSINESS_REQUIREMENTS.md, which have been
+# stated as targets and never measured (CR-L12-05). Needs the stack up and
+# NPC_ENGINE_API_KEY set. A measurement, not a gate — deliberately not in `check`.
+bench-nfr:
+	$(PYTHON) scripts/bench_nfr.py $(if $(OUT),--out $(OUT),)
+
+# verify-rag: exercise the real embedding path (loads the model, needs torch).
+# Deliberately NOT in `check`: CI has no GPU and no torch, and a skipif guard would make
+# it pass by skipping. Human-run verification instead (R5.2).
+verify-rag:
+	$(PYTHON) scripts/verify_rag.py
+
+# check-api-contract: the /v1 surface changed in a way that breaks an existing consumer
+# — route removed (including the WebSocket route, which app.openapi() does not list),
+# response field dropped or retyped, request tightened, status code or auth changed.
+# Additive change passes and needs no baseline edit. Re-record a deliberate break with:
+#   python scripts/check_api_contract.py --update      (see docs/API_STABILITY.md, DEC-254)
+check-api-contract:
+	$(PYTHON) scripts/check_api_contract.py
 
 # check-engine-logs: engine logger.info calls missing duration_ms exceed the
 # recorded baseline (42 at R1.8).
@@ -344,7 +367,7 @@ check-engine-logs:
 # R4.5: check-ledger-ids added, 19 -> 20. Placed beside check-harness because both audit
 #        the project ledgers rather than the code, and both must fire before lint can
 #        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
@@ -717,7 +740,16 @@ eval-harness:
 # ---------------------------------------------------------------------------
 
 # demo: start engine (idempotent) then open Pygame window
-demo:
+# demo depends on boot-check so the documented day-to-day path REBUILDS the app image.
+# The image is baked, not bind-mounted (COPY src/ in the Dockerfile), so `docker-compose
+# up -d` alone serves the pre-edit build with no visible signal — boot-check's staleness
+# detector existed but nothing invoked it (CR-L16-03, R5.5).
+demo: boot-check
+	$(PYTHON) -m demo_game
+
+# demo-stale: the old behaviour — start whatever image is already built, no rebuild.
+# Use when you know the image is current and want the seconds back.
+demo-stale:
 	docker-compose up -d
 	$(PYTHON) -m demo_game
 

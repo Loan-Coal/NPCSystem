@@ -8120,3 +8120,116 @@ described as a pure move.
 **Explicitly not closed:** ISSUE-235. That gate counts `logger.info` sites inside `engines/`
 that lack `duration_ms`; `scheduler/` is a different layer and none of those 42 sites is
 touched. `scripts/engine_logs_baseline.txt` stays at 42.
+## DEC-254: a committed API-contract baseline, when R4.7 deleted the last committed API artifact
+
+**Date:** 2026-09-03, during R5.1 (CR-L12-07).
+
+**Decision:** Add `scripts/api_contract_baseline.json` — a committed recording of the `/v1`
+surface — and gate it with `make check-api-contract`. This is deliberately the same *shape* of
+artifact that R4.7 deleted three days ago, and the reasoning for why that is not a contradiction
+is the substance of this entry.
+
+**What R4.7 deleted and why.** `live_openapi.json` was a committed copy of `app.openapi()`. It
+had drifted four routes behind the app (`/setup/config`, `/setup/validate`,
+`/v1/admin/debug/vector-store`, `/v1/admin/vector-store/rehydrate`) while looking authoritative,
+so it was deleted in favour of regenerating on demand via `make openapi`.
+
+**Why this one does not rot the same way.** Three reasons, in order of weight:
+
+*(1) Rot is a function of readership, not of format.* `live_openapi.json` had **zero readers** —
+nothing compared it to the app, so the only force keeping it current was human diligence, and
+diligence lost four routes over an unbounded window. This artifact is the input of a gate that
+runs in `make check` on every commit. Its reachable states are exactly two: equal to the app, or
+red. There is no "quietly four routes behind" state, because that state *is* the failure signal.
+The same repo already carries eight read-every-run baselines in `scripts/` and none has rotted.
+
+*(2) It is not a copy of a truth; it is the recorded input of a detector.* DEC-249's "a copy here
+is a copy that rots" is about unread copies. A ratchet baseline is the opposite: it is the thing
+the ratchet is *for*.
+
+*(3) Churn is bounded, so re-recording stays rare and legible.* Raw `app.openapi()` is 212 KB and
+changes whenever any route docstring changes — a diff that is mostly prose trains reviewers to run
+`--update` without reading, which is how the old file lost credibility before it lost accuracy.
+The recording strips description/summary/title/example/operationId/tags, measured **62% smaller**
+(212 KB → 83 KB), and additive change requires **no baseline edit at all**. The baseline moves only
+on a deliberate break, which is the only time anyone should be looking at it.
+
+**Why `make check` goes 22 → 23 targets.** `check-api-stability` is kept rather than replaced. It
+is an AST field-drop ratchet over `api/response_models/` and `api/schemas.py` — 17 of the 105
+BaseModel classes under `api/` — and it sees a source-level rename before a route is wired, which
+the contract gate (which reads the built app) cannot. The overlap is accepted; retiring it is
+logged as ISSUE-268 rather than done here, because deleting a gate is not a thing to do in passing.
+
+**Two measurements that shaped the design, both of which contradicted the plan:**
+
+*(a) Operations are enumerated from `app.routes`, not from `app.openapi()`.* Measured: the app
+serves 148 `APIRoute`s **plus one `APIWebSocketRoute`** (`/v1/ws/dialogue`), and `app.openapi()`
+contains **zero** WebSocket entries. `docs/INTEGRATION.md` sells that streaming route as part of
+the contract. A gate built on OpenAPI alone — which is what CR-L12-07's fix sketch proposed —
+would have permitted deleting it in silence. Verified by counterfactual: renaming the route reds
+the gate with `operation_removed WEBSOCKET {v1}/ws/dialogue`.
+
+*(b) The gate must import the tree it lives in.* First implementation put `scripts/` on `sys.path`
+but not `src/`, so an editable install elsewhere was imported instead. The gate measured a
+different checkout and **stayed green through two real breaking changes**. The path fix then had
+to move to import time, because `build_contract()` imports `npc_engine` submodules before it calls
+`build_app()`, and the first such import binds the package path for the process. Both false greens
+were caught only by running end-to-end counterfactuals, not by the unit tests, which passed
+throughout because pytest sets `pythonpath = ["src"]`.
+
+**Trade-off accepted:** the gate covers declared shape, not behaviour. A green result means "no
+consumer's parsing breaks", not "nothing changed" — stated explicitly in `docs/API_STABILITY.md`
+so the gate is not over-read, which is the failure DEC-250 exists to punish. The deprecation
+window in that document is process, not a gate, and is labelled as such.
+
+---
+
+## DEC-255: `:SchemaMigration` as an infrastructure label, and per-migration reversibility
+
+**Date:** 2026-09-03, during R5.4 (CR-L04-01/05/06).
+
+**Decision:** The migration applied-state ledger is a `:SchemaMigration` node keyed by migration
+id, and it is **infrastructure, not a domain node** — it gets no `type_registry/base_nodes` YAML
+and no entry in the node-type snapshot. Its uniqueness constraint is created by
+`graph/infra/migration_state_writer.py`, not by a migration.
+
+**Why not a type_registry node.** The registry describes the game's world model — characters,
+events, factions. A record of which schema migrations have run is about the *database*, not the
+world, and giving it a node-type YAML would put it in front of `check_migrations.py`, which
+watches base-node YAMLs for new required fields. The ledger would then be a node type whose own
+required fields demand migrations, which is circular. It belongs beside the constraints in
+`schema_bootstrap.py`, which are infrastructure for the same reason.
+
+**Why the writer creates its own constraint.** A migration cannot be the thing that creates the
+migration ledger — the first migration to run would need the ledger to record that it ran. So
+`ensure_ledger_constraint()` is idempotent and called before every write, exactly like
+`ensure_core_constraints()` at startup.
+
+**Reversibility is declared per migration, not assumed uniform.** Each migration declares
+`REVERSIBLE` as `full`, `partial` or `none`, and anything other than `full` must give a non-empty
+`IRREVERSIBLE_REASON`. The measured split across the six:
+
+- **full** (3) — `add_investigation_schema`, `add_social_schema`, `add_strategy_schema`. These
+  create uniqueness constraints only. Dropping a constraint removes an invariant, never a node or
+  a property, so `down()` restores the prior state exactly.
+- **partial** (2) — `add_phase7_schema`, `add_political_schema`. These backfilled
+  `is_canonical=false` and `power_score/treasury/military_strength=0`. **Those are also
+  legitimate authored values**, so `down()` cannot distinguish a field it defaulted from one a
+  designer set. It therefore drops only the constraints and leaves every property in place. A
+  blind `REMOVE` would delete real data, which is worse than an incomplete undo.
+- **partial** (1) — `migrate_faction_strings`, the one CR-L04-01 singled out. `up()` now stamps
+  `r.created_by_migration` on every `MEMBER_OF` edge it creates, so `down()` deletes only its own
+  edges and never a membership gameplay created. Edges written by the pre-R5.4 version carry no
+  stamp and are deliberately left alone.
+
+**Trade-off accepted:** "partial" is a weaker promise than a migration framework usually makes,
+and it is the honest one here. The alternative — recording every affected node id so a backfill
+could be reversed precisely — was rejected as disproportionate: it would mean rewriting the body
+of every migration to collect ids, for an undo path that has never once been exercised. If a
+migration ever backfills a value that is *not* also a plausible authored value, it can be `full`.
+
+**Also decided:** no migration runner, registry or `make migrate` (ISSUE-267's sibling reasoning).
+The six migrations are mutually independent — five create disjoint constraints, one migrates a
+string field — so an orchestrator would be ordering machinery for a graph with no edges. And no
+new `make` target: the contract test rides in `make check` via the existing coverage of
+`tests/unit/scripts/`.

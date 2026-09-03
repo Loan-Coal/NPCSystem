@@ -3,7 +3,9 @@
 > **Scope:** This document describes the REST/WS surface a native Unity client
 > (or any native game client) uses to communicate with the NPC Engine backend.
 > It is a **runtime contract** — not a frozen OpenAPI spec (that is SX.1).
-> Routes and shapes may evolve; breaking changes will be announced.
+> Routes and shapes may evolve additively at any time. What may and may not change
+> under you, and the deprecation window for a breaking change, are in
+> [API_STABILITY.md](API_STABILITY.md); `make check-api-contract` enforces the shape half.
 
 ---
 
