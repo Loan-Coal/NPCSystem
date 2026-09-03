@@ -22,9 +22,9 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
-        demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
+        demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
-        seed-tavern-world seed-village-world package eval-dashboard verify-rag
+        seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
 
 install:
 	pip install -e .[dev]
@@ -319,6 +319,12 @@ check-migrations:
 # gate; this one is kept because it sees a source-level rename before a route is wired.
 check-api-stability:
 	$(PYTHON) scripts/check_api_stability.py
+
+# bench-nfr: put a number on the NFRs in docs/BUSINESS_REQUIREMENTS.md, which have been
+# stated as targets and never measured (CR-L12-05). Needs the stack up and
+# NPC_ENGINE_API_KEY set. A measurement, not a gate — deliberately not in `check`.
+bench-nfr:
+	$(PYTHON) scripts/bench_nfr.py $(if $(OUT),--out $(OUT),)
 
 # verify-rag: exercise the real embedding path (loads the model, needs torch).
 # Deliberately NOT in `check`: CI has no GPU and no torch, and a skipif guard would make
@@ -734,7 +740,16 @@ eval-harness:
 # ---------------------------------------------------------------------------
 
 # demo: start engine (idempotent) then open Pygame window
-demo:
+# demo depends on boot-check so the documented day-to-day path REBUILDS the app image.
+# The image is baked, not bind-mounted (COPY src/ in the Dockerfile), so `docker-compose
+# up -d` alone serves the pre-edit build with no visible signal — boot-check's staleness
+# detector existed but nothing invoked it (CR-L16-03, R5.5).
+demo: boot-check
+	$(PYTHON) -m demo_game
+
+# demo-stale: the old behaviour — start whatever image is already built, no rebuild.
+# Use when you know the image is current and want the seconds back.
+demo-stale:
 	docker-compose up -d
 	$(PYTHON) -m demo_game
 

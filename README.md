@@ -51,9 +51,12 @@ git config --global core.longpaths true
 cp .env.example .env   # .env is gitignored; only .env.example is tracked
 pip install -e .[dev]
 
+# NEO4J_PASSWORD must be set in .env — the stack refuses to start on a default
+# credential (R5.5). The app image is baked, not bind-mounted, so `make demo` rebuilds
+# it and verifies the running build SHA; use `make demo-stale` to skip that.
 docker-compose up -d   # start Neo4j + API server
 make demo-seed         # seed demo world (idempotent)
-make demo              # open interactive pygame window
+make demo              # rebuild, verify build SHA, open interactive pygame window
 
 # Run unit tests:
 make test

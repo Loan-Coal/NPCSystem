@@ -2096,3 +2096,86 @@ it.
 **To fix:** scope pair selection to the test's location, or raise the cap above the global
 candidate count. Prefer scoping — a test that depends on global DB state is order-dependent
 whatever the cap.
+
+
+## ISSUE-264: no dependency lockfile; the tool choice is unmade
+**Found:** 2026-09-03, during R5.5 (CR-L16-05)
+**Severity:** P3 (nice-to-fix)
+**Where:** `pyproject.toml`, `demo_game/requirements.txt`
+**Description:** The repo has no lockfile, so `pip install -e .[dev]` is not reproducible across
+machines or across time. R5.5 did the cheap 80%: the one unpinned dependency (`types-PyYAML`)
+gained a bound and every ranged dependency gained a ceiling, taking the counts from
+13 pinned / 7 ranged / 1 unpinned to **13 / 4 / 0**. `demo_game/requirements.txt` re-declared
+`httpx` and `pydantic-settings` at looser bounds than pyproject pinned them, so installing both
+files could silently downgrade the engine's pins; those two are now pinned to match.
+**Why deferred:** a real lockfile needs a tool decision that is not mine to make — pip-tools
+(`requirements.lock`) vs `uv lock` — and each adds a dependency and a CI step. There is also a
+wrinkle worth deciding deliberately: `torch` resolves to different local versions per platform
+(`2.9.1+cu128` on the dev GPU box, a `+cpu` build in the container), and a naive `pip freeze`
+lock would bake one machine's CUDA build into a file the container cannot install.
+**To fix:** pick the tool, generate the lock with the torch local-version segment excluded (or
+with a platform-conditional constraint), make `make install` consume it, and add a gate that
+reds when the lock and `pyproject.toml` disagree.
+
+
+## ISSUE-265: migration Cypher lives in `scripts/`, outside the `graph/` layer
+**Found:** 2026-09-03, during R5.4
+**Severity:** P3 (nice-to-fix)
+**Where:** all six modules in `scripts/migrations/`
+**Description:** Each migration holds its own inline Cypher (constraint creation, backfills,
+`MEMBER_OF` edge creation). CLAUDE.md's layer rule puts Neo4j queries in `graph/` only. The rule
+is machine-checked by `check_rules`' R005, which scans `src/npc_engine` — so `scripts/` is
+outside its reach and this has never reddened a gate.
+**Why deferred:** R5.4's single task was down paths and an applied-state record. Its *new* Cypher
+did land in `graph/infra/migration_state_writer.py`, so the debt is frozen rather than widened,
+but moving six existing migrations' queries is a separate refactor with its own risk.
+**To fix:** add per-migration reader/writer modules under `graph/`, leave the scripts as thin
+CLI adapters over them, and widen `check_rules`' R005 scan to `scripts/` so it cannot recur.
+Note that widening the scan needs ISSUE-255 (lint/type coverage of `scripts/`) settled first.
+
+
+## ISSUE-266: `check-api-stability` is now a strict subset of `check-api-contract`
+**Found:** 2026-09-03, during R5.1
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_api_stability.py`, `scripts/api_stability_baseline.json`, `Makefile`
+**Description:** R5.1 added `check-api-contract`, which detects every field drop the older gate
+can plus route removal, type changes, required-set widening, status codes and auth. The old gate
+covers 17 of the 105 BaseModel classes under `api/`. Keeping both means two baselines to
+re-record for one deliberate change, which is the second-copy failure DEC-249 names.
+**Why deferred:** deleting a gate is not something to do in passing, and the old one does hold
+one thing the new one cannot — it reads source, so it sees a response model renamed before that
+model is wired to any route. `make check` therefore carries both, at 23 targets.
+**To fix:** decide whether the unrouted-model case is worth a gate. If not, delete the script,
+its baseline and its test, and rename the target — `make check` returns to 22.
+
+
+## ISSUE-267: `make package` output path does not match its documented location
+**Found:** 2026-09-03, during R5.3
+**Severity:** P3 (nice-to-fix)
+**Where:** `Makefile` `package:` target comment; `packaging/npc_engine.spec` COLLECT name
+**Description:** The Makefile comment says the output is
+`dist/npc_engine_server/npc_engine_server[.exe]`. The binary is actually one level deeper, at
+`dist/npc_engine_server/npc_engine_server/npc_engine_server.exe`, because `--distpath
+dist/npc_engine_server` and the spec's `COLLECT(name="npc_engine_server")` each contribute a
+directory. Cosmetic, but it is exactly the kind of stale path claim R5.3 existed to remove.
+**Why deferred:** R5.3's task was making the build work; it does, and the path is correct, only
+the comment is imprecise. Changing `--distpath` would move an output other tooling may reference.
+**To fix:** either set `--distpath dist` so the collected directory is `dist/npc_engine_server/`,
+or correct the comment. Prefer the former; check `e2e/` and any installer script first.
+
+
+## ISSUE-268: the gossip throughput NFR is still unproven at its target
+**Found:** 2026-09-03, during R5.5 (CR-L12-05)
+**Severity:** P3 (nice-to-fix)
+**Where:** `docs/BUSINESS_REQUIREMENTS.md:34`, `scripts/bench_nfr.py`
+**Description:** The stated target is >= 200 NPC pairs per gossip tick. `make bench-nfr` now
+measures it, and the first measurement ever taken reports **36 pairs in 1.9 s** against a
+requested `max_pairs=200`. That is a *world-size* limit, not an engine limit: the seeded demo
+world does not contain 200 eligible pairs, so the tick ran out of work rather than out of time.
+The target is therefore neither met nor refuted. (For contrast, the graph-size NFR now measures
+27,488 nodes against a 10,000 target and is genuinely met — the review's claim that the graph
+held 52 nodes does not reproduce.)
+**Why deferred:** proving it needs a synthetic world with >= 200 eligible pairs, which is a
+seeding task, not a benchmarking one.
+**To fix:** add a scale-seed target that generates enough characters and relationships to offer
+200+ eligible pairs, then re-run `make bench-nfr` and record the number.

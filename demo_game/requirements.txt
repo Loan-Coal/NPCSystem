@@ -1,5 +1,8 @@
-httpx>=0.28.0
-pydantic-settings>=2.0.0
+# httpx and pydantic-settings are PINNED in pyproject.toml (0.28.1 / 2.11.0). They were
+# re-declared here at looser bounds, so installing both files could silently downgrade
+# the engine's pinned versions. Kept in sync deliberately (R5.5, CR-L16-05).
+httpx==0.28.1
+pydantic-settings==2.11.0
 pygame-ce>=2.5.0  # pygame has no Python 3.14 wheel; pygame-ce is drop-in compatible
 networkx>=3.0
 matplotlib>=3.7
