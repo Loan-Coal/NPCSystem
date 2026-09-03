@@ -621,3 +621,7 @@ The original text, verbatim:
 > The cursor still points at M1.1 after 2 attempts. The session
 > reported completion but never ran 'roadmap_cursor.py --mark M1.1', so the work may or may not
 > be committed. Inspect the last task log before re-running.
+
+## 2026-09-03 19:17:08 — task M1.1 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
