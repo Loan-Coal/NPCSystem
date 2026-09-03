@@ -1,0 +1,27 @@
+case_id: case_pos_mem_mira_last_war_regulars
+description: >
+  mira_innkeeper REMEMBERS 'The last time the city went to war - half my regulars never came
+  back' (importance 90, valence -75). Asked whether she has seen a war before, she should
+  surface that loss rather than generic sorrow.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Have you lived through a war before, Mira? What was it like here?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "regulars"
+      - "never came back"
+      - "half"
+      - "last time"
+      - "lost"
+relevant_node_ids:
+  - mira_innkeeper
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Memory-grounded via slot `memories`, which system_v1
+  Rule 15 does read. Expected difficulty: medium.

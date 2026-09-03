@@ -1,0 +1,28 @@
+case_id: case_pos_goal_lira_aldric_ledger
+description: >
+  lira_fence PURSUES 'Get that ledger from Aldric before he realizes what it proves' at
+  strength 85, and holds the supporting belief about the ledger's contents. Asked what job she
+  would take if she could pick any, she should surface the ledger.
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Say you could pick any job in this city, Lira, and no one would ever know it was you. What
+    are you taking?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "ledger"
+      - "aldric"
+      - "book"
+      - "accounts"
+      - "proves"
+relevant_node_ids:
+  - lira_fence
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Goal-grounded via slot `goals`, which system_v1 Rule 7
+  does read. Expected difficulty: medium.

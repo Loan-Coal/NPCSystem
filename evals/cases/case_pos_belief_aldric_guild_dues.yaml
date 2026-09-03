@@ -1,0 +1,30 @@
+case_id: case_pos_belief_aldric_guild_dues
+description: >
+  aldric_merchant holds the BELIEVES edge 'The guild protects those who pay their dues - and
+  devours those who don't' at strength 65. Asked whether the merchants' guild is worth
+  joining, he should surface both halves of that bargain.
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    I am thinking of taking up with the merchants' guild. Straight answer, Aldric - is it
+    worth the dues they ask?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "dues"
+      - "pay"
+      - "protect"
+      - "protects"
+      - "devour"
+      - "worth"
+relevant_node_ids:
+  - aldric_merchant
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Belief-grounded: system_v1.yaml names no
+  context.npc.beliefs rule, so the fact is in context but nothing instructs the model to speak
+  from it (ISSUE-231). Expected difficulty: hard.

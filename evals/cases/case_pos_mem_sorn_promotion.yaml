@@ -1,0 +1,27 @@
+case_id: case_pos_mem_sorn_promotion
+description: >
+  captain_sorn REMEMBERS 'The day I was promoted to captain - my predecessor disappeared the
+  same week' (importance 78, valence 40). Asked how he came to command, he should surface the
+  promotion and the predecessor together.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    How did you come to command the watch, Captain?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "promoted"
+      - "predecessor"
+      - "disappeared"
+      - "captain"
+      - "same week"
+relevant_node_ids:
+  - captain_sorn
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Memory-grounded via slot `memories`, which system_v1
+  Rule 15 does read. Expected difficulty: medium.

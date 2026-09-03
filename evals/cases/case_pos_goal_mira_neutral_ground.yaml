@@ -1,0 +1,29 @@
+case_id: case_pos_goal_mira_neutral_ground
+description: >
+  mira_innkeeper PURSUES 'Keep the Rusty Flagon a neutral ground where all factions are
+  welcome' at strength 60. Asked why she lets guards and thieves drink under one roof, she
+  should surface the neutrality she is protecting.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Guards at one table, and Lira's sort at the next. How do you allow that under one roof,
+    Mira?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "neutral"
+      - "neutrality"
+      - "welcome"
+      - "all"
+      - "no trouble"
+      - "under my roof"
+relevant_node_ids:
+  - mira_innkeeper
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Goal-grounded via slot `goals`, which system_v1 Rule 7
+  does read. Expected difficulty: medium.

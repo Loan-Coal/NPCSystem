@@ -1,0 +1,29 @@
+case_id: case_pos_goal_sorn_catch_lira
+description: >
+  captain_sorn PURSUES 'Catch Lira in a crime significant enough to break the guild's
+  protection racket' at strength 80, and OPPOSES lira_fence. Asked what would most change
+  things for the watch, he should surface that aim.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    If you could put one person in irons tomorrow, Captain, and make it stick - who would it
+    be, and what would it change?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "lira"
+      - "guild"
+      - "protection"
+      - "racket"
+      - "catch"
+      - "crime"
+relevant_node_ids:
+  - captain_sorn
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Goal-grounded via slot `goals`, which system_v1 Rule 7
+  does read. Expected difficulty: medium.

@@ -1,0 +1,29 @@
+case_id: case_pos_belief_sorn_walls_disrepair
+description: >
+  captain_sorn holds the BELIEVES edge 'The city walls have never been in worse repair. One
+  hard winter could break us' at strength 75. Asked whether the city could hold, he should
+  surface the walls rather than troop counts.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    If it came to a siege, Captain - could this city actually hold?
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "wall"
+      - "walls"
+      - "repair"
+      - "disrepair"
+      - "winter"
+      - "break"
+relevant_node_ids:
+  - captain_sorn
+notes: >
+  Requires demo world seed (make demo-seed). Authored M3.4 against demo_game/seeds/seed.py as
+  source of truth, not the live graph. Belief-grounded: system_v1.yaml names no
+  context.npc.beliefs rule, so the fact is in context but nothing instructs the model to speak
+  from it (ISSUE-231). Expected difficulty: hard.

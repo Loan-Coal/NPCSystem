@@ -293,9 +293,18 @@ after the regeneration burns the entire relabel.
          run seeded only `demo` (15 demo + 1 village generated). Six demo-world cases were
          skipped for a separate reason still to be established. **M4.1 must seed all three
          worlds** or it will repeat the omission.
-      2. **The 3 long-horizon sequence cases (M2.3)** — memory, gossip, relationship. Follow
-         `docs/SEQUENCE_SCHEMA.md`. `sequence_runner.py` is outcome-agnostic and reuses existing
-         matcher kinds; do not invent a new judge type for it.
+      2. **The 3 long-horizon sequence cases (M2.3) already exist — do not author duplicates.**
+         Verified 2026-09-03. A sequence scenario is a Python `ScenarioFn = Callable[[], bool]`,
+         not a YAML case; there is no scenario file format and no scenario directory. Six are
+         promoted in `evals/scenario_adapters{,_extra}.py`, and three of them are exactly the
+         three this priority asks for: `gossip_chain` (gossip), `grief_persistence` (memory) and
+         `reputation_drift` (relationship). The other three are `memory_consolidation`,
+         `time_passage` and `mood_contagion`.
+         M2.3's premise that "nothing drives them" is also wrong: `make eval-sequence [K=3]`
+         (Makefile:633) runs all six live through `python -m evals sequence`. What is actually
+         missing is that the target needs running services, is not in `make check`, and has never
+         been recorded into the trend. **The remaining work is to run it and record it, not to
+         write cases.**
       3. **New cases across every `dialogue_observable` engine with seeded, addressable content.**
          `docs/ENGINE_EVAL_COVERAGE.md` names them: `events`, `gossip`, `memory`,
          `knowledge_learning`, `deception`, `planning`, `reputation` and `dialogue`. The other
