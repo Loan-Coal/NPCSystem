@@ -2179,3 +2179,42 @@ held 52 nodes does not reproduce.)
 seeding task, not a benchmarking one.
 **To fix:** add a scale-seed target that generates enough characters and relationships to offer
 200+ eligible pairs, then re-run `make bench-nfr` and record the number.
+
+
+## ISSUE-269: `make type-evals` is green only in the checkout the editable install points at
+**Found:** 2026-09-03, during R5 verification
+**Severity:** P2 (annoying) — `make check` cannot pass in a fresh clone or a git worktree
+**Where:** `mypy.ini` (`exclude = src/npc_engine/config/`), `scripts/mypy_evals_ratchet.py`
+**Description:** `python -m mypy evals/` reports two errors in any checkout that is not the one
+`pip install -e .` points at:
+
+```
+src/npc_engine/retrieval/embedding/vector_store_factory.py:13: error: Module "npc_engine.config" has no attribute "Settings"
+src/npc_engine/graph/infra/db.py:19: error: Module "npc_engine.config" has no attribute "Settings"
+```
+
+`src/npc_engine/config/` is a data-only directory holding `llm_config.yaml`, and it shadows the
+`config.py` module as a namespace package. `mypy.ini` excludes it, but mypy's `exclude` governs
+directory crawling, not modules reached by following an import — so when checking `evals/`, the
+resolver finds the directory first.
+
+**This is pre-existing and was not introduced by R5.** Measured three ways:
+- Fails identically with `python_version = 3.11` and `3.14`, so the R5.2 bump is not the cause.
+- Fails with R5's two new `graph/infra/migration_state_*.py` files temporarily removed.
+- **Fails at the base commit `0b110021` in a clean detached worktree** — the same commit recorded
+  as "`make check`, 22 targets, exits 0".
+
+Why it looks green day to day: `python -c "import npc_engine"` resolves to the *installed* tree
+via the editable `.pth`, so in that one checkout the relative `exclude` path lines up and
+`config.py` wins. Every other checkout — a fresh clone, a worktree, a CI runner that installs
+before checking out elsewhere — reds. `mypy src/` is unaffected and passes (630 files).
+
+**Why deferred:** it is not R5's task, and the fix is a mypy-resolution change to a gate config
+that deserves its own commit and its own counterfactual. Flagging it matters more than fixing it
+in passing: this is a gate that reports green for an environmental reason, which is the exact
+failure class the 2026-08 programme existed to remove.
+**To fix:** stop `config/` being resolvable as a namespace package — the honest options are to
+rename the data directory (e.g. `src/npc_engine/config_data/`, updating `LLM_CONFIG_PATH` and
+the packaging spec's `datas`), or to give mypy an explicit module override that pins
+`npc_engine.config` to `config.py`. Verify by running `mypy evals/` in a detached worktree of the
+commit under test — not in the installed tree, which cannot reproduce it.
