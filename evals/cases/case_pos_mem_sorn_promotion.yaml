@@ -17,7 +17,6 @@ expected:
       - "promoted"
       - "predecessor"
       - "disappeared"
-      - "captain"
       - "same week"
 relevant_node_ids:
   - captain_sorn

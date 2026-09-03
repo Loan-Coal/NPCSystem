@@ -15,12 +15,10 @@ expected:
   - kind: schema
   - kind: keyword_any
     keywords:
-      - "dues"
       - "pay"
       - "protect"
       - "protects"
       - "devour"
-      - "worth"
 relevant_node_ids:
   - aldric_merchant
 notes: >

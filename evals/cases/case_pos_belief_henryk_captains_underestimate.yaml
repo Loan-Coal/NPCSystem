@@ -15,10 +15,8 @@ expected:
   - kind: keyword_any
     keywords:
       - "underestimate"
-      - "young"
       - "thieves"
       - "too late"
-      - "captains"
 relevant_node_ids:
   - old_henryk
 notes: >
