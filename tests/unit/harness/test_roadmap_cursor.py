@@ -169,18 +169,13 @@ def _real_roadmap_phases():
 # A task listed here that is later ticked simply drops out of `pending`; leaving its entry
 # behind is harmless, so this list is append-mostly and does not go stale on progress.
 EXPECTED_FLAGS: dict[str, list[str]] = {
-    # 2026-08-28 (DEC-233): the EVAL-P entries are gone with the culled program. These are
-    # the remediation tasks the loop must refuse, and the reason each is refused.
-    # Needs a decision only a human can take.
-    "R1.7": ["ask-gate", "deferred"],     # which gates survive the DEC-224 counterfactual audit
-    "R2.5": ["ask-gate", "deferred"],     # retracting a published claim; outcome depends on R2.4
-    "R4.4": ["ask-gate", "deferred"],     # what an agent must read before its first tool call
-    # Needs a live CI run to observe, which a local session cannot do.
-    "R2.2": ["deferred", "live"],
-    # Blocked behind R2.5: every one changes a number, and no number is trustworthy
-    # until the null baseline is published.
-    "R2.6": ["deferred"],
-    "R2.7": ["deferred"],
+    # 2026-09-03: empty, and deliberately so. The R-phase entries left with the archived
+    # remediation program. Every task now inside the fence (M1, M2) is mechanical, so
+    # nothing in it should be skipped. The split is by nature: work needing a human
+    # judgment or a live model run lives OUTSIDE the fence (M3, M4, R6), where the cursor
+    # never sees it, rather than inside it behind a skip flag. An empty map still catches
+    # a regression — any fence task that acquires a flag fails the `unexpected` check
+    # below, which is exactly the ISSUE-134 trap of the skip-regex matching prose.
 }
 
 
@@ -198,7 +193,12 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
 # fence now spans the four phases the overnight loop is allowed to own; R5/R6/R7 sit
 # outside it deliberately (R6 would have the loop rewrite its own driver mid-run).
 # File order is dependency order, which is why R4 precedes R3.
-_EXPECTED_PHASE_IDS: list[str] = ["R1", "R2", "R4", "R3"]
+# 2026-09-03: the remediation program is complete and archived at
+# archive/ROADMAP_remediation-2026-08_2026-09-03.md. The fence now spans the mechanical
+# half of the M program — M1 (graph integrity) and M2 (the four unmeasured dimensions).
+# M3, M4 and R6 sit outside it deliberately: M3 and M4 need human judgment and live model
+# runs, and R6 would still have the loop rewrite its own driver mid-run.
+_EXPECTED_PHASE_IDS: list[str] = ["M1", "M2"]
 
 
 def test_real_roadmap_parses_and_verifies_clean() -> None:
@@ -215,7 +215,8 @@ def test_real_roadmap_parses_and_verifies_clean() -> None:
     assert phases, "queue fence parsed to zero phases"
     ids = [p.id for p in phases]
     assert ids == _EXPECTED_PHASE_IDS, (
-        f"queue must be the EVAL-P sequence starting at P0 (P22B included), got {ids}"
+        f"queue phases changed: expected {_EXPECTED_PHASE_IDS}, got {ids}. "
+        "Update the constant deliberately — see the tripwire docstring below."
     )
 
 

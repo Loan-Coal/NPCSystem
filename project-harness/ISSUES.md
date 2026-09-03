@@ -2261,3 +2261,40 @@ rename the data directory (e.g. `src/npc_engine/config_data/`, updating `LLM_CON
 the packaging spec's `datas`), or to give mypy an explicit module override that pins
 `npc_engine.config` to `config.py`. Verify by running `mypy evals/` in a detached worktree of the
 commit under test — not in the installed tree, which cannot reproduce it.
+
+## ISSUE-273: `WorldStateQuestTrigger` writes one draft Quest per tick forever — 23,292 leaked nodes
+**Found:** 2026-09-03, during the metrics-readiness review
+**Severity:** P1 (blocking) — it poisons every graph-scale, retrieval and NFR measurement
+**Where:** `src/npc_engine/engines/quest_generation/world_state_quest_trigger.py:80-118`
+**Description:** `run_tick` generates a draft quest whenever `world_state.epoch` maps to an
+archetype in `_EPOCH_ARCHETYPE_MAP`. The `world` WorldState node sits permanently at
+`epoch="war"`, so the condition is true on every tick. The only guard is the instance
+sentinel `self._last_triggered_tick == tick_id`, which dedupes the *same tick fired twice*
+— not the same *condition* firing across successive ticks. `_pick_npc` resolves through
+`get_any_military_npc` (`LIMIT 1`), so every quest names `captain_sorn`. No cap, no prune,
+and `_generate_for_epoch` passes no `cause_event_id`, so no `CAUSED_BY` edge is written and
+nothing can ever mark the condition consumed.
+
+Measured live: 23,292 `:Quest {source:"generated", status:"draft"}` nodes plus 23,292
+`HAS_QUEST` edges against ~681 nodes of real world content (27,529 nodes total). Only 2
+quests carry a `CAUSED_BY` edge — those are `EventQuestTrigger`'s, whose
+`NOT ((:Quest)-[:CAUSED_BY]->(e))` guard works correctly and matches the 2 `conflict`
+events exactly. Growth begins 2026-08-27 (1,053), peaks 2026-08-29/30 (~7,100/day) and is
+still live (122 on 2026-09-03). Each node is one LLM call, so this also burns generation
+time on every tick.
+
+Contrast `need_quest_trigger.py:117`, which does hold a real idempotency guard
+(`has_draft_quest`) keyed on outstanding state rather than on tick identity.
+
+**Why deferred:** raised during a review task, not patched inside it. Now **scheduled as
+ROADMAP task M1.1**, which fixes the guard, adds the growth regression test, and blocks the
+wipe/reseed in M1.3 behind it — a wipe before the fix refills within a day.
+**To fix:** replace the tick sentinel with a state-keyed guard. Three candidates, in
+preference order: (a) mirror `need_quest_trigger` — skip when the quest-giver already
+holds an outstanding draft quest; (b) key on the epoch itself, so one `war` epoch yields
+one quest until the epoch changes; (c) pass a `cause_event_id` and reuse the `CAUSED_BY`
+guard that already works in `EventQuestTrigger`. Whichever is chosen, add a cap on draft
+quests per NPC and a prune path for stale drafts, and add a regression test that runs N
+ticks under a stable epoch and asserts the quest count does not grow with N. The 23,292
+leaked nodes must be deleted before any graph-scale or retrieval number is measured, and
+the fix must land first or the wipe refills.
