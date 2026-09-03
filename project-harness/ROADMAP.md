@@ -441,7 +441,41 @@ RED anchor: write a duplicate-id detector over `DECISIONS.md` + `ISSUES.md` +
 Validation: `grep -c 'ISSUE-145' project-harness/ISSUES.md` returns 0 (moved to archive).
 CR-L07-02, CR-L07-01, CR-L07-04, CR-L07-06, CR-L07-07, CR-L07-08.
 
-- [ ] **R4.6** Documentation repair — delete numbers from prose, cite the files
+- [x] **R4.6** ✅ DONE 2026-09-02 — numbers deleted, `make harness-status` added
+Files: `project-harness/HARNESS_GATES.md`, `CONTRIBUTING.md`, `README.md`, `CHANGELOG.md`,
+`docs/API.md`, `src/npc_engine/retrieval/context/context_builder.py`, `Makefile`,
+`scripts/harness_status.py`, `scripts/check_readme_paths.py`,
+`tests/unit/scripts/test_check_readme_paths.py`
+
+RED anchors, both measured. (a) `grep -oE '[0-9]+ today' HARNESS_GATES.md` returned
+`57 today` and `256 today` against a live 118 and 0 — and the 256 had *moved*, to
+`.mypy_baseline_demo`, so correcting it in place would have re-pointed a true number at the
+wrong file. Both deleted; `make harness-status` prints all eight baselines live. It is
+deliberately **not** in `make check` — it cannot fail, and a gate that cannot fail is what R1
+existed to delete. (b) `scripts/check_readme_paths.py` reported **7** dead links in README's
+"Key files" table (an `npc_engine/` source layout replaced by `src/npc_engine/`,
+`tests/scenarios/` which is `e2e/scenarios/`, and a `proposals/` directory that no longer
+exists); it now reports 0. Enforcement is `tests/unit/scripts/test_check_readme_paths.py`,
+which `test-cov` already runs inside `make check` — **no new gate**, because DEC-250's freeze
+and DEC-224 both forbid one and R4.5's granted exception went unused.
+
+**Two more claims corrected.** `docs/API.md` is missing **4** live routes, not 6:
+`/v1/admin/factions/{faction_id}/standings/{target_id}` and
+`/v1/admin/schedules/character/{character_id}/at` are documented, in bracket notation
+(`[/{target_id}]`, `[/at]`), which a literal path match misses — the same substring error that
+produced the review's count. The 4 real ones are `/setup/config`, `/setup/validate`,
+`/v1/admin/debug/vector-store`, `/v1/admin/vector-store/rehydrate`, all now documented. And
+CHANGELOG is **161** commits stale, not 96, measured with `git rev-list --count`.
+
+`context_builder.py`'s comment claimed "~448 lines" against a real **799** — but the finding
+that matters is that the file sits **one line under the 800-line unwaivable gate**. Writing a
+longer replacement comment pushed it to 801 and `make check-rules` correctly went RED; the
+replacement is the same 4 lines as the original and says so, so the next person is warned
+before they add a line rather than after.
+CR-L13-01, CR-L13-02, CR-L13-04, CR-L13-08, CR-L13-09, CR-L10-02, CR-L08-08, CR-L06-12.
+
+<!-- superseded spec below, kept for the record -->
+- [x] ~~**R4.6** Documentation repair — delete numbers from prose, cite the files~~
 Files: `project-harness/HARNESS_GATES.md`, `CONTRIBUTING.md`, `README.md`, `CHANGELOG.md`,
 `docs/API.md`, `src/npc_engine/retrieval/context/context_builder.py`, `Makefile`
 Spec: **delete drifting numbers rather than correcting them** — correcting schedules the next

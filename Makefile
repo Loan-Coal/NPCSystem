@@ -20,7 +20,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-ledger-ids check-cited-reports check-ceiling-baseline \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
-        openapi verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
+        openapi harness-status check-readme-paths verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
@@ -45,6 +45,22 @@ run:
 # dumps of the same app are byte-identical. Do not commit the output.
 openapi:
 	$(PYTHON) scripts/dump_openapi.py $(if $(OUT),--out $(OUT),)
+
+# harness-status: print what `make check` runs and every baseline's live value, read from
+# the files that hold them. Exists so no document has to keep a copy of a number: R4.6
+# found HARNESS_GATES.md asserting "57 today" against a live 118 and "256 today" against a
+# live 0, both untouched for 85 days. Reporting only -- deliberately NOT in `make check`,
+# because it cannot fail and a gate that cannot fail is what R1 existed to delete.
+harness-status:
+	$(PYTHON) scripts/harness_status.py
+
+# check-readme-paths: fail when README.md links to a path that does not exist. Deliberately
+# NOT added to `make check`: DEC-250 freezes the gate apparatus through end-of-R4 and DEC-224
+# forbids a new gate without retiring one. Enforcement comes from
+# tests/unit/scripts/test_check_readme_paths.py instead, which `test-cov` already runs inside
+# `make check` -- same coverage, no new gate (R4.6).
+check-readme-paths:
+	$(PYTHON) scripts/check_readme_paths.py
 
 smoke:
 	$(PYTHON) -m pytest tests/unit/conformance/test_boot_smoke.py -q

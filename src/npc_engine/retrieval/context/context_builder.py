@@ -6,10 +6,10 @@ Does NOT: call LLM adapters.
 Dependencies injected: EmbeddingIndex.
 Used by: engines.dialogue.dialogue_handler
 
-NOTE: This file exceeds the 300-line limit (currently ~448 lines). The public function
-build_serialized_context is an async pipeline — every line is part of one cohesive orchestration
-flow. Each stage is extracted into a private helper. See DECISIONS.md entry
-"context_builder.py exceeds 300-line limit (Phase 6)" for the full analysis.
+NOTE: past the 400-line advisory tier and ONE line under the 800-line hard gate (DEC-226) —
+adding a line here reds `make check-rules`, unwaivably. No length is quoted: the old note said
+"~448" against a real 799, and named a 300-line limit that no longer exists. build_serialized_context
+is one cohesive async pipeline, each stage already in a private helper (DECISIONS.md, Phase 6).
 """
 
 from __future__ import annotations

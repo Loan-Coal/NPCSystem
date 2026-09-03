@@ -62,20 +62,23 @@ NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=password   make 
 Three integration tests are known-failing and allowlisted in
 `scripts/integration_baseline.txt`; `make check-integration-baseline` fails on a fourth.
 
-All tests must be green before merging. See `project/CLAUDE.md` § "Pre-merge checklist"
-for the full list of required checks.
+All tests must be green before merging. `make check` is the full list — run
+`make harness-status` to see what it covers and where each baseline stands.
 
 ## Before you commit
 
-Read `project/CLAUDE.md` before writing any code — it is the authoritative rules file.
+Read `project-harness/CLAUDE.md` before writing any code — it is the authoritative rules file.
 Key points:
 
-- **Layer model**: dependencies point downward only (`api → engines → retrieval → graph → config`). No upward imports.
-- **File size**: 300-line hard limit on non-test code. Split before merging.
+- **Layer model**: dependencies point downward only. `scripts/check_layers.py` holds the
+  authoritative edge list and `make check-layers` enforces it. No upward imports.
+- **File size**: two tiers (DEC-226) — 400 lines advisory, 800 lines a hard unwaivable
+  gate, and a file already on the `check-rules` baseline may not grow past its recorded
+  count. `make check-rules` enforces all three.
 - **Docstrings**: every public function and class requires a docstring. See CLAUDE.md § "Documentation" for the exact format.
 - **Prompts**: no prompt strings outside `prompts/`. Everything passed to an LLM lives in versioned YAML.
-- **Deferred work**: anything you notice but do not fix goes in `project/ISSUES.md`.
-- **Non-obvious choices**: write a `project/DECISIONS.md` entry and get approval before changing a public interface, adding a dependency, or modifying graph schema.
+- **Deferred work**: anything you notice but do not fix goes in `project-harness/ISSUES.md`.
+- **Non-obvious choices**: write a `project-harness/DECISIONS.md` entry and get approval before changing a public interface, adding a dependency, or modifying graph schema.
 
 ## Commit format
 
@@ -89,7 +92,7 @@ Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
 
 ## Design changes
 
-Stop and write a `project/DECISIONS.md` entry before:
+Stop and write a `project-harness/DECISIONS.md` entry before:
 - Changing a public interface that has callers outside its module
 - Adding a new dependency
 - Changing the schema of a graph node or edge

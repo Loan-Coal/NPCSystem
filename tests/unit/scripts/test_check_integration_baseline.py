@@ -125,17 +125,21 @@ def test_a_missing_baseline_is_strictest(tmp_path: Path) -> None:
 
 
 def test_the_committed_baseline_matches_the_measured_failures() -> None:
-    """The shipped allowlist holds the 4 remaining after R3 (was 8; ISSUE-233).
+    """The shipped allowlist holds the 3 remaining after R3 close-out (was 8; ISSUE-233).
 
     R3 fixed four of the eight: both faction remove-path contracts (a bare count()
-    aggregate made their raise guards unreachable) and both scheme tick tests.
-    _NODE_A is one of the fixed ones, so it is now asserted ABSENT; it survives
-    above only as a synthetic node id for the parsing tests.
+    aggregate made their raise guards unreachable) and both scheme tick tests. R3's
+    close-out fixed a fifth, the reputation label boundary, once DEC-252 settled that
+    standing 50 is `allied` (ISSUE-261). _NODE_A and _NODE_B are both among the fixed and
+    are asserted ABSENT; they survive above only as synthetic ids for the parsing tests.
+    The three that remain are ISSUE-259 (a test targeting a removed API) and ISSUE-260
+    (faction gossip pair truncation, two tests) -- explained, not unexplained, which is
+    DEC-250's exit condition.
     """
     baseline = load_baseline()
-    assert len(baseline) == 4
-    assert _NODE_B in baseline
+    assert len(baseline) == 3
     assert _NODE_A not in baseline
+    assert _NODE_B not in baseline
     assert all(node.startswith("tests/integration/") for node in baseline)
 
 

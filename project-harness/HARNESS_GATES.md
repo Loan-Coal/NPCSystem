@@ -8,11 +8,17 @@ This repo's quality rules are now **executable and enforced**, not just prose in
 ## The one command
 
 ```bash
-make check        # lint + check-rules + type-ratchet + check-harness + test-cov(80% floor)
+make check              # every gate below, in dependency order
+make harness-status     # what `make check` runs, and every baseline's live value
 ```
 
 Same command runs locally and in CI. If `make check` is green, the tree is healthy by
 the project's own rules.
+
+**This document names no counts.** `make harness-status` reads them from the files that
+hold them. The previous version of this section listed 5 of the gates and asserted two
+baseline sizes that had been wrong for 85 days — deleting a number is the only way to stop
+it drifting, and correcting one only schedules the next drift (R4.6).
 
 ## The gates
 
@@ -27,11 +33,17 @@ the project's own rules.
 
 ### Baseline ratchet (the key idea)
 
-You can't flip mypy to gating with 254 errors — so it gets dropped and the debt grows
-invisibly. Instead we commit a **baseline that can only decrease**:
+You can't flip mypy to gating with a large error count — it gets dropped, and the debt
+then grows invisibly. Instead we commit a **baseline that can only decrease**:
 
-- `scripts/rules_baseline.txt` — grandfathered CLAUDE.md rule violations (57 today).
-- `.mypy_baseline` — grandfathered mypy error count (256 today).
+- `scripts/rules_baseline.txt` — grandfathered CLAUDE.md rule violations in `src/` and `scripts/`.
+- `scripts/evals_baseline.txt` — the same, for `evals/`.
+- `.mypy_baseline` / `.mypy_baseline_demo` — grandfathered mypy error counts.
+- `scripts/integration_baseline.txt` — known-failing integration tests, by node id.
+- `scripts/engine_logs_baseline.txt`, `scripts/check_test_quality_baseline.txt`,
+  `scripts/dead_keywords_baseline.txt` — the R1.8 gates' counts.
+
+Run `make harness-status` for every current value. They are deliberately not written here.
 
 A gate **fails only on a NEW violation**. When you fix some, the gate tells you, and you
 lock the win in:

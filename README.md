@@ -24,18 +24,19 @@ A game backend service that gives non-player characters persistent knowledge, re
 | Eval harness (Layer 1+2 matchers, markdown report, `make eval`) | ✅ |
 | E2E scenario tests (transcript output, `make scenarios`) | ✅ |
 | Docs (ARCHITECTURE.md, DATA_MODELS.md, BUSINESS_REQUIREMENTS.md, RELEVANCE_WEIGHTS.md) | ✅ |
-| Migration scripts (001_remove_current_location_id, 002_remove_event_participants) | ✅ |
-| Proposals (delta_log_options, prompt_inventory) | ✅ |
 
 ## What's next
 
-- **Task 5 Phase 2** — Extract prompts into versioned YAML files (`proposals/prompt_inventory.md` is ready; awaiting approval).
-- **delta_log cap** — Pick one of the three options in `proposals/delta_log_options.md` and implement it.
-- **Archetype-aware canned responses** — `dialogue_handler.py` currently passes `archetype="default"` to the canned tier; wire in a lightweight graph lookup to pick the right archetype YAML.
-- **Structured output strategy** — `proposals/structured_output_strategy.md` (GBNF/Outlines recommendation) not yet written.
-- **Custom type engine consumption** — `custom_node_types` and `custom_edge_types` are parsed but not consumed by gossip/dialogue/event engines; startup warning is in place.
-- **Production hardening** — Redis-backed session/emotion stores, multi-instance concurrency, TLS, rate limiting.
-- **LLM judge (Layer 3 eval)** — `tone_judge` matcher is a stub; wire in LLM-as-judge for subjective tone/empathy checks.
+**[project-harness/ROADMAP.md](project-harness/ROADMAP.md) holds the current phase and the
+next task**; open problems are in
+[project-harness/ISSUES.md](project-harness/ISSUES.md).
+
+This section used to list seven items by hand. It is a pointer now because five of the
+seven had been delivered and nobody had come back to cross them off: prompts moved into
+versioned YAML under [prompts/](prompts/), `tone_judge` became a live LLM judge rather
+than a stub, and three of the remaining items cited a `proposals/` directory the repo no
+longer has. A hand-maintained roadmap in a README competes with the roadmap and loses
+(R4.6).
 
 ## Quick start
 
@@ -109,14 +110,18 @@ a number here without one of these comments.
 
 | File | Purpose |
 |---|---|
-| [npc_engine/main.py](npc_engine/main.py) | FastAPI app entry point and lifespan |
-| [npc_engine/config.py](npc_engine/config.py) | All environment settings |
-| [npc_engine/engines/dialogue/](npc_engine/engines/dialogue/) | Dialogue orchestration, degradation tiers |
-| [npc_engine/type_registry/](npc_engine/type_registry/) | Schema contracts and runtime registry |
-| [npc_engine/retrieval/](npc_engine/retrieval/) | Context assembly, cache, embedding reconciler |
+| [src/npc_engine/main.py](src/npc_engine/main.py) | FastAPI app entry point and lifespan |
+| [src/npc_engine/config.py](src/npc_engine/config.py) | All environment settings |
+| [src/npc_engine/engines/dialogue/](src/npc_engine/engines/dialogue/) | Dialogue orchestration, degradation tiers |
+| [src/npc_engine/type_registry/](src/npc_engine/type_registry/) | Schema contracts and runtime registry |
+| [src/npc_engine/retrieval/](src/npc_engine/retrieval/) | Context assembly, cache, embedding reconciler |
 | [prompts/canned/](prompts/canned/) | Canned response YAML files per archetype |
 | [evals/](evals/) | Eval runner, matchers, cases, reports |
-| [tests/scenarios/](tests/scenarios/) | E2E story scenarios with transcript output |
-| [proposals/](proposals/) | Design proposals (delta_log, prompt inventory) |
+| [e2e/scenarios/](e2e/scenarios/) | E2E story scenarios with transcript output |
+| [docs/overview.md](docs/overview.md) | Repo layout, stack, and where things live |
 | [docs/RELEVANCE_WEIGHTS.md](docs/RELEVANCE_WEIGHTS.md) | Relevance weight formula and examples |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full architecture doc |
+| [project-harness/ROADMAP.md](project-harness/ROADMAP.md) | Current phase and the next task |
+
+`make check-readme-paths` fails on any link in this file that points at nothing, so the
+table cannot drift back to a source layout the repo no longer has (R4.6).

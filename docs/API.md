@@ -15,7 +15,10 @@ This document covers the **complete mounted API surface** across all three audie
 
 The full interactive contract (every request/response model) is always served live at
 `/docs` (Swagger UI) and `/openapi.json` — treat that as the source of truth for field
-shapes; this document is the curated guide.
+shapes; this document is the curated guide. Offline, `make openapi` prints the same
+schema without a running server. **No route count is quoted in this file**: the tables
+below are curated prose and will lag the app, so diff them against `make openapi` rather
+than against a number someone wrote down (R4.6).
 
 ---
 
@@ -281,6 +284,20 @@ public game port. Mutations honor idempotency headers when enforcement is on.
 | `GET` | `/v1/admin/schema` | Loaded game schema (node/edge types, extension fields). |
 | `GET` | `/v1/admin/schema/registry` | Serialized type-registry snapshot. |
 | `GET` | `/v1/admin/protected` | Auth smoke-test probe. |
+| `GET` | `/v1/admin/debug/vector-store` | Vector-store state: counts and index health. |
+| `POST` | `/v1/admin/vector-store/rehydrate` | Rebuild the vector store from the graph. |
+
+## Setup wizard — `/setup/*`
+
+First-run configuration for a self-hosted deployment. **Authenticated** — the
+unauthenticated read of a plaintext API key here was ISSUE-227, fixed in R0.1 (DEC-231).
+Restrict these at the proxy alongside `/v1/admin/*`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/setup/config` | Read the current setup configuration. |
+| `POST` | `/setup/config` | Write the setup configuration. |
+| `POST` | `/setup/validate` | Validate a filesystem path before writing it into config. |
 
 ## Graph admin — `/v1/admin/graph/*`
 
