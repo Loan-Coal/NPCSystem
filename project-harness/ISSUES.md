@@ -669,9 +669,17 @@ the guard battery. Re-measure against the frozen `evaluated_cases` denominator (
 
 ---
 
-## ISSUE-126: `expand_loop.sh --dry-run` never terminates (its own usage block advertises the hanging form)
+## ISSUE-126: `expand_loop.sh` stale-lock recovery is documented nowhere (runaway half FIXED)
 **Found:** 2026-08-02, during loop-readiness verification of the DEC-153 roadmap changes
-**Severity:** P2 (annoying) — costs a wasted invocation and leaves a stale lock, no data loss
+**Partially fixed:** 2026-08-28 by DEC-235, confirmed by measurement 2026-09-03 — the runaway half is
+closed. `scripts/expand_loop.sh:648` halts the
+loop once the cursor returns the same task `MAX_SAME_TASK_REPEATS` times (default 2, `:103`), which is
+option (c) from the fix list below. Measured 2026-09-03: an unbounded
+`bash scripts/expand_loop.sh --dry-run` terminated on its own after 6.5 minutes with exit 0, logging
+`HALT: M1.1 repeated 2 times without advancing the cursor`. **Do not delete that guard or reimplement
+it.** What is still open is only the documentation half — see **To fix**.
+**Severity:** P3 (nice-to-fix) — was P2 while the loop could spin; the remaining half costs one
+confused restart, no data loss
 **Where:** `scripts/expand_loop.sh` — `run_claude_session` (dry-run early return) vs the `main()` while-loop; usage block at `:55-59`
 **Description:** A task is ticked by the **claude session** (`/expand-linear-next` marks, gates and commits
 it), not by the loop driver — `grep "cursor --mark" scripts/expand_loop.sh` returns nothing. Under
@@ -694,11 +702,16 @@ documented anywhere.
 separate task and the roadmap's single-task-focus rule applies. It does not affect real (non-dry-run) nights —
 DEC-151's rig validated the real path with a fake `claude` on `PATH`, which *does* mark tasks.
 
-**To fix:** either (a) make `--dry-run` imply `--max-tasks 1` unless the caller sets it explicitly, (b) have
-the dry-run path simulate the mark so the queue advances and the loop drains as it would live, or (c) detect
-no-progress (same task id returned twice in a row) and abort with a clear message — (c) also protects the
-live path against a session that silently fails to tick. Correct the usage block either way, and document
-the stale-lock recovery in `project-harness/OVERNIGHT_LOOP.md`.
+**To fix (remaining):** document the stale-lock recovery — `rm -rf project-harness/.loop-state/loop.lock`
+— in the script's usage block and in `project-harness/OVERNIGHT_LOOP.md`. The no-progress halt makes this
+*more* likely to be met, not less: a halt is now the normal end of a stalled night, so the next operator
+meets the lock rather than the spin. Tracked as roadmap task R6.1.
+
+Historical fix options, kept for the record: (a) make `--dry-run` imply `--max-tasks 1` unless the caller
+sets it explicitly, (b) have the dry-run path simulate the mark so the queue advances and the loop drains
+as it would live, or (c) detect no-progress (same task id returned twice in a row) and abort with a clear
+message. **(c) is what shipped**, and it also protects the live path against a session that silently fails
+to tick.
 
 ---
 

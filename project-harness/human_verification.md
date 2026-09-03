@@ -607,8 +607,17 @@ Every failure pre-dated this task (baseline attribution). Nothing new broke.
 
 The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-R1.8-1787933626.log
 
-## 2026-09-03 18:27:44 — task M1.1 did not tick itself
+## [NOT A FAILURE] 2026-09-03 18:27:44 — task M1.1 did not tick itself
 
-The cursor still points at M1.1 after 2 attempts. The session
-reported completion but never ran 'roadmap_cursor.py --mark M1.1', so the work may or may not
-be committed. Inspect the last task log before re-running.
+**Annotated 2026-09-03: this entry came from a deliberate `--dry-run`, not from a real night.**
+No session ran, so nothing could have ticked M1.1 and nothing was committed — the tree was
+untouched. The entry is in fact evidence that the ISSUE-126 no-progress guard
+(`scripts/expand_loop.sh:648`) works: the unbounded dry run halted itself after 6.5 minutes with
+exit 0 instead of spinning until killed. **No action. Do not investigate M1.1 on the strength of
+this line.**
+
+The original text, verbatim:
+
+> The cursor still points at M1.1 after 2 attempts. The session
+> reported completion but never ran 'roadmap_cursor.py --mark M1.1', so the work may or may not
+> be committed. Inspect the last task log before re-running.

@@ -124,6 +124,15 @@ The four dimensions that do not exist. Extend the trend row; build no new subsys
 `mean_precision_at_k` — a new dimension is one more field on a row that is already written,
 stored, trended and reported.
 
+**Validation in this phase is unit-only, and deliberately so.** The loop brings up `neo4j` alone
+(`scripts/loop_compat.sh:166`), and the `app` service in `docker-compose.yml:73` declares no bind
+mount, so it serves the image baked at build time — never the code M1 and M2 write during a
+night. "A generation run writes the new field" is therefore a check the loop cannot honestly
+perform: it would pass against yesterday's image or fail for reasons that have nothing to do with
+the task. Every M2 task is proven instead against fake turn records, in-process, with no model and
+no database. The end-to-end confirmation is M4.1, which is human-driven and follows a deliberate
+`docker compose build app`.
+
 - [ ] **M2.1** Per-turn latency and token cost as trend fields
 Files: new `evals/perf_records.py`, `evals/trend_row_builder.py`, `evals/trend_store.py`,
 `evals/runner.py`
@@ -133,8 +142,13 @@ measured. Add a Pydantic record capturing wall-clock duration and prompt/complet
 around the turn the runner already makes, aggregate to p50 and p95 latency and mean tokens in and
 out, and surface them as new fields on the trend row. Keep the new module under 150 lines and add
 no new report path — the existing summary and dashboard already read the trend row.
-RED anchor: `grep -c p95 evals/trend_row_builder.py` returns 0 today.
-Validation: a generation run writes the new fields into `evals/trend/trend_v1.jsonl`.
+RED anchor: a unit test under `tests/unit/evals/` that constructs a handful of fake turn records
+with known durations and token counts, builds a trend row from them, and asserts the row carries
+p50 latency, p95 latency and mean tokens-in/out. It fails at import today — `evals/perf_records.py`
+does not exist and `grep -c p95 evals/trend_row_builder.py` returns 0.
+Validation: that same unit test, green, with the aggregates checked against hand-computed values
+rather than against whatever the code produces. No process is started and no run is generated;
+see the phase note above for why, and M4.1 for where the end-to-end proof happens.
 
 - [ ] **M2.2** Record realised per-turn context size against its declared budget
 Files: `evals/perf_records.py`, `evals/trend_row_builder.py`
@@ -143,9 +157,13 @@ spent, so the budget cannot be shown to bind. Record realised per-turn context s
 declared budget and surface mean and max. Related but NOT this task:
 `session_turns_budget_tokens` is enforced only by a function nothing calls (ISSUE-225) — record
 the number here, do not change the enforcement.
-RED anchor: a test asserting the trend row carries a realised context-size field. Fails today.
-Validation: realised size is at or under `prompt_token_budget` for every turn in a run. Any
-overshoot is a finding to log, not a rounding artefact to absorb.
+RED anchor: a unit test asserting a trend row built from fake turn records carries a realised
+context-size field alongside the declared `prompt_token_budget`. Fails today — the field does not
+exist.
+Validation: the same test, green, fed two fixtures — one whose realised sizes sit under the
+declared budget and one that straddles it — asserting the mean and the max are reported as given
+and that the overshoot is visible in the row rather than clamped or absorbed. Whether a real run
+overshoots is a question for M4.1; this task only has to make the answer readable.
 
 - [ ] **M2.3** Drive the long-horizon sequence machinery with three cases
 Files: three new sequence cases under `evals/cases/`, and `evals/sequence_runner.py` if the
@@ -156,8 +174,13 @@ multi-turn case in `evals/cases/`. Author exactly three, one each against `memor
 `relationship`, which are the dialogue-observable engines with seeded, per-NPC, addressable
 content (`docs/ENGINE_EVAL_COVERAGE.md`). Follow `docs/SEQUENCE_SCHEMA.md`. Three is the v1: do
 not author a full set before the first three produce a number worth trusting.
-RED anchor: `make eval-sequence` has no cases to run today.
-Validation: three sequences execute and report a fidelity rate.
+RED anchor: a unit test that loads every sequence case in `evals/cases/`, asserts there are three
+and that they name three distinct engines, and drives `evals/sequence_runner.py` across each with
+a stub client replaying canned per-turn responses. It fails today at the count: `make eval-sequence`
+has no cases to run.
+Validation: that test green — the three cases parse against `docs/SEQUENCE_SCHEMA.md`, and each
+produces a fidelity rate from the canned responses, with one fixture built to score below 1.0 so
+the rate is shown to vary rather than merely to compute. Real models come in at M4.1.
 
 <!-- LOOP:QUEUE end -->
 
@@ -172,21 +195,25 @@ are the driver executing the queue. A loop rewriting its own driver mid-run prod
 cannot be diagnosed. Run these with the loop stopped. Do R6 before M3 and M4 — the point of
 fixing the loop is to have it grind M1 and M2 overnight while the days go to M3 and M4.
 
-- [ ] R6.1 Fix ISSUE-126 — `--dry-run` never terminates, and the deeper cause: tasks are ticked
-      by the *session*, not the driver, so a session that completes without ticking re-runs
-      forever · CR-L11-09
-      `grep "cursor --mark" scripts/expand_loop.sh` returns nothing, which is the whole defect.
-      Under `--dry-run` no session runs, so nothing marks the task, `cursor --next` returns the
-      same task every iteration, and the loop sleeps `TASK_SLEEP_SECS` between identical
-      iterations until killed — while the script's own usage block advertises exactly that
-      invocation. Minimal fix: after each session the driver re-reads `cursor --next` and fails
-      the iteration when the cursor has not advanced. That one check kills the infinite loop and
-      also catches the real-world case of a session completing without ticking, **without**
-      moving tick ownership — so the "the commit IS the transaction" invariant the script is
-      built around survives untouched. Make `--dry-run` imply `--max-tasks 1`, or print the plan
-      and exit. Also document stale-lock recovery (`rm -rf project-harness/.loop-state/loop.lock`)
-      in the usage block; it is currently written down nowhere.
-      RED anchor: `bash scripts/expand_loop.sh --dry-run` terminates. Today it must be killed.
+- [ ] R6.1 Document stale-lock recovery — the runaway half of ISSUE-126 is already fixed, and the
+      roadmap said otherwise until 2026-09-03 · CR-L11-09
+      **The no-progress guard exists (DEC-235). Do not delete it and do not write a second one.**
+      `scripts/expand_loop.sh:648` compares each iteration's task id against `LAST_TASK_ID` and
+      halts once `SAME_TASK_REPEATS` reaches `MAX_SAME_TASK_REPEATS` (default 2, set at `:103`),
+      flagging the human before breaking the loop. Measured 2026-09-03: an unbounded
+      `bash scripts/expand_loop.sh --dry-run` terminated on its own after 6.5 minutes with exit 0,
+      logging `HALT: M1.1 repeated 2 times without advancing the cursor`. The RED anchor this task
+      used to carry — "`--dry-run` terminates; today it must be killed" — is green and has been
+      for some time.
+      What remains is the half ISSUE-126 also asks for and nobody did: killing a loop leaves the
+      `mkdir`-based lock directory `project-harness/.loop-state/loop.lock/` behind, so the next
+      run aborts with `FATAL: another loop holds …`. Recovery is
+      `rm -rf project-harness/.loop-state/loop.lock`, and it is documented nowhere — not in the
+      script's usage block, not in `project-harness/OVERNIGHT_LOOP.md`. Write it into both.
+      Note that the guard makes the stale lock *more* likely to be met, not less: a halt is now
+      the normal end of a stalled night, so the next operator meets the lock rather than the spin.
+      RED anchor: `grep -rn "loop-state/loop.lock" scripts/expand_loop.sh
+      project-harness/OVERNIGHT_LOOP.md` surfaces no recovery instruction today.
 
 - [ ] R6.2 Classify HALT causes so a self-test failure is not a product HALT — every HALT to date
       was the harness tripping over its own self-tests · CR-L11-03
