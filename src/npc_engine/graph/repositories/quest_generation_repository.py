@@ -185,6 +185,12 @@ class Neo4jEventTriggerRepository:
         async with self._graph_db.get_session() as session:
             return await get_any_military_npc(session, archetypes)
 
+    async def has_draft_quest(self, *, character_id: str) -> bool:
+        """Return True if the character already has an outstanding draft quest."""
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await has_draft_quest(session, character_id)
+
 
 class Neo4jNeedTriggerRepository:
     """Session-per-call adapter for need trigger reads (NeedTriggerGraphPort)."""

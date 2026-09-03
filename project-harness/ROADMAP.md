@@ -65,7 +65,7 @@ needs; delete it once consumed. Keep <= 10 lines.*
 Graph integrity. Nothing measured before this means anything — the database is 97% leaked
 Quest nodes, and one node kind is split across two labels.
 
-- [ ] **M1.1** Stop the quest leak — one draft Quest is minted per tick, forever
+- [x] **M1.1** Stop the quest leak — one draft Quest is minted per tick, forever
 Files: `src/npc_engine/engines/quest_generation/world_state_quest_trigger.py`, plus a new
 regression test under `tests/unit/engines/quest_generation/`
 Spec: `run_tick` guards only on `self._last_triggered_tick == tick_id`, which dedupes the same
@@ -82,7 +82,7 @@ idempotency scheme — `event_quest_trigger`'s `NOT ((:Quest)-[:CAUSED_BY]->(e))
 correct, and the data proves it: exactly 2 such quests against exactly 2 `conflict` events.
 RED anchor: a test that runs five ticks under a stable `war` epoch and asserts the quest count
 after tick five equals the count after tick one. Today it is five times larger.
-Blocks: M1.3, and every number M2 and M4 produce. ISSUE-273.
+Blocks: M1.3, and every number M2 and M4 produce. ISSUE-273. ✅ AUTO (M1.1, 2026-09-03)
 
 - [ ] **M1.2** Make `resolve_node_label` read the registry's declared `node_type`
 Files: `src/npc_engine/graph/generic/generic_graph_utils.py`,

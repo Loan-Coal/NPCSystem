@@ -47,9 +47,12 @@ class WorldStateQuestTrigger:
     NPC, and delegates to the injected ``QuestGenerationEngine`` to produce a
     draft quest.
 
-    Idempotency is enforced via a module-level ``_last_triggered_tick`` sentinel:
-    if ``run_tick`` is called more than once with the same ``tick_id`` the second
-    call is a no-op.  Slice 2 may replace this with a graph-side cooldown node.
+    Two idempotency guards prevent duplicate quests.  First, if ``run_tick`` is
+    called more than once with the same ``tick_id`` the second call is a no-op
+    (``_last_triggered_tick`` sentinel).  Second, before delegating to the
+    generation engine the trigger checks whether the selected NPC already has an
+    outstanding draft quest (``trigger_repo.has_draft_quest``); if so the tick is
+    skipped so successive ticks under a stable epoch do not accumulate drafts.
 
     Attributes:
         _world_state_repo: WorldStateGraphPort (injected; provides epoch reads).
@@ -141,6 +144,14 @@ class WorldStateQuestTrigger:
             _logger.warning(
                 "world_state_quest_trigger: no NPC found for archetype",
                 extra={"tick_id": tick_id, "archetype_hint": archetype_hint, "epoch": epoch},
+            )
+            return None
+
+        already_has_draft = await self._trigger_repo.has_draft_quest(character_id=npc_id)
+        if already_has_draft:
+            _logger.info(
+                "world_state_quest_trigger: skipping NPC with existing draft quest",
+                extra={"tick_id": tick_id, "npc_id": npc_id, "epoch": epoch, "duration_ms": 0},
             )
             return None
 

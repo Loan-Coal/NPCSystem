@@ -96,6 +96,10 @@ class EventTriggerGraphPort(Protocol):
         """Return any character ID whose archetype is in archetypes, or None."""
         ...
 
+    async def has_draft_quest(self, *, character_id: str) -> bool:
+        """Return True if the character already has an outstanding draft quest."""
+        ...
+
 
 class NeedTriggerGraphPort(Protocol):
     """Graph reads for NeedQuestTrigger."""

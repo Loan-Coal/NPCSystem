@@ -35,10 +35,19 @@ def _make_world_state_repo(world_state: WorldState) -> MagicMock:
     return repo
 
 
-def _make_event_trigger_repo(any_military_npc: str | None) -> MagicMock:
-    """Return a mock EventTriggerGraphPort."""
+def _make_event_trigger_repo(
+    any_military_npc: str | None,
+    has_draft: bool = False,
+) -> MagicMock:
+    """Return a mock EventTriggerGraphPort.
+
+    Args:
+        any_military_npc: Value returned by get_any_military_npc.
+        has_draft: Value returned by has_draft_quest (default False — no outstanding draft).
+    """
     repo = MagicMock()
     repo.get_any_military_npc = AsyncMock(return_value=any_military_npc)
+    repo.has_draft_quest = AsyncMock(return_value=has_draft)
     return repo
 
 
