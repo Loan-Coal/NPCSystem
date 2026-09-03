@@ -16,6 +16,37 @@ Rules:
 
 ## Open
 
+## ISSUE-274: `test_quest_lifecycle_offer_to_completion_and_rewards` has been red and invisible — `make check` skips it without services
+**Found:** 2026-09-03, during the first watched bring-up of the M programme loop
+**Severity:** P2 (annoying) — it sits in the loop's failing-test baseline, so every night of the M
+programme will commit against a red gate and flag a human for it, every task, until it is fixed
+**Where:** `tests/integration/test_quest_lifecycle_integration_v14.py::test_quest_lifecycle_offer_to_completion_and_rewards`
+**Description:** The test fails in 0.35 s with
+`ValueError: QuestLifecycleEngine requires a TypeRegistry injected via __init__` — it never reaches
+the database. This is a test-side construction defect: the engine grew a required `TypeRegistry`
+constructor dependency and this call site was not updated.
+
+It is invisible to the normal gate. `make check` without services **collects and skips** the
+integration suite (36 skipped, exit 0, measured 2026-09-03), so the suite reads green while this
+test is red. It only surfaced because the loop was launched with `--with-services`, which is the
+same "degraded, not red" hazard that makes `--with-services` mandatory for M1.3.
+
+Distinguish it from the other two entries in the same baseline —
+`test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs` and
+`::test_same_faction_pairs_rank_higher_than_strangers`. Those fail for a different reason: they
+assert a freshly-seeded pair appears in `select_pairs(max_pairs=20)`, and the live graph holds
+27,534 nodes of which 23,292 are leaked draft quests (ISSUE-273) against 23 characters, so the
+seeded pair cannot make the top-20 cut. **Those two are expected to go green when M1.3 wipes and
+reseeds.** This one will not — it is unrelated to graph state.
+**Why deferred:** found during a bring-up whose single task was M1.1, and the roadmap's
+single-task-focus rule applies. It is also not a blocker: the loop attributes it to the baseline
+and commits, rather than halting.
+**To fix:** inject a `TypeRegistry` at the test's `QuestLifecycleEngine` construction, matching how
+the engine's other call sites build it. Check whether sibling tests in the same file share the
+defect. Then confirm the loop's baseline drops from 3 entries to 2.
+
+---
+
 ## ISSUE-234: 25 tests call the SUT and assert nothing
 **Found:** 2026-08-31, during R1.8
 **Severity:** P2 (annoying)
