@@ -3755,4 +3755,34 @@ RED anchor: `tests/integration/test_is_active_reader_agreement_integration.py` f
 after. Integration suite 43 passed / 3 failed, the 3 being the recorded baseline.
 The remaining gap — fixtures that MERGE raw Cypher and never reach validation — is ISSUE-263.
 
+## [FIXED] ISSUE-257: the adversarial battery does not discriminate the engine from a canned hedge
+**Found:** 2026-09-02, during R2.5 step 3c
+**Fixed:** 2026-09-03, in M3.3 (e8807803). The rule was decided and recorded as DEC-256, all
+37 cases were re-authored against it, and the acceptance test passes: the canned hedge now
+scores **0/37 = 0.000** against a 0.30 gate, down from 37/37 = 1.000. `evals/null_baseline.json`
+is re-recorded (hedge sha256 verified unchanged, so both numbers describe the same adversary
+and the same expectation set). The positive half is a per-case `commits_judge` criterion, not
+the `affirms_judge` the issue guessed at — see DEC-256 for why affirms_judge could not work.
+**Severity:** P3 (nice-to-fix)
+**Reclassified:** Downgraded P1→P3 2026-09-02 by DEC-250: the battery's failure to discriminate is ACCEPTED, not scheduled. It is retained as a regression smoke test and must not be described as a measurement. Re-authoring the 37 cases is the entry point if the claim is ever revived. Supersedes the closed ISSUE-229.
+unpublishable until this is fixed
+**Where:** `evals/cases/case_adv_*.yaml`, `evals/cases/case_neg_*.yaml` (37 cases)
+**Description:** Measured 2026-09-02 through the shared expectation set
+(`guard_expectations.expected_with_guards`, both LLM judges live): the canned hedge in
+`scripts/hedge_responder_probe.py` scores **37/37 = 1.000**, against the engine's 0.8468.
+Every adversarial and negative case is satisfied by a fixed string that asserts nothing.
 
+This is not a guard defect. The four injected guards catch empty, canned and AI-revealing
+responses; a fluent hedge is none of those, so they pass it correctly. The defect is in case
+authoring: the cases forbid confirming a false premise, and hedging does not confirm it, so
+refusing to answer is scored identically to knowing better. Per DEC-245 the adversarial rate
+is therefore no longer printed.
+**Why deferred:** re-authoring 37 cases is a distinct, substantial task from the comparability
+fix that revealed the problem, and it needs a stated authoring rule (what must a case require
+beyond "does not confirm the false premise"?) before any case is rewritten. Guessing that rule
+case-by-case would produce 37 inconsistent cases.
+**To fix:** decide the discrimination rule — most likely each guard case must also require a
+positive, case-specific commitment the hedge cannot supply (naming what the NPC does know, or
+who to ask) — record it as a DEC, then re-author the cases against it. Prove it by re-running
+`python scripts/hedge_responder_probe.py --battery adversarial` and requiring the null rate
+below the 0.30 gate, and re-record `evals/null_baseline.json`.

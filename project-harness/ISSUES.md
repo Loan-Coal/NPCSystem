@@ -169,7 +169,6 @@ each one reports, which is a behaviour change per site, not a mechanical edit.
 as it shrinks. The gate only enforces `duration_ms` today — the other three fields CLAUDE.md
 names are not yet checked, and widening it is a follow-on decision, not part of this issue.
 
-
 ## ISSUE-223: the dialogue prompt is a process-wide singleton, so it cannot be A/B tested
 **Found:** 2026-08-27, during the P0-P9 review that produced `EVAL_P25_TO_P31_PLAN.md`
 **Severity:** P2 (annoying) - blocking for Program 5, not for anything shipping today
@@ -836,7 +835,6 @@ to tick.
 
 ---
 
-
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
 **Found:** 2026-06-09, during eval re-run
 **Severity:** P3 (nice-to-fix — voice quality, not anti-hallucination)
@@ -888,7 +886,6 @@ hallucination guards remain unaffected (separate axis).
 ## Closed
 
 ---
-
 
 > **Issue format:** see the template in `project-harness/CLAUDE.md` (“Issues”).
 > It is deliberately NOT duplicated here. Until 2026-09-02 this file carried a copy
@@ -1120,7 +1117,6 @@ needs its own test update and a prompt-determinism re-measurement.
 sites, stop re-adding `expires_at_tick` in the pledge item, and update `test_pledge_service.py`.
 Re-run the retrieved_context drift measurement afterwards to confirm it stays at 0.
 
-
 ## ISSUE-183: EVAL-P21.1/P21.2's named acceptance clauses were never exercised by the live panel run
 **Found:** 2026-08-18, verifying the 2026-08-17 overnight panel run against the roadmap
 **Severity:** P2 (annoying) - blocks an honest tick of two roadmap items; no wrong data
@@ -1164,7 +1160,6 @@ Supersedes nothing - ISSUE-141 stays open and is now better evidenced.
 **To fix:** treat per-criterion kappa as the target metric for the next `refusal_judge` /
 `affirms_judge` prompt iteration (ISSUE-141), and judge progress on the per-criterion breakdown
 rather than the raw-agreement headline.
-
 
 ## ISSUE-186: `k3_73e6c36` cannot serve as an A/B baseline arm (`harness_version` and `seed` are null)
 **Found:** 2026-08-18, tracing the A/B path while scoping the combined run
@@ -1692,7 +1687,6 @@ an env var) and return it from `/health` alongside `version`. Then gate 2 become
 comparison. Add a test that `/health` reports something other than a hardcoded literal
 when the env var is set.
 
-
 ## ISSUE-228: gossip distortion does not compound across hops
 **Found:** 2026-08-28, during the 2026-08 review remediation triage
 **Severity:** P1 (blocking)
@@ -1859,10 +1853,6 @@ one line each. Fixing them drops 2 ids from `scripts/integration_baseline.txt` v
 The 2 defects and 3 fixture gaps are safe to fix. Item 7 needs a product decision. Item 8 needs one
 more measurement. None was fixed here — this task changes only this file.
 
-
-
-
-
 ---
 
 ### R3.6 TRIAGE — 2026-09-02, report only, nothing changed
@@ -1942,7 +1932,6 @@ Closed since: the reputation label boundary, decided as `allied` by DEC-252 (**I
 Per DEC-250 the programme exit condition is zero *unexplained* failures, not zero failures. That
 condition is met: every remaining failure has a measured cause and an owning issue.
 
-
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning
 **Severity:** P2 (annoying) — silently overstates n and makes case deletions invisible
@@ -1961,7 +1950,6 @@ numbers, which is the attribution error R2 exists to stop.
 **To fix:** add a case-existence filter to `_iter_rows`, report the dropped-row count
 explicitly so silent shrinkage is visible, and red when the drop rate exceeds a recorded
 baseline. Revisit when a regeneration is next run.
-
 
 ## ISSUE-238: 14 guard cases state a knowledge-boundary property that nothing enforces
 **Found:** 2026-08-31, during R2.4
@@ -1990,15 +1978,26 @@ per-case knowledge boundary. That specific claim is currently unenforced.
 **Why deferred:** the fix is 14 hand-written judge rubrics, which is a phase of work, and it
 must be a separate commit from R2.4's deletion or the 208 -> 105 move has two causes — the
 attribution error R2 exists to stop.
-**To fix:** replace each removed block with an `affirms_judge` criterion restating that case's
-`description` as a rubric. `affirms_judge` is a supported matcher kind (`evals/matchers.py:197`),
+**Progress 2026-09-03 (M3.3, not a fix).** All 37 guard cases were re-authored against DEC-256.
+Topic nouns are gone from every `keyword_none` list, the surviving entries are disclosure
+predicates, and total dead keywords fell 203 -> 93 (baseline re-recorded downward). Each case also
+gained a per-case `commits_judge` criterion, which took the canned hedge from 37/37 to 0/37 and
+closed ISSUE-257. **That is the positive half only.** This issue's actual complaint — that the
+per-case knowledge boundary ("NPC X must not confabulate NPC Y's knowledge") is enforced
+lexically rather than semantically — still stands: the negative half is still a literal phrase
+list, and a leak phrased in words nobody guessed still passes.
+**To fix:** the issue's original prescription is still right, and DEC-256 sharpens why. Add a
+per-case `affirms_judge` criterion restating each case's `description` as a claim about the
+withheld fact. `affirms_judge` is the correct instrument *here* precisely because it is
+polarity-inverted: confabulation IS an assertion, so it fails exactly what a lexical list misses.
+(It is the wrong instrument for the positive half, which is what DEC-256 rejected — the two halves
+need opposite polarities, and this issue owns the negative one.) `affirms_judge` is a supported matcher kind (`evals/matchers.py:197`),
 already used for the injected lore rubric, and carries real variance (0.941 on the recorded
 generation) — so the assertion can actually fail. Do NOT use `refusal_judge`: it has no dispatch
 branch in `matchers.py`, no case file uses it, and ISSUE-141 records kappa=0.247 with a CI
 crossing zero. Note the replacement inherits ISSUE-129: `affirms_judge` kappa is 0.530
 [0.000, 0.853], refused against the 0.60 threshold — a measurable instrument, not yet a trusted
 one. Land it after the next regeneration so the before/after is comparable.
-
 
 ## ISSUE-246: the baseline generation records null model digests, so the trend re-decision can never unblock
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
@@ -2034,32 +2033,6 @@ about whether `scripts/` gets its own ratcheted baseline (as `evals/` did in EVA
 be clean from the start.
 **To fix:** decide baseline-vs-clean, fix `check_rules.py:45`, add `scripts/` to the `lint`
 recipe, and extend `test_gate_scope.py` to pin the wider scope.
-
-## ISSUE-257: the adversarial battery does not discriminate the engine from a canned hedge
-**Found:** 2026-09-02, during R2.5 step 3c
-**Severity:** P3 (nice-to-fix)
-**Reclassified:** Downgraded P1→P3 2026-09-02 by DEC-250: the battery's failure to discriminate is ACCEPTED, not scheduled. It is retained as a regression smoke test and must not be described as a measurement. Re-authoring the 37 cases is the entry point if the claim is ever revived. Supersedes the closed ISSUE-229.
-unpublishable until this is fixed
-**Where:** `evals/cases/case_adv_*.yaml`, `evals/cases/case_neg_*.yaml` (37 cases)
-**Description:** Measured 2026-09-02 through the shared expectation set
-(`guard_expectations.expected_with_guards`, both LLM judges live): the canned hedge in
-`scripts/hedge_responder_probe.py` scores **37/37 = 1.000**, against the engine's 0.8468.
-Every adversarial and negative case is satisfied by a fixed string that asserts nothing.
-
-This is not a guard defect. The four injected guards catch empty, canned and AI-revealing
-responses; a fluent hedge is none of those, so they pass it correctly. The defect is in case
-authoring: the cases forbid confirming a false premise, and hedging does not confirm it, so
-refusing to answer is scored identically to knowing better. Per DEC-245 the adversarial rate
-is therefore no longer printed.
-**Why deferred:** re-authoring 37 cases is a distinct, substantial task from the comparability
-fix that revealed the problem, and it needs a stated authoring rule (what must a case require
-beyond "does not confirm the false premise"?) before any case is rewritten. Guessing that rule
-case-by-case would produce 37 inconsistent cases.
-**To fix:** decide the discrimination rule — most likely each guard case must also require a
-positive, case-specific commitment the hedge cannot supply (naming what the NPC does know, or
-who to ask) — record it as a DEC, then re-author the cases against it. Prove it by re-running
-`python scripts/hedge_responder_probe.py --battery adversarial` and requiring the null rate
-below the 0.30 gate, and re-record `evals/null_baseline.json`.
 
 ## ISSUE-248: the resolved-issues archive reuses two ids and skips five
 **Found:** 2026-08-31, during the adversarial review of the R2-remainder plan
@@ -2117,7 +2090,6 @@ registry-valid Character/Faction payload, validates it through `validate_node_pa
 writes the result — then repoint the 10 files at it. Once that exists, a `check-rules` pattern
 banning a raw `:Character`/`:Faction` MERGE under `tests/integration/` would keep it true.
 
-
 ## ISSUE-262: `check-integration-baseline-update` writes CRLF into a LF-normalised file
 **Found:** 2026-09-02, during R3 close-out (ISSUE-261)
 **Severity:** P3 (nice-to-fix) — costs one manual normalisation per use, never wrong output
@@ -2134,7 +2106,6 @@ it wants doing alongside that rather than as a drive-by in a product-correctness
 "` (or `write_bytes`). Then check the other
 `--update` writers for the same defect: `check_rules.py`, `check_test_quality.py`,
 `check_engine_logs.py` and `check_migrations.py` all rewrite a tracked text file.
-
 
 ## ISSUE-250: two documents cite ISSUE ids that were never filed
 **Found:** 2026-09-01, during R4.5 (ledger hygiene)
@@ -2190,7 +2161,6 @@ change into a documentation change — the attribution error the R2 program exis
 single shared helper so the next regeneration updates all three at once. Do it in the same commit
 as the next regeneration so the before/after is attributable.
 
-
 ## ISSUE-259: the quest lifecycle integration test targets an API that no longer exists
 **Found:** 2026-09-02, during R3.4 (triage cause D)
 **Severity:** P2 (annoying) — one baselined integration failure, no product defect behind it
@@ -2211,7 +2181,6 @@ the body is unverified — the test has never executed — so it must be re-deri
 `quest_repo` and `clock` (see `tests/unit/engines/test_quest_lifecycle_engine.py:118`), construct
 a `QuestOfferService` for the offer step, and drop every `session=` kwarg. Expect the assertions
 to need re-deriving rather than porting.
-
 
 ## ISSUE-260: faction-aware gossip pair selection truncates the pairs its test asserts on
 **Found:** 2026-09-02, during R3 (triage cause C, carried from ISSUE-233)
@@ -2294,7 +2263,6 @@ lock would bake one machine's CUDA build into a file the container cannot instal
 with a platform-conditional constraint), make `make install` consume it, and add a gate that
 reds when the lock and `pyproject.toml` disagree.
 
-
 ## ISSUE-268: migration Cypher lives in `scripts/`, outside the `graph/` layer
 **Found:** 2026-09-03, during R5.4
 **Severity:** P3 (nice-to-fix)
@@ -2310,7 +2278,6 @@ but moving six existing migrations' queries is a separate refactor with its own 
 CLI adapters over them, and widen `check_rules`' R005 scan to `scripts/` so it cannot recur.
 Note that widening the scan needs ISSUE-255 (lint/type coverage of `scripts/`) settled first.
 
-
 ## ISSUE-269: `check-api-stability` is now a strict subset of `check-api-contract`
 **Found:** 2026-09-03, during R5.1
 **Severity:** P3 (nice-to-fix)
@@ -2325,7 +2292,6 @@ model is wired to any route. `make check` therefore carries both, at 23 targets.
 **To fix:** decide whether the unrouted-model case is worth a gate. If not, delete the script,
 its baseline and its test, and rename the target — `make check` returns to 22.
 
-
 ## ISSUE-270: `make package` output path does not match its documented location
 **Found:** 2026-09-03, during R5.3
 **Severity:** P3 (nice-to-fix)
@@ -2339,7 +2305,6 @@ directory. Cosmetic, but it is exactly the kind of stale path claim R5.3 existed
 the comment is imprecise. Changing `--distpath` would move an output other tooling may reference.
 **To fix:** either set `--distpath dist` so the collected directory is `dist/npc_engine_server/`,
 or correct the comment. Prefer the former; check `e2e/` and any installer script first.
-
 
 ## ISSUE-271: the gossip throughput NFR is still unproven at its target
 **Found:** 2026-09-03, during R5.5 (CR-L12-05)
@@ -2356,7 +2321,6 @@ held 52 nodes does not reproduce.)
 seeding task, not a benchmarking one.
 **To fix:** add a scale-seed target that generates enough characters and relationships to offer
 200+ eligible pairs, then re-run `make bench-nfr` and record the number.
-
 
 ## ISSUE-272: `make type-evals` is green only in the checkout the editable install points at
 **Found:** 2026-09-03, during R5 verification
