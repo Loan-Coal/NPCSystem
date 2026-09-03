@@ -55,6 +55,7 @@ from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_wit
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
 from .context_profile_policy import apply_slot_policy, tier_enabled
+from .context_need_models import NEED_UNMET_LEVEL_THRESHOLD, NeedSnapshot
 from .context_protocols import EmbeddingIndexProtocol
 from .context_slots import slot_for_key
 from .context_builder_helpers import (
@@ -83,30 +84,6 @@ from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_co
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.graph.world_state.world_state_reader import get_world_state
-
-
-from pydantic import BaseModel
-
-
-# Level below which a need is considered "unmet" and surfaced to dialogue context.
-# Needs are modelled on a 0-100 scale; lower = more urgent.
-NEED_UNMET_LEVEL_THRESHOLD: int = 50
-
-
-class NeedSnapshot(BaseModel):
-    """Typed snapshot of a single NPC need node — no raw dict crosses module boundary.
-
-    Attributes:
-        need_id: Unique node ID in the graph.
-        kind:    Semantic kind (e.g. "hunger", "social", "rest").
-        level:   Current level on a 0-100 scale.  Lower = more urgent.
-        character_id: Owning NPC node ID.
-    """
-
-    need_id: str
-    kind: str
-    level: int
-    character_id: str
 
 
 # ---------------------------------------------------------------------------
