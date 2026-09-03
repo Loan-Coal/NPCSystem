@@ -69,5 +69,36 @@ def main() -> None:
         sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# R5.4 migration contract — identity, claimed fields, and the down path.
+# ---------------------------------------------------------------------------
+
+MIGRATION_ID = "add_strategy_schema"
+MIGRATES = []
+REVERSIBLE = "full"
+
+_CREATED_CONSTRAINTS: tuple[str, ...] = ('resource_node_id_unique', 'army_id_unique')
+
+
+async def down(session, *, dry_run: bool = False) -> None:
+    """Undo this migration as far as it can honestly be undone.
+
+    Args:
+        session: Active Neo4j async session (write access required).
+        dry_run: When True, print the plan and write nothing.
+    """
+    from _support import drop_constraints, record_run
+
+    await drop_constraints(session, _CREATED_CONSTRAINTS, dry_run=dry_run)
+    if not dry_run:
+        await record_run(
+            session,
+            migration_id=MIGRATION_ID,
+            direction="down",
+            reversible=REVERSIBLE,
+            notes='constraints dropped; no data removed',
+        )
+
+
 if __name__ == "__main__":
     main()

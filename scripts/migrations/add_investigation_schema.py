@@ -89,6 +89,37 @@ async def _apply_constraints(session, *, dry_run: bool, mode: str) -> None:
             await session.run(cypher)
 
 
+# ---------------------------------------------------------------------------
+# R5.4 migration contract — identity, claimed fields, and the down path.
+# ---------------------------------------------------------------------------
+
+MIGRATION_ID = "add_investigation_schema"
+MIGRATES = []
+REVERSIBLE = "full"
+
+_CREATED_CONSTRAINTS: tuple[str, ...] = ('evidence_id_unique', 'deduction_id_unique')
+
+
+async def down(session, *, dry_run: bool = False) -> None:
+    """Undo this migration as far as it can honestly be undone.
+
+    Args:
+        session: Active Neo4j async session (write access required).
+        dry_run: When True, print the plan and write nothing.
+    """
+    from _support import drop_constraints, record_run
+
+    await drop_constraints(session, _CREATED_CONSTRAINTS, dry_run=dry_run)
+    if not dry_run:
+        await record_run(
+            session,
+            migration_id=MIGRATION_ID,
+            direction="down",
+            reversible=REVERSIBLE,
+            notes='constraints dropped; no data removed',
+        )
+
+
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
     asyncio.run(run_migration(dry_run=dry_run))

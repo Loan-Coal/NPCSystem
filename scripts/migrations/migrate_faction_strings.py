@@ -45,7 +45,8 @@ LIMIT 1
 CYPHER_CREATE_MEMBER_OF = """
 MATCH (c:Character {id: $character_id}), (f:Faction {id: $faction_id})
 MERGE (c)-[r:MEMBER_OF]->(f)
-ON CREATE SET r.role = 'member', r.status = 'active', r.joined_at_tick = 0
+ON CREATE SET r.role = 'member', r.status = 'active', r.joined_at_tick = 0,
+              r.created_by_migration = $migration_id
 RETURN r
 """
 
@@ -156,6 +157,65 @@ async def _create_member_of(session, character_id: str, faction_id: str) -> None
         CYPHER_CREATE_MEMBER_OF,
         character_id=character_id,
         faction_id=faction_id,
+        migration_id=MIGRATION_ID,
+    )
+
+
+# ---------------------------------------------------------------------------
+# R5.4 migration contract — identity, claimed fields, and the down path.
+# ---------------------------------------------------------------------------
+
+MIGRATION_ID = "migrate_faction_strings"
+MIGRATES = []
+REVERSIBLE = "partial"
+IRREVERSIBLE_REASON = (
+    "down() deletes only MEMBER_OF edges this migration stamped with "
+    "created_by_migration, so memberships created by gameplay are never touched. Edges "
+    "written by the pre-R5.4 version of this script carry no stamp and cannot be "
+    "distinguished from gameplay data, so they are deliberately left in place. up() "
+    "never removed Character.faction, so no source data was destroyed either way."
+)
+
+CYPHER_DELETE_STAMPED_MEMBER_OF = """
+MATCH ()-[r:MEMBER_OF]->()
+WHERE r.created_by_migration = $migration_id
+DELETE r
+RETURN count(r) AS deleted
+"""
+
+CYPHER_COUNT_STAMPED_MEMBER_OF = """
+MATCH ()-[r:MEMBER_OF]->()
+WHERE r.created_by_migration = $migration_id
+RETURN count(r) AS stamped
+"""
+
+
+async def down(session, *, dry_run: bool = False) -> None:
+    """Delete only the MEMBER_OF edges this migration created.
+
+    Args:
+        session: Active Neo4j async session (write access required).
+        dry_run: When True, report the count and write nothing.
+    """
+    from _support import record_run
+
+    if dry_run:
+        result = await session.run(CYPHER_COUNT_STAMPED_MEMBER_OF, migration_id=MIGRATION_ID)
+        record = await result.single()
+        stamped = 0 if record is None else record["stamped"]
+        print(f"  [dry-run] would delete {stamped} stamped MEMBER_OF edge(s)")
+        return
+
+    result = await session.run(CYPHER_DELETE_STAMPED_MEMBER_OF, migration_id=MIGRATION_ID)
+    record = await result.single()
+    deleted = 0 if record is None else record["deleted"]
+    print(f"  deleted {deleted} stamped MEMBER_OF edge(s)")
+    await record_run(
+        session,
+        migration_id=MIGRATION_ID,
+        direction="down",
+        reversible=REVERSIBLE,
+        notes=IRREVERSIBLE_REASON,
     )
 
 
