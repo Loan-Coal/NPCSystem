@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
         check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
-        check-migrations check-api-stability check-engine-logs \
+        check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         check-ledger-ids check-cited-reports check-ceiling-baseline \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
@@ -314,8 +314,19 @@ check-migrations:
 	$(PYTHON) scripts/check_migrations.py
 
 # check-api-stability: a /v1 response model lost a field it had in the baseline.
+# Narrow by construction: an AST field-drop ratchet over api/response_models/ and
+# api/schemas.py only (17 of 105 api/ models). check-api-contract is the real contract
+# gate; this one is kept because it sees a source-level rename before a route is wired.
 check-api-stability:
 	$(PYTHON) scripts/check_api_stability.py
+
+# check-api-contract: the /v1 surface changed in a way that breaks an existing consumer
+# — route removed (including the WebSocket route, which app.openapi() does not list),
+# response field dropped or retyped, request tightened, status code or auth changed.
+# Additive change passes and needs no baseline edit. Re-record a deliberate break with:
+#   python scripts/check_api_contract.py --update      (see docs/API_STABILITY.md, DEC-253)
+check-api-contract:
+	$(PYTHON) scripts/check_api_contract.py
 
 # check-engine-logs: engine logger.info calls missing duration_ms exceed the
 # recorded baseline (42 at R1.8).
@@ -344,7 +355,7 @@ check-engine-logs:
 # R4.5: check-ledger-ids added, 19 -> 20. Placed beside check-harness because both audit
 #        the project ledgers rather than the code, and both must fire before lint can
 #        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-engine-logs check-base-rate check-dead-keywords
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

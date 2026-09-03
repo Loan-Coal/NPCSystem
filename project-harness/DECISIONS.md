@@ -8069,3 +8069,67 @@ gain beyond making one assertion pass.
 without the field, becomes invisible to all 37 readers rather than to 36 of them. That is the intended
 behaviour and it is louder than the alternative, but it does move the failure earlier for raw-Cypher
 writers — see ISSUE-263.
+
+---
+
+## DEC-253: a committed API-contract baseline, when R4.7 deleted the last committed API artifact
+
+**Date:** 2026-09-03, during R5.1 (CR-L12-07).
+
+**Decision:** Add `scripts/api_contract_baseline.json` — a committed recording of the `/v1`
+surface — and gate it with `make check-api-contract`. This is deliberately the same *shape* of
+artifact that R4.7 deleted three days ago, and the reasoning for why that is not a contradiction
+is the substance of this entry.
+
+**What R4.7 deleted and why.** `live_openapi.json` was a committed copy of `app.openapi()`. It
+had drifted four routes behind the app (`/setup/config`, `/setup/validate`,
+`/v1/admin/debug/vector-store`, `/v1/admin/vector-store/rehydrate`) while looking authoritative,
+so it was deleted in favour of regenerating on demand via `make openapi`.
+
+**Why this one does not rot the same way.** Three reasons, in order of weight:
+
+*(1) Rot is a function of readership, not of format.* `live_openapi.json` had **zero readers** —
+nothing compared it to the app, so the only force keeping it current was human diligence, and
+diligence lost four routes over an unbounded window. This artifact is the input of a gate that
+runs in `make check` on every commit. Its reachable states are exactly two: equal to the app, or
+red. There is no "quietly four routes behind" state, because that state *is* the failure signal.
+The same repo already carries eight read-every-run baselines in `scripts/` and none has rotted.
+
+*(2) It is not a copy of a truth; it is the recorded input of a detector.* DEC-249's "a copy here
+is a copy that rots" is about unread copies. A ratchet baseline is the opposite: it is the thing
+the ratchet is *for*.
+
+*(3) Churn is bounded, so re-recording stays rare and legible.* Raw `app.openapi()` is 212 KB and
+changes whenever any route docstring changes — a diff that is mostly prose trains reviewers to run
+`--update` without reading, which is how the old file lost credibility before it lost accuracy.
+The recording strips description/summary/title/example/operationId/tags, measured **62% smaller**
+(212 KB → 83 KB), and additive change requires **no baseline edit at all**. The baseline moves only
+on a deliberate break, which is the only time anyone should be looking at it.
+
+**Why `make check` goes 22 → 23 targets.** `check-api-stability` is kept rather than replaced. It
+is an AST field-drop ratchet over `api/response_models/` and `api/schemas.py` — 17 of the 105
+BaseModel classes under `api/` — and it sees a source-level rename before a route is wired, which
+the contract gate (which reads the built app) cannot. The overlap is accepted; retiring it is
+logged as ISSUE-265 rather than done here, because deleting a gate is not a thing to do in passing.
+
+**Two measurements that shaped the design, both of which contradicted the plan:**
+
+*(a) Operations are enumerated from `app.routes`, not from `app.openapi()`.* Measured: the app
+serves 148 `APIRoute`s **plus one `APIWebSocketRoute`** (`/v1/ws/dialogue`), and `app.openapi()`
+contains **zero** WebSocket entries. `docs/INTEGRATION.md` sells that streaming route as part of
+the contract. A gate built on OpenAPI alone — which is what CR-L12-07's fix sketch proposed —
+would have permitted deleting it in silence. Verified by counterfactual: renaming the route reds
+the gate with `operation_removed WEBSOCKET {v1}/ws/dialogue`.
+
+*(b) The gate must import the tree it lives in.* First implementation put `scripts/` on `sys.path`
+but not `src/`, so an editable install elsewhere was imported instead. The gate measured a
+different checkout and **stayed green through two real breaking changes**. The path fix then had
+to move to import time, because `build_contract()` imports `npc_engine` submodules before it calls
+`build_app()`, and the first such import binds the package path for the process. Both false greens
+were caught only by running end-to-end counterfactuals, not by the unit tests, which passed
+throughout because pytest sets `pythonpath = ["src"]`.
+
+**Trade-off accepted:** the gate covers declared shape, not behaviour. A green result means "no
+consumer's parsing breaks", not "nothing changed" — stated explicitly in `docs/API_STABILITY.md`
+so the gate is not over-read, which is the failure DEC-250 exists to punish. The deprecation
+window in that document is process, not a gate, and is labelled as such.
