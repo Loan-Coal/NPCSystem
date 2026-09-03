@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "npc-engine"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi==0.116.1",
     "uvicorn[standard]==0.35.0",
@@ -16,8 +16,12 @@ dependencies = [
     "neo4j==5.28.2",
     "redis==5.2.1",
     "httpx==0.28.1",
-    "sentence-transformers>=2.6.0",
-    "torch>=2.0.0",
+    # Floor is the oldest release verified on this project's target: Python 3.14 (cp314)
+    # and Blackwell / sm_120. Local dev runs 2.9.1+cu128; the container resolves a newer
+    # +cpu build from the CPU index. The +cu128 / +cpu local version segments are
+    # deliberately not pinned here — they are not portable (R5.2, CR-L16-04).
+    "sentence-transformers>=3.0.0,<7",
+    "torch>=2.9.1,<3",
 ]
 
 [project.optional-dependencies]

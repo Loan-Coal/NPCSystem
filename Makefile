@@ -24,7 +24,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
-        seed-tavern-world seed-village-world package eval-dashboard
+        seed-tavern-world seed-village-world package eval-dashboard verify-rag
 
 install:
 	pip install -e .[dev]
@@ -319,6 +319,12 @@ check-migrations:
 # gate; this one is kept because it sees a source-level rename before a route is wired.
 check-api-stability:
 	$(PYTHON) scripts/check_api_stability.py
+
+# verify-rag: exercise the real embedding path (loads the model, needs torch).
+# Deliberately NOT in `check`: CI has no GPU and no torch, and a skipif guard would make
+# it pass by skipping. Human-run verification instead (R5.2).
+verify-rag:
+	$(PYTHON) scripts/verify_rag.py
 
 # check-api-contract: the /v1 surface changed in a way that breaks an existing consumer
 # — route removed (including the WebSocket route, which app.openapi() does not list),
