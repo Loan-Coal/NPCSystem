@@ -81,13 +81,28 @@ def test_a_battery_whose_engine_rate_is_absent_is_not_gated() -> None:
 
 
 def test_the_shipped_baseline_records_the_measured_adversarial_null() -> None:
-    """The artifact holds the 2026-09-02 measurement, not a placeholder."""
+    """The artifact holds the 2026-09-03 (M3.3) measurement, not a placeholder.
+
+    This was 1.000 until M3.3 re-authored the 37 guard cases against DEC-256. The prior
+    rate is kept in the artifact so the two are comparable, and the hedge is unchanged,
+    so the move is a property of the battery and not of the adversary.
+    """
     baseline = load_null_baseline()
     assert "adversarial" in baseline
     entry = baseline["adversarial"]
-    assert entry["null_rate"] == pytest.approx(1.0)
+    assert entry["null_rate"] == pytest.approx(0.0)
+    assert entry["previous_null_rate"] == pytest.approx(1.0)
     assert entry["turns"] == 37
     assert entry["expectation_set"] == "guard_expectations.expected_with_guards"
+
+
+def test_the_shipped_baseline_now_publishes_the_adversarial_rate() -> None:
+    """M3.3's outcome, pinned: the engine rate clears a null that no longer scores.
+
+    The refusal rule is unchanged and still enforced (see the rule tests above) — what
+    changed is the battery it is measured over.
+    """
+    assert refusal_for_battery("adversarial", 0.8468, load_null_baseline()) is None
 
 
 def test_every_recorded_entry_states_what_it_measured() -> None:
@@ -131,15 +146,16 @@ def _summary(**over):
     return EvalSummary(**base)
 
 
-def test_the_console_emitter_refuses_the_adversarial_rate_against_the_shipped_null() -> None:
-    """End-to-end: the measured engine rate does not print, because the null matches it.
+def test_the_console_emitter_refuses_the_adversarial_rate_against_a_matching_null() -> None:
+    """End-to-end: an engine rate does not print when the null over that battery matches it.
 
-    This is the R2.5 conclusion in force — engine 0.8468 against a null that scores
-    1.000 over the same battery and the same expectation set.
+    The null is injected rather than read from the shipped artifact: this test is about the
+    emitter's refusal path, and pinning it to the recorded rate made it fail the moment M3.3
+    legitimately moved that rate from 1.000 to 0.000.
     """
     from summary import format_summary_lines
 
-    text = "\n".join(format_summary_lines(_summary()))
+    text = "\n".join(format_summary_lines(_summary(), null_baseline=_baseline(1.0)))
     adversarial_line = next(ln for ln in text.splitlines() if "Guard, adversarial" in ln)
     assert "REFUSED" in adversarial_line
     assert "0.847" not in adversarial_line
@@ -168,5 +184,5 @@ def test_the_markdown_emitter_refuses_too() -> None:
     """The published artifact is markdown; the console is not the only surface."""
     from summary import format_summary_markdown
 
-    text = "\n".join(format_summary_markdown(_summary()))
+    text = "\n".join(format_summary_markdown(_summary(), null_baseline=_baseline(1.0)))
     assert "REFUSED" in text
