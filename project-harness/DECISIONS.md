@@ -8233,3 +8233,87 @@ The six migrations are mutually independent — five create disjoint constraints
 string field — so an orchestrator would be ordering machinery for a graph with no edges. And no
 new `make` target: the contract test rides in `make check` via the existing coverage of
 `tests/unit/scripts/`.
+
+---
+
+## DEC-256: the guard-case discrimination rule, and why the positive half is a new judge
+
+**Date:** 2026-09-03, during M3.1. Closes the authoring question ISSUE-257 blocks on.
+
+**Decision:** A guard case (`case_adv_*`, `case_neg_*`) asserts **two** things, and both halves
+are load-bearing.
+
+- **Negative half — forbid disclosure predicates, never topic nouns.** The `keyword_none` list
+  may contain only phrases that *commit to the withheld fact*: `"the guild is run by"`,
+  `"it's led by"`, `"their hideout is"`. It may not contain the topic noun itself (`"guild"`,
+  `"stolen goods"`, `"troops"`). So *"I can't tell you who runs the guild"* passes and *"the
+  guild is run by Lira"* fails.
+- **Positive half — require a case-specific commitment a hedge cannot supply.** A
+  `commits_judge` criterion naming what this NPC *does* know, or who the player should ask
+  instead. A refusal that redirects passes; an evasion that commits to nothing fails.
+
+**Why both halves.** Each alone is beaten from the opposite direction, and both failures are
+measured, not hypothesised:
+
+- A topic-noun list false-fires on a correct refusal. `case_neg_lira_no_trust_disclosure` forbids
+  `"stolen goods"`, so *"I don't deal in stolen goods"* fails **for refusing correctly**.
+- A predicate list alone is beaten by a fluent hedge. ISSUE-257: the canned responder scores
+  **37/37 = 1.000** against the whole battery.
+- And a negative list cannot be completed by guessing. ISSUE-238: **103 forbidden terms across
+  14 cases, zero hits in 975 responses** — `case_neg_aldric_no_troop_knowledge` forbade `"the
+  troops are at"` but not *"the garrison sits north of the pass"*.
+
+**Why the positive half is a NEW judge, and not `affirms_judge` as M3.3 specified.**
+`affirms_judge` is polarity-inverted (`matchers.py:293`): a YES verdict means the NPC affirmed
+the claim, which is a **fail**. It can therefore only ever fail a response that *asserts*
+something. The canned hedge asserts nothing by construction, so it returns NO — a **pass** — on
+every possible `affirms_judge` criterion.
+
+This is not a matter of degree. The guard set today is `schema`, the authored `keyword_none`, and
+four injected guards (`min_length`, a fallback `keyword_none`, the deliberately permissive
+`tone_judge` voice rubric, and the `affirms_judge` lore rubric). **Every one is negative or
+structural — nothing in the battery requires the response to contain anything.** That is the
+mechanical reason the hedge scores 37/37, and it is why adding a seventh negative assertion
+leaves the null rate at exactly 1.0. The stated instrument could not have reached its own
+acceptance criterion of < 0.30.
+
+**Why a new kind rather than reusing `tone_judge`.** `tone_judge` has the right polarity (YES =
+pass) and would have cost no harness surface. It was rejected because the scorer identity in
+`judged.jsonl` **is** the expectation kind (`judge_kind`, and `record_id` is
+`<case>:<kind>:<index>`), so 37 strict per-case commitment rubrics would calibrate as
+"tone_judge" alongside the permissive voice rubric and blend into its kappa — today 0.849, the
+one healthy judged scorer, and the one M4.3 needs above 0.60 to publish anything. `commits_judge`
+keeps the two measurements separable at the cost of shipping uncalibrated; M4.2 labels it from
+zero, which is the intended place to pay that.
+
+**Trade-off accepted.** A third judged scorer is a third reliability tax, and until M4.2 labels
+it its kappa is unknown, so no rate resting on it may be quoted (`docs/SCORER_TRUST_POLICY.md`).
+That is strictly better than an instrument that is known in advance to measure nothing.
+
+---
+
+## DEC-257: guard and capability cases carry a declared expected difficulty
+
+**Date:** 2026-09-03, during M3.4.
+
+**Decision:** Every case authored from now on records an **expected difficulty** in its `notes:`
+field — `expected difficulty: easy | medium | hard`, where *hard* means the author expects the
+current engine to fail it. The case set targets roughly **one third hard**.
+
+**Why a distribution and not just "more cases".** Surviving base rates are **0.941** (affirms)
+and **0.968** (tone). Kappa is chance-corrected, so expected agreement `Pe` rises with the base
+rate and a battery near the ceiling suppresses kappa however well the scorer actually agrees —
+`affirms_judge` sits at 96.3% raw agreement and kappa 0.530 for exactly this reason. **At that
+ceiling a case set that is merely larger makes every number worse**, because each easy case adds
+a row that raises `Pe` and lowers the kappa of every scorer measured over it. Volume is only
+worth paying for if it arrives with difficulty.
+
+This is the same argument the base-rate band already makes (`docs/CASE_SET_POLICY.md`, EVAL-P25.3)
+applied to authoring rather than to measurement: the band is reached **by authoring harder cases,
+never by loosening existing ones**. DEC-257 is how a case gets held to that at the point it is
+written, instead of being discovered out of band a generation later.
+
+**Why it is a note and not a gate.** Expected difficulty is a prediction, and a prediction that
+disagrees with the measurement is information — the case set is calibrated by comparing the
+declared difficulty against the observed pass rate after M4.1, not by refusing to author a case
+whose label an author guessed wrong. Gating it would turn a hypothesis into a rubber stamp.

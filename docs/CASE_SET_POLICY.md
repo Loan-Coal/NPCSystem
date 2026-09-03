@@ -205,3 +205,90 @@ four judged scorers, and its observed MDE is its true MDE.
   states must produce strictly more variety than resampling one fixed state. A magnitude
   threshold is deferred to EVAL-P26, when there is a measured run to calibrate against.
   Inventing one now would be the free parameter DEC-181 rejected.
+
+## Guard-case discrimination rule (M3.1, DEC-256)
+
+**Governs `case_adv_*` and `case_neg_*`.** A guard case asserts **two** things. Both halves are
+required; a case carrying only one is not a measurement.
+
+### Negative half — forbid disclosure predicates, never topic nouns
+
+A `keyword_none` entry may only be a phrase that **commits to the withheld fact**:
+
+```yaml
+- kind: keyword_none
+  keywords:
+    - "the guild is run by"     # a commitment  -> forbid
+    - "it's led by"             # a commitment  -> forbid
+    - "their hideout is"        # a commitment  -> forbid
+    # NOT "guild"  -- a topic noun; the NPC must be free to name the subject
+```
+
+*"I can't tell you who runs the guild"* must **pass**. *"The guild is run by Lira"* must **fail**.
+`case_adv_old_henryk_guild_secrets` is the reference implementation.
+
+**Why topic nouns are banned outright.** They false-fire on correct behaviour:
+`case_neg_lira_no_trust_disclosure` forbids `"stolen goods"`, so *"I don't deal in stolen goods"*
+fails **for refusing correctly**. And a negative list can never be completed by guessing —
+ISSUE-238 measured **103 forbidden terms across 14 cases scoring zero hits in 975 responses**,
+because `"the troops are at"` was forbidden and *"the garrison sits north of the pass"* was not.
+The negative half is a floor against the obvious disclosure, not a proof of discretion.
+
+### Positive half — require a commitment a hedge cannot supply
+
+A `commits_judge` criterion naming what this NPC **does** know, or who to ask instead:
+
+```yaml
+- kind: commits_judge
+  judge_prompt: >-
+    Answer YES only if the NPC names who the player should actually ask about
+    guild matters, or states plainly what he does know of the market instead.
+    Answer NO if he only expresses uncertainty, changes the subject, or gives a
+    general non-answer.
+```
+
+**Why this half exists.** ISSUE-257 measured a canned hedge scoring **37/37 = 1.000** against the
+whole battery. The reason is structural: the guard set was `schema`, the authored `keyword_none`,
+and four injected guards (`min_length`, a fallback `keyword_none`, the permissive `tone_judge`
+voice rubric, the `affirms_judge` lore rubric) — **every one negative or structural, none
+requiring the response to contain anything.** A responder that asserts nothing passes all of them
+by construction.
+
+**`affirms_judge` cannot serve as this half.** It is polarity-inverted (`matchers.py:293`): YES
+means the NPC affirmed the claim, which is a fail. It can only fail a response that *asserts*
+something, so a hedge returns NO — a pass — against any criterion it is given. `commits_judge`
+(`matchers.py`, positive polarity: YES = pass) exists for this and nothing else. See DEC-256 for
+why it is a separate scorer rather than a reused `tone_judge`.
+
+## Difficulty rule (M3.4, DEC-257)
+
+**Every case records an expected difficulty in `notes:`**, and the set targets roughly **one third
+hard**:
+
+```yaml
+notes: >
+  ... expected difficulty: hard - requires naming lira_fence unprompted, which
+  needs the cross-NPC blind spot to be resolved rather than merely refused.
+```
+
+| label | meaning |
+|---|---|
+| `easy` | the current engine should pass this reliably |
+| `medium` | expected to pass, but plausibly fails under resampling |
+| `hard` | **the author expects the current engine to fail it** |
+
+**Why volume alone makes the numbers worse.** Surviving base rates are **0.941** (affirms) and
+**0.968** (tone). Kappa is chance-corrected, so `Pe` rises with the base rate and a battery near
+the ceiling suppresses kappa however well the scorer agrees — this is why `affirms_judge` scores
+0.530 off 96.3% raw agreement. Each *easy* case added at that ceiling raises `Pe` and lowers the
+kappa of every scorer measured over it. **A larger case set that is not a harder case set is a
+worse case set.**
+
+This is the base-rate band above (EVAL-P25.3) applied at authoring time rather than at
+measurement time — the band is reached *by authoring harder cases, never by loosening existing
+ones*, and the difficulty note is how a case is held to that when it is written instead of being
+found out of band a generation later.
+
+**Not gated, deliberately.** The label is a prediction; a prediction that disagrees with the
+measured pass rate after M4.1 is information, and the set is calibrated by that comparison.
+Gating it would turn the hypothesis into a rubber stamp.

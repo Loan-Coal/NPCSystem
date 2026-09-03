@@ -242,7 +242,7 @@ fixing the loop is to have it grind M1 and M2 overnight while the days go to M3 
 Must precede M4. Re-authoring changes what is generated **and** what is labelled, so doing it
 after the regeneration burns the entire relabel.
 
-- [ ] M3.1 Write the discrimination rule as a DECISIONS entry, then into `docs/CASE_SET_POLICY.md`
+- [x] M3.1 Write the discrimination rule as a DECISIONS entry, then into `docs/CASE_SET_POLICY.md`
       ISSUE-257 blocks on exactly this and says so: the rule must be stated before any case is
       rewritten, or 37 cases get 37 inconsistent rules. The rule, decided 2026-09-03: a guard
       case asserts **two** things. The negative half forbids **disclosure predicates**, never
