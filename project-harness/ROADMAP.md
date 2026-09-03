@@ -728,11 +728,46 @@ These need a human, or must not run unattended.
 The Unreal DemoGame is a real external consumer now (DEC-229), so these stopped being
 hypothetical. Plans: `FIX_PLANS.md#r5`.
 
-- [ ] R5.1 API stability policy + breaking-change contract test — **do first in this phase**; cheap now, expensive once Unreal binds · CR-L12-07
-- [ ] R5.2 Python 3.14 everywhere; install `torch`/`sentence-transformers` · DEC-230 · CR-L16-06, CR-L16-04
-- [ ] R5.3 Make `make package` build — its spec names `config/` and `game_schema.yaml`, neither of which exists · CR-L12-02
-- [ ] R5.4 Migration down paths + applied-state record — 0 of 7 have either · CR-L04-01, CR-L04-06, CR-L04-05
-- [ ] R5.5 Ops: image staleness, non-root, app healthcheck, default creds, lockfile, NFR measurement · CR-L16-03 +5
+- [x] R5.1 API stability policy + breaking-change contract test · CR-L12-07 ✅ (2026-09-03)
+      Spec correction: it was NOT true that "no such test exists" — `check-api-stability` was
+      already gated, but it is an AST field-drop ratchet over 2 files = **17 of 105** `api/`
+      models, blind to routes, types, required-set and auth. Added `check-api-contract`
+      (`make check` 22 → **23** targets) + `docs/API_STABILITY.md` + DEC-253. Operations come
+      from `app.routes`, not `app.openapi()`: **149 ops = 148 HTTP + 1 WebSocket**, and
+      OpenAPI lists **0** WebSocket entries, so an OpenAPI-only gate would miss deleting
+      `/v1/ws/dialogue`. Retiring the old gate is ISSUE-266.
+- [x] R5.2 Python 3.14 everywhere; install `torch`/`sentence-transformers` · DEC-230 · CR-L16-06, CR-L16-04 ✅ (2026-09-03)
+      Drift was **3 files against CI**, not a whole-repo bump: `Dockerfile`, `mypy.ini`,
+      `pyproject.toml`. All now 3.14, pinned by a conformance test; image rebuilt and reports
+      Python 3.14.7. torch 2.9.1+cu128 installed and verified on the RTX 5070 Ti (sm_120):
+      `make verify-rag` loads the real model on cuda:0, dim=384, norm=1.000000. The RAG path
+      had never executed locally before. No existing test starts passing — they all mock the
+      encoder — and `verify-rag` is deliberately not a pytest test (CI has no GPU).
+- [x] R5.3 Make `make package` build · CR-L12-02 ✅ (2026-09-03)
+      Spec correction: `config/` and `game_schema.yaml` do not exist **at the repo root** but
+      do under `src/npc_engine/`. And that was not the first failure. `REPO_ROOT =
+      Path(SPECPATH)` resolved to `packaging/`, so the entry script `scripts/launcher.py` was
+      never found and the build died **before** reading `datas`. Third defect: the spec
+      bundled 3 of the **11** package-data patterns — **9 patterns / 120 files** missing,
+      including the whole type registry and every per-engine `llm_config.yaml`. `make package`
+      now exits 0 and the binary boots. Output-path nit: ISSUE-267.
+- [x] R5.4 Migration down paths + applied-state record · CR-L04-01, CR-L04-06, CR-L04-05 ✅ (2026-09-03)
+      Count correction: **6** migrations, not 7 — `add_faction_support.py` was deleted by R4.3
+      (`6a6b1dcb`) and the number was never decremented. "0 of them" reproduces on every
+      count: 0 down paths, 0 `MIGRATES` declarations, 0 applied-state records. Also corrected:
+      `scripts/check_migrations.py` is **not new** (R1.8/DEC-224) and was already gated — its
+      `MIGRATES` contract was satisfied by zero migrations. Reversibility is per-migration and
+      honest: 3 `full`, 3 `partial` where a backfilled default is indistinguishable from an
+      authored value. Runner/registry deferred; Cypher-in-scripts is ISSUE-265.
+- [x] R5.5 Ops: image staleness, non-root, app healthcheck, default creds, lockfile, NFR measurement · CR-L16-03 +5 ✅ (2026-09-03)
+      Five of six land; the lockfile is **deliberately partial** (13 pinned / 7 ranged / 1
+      unpinned → **13 / 4 / 0**, every range now ceilinged) because the tool choice is yours —
+      ISSUE-264. Verified by inspection, not assertion: uid=10001 non-root, healthcheck=yes,
+      `docker compose config` refuses to start without NEO4J_PASSWORD. First NFR numbers ever
+      taken: graph **27,488 nodes** vs a 10,000 target (MET — and the review's "52 nodes" does
+      **not** reproduce); gossip **36 pairs/tick** vs 200 (NOT met, but a world-size limit, so
+      the target is unproven rather than refuted — ISSUE-268). 2 of 4 NFRs remain unmeasurable
+      here and are reported as such rather than guessed.
 
 ### R6 — Overnight loop rework
 
@@ -745,7 +780,14 @@ cannot be diagnosed. Run these with the loop stopped.
 
 ### R7 — Deferred large work
 
-- [ ] R7.1 Pydantic models at `BaseEngine.run_tick()` / `generate_structured()` — 145 functions, XL. Do not start before R2 is green · CR-L02-05
+- [ ] R7.1 Pydantic models at `BaseEngine.run_tick()` / `generate_structured()` · CR-L02-05
+      **Re-measured 2026-09-03, not started.** "145 functions" reproduces only as a
+      package-wide dict census (147 today) in which **72 are unrelated `graph/` query
+      helpers**. True scope for the task as titled: **49 production functions** (3 protocols,
+      28 `run_tick` implementors, 11 callers, 1 + 3 + 3 for `generate_structured`), or 67 with
+      test doubles. The signature half is already done — R3.5 replaced `*args/**kwargs` with
+      three keyword-only protocols — so what remains is purely return types. Still XL, but for
+      the 194 test call sites and 28 disjoint return shapes, not for 145 functions.
 - [ ] R7.2 Debt with no urgency: the four file splits behind R1.1, `config.py` fan-in 74, single-caller DIP port cull, `intent_queries.py` coverage, double mypy run, ruff rule set · CR-L14-03 +9
 
 ### Parked
