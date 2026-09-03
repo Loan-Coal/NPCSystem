@@ -6,10 +6,12 @@ Does NOT: call LLM adapters.
 Dependencies injected: EmbeddingIndex.
 Used by: engines.dialogue.dialogue_handler
 
-NOTE: past the 400-line advisory tier and ONE line under the 800-line hard gate (DEC-226) —
-adding a line here reds `make check-rules`, unwaivably. No length is quoted: the old note said
-"~448" against a real 799, and named a 300-line limit that no longer exists. build_serialized_context
-is one cohesive async pipeline, each stage already in a private helper (DECISIONS.md, Phase 6).
+This module is now ORCHESTRATOR ONLY (CLAUDE.md SRP: one module, one category).
+The reader, builder, model, protocol and cache-state categories it used to hold live in
+context_graph_readers, context_tier_builders, context_need_models, context_protocols and
+context_cache_state respectively. build_serialized_context is one cohesive async pipeline
+whose stages are those modules; keep new stages there, not here. No length is quoted on
+purpose - a number in prose rots, and `make check-rules` owns the limits (DEC-226, DEC-249).
 """
 
 from __future__ import annotations
@@ -30,6 +32,11 @@ from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_wit
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
 from .context_profile_policy import apply_slot_policy, tier_enabled
+from .context_cache_state import (
+    _check_legacy_cache,
+    _get_partial_cache_state,
+    _resolve_npc_context_with_cache,
+)
 from .context_tier_builders import (
     _build_event_trust_map,
     _build_tier0_items,
@@ -41,8 +48,6 @@ from .context_tier_builders import (
 from .context_graph_readers import (
     _TOP_NEED_TIER_B_PRIORITY,
     _fetch_base_graph_data,
-    _fetch_beliefs_goals_data,
-    _fetch_npc_profile_data,
     _fetch_player_data,
     _fetch_player_memory_item,
     _fetch_rag_results,
@@ -50,13 +55,10 @@ from .context_graph_readers import (
 )
 from .context_protocols import EmbeddingIndexProtocol
 from .context_builder_helpers import (
-    rerank_by_keyword,
     to_json_safe,
 )
 from .context_merger import ContextItem, MergedContext, merge_context
 from .context_metrics import (
-    CONTEXT_CACHE_HITS_METRIC,
-    CONTEXT_CACHE_MISSES_METRIC,
     record_compression_metrics,
     record_context_metrics,
     record_attributed_drop_metrics,
@@ -66,7 +68,6 @@ from npc_engine.retrieval.embedding.topic_classifier import detect_dialogue_prof
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.retrieval.dialogue_context.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
-from npc_engine.utils.metrics import increment_metric
 
 
 # ---------------------------------------------------------------------------
@@ -96,56 +97,6 @@ def _resolve_initial_state(character_bundle: dict[str, Any], emotion_state: dict
     return emotion_snapshot, current_game_time, npc_ts, world_ts
 
 
-def _check_legacy_cache(
-    context_cache: Any, session_id: str | None, npc_id: str, player_id: str | None,
-    emotion_snapshot: dict[str, Any], npc_ts: str, world_ts: str,
-) -> tuple[str | None, Any, Any]:
-    """Check the legacy monolithic cache; return (hit_string | None, legacy_cache, legacy_key)."""
-    legacy_cache: DialogueContextCache | None = (
-        context_cache if isinstance(context_cache, DialogueContextCache) else None
-    )
-    if legacy_cache is None or session_id is None:
-        return None, legacy_cache, None
-    legacy_key = legacy_cache.build_key(
-        npc_id=npc_id, session_id=session_id, player_id=player_id or "",
-        npc_last_graph_updated_at=npc_ts, world_last_updated_at=world_ts,
-        current_mood=str(emotion_snapshot.get("current_mood", "neutral")),
-    )
-    cached = legacy_cache.get(legacy_key)
-    if cached is not None:
-        increment_metric(metric=CONTEXT_CACHE_HITS_METRIC, labels={"npc_id": npc_id})
-        return cached, legacy_cache, legacy_key
-    increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
-    return None, legacy_cache, legacy_key
-
-
-def _get_partial_cache_state(
-    context_cache: Any, npc_id: str, npc_ts: str, profile_name: str
-) -> tuple[Any, Any, Any, Any, Any]:
-    """Extract partial cache and its keys; record hit/miss metrics when both slots are warm.
-
-    `profile_name` reaches the PROFILE key only. The value cached there is read with the
-    profile's own `events_limit`, so two A/B arms sharing an entry means the second arm is
-    served the first arm's event list -- and with the arms interleaved inside one run, that
-    reads as a treatment effect. The beliefs/goals key deliberately omits it; see
-    `build_beliefs_goals_key`.
-    """
-    partial_cache: PartialDialogueContextCache | None = (
-        context_cache if isinstance(context_cache, PartialDialogueContextCache) else None
-    )
-    if partial_cache is None:
-        return None, None, None, None, None
-    profile_key = partial_cache.build_profile_key(
-        npc_id=npc_id, npc_last_graph_updated_at=npc_ts, profile_name=profile_name
-    )
-    bg_key = partial_cache.build_beliefs_goals_key(npc_id=npc_id, npc_last_graph_updated_at=npc_ts)
-    cached_profile = partial_cache.get_profile(profile_key)
-    cached_bg = partial_cache.get_beliefs_goals(bg_key)
-    if cached_profile is not None and cached_bg is not None:
-        increment_metric(metric=CONTEXT_CACHE_HITS_METRIC, labels={"npc_id": npc_id})
-    else:
-        increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
-    return partial_cache, profile_key, bg_key, cached_profile, cached_bg
 
 
 
@@ -154,38 +105,8 @@ def _get_partial_cache_state(
 
 
 
-async def _resolve_npc_context_with_cache(
-    session: AsyncSession, npc_id: str, settings: Settings, player_id: str | None,
-    location_id: str | None, partial_cache: Any, profile_key: Any, bg_key: Any,
-    cached_profile: Any, cached_bg: Any,
-    player_message: str, retrieval_profile: RetrievalProfile,
-) -> tuple[NpcProfileData, Any, Any, Any, Any]:
-    """Fetch or restore profile+beliefs/goals with partial cache; return (profile_data, beliefs, goals, secrets, obligations)."""
-    profile_miss = cached_profile is None
-    bg_miss = cached_bg is None
-    if profile_miss and bg_miss:
-        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id, retrieval_profile)
-        new_bg = await _fetch_beliefs_goals_data(session, npc_id)
-    elif profile_miss:
-        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id, retrieval_profile)
-        new_bg = None
-    elif bg_miss:
-        new_profile = None
-        new_bg = await _fetch_beliefs_goals_data(session, npc_id)
-    else:
-        new_profile = new_bg = None
-    if new_profile is not None and partial_cache is not None and profile_key is not None:
-        partial_cache.set_profile(profile_key, new_profile)
-    profile_data = new_profile if new_profile is not None else cached_profile
-    if new_bg is not None and partial_cache is not None and bg_key is not None:
-        partial_cache.set_beliefs_goals(bg_key, new_bg)
-    bg_data = new_bg if new_bg is not None else cached_bg
-    beliefs, goals, secrets, obligations = bg_data
-    return (profile_data,
-            rerank_by_keyword(beliefs, "content", player_message, top_k=3),
-            rerank_by_keyword(goals, "objective", player_message, top_k=3),
-            rerank_by_keyword(secrets, "content", player_message, top_k=3),
-            obligations)
+
+
 
 
 
