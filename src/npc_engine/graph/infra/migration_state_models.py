@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 # Node label carrying the applied-state ledger. Infrastructure, like the constraints in
-# schema_bootstrap — deliberately not a type_registry domain node (DEC-254).
+# schema_bootstrap — deliberately not a type_registry domain node (DEC-255).
 SCHEMA_MIGRATION_LABEL = "SchemaMigration"
 
 MigrationDirection = Literal["up", "down"]

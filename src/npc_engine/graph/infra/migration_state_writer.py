@@ -9,7 +9,7 @@ Used by: scripts/migrations/_support.py
 
 Cypher for the ledger lives here rather than in scripts/ because graph/ is the only
 layer allowed to run it. The six migration scripts still hold their own inline Cypher —
-pre-existing debt logged as ISSUE-265, deliberately not widened by this module.
+pre-existing debt logged as ISSUE-268, deliberately not widened by this module.
 """
 
 from __future__ import annotations

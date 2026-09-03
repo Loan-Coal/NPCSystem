@@ -30,7 +30,7 @@ it drifting, and correcting one only schedules the next drift (R4.6).
 | Coverage | `make test-cov` | full unit suite, ≥80% | hard fail (`--cov-fail-under=80`) |
 | Honesty | `make check-harness` | docs don't claim a clean state the gates contradict | advisory (warn); `--strict` to enforce |
 | Contracts | `make check-contracts` / `check-contract-sync` | engine contract YAML ↔ tests | hard fail |
-| API contract | `make check-api-contract` | the `/v1` surface (149 ops incl. the WebSocket route, 153 schemas) gains no breaking change: route removal, response field drop/retype, request tightening, status or auth change. Additive change passes untouched (R5.1, DEC-253) | **recorded baseline**, `--update` to re-record |
+| API contract | `make check-api-contract` | the `/v1` surface (149 ops incl. the WebSocket route, 153 schemas) gains no breaking change: route removal, response field drop/retype, request tightening, status or auth change. Additive change passes untouched (R5.1, DEC-254) | **recorded baseline**, `--update` to re-record |
 
 ### Baseline ratchet (the key idea)
 

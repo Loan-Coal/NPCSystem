@@ -14,7 +14,7 @@ Used by: make check-api-contract, tests/unit/scripts/test_api_contract_differ.py
 Why a committed baseline here does not repeat R4.7's live_openapi.json: that file had
 no reader, so only human diligence kept it current and it lost four routes. This one is
 the input of a gate that runs in `make check` on every commit, so its only two reachable
-states are "equal to the app" and "red". See DEC-253.
+states are "equal to the app" and "red". See DEC-254.
 """
 
 from __future__ import annotations

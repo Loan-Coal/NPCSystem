@@ -2098,7 +2098,7 @@ candidate count. Prefer scoping — a test that depends on global DB state is or
 whatever the cap.
 
 
-## ISSUE-264: no dependency lockfile; the tool choice is unmade
+## ISSUE-267: no dependency lockfile; the tool choice is unmade
 **Found:** 2026-09-03, during R5.5 (CR-L16-05)
 **Severity:** P3 (nice-to-fix)
 **Where:** `pyproject.toml`, `demo_game/requirements.txt`
@@ -2118,7 +2118,7 @@ with a platform-conditional constraint), make `make install` consume it, and add
 reds when the lock and `pyproject.toml` disagree.
 
 
-## ISSUE-265: migration Cypher lives in `scripts/`, outside the `graph/` layer
+## ISSUE-268: migration Cypher lives in `scripts/`, outside the `graph/` layer
 **Found:** 2026-09-03, during R5.4
 **Severity:** P3 (nice-to-fix)
 **Where:** all six modules in `scripts/migrations/`
@@ -2134,7 +2134,7 @@ CLI adapters over them, and widen `check_rules`' R005 scan to `scripts/` so it c
 Note that widening the scan needs ISSUE-255 (lint/type coverage of `scripts/`) settled first.
 
 
-## ISSUE-266: `check-api-stability` is now a strict subset of `check-api-contract`
+## ISSUE-269: `check-api-stability` is now a strict subset of `check-api-contract`
 **Found:** 2026-09-03, during R5.1
 **Severity:** P3 (nice-to-fix)
 **Where:** `scripts/check_api_stability.py`, `scripts/api_stability_baseline.json`, `Makefile`
@@ -2149,7 +2149,7 @@ model is wired to any route. `make check` therefore carries both, at 23 targets.
 its baseline and its test, and rename the target — `make check` returns to 22.
 
 
-## ISSUE-267: `make package` output path does not match its documented location
+## ISSUE-270: `make package` output path does not match its documented location
 **Found:** 2026-09-03, during R5.3
 **Severity:** P3 (nice-to-fix)
 **Where:** `Makefile` `package:` target comment; `packaging/npc_engine.spec` COLLECT name
@@ -2164,7 +2164,7 @@ the comment is imprecise. Changing `--distpath` would move an output other tooli
 or correct the comment. Prefer the former; check `e2e/` and any installer script first.
 
 
-## ISSUE-268: the gossip throughput NFR is still unproven at its target
+## ISSUE-271: the gossip throughput NFR is still unproven at its target
 **Found:** 2026-09-03, during R5.5 (CR-L12-05)
 **Severity:** P3 (nice-to-fix)
 **Where:** `docs/BUSINESS_REQUIREMENTS.md:34`, `scripts/bench_nfr.py`
@@ -2181,7 +2181,7 @@ seeding task, not a benchmarking one.
 200+ eligible pairs, then re-run `make bench-nfr` and record the number.
 
 
-## ISSUE-269: `make type-evals` is green only in the checkout the editable install points at
+## ISSUE-272: `make type-evals` is green only in the checkout the editable install points at
 **Found:** 2026-09-03, during R5 verification
 **Severity:** P2 (annoying) — `make check` cannot pass in a fresh clone or a git worktree
 **Where:** `mypy.ini` (`exclude = src/npc_engine/config/`), `scripts/mypy_evals_ratchet.py`

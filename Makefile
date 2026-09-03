@@ -336,7 +336,7 @@ verify-rag:
 # — route removed (including the WebSocket route, which app.openapi() does not list),
 # response field dropped or retyped, request tightened, status code or auth changed.
 # Additive change passes and needs no baseline edit. Re-record a deliberate break with:
-#   python scripts/check_api_contract.py --update      (see docs/API_STABILITY.md, DEC-253)
+#   python scripts/check_api_contract.py --update      (see docs/API_STABILITY.md, DEC-254)
 check-api-contract:
 	$(PYTHON) scripts/check_api_contract.py
 

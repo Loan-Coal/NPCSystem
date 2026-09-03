@@ -96,4 +96,4 @@ A green gate means "no consumer's parsing breaks", not "nothing changed".
 - `scripts/check_api_contract.py` — the gate; `scripts/api_contract_differ.py` is the
   pure detector and is tested against synthetic contract pairs, not just the baseline.
 - `docs/INTEGRATION.md` — the integrator-facing overview.
-- DEC-253 — why a committed baseline is safe here when R4.7 deleted `live_openapi.json`.
+- DEC-254 — why a committed baseline is safe here when R4.7 deleted `live_openapi.json`.
