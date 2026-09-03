@@ -30,7 +30,7 @@ install:
 	pip install -e .[dev]
 
 # package: build the standalone npc_engine_server binary via PyInstaller (SHIP-04).
-# Requires: pip install pyinstaller  (not in dev dependencies — build-time only).
+# Requires: pip install -e .[packaging]  (build-time only, not a runtime or dev dep).
 # Output:   dist/npc_engine_server/npc_engine_server[.exe]
 package:
 	$(PYTHON) -m PyInstaller packaging/npc_engine.spec --distpath dist/npc_engine_server --workpath build/pyinstaller --noconfirm

@@ -99,3 +99,7 @@ project-harness/*HANDOFF*.md
 
 # Regenerate with `make openapi` instead of committing a copy (R4.7).
 live_openapi.json
+
+# PyInstaller build output (`make package`, R5.3). The binary is ~83 MB.
+dist/
+build/pyinstaller/
