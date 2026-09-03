@@ -606,3 +606,9 @@ Every failure pre-dated this task (baseline attribution). Nothing new broke.
 ## 2026-08-28 18:38:30 — no status token from task R1.8
 
 The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-R1.8-1787933626.log
+
+## 2026-09-03 18:27:44 — task M1.1 did not tick itself
+
+The cursor still points at M1.1 after 2 attempts. The session
+reported completion but never ran 'roadmap_cursor.py --mark M1.1', so the work may or may not
+be committed. Inspect the last task log before re-running.
