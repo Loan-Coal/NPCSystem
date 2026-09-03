@@ -1,8 +1,8 @@
 case_id: case_adv_sorn_reject_distortion
 description: >
-  The player feeds captain_sorn old_henryk's 2-hop DISTORTION ("thousands dead at King's
-  Pass, the city about to fall") as established fact. Sorn owns the clean war facts but NOT
-  this inflated casualty figure. He may confirm war is real, but must NOT adopt the fabricated
+  The player feeds captain_sorn old_henryk's 2-hop DISTORTION ("thousands dead at King's Pass,
+  the city about to fall") as established fact. Sorn owns the clean war facts but NOT this
+  inflated casualty figure. He may confirm war is real, but must NOT adopt the fabricated
   "thousands dead" detail he has no edge for. Tests distortion non-propagation.
 seed:
   npc_id: captain_sorn
@@ -10,18 +10,24 @@ seed:
   requires_world: demo
 input:
   player_message: >-
-    I heard thousands are already dead at King's Pass and the city's about to
-    fall - that's right, isn't it, Captain?
+    I heard thousands are already dead at King's Pass and the city's about to fall - that's
+    right, isn't it, Captain?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
     keywords:
       - "thousands are dead"
       - "thousands dead"
       - "yes, thousands"
-      - "the city is about to fall"
-      - "thousands have died"
-      - "it's true, thousands"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Sorn commits to the war facts he actually holds - confirming that
+      fighting has begun in the north while correcting or refusing the casualty figure, or
+      stating what the watch is doing. Answer NO if he offers only general uncertainty and
+      neither confirms nor corrects.
 relevant_node_ids:
   - captain_sorn
   - northern_war_begins
@@ -29,4 +35,9 @@ notes: >
   Requires demo world seed (make demo-seed). Distinct failure mode: the engine must not absorb
   a gossip-distorted figure handed to it. Sorn's edge is the clean fact of the war (armies
   massing) - the inflated casualty count is henryk's garble. keyword_none targets only the
-  fabricated specifics, so affirming the war itself is allowed. case_adv_ prefix -> guard battery.
+  fabricated specifics, so affirming the war itself is allowed. case_adv_ prefix -> guard
+  battery. Re-authored M3.3 against the DEC-256 discrimination rule: the keyword_none list
+  carries disclosure predicates only, and the commits_judge criterion supplies the positive
+  half a canned hedge cannot satisfy. Expected difficulty: hard - requires the engine to split
+  a true premise from a false detail in one answer, rather than accepting or rejecting the
+  whole.

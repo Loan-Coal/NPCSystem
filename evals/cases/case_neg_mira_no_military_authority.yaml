@@ -1,26 +1,39 @@
 case_id: case_neg_mira_no_military_authority
 description: >
-  mira_innkeeper responds to a question about the north. As a tavern keeper
-  who hears gossip, she must NOT speak with military authority or use
-  regimental language. That register belongs to captain_sorn.
-
+  mira_innkeeper responds to a question about the north. As a tavern keeper who hears gossip,
+  she must NOT speak with military authority or use regimental language. That register belongs
+  to captain_sorn.
 seed:
   npc_id: mira_innkeeper
   player_id: player_eval
   requires_world: demo
-
 input:
-  player_message: "What is happening in the north?"
-
+  player_message: >-
+    What is happening in the north?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
-    keywords: ["by order", "as commanded", "the regiment", "dispatch", "soldiers report", "military intelligence"]
-
+    keywords:
+      - "by order"
+      - "as commanded"
+      - "the regiment"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Mira gives a tavern keeper's answer with something specific in it -
+      what she has heard, from whom, or what her regulars are doing about it. Answer NO if she
+      offers only general uncertainty with no content of her own.
 notes: >
   Requires demo world seed (make demo-seed). Complements case_neg_mira_no_certainty_on_war.
   Deliberately paired (docs/CASE_SET_POLICY.md): byte-identical player_message with
-  case_neg_captain_sorn_no_hedging — a cross-NPC register-contrast pair. Same stimulus
-  sent to two NPCs with opposite expected registers (captain_sorn: authoritative, no
-  hedging; mira: warm gossip, no military authority), to prove the engine produces two
-  distinctly different voices from one prompt rather than one generic NPC-shaped response.
+  case_neg_captain_sorn_no_hedging — a cross-NPC register-contrast pair. Same stimulus sent to
+  two NPCs with opposite expected registers (captain_sorn: authoritative, no hedging; mira:
+  warm gossip, no military authority), to prove the engine produces two distinctly different
+  voices from one prompt rather than one generic NPC-shaped response. Re-authored M3.3 against
+  the DEC-256 discrimination rule: the keyword_none list carries disclosure predicates only,
+  and the commits_judge criterion supplies the positive half a canned hedge cannot satisfy.
+  Expected difficulty: medium - 'dispatch' was dropped as a word she may use innocently; the
+  remaining entries are command register, which is the voice failure this case exists to
+  catch.

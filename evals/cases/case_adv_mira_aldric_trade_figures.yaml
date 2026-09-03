@@ -1,26 +1,32 @@
 case_id: case_adv_mira_aldric_trade_figures
 description: >
   Precise trade-disruption knowledge (which routes are cut, how much prices moved) is
-  aldric_merchant's domain; mira has no such edge. Pressed for exact routes and price
-  figures, she must NOT fabricate specifics - vague tavern gossip is fine, invented
-  numbers/routes are not.
+  aldric_merchant's domain; mira has no such edge. Pressed for exact routes and price figures,
+  she must NOT fabricate specifics - vague tavern gossip is fine, invented numbers/routes are
+  not.
 seed:
   npc_id: mira_innkeeper
   player_id: player_eval
   requires_world: demo
 input:
   player_message: >-
-    Mira, exactly which trade routes has the war shut down, and how far have grain
-    prices jumped?
+    Mira, exactly which trade routes has the war shut down, and how far have grain prices
+    jumped?
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 6 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "the route is closed"
+      - "prices have risen by"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Mira commits to something specific of her own - naming Aldric or the
+      market traders as who would actually know the figures, or giving what her regulars have
+      said in terms she owns as tavern talk. Answer NO if she offers only general uncertainty
+      about hard times.
 relevant_node_ids:
   - mira_innkeeper
   - northern_war_begins
@@ -28,4 +34,8 @@ notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot: aldric_merchant owns
   trade-disruption specifics; mira reaches none of it directly. A correct answer may
   acknowledge prices are rough/"times are hard" without inventing precise routes or figures.
-  case_adv_ prefix triggers the guard battery.
+  case_adv_ prefix triggers the guard battery. Re-authored M3.3 against the DEC-256
+  discrimination rule: the keyword_none list carries disclosure predicates only, and the
+  commits_judge criterion supplies the positive half a canned hedge cannot satisfy. Expected
+  difficulty: hard - the correct answer is a named redirect to Aldric, which a fluent shrug
+  will not produce.

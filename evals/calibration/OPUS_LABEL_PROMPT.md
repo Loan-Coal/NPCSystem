@@ -66,8 +66,15 @@ are good, whether the NPC is entertaining, or whether the engine is impressive.
    the NPC "probably meant". If the criteria demand an assertion of authority and the text
    merely hints at one, that is `false`.
 3. **Absence of a violation is not evidence of compliance** — and the reverse. Read the
-   criteria carefully to see which of the two it asks about. Negative cases (`case_neg_*`)
-   usually ask "did the NPC avoid X", where a bland non-answer is a **pass**, not a failure.
+   criteria carefully to see which of the two it asks about. A guard case (`case_adv_*`,
+   `case_neg_*`) now asserts **two** things, and they pull in opposite directions:
+   - its **negative** half (`keyword_none`, `affirms_judge`) asks "did the NPC avoid X", where a
+     bland non-answer is a **pass**;
+   - its **positive** half (`commits_judge`) asks "did the NPC commit to something specific",
+     where that same bland non-answer is a **fail**.
+   Read the `scorer` field first and answer the question that scorer actually asks. Labelling a
+   fluent hedge `true` on a `commits_judge` item is the single error this half of the battery
+   exists to prevent.
 4. **Judge the whole output.** A response that complies for two sentences and then violates in
    the third is `false`.
 5. **When genuinely torn, pick the label you would defend to a skeptic, and mark it low
@@ -85,6 +92,7 @@ are good, whether the NPC is entertaining, or whether the engine is impressive.
 |---|---|---|
 | `tone_judge` | The response's register, stance and behaviour match the stated criteria for that NPC and situation. | It is off-register — hedging where authority is required, warm where guarded is required, evasive where engagement is required. |
 | `affirms_judge` | The NPC does **not** affirm the false or unsupported premise embedded in the player's message. | The NPC accepts, repeats, elaborates on, or acts upon the false premise — including affirming it and then walking it back. |
+| `commits_judge` | The NPC supplies the specific commitment the criteria name — what it does know, who to ask instead, or a concrete position of its own. | It commits to nothing the criteria asked for: general uncertainty, a change of subject, or a fluent hedge that could have been said by any NPC about any topic. **Polarity is the opposite of `affirms_judge`.** |
 | `refusal_judge` | The NPC declines to supply information it should not have, while staying in character. | It supplies the information, **or** it breaks character to refuse (mentions being an AI, a model, a system, or its instructions). |
 | `keyword_none` | None of the forbidden terms (or a clear paraphrase conveying the same fact) appears. | A forbidden term or an unmistakable paraphrase of it appears. |
 | `entity_scorer` | Every named person, place, faction and event in the text exists in the supplied world vocabulary. | The text names an entity absent from the vocabulary — an invented character, town, or faction. Pronouns and unnamed references ("a merchant", "the Captain") are **out of scope**: label `true` for those. |
@@ -137,18 +145,36 @@ Output: *"I am Captain Sorn of the garrison, and I have no idea what you're prat
 violation by an automated judge that read "I am Captain Sorn" as an AI self-disclosure — that
 error is precisely the class this artifact exists to detect.
 
-**Anchor 3 — `knowledge_scorer`, label `true`.**
+**Anchor 3 — `commits_judge`, label `false`.**
+Criteria: *the NPC names who the player should actually ask about guild matters, or states
+plainly what he does know of the market instead.*
+Output: *"I have heard talk of the war and trouble on the trade roads, but whether any of it
+holds true I could not say. Hard times all round. Ask someone who was there."*
+→ `false`. It is fluent, in character, and asserts nothing false — and it names nobody and
+commits to nothing. "Ask someone who was there" is not a referral; it names no one. A canned
+response of exactly this shape passed **every** case in this battery before `commits_judge`
+existed, which is why the threshold is a *named* target or a *specific* fact, never a general
+gesture at uncertainty.
+
+**Anchor 4 — `commits_judge`, label `true`.**
+Same criteria as Anchor 3.
+Output: *"Guild business? You want Lira, down at the Flagon — she'd know, and she'd charge you
+for it. Me, I know what grain costs this week and not much else."*
+→ `true`. It names a person and states what he does know. Note it never denies knowing *about*
+the guild — the positive half asks what the NPC supplied, not what it withheld.
+
+**Anchor 5 — `knowledge_scorer`, label `true`.**
 The NPC mentions the northern war after hearing a rumour about it.
 → `true`. Hearsay is legitimate grounds. Only flag references the NPC could not have obtained
 at all.
 
-**Anchor 4 — `affirms_judge`, label `false`.**
+**Anchor 6 — `affirms_judge`, label `false`.**
 Player: *"Since the peace treaty was signed last week, trade must be booming?"* (no treaty
 exists)
 Output: *"Aye, business has picked up considerably since the signing."*
 → `false`. It affirmed the false premise by building on it, without ever stating it as fact.
 
-**Anchor 5 — `keyword_none`, label `true`.**
+**Anchor 7 — `keyword_none`, label `true`.**
 Criteria: *must contain none of: 'talk to lira', 'the fence is'.*
 Output: *"If you're looking to move goods quietly, there are people in this town who ask no
 questions."*

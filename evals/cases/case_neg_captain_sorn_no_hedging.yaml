@@ -1,31 +1,46 @@
 case_id: case_neg_captain_sorn_no_hedging
 description: >
-  captain_sorn responds to a question about the north. As a military commander
-  with direct KNOWS_ABOUT the war, he must NOT use epistemic hedging language.
-  Hedging is for NPCs with rumour-state knowledge only.
-
+  captain_sorn responds to a question about the north. As a military commander with direct
+  KNOWS_ABOUT the war, he must NOT use epistemic hedging language. Hedging is for NPCs with
+  rumour-state knowledge only.
 seed:
   npc_id: captain_sorn
   player_id: player_eval
   requires_world: demo
-
 input:
-  player_message: "What is happening in the north?"
-
+  player_message: >-
+    What is happening in the north?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
-    keywords: ["i've heard", "they say", "perhaps", "rumor", "apparently", "word is", "i think"]
-
+    keywords:
+      - "i've heard"
+      - "they say"
+      - "perhaps"
+      - "apparently"
+      - "word is"
+      - "i think"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Sorn states what is happening in the north as fact on his own
+      authority - that fighting has begun, what the watch is doing, or what he expects of the
+      city. Answer NO if he attributes it to talk or offers only general uncertainty.
 notes: >
   Requires demo world seed (make demo-seed). Hedging rule (docs/CASE_SET_POLICY.md):
   captain_sorn holds a DIRECT KNOWS_ABOUT edge, so hedging is a failure here — contrast
   case_pos_mira_gossip_hedging, where hedging is a pass because mira's knowledge is
-  gossip-propagated. "i heard" replaced with "i've heard": the committed corpus writes
-  the contraction 612 times and the uncontracted form zero times, so "i heard" alone
-  never fired (EVAL-P19.3 dead-keyword finding).
-  Deliberately paired, byte-identical player_message, two ways (see docs/CASE_SET_POLICY.md):
-  (1) same-NPC dual-lens with case_voice_captain_sorn_001 (this case's keyword_none vs.
-  that case's tone_judge, two independent checks of the same no-hedging property);
-  (2) cross-NPC register-contrast with case_neg_mira_no_military_authority (same stimulus,
-  opposite expected register).
+  gossip-propagated. "i heard" replaced with "i've heard": the committed corpus writes the
+  contraction 612 times and the uncontracted form zero times, so "i heard" alone never fired
+  (EVAL-P19.3 dead-keyword finding). Deliberately paired, byte-identical player_message, two
+  ways (see docs/CASE_SET_POLICY.md): (1) same-NPC dual-lens with case_voice_captain_sorn_001
+  (this case's keyword_none vs. that case's tone_judge, two independent checks of the same
+  no-hedging property); (2) cross-NPC register-contrast with
+  case_neg_mira_no_military_authority (same stimulus, opposite expected register). Re-authored
+  M3.3 against the DEC-256 discrimination rule: the keyword_none list carries disclosure
+  predicates only, and the commits_judge criterion supplies the positive half a canned hedge
+  cannot satisfy. Expected difficulty: medium - Sorn's direct KNOWS_ABOUT edge makes an
+  unhedged account correct here, per the provenance rule above; 'rumor' was dropped from the
+  list as a topic noun he may name while dismissing it.

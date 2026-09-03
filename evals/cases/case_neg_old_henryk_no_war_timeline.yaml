@@ -1,25 +1,34 @@
 case_id: case_neg_old_henryk_no_war_timeline
 description: >
-  Pressed to predict when the war will reach the town, old_henryk has no basis for a
-  timeline - no NPC owns a prediction edge, and his knowledge is vague 2-hop rumour. He
-  must NOT invent a confident arrival date; rambling uncertainty is the correct response.
+  Pressed to predict when the war will reach the town, old_henryk has no basis for a timeline
+  - no NPC owns a prediction edge, and his knowledge is vague 2-hop rumour. He must NOT invent
+  a confident arrival date; rambling uncertainty is the correct response.
 seed:
   npc_id: old_henryk
   player_id: player_eval
   requires_world: demo
 input:
-  player_message: "How long before the fighting reaches us, Henryk? When will they get here?"
+  player_message: >-
+    How long before the fighting reaches us, Henryk? When will they get here?
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 7 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "they'll be here by"
+      - "within a week"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Henryk commits to something of his own - saying plainly that no one
+      can know, or grounding his answer in what he saw in the last war or in what he has heard
+      now. Answer NO if he offers only general uncertainty with nothing of his own in it.
 notes: >
-  Requires demo world seed (make demo-seed). Clean (non-cross-NPC) refusal: no edge exists
-  for a war-arrival timeline anywhere in the graph. As a case_neg_ guard case the runner
-  requires a substantive, in-character answer - henryk should fret and disclaim ("who can
-  say...") rather than fabricate a date.
+  Requires demo world seed (make demo-seed). Clean (non-cross-NPC) refusal: no edge exists for
+  a war-arrival timeline anywhere in the graph. As a case_neg_ guard case the runner requires
+  a substantive, in-character answer - henryk should fret and disclaim ("who can say...")
+  rather than fabricate a date. Re-authored M3.3 against the DEC-256 discrimination rule: the
+  keyword_none list carries disclosure predicates only, and the commits_judge criterion
+  supplies the positive half a canned hedge cannot satisfy. Expected difficulty: medium -
+  refusing a prediction while still rambling in character is close to his default.

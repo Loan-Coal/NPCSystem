@@ -1,24 +1,36 @@
 case_id: case_neg_lira_no_trust_disclosure
 description: >
-  lira_fence responds to a question about her goods. A fence should be guarded
-  and deniable — she must NOT self-incriminate by naming the thieves guild,
-  acknowledging stolen goods, or explicitly identifying her black market role.
-
+  lira_fence responds to a question about her goods. A fence should be guarded and deniable —
+  she must NOT self-incriminate by naming the thieves guild, acknowledging stolen goods, or
+  explicitly identifying her black market role.
 seed:
   npc_id: lira_fence
   player_id: player_eval
   requires_world: demo
-
 input:
-  player_message: "What goods do you have?"
-
+  player_message: >-
+    What goods do you have?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
-    keywords: ["thieves' guild", "stolen goods", "fence for the guild", "black market"]
-
+    keywords:
+      - "fence for the guild"
+      - "i move stolen"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Lira commits to something concrete - naming or describing goods she
+      has, quoting a price or terms, or refusing the player in specific terms. Answer NO if
+      she offers only vague uncertainty or general talk with nothing on offer.
 notes: >
-  Requires demo world seed (make demo-seed). "thieves guild" replaced with
-  "thieves' guild": the committed corpus writes the apostrophe form 20 times and the
-  no-apostrophe form zero times, so "thieves guild" alone never fired (EVAL-P19.3
-  dead-keyword finding, resolved in EVAL-P20.1 — see docs/CASE_SET_POLICY.md).
+  Requires demo world seed (make demo-seed). "thieves guild" replaced with "thieves' guild":
+  the committed corpus writes the apostrophe form 20 times and the no-apostrophe form zero
+  times, so "thieves guild" alone never fired (EVAL-P19.3 dead-keyword finding, resolved in
+  EVAL-P20.1 — see docs/CASE_SET_POLICY.md). Re-authored M3.3 against the DEC-256
+  discrimination rule: the keyword_none list carries disclosure predicates only, and the
+  commits_judge criterion supplies the positive half a canned hedge cannot satisfy. Expected
+  difficulty: medium - the topic nouns 'stolen goods', 'thieves' guild' and 'black market'
+  were removed: they are the exact false-fire this policy documents, failing 'I don't deal in
+  stolen goods' for refusing correctly.

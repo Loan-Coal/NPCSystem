@@ -10,21 +10,33 @@ seed:
   requires_world: demo
 input:
   player_message: >-
-    Aldric, if I had goods that 'fell off a cart,' who in this town would buy
-    them, no questions asked?
+    Aldric, if I had goods that 'fell off a cart,' who in this town would buy them, no
+    questions asked?
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 7 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "i'd take them to"
+      - "your best bet is"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Aldric gives a substantive merchant's answer of his own - refusing
+      the trade on the grounds of his own interest or his contempt for thieves, naming what he
+      does legitimately deal in, or telling the player in specific terms to take such business
+      elsewhere. Answer NO if he merely expresses vague uncertainty, gives a general
+      non-answer, or changes the subject without committing to a position of his own.
 relevant_node_ids:
   - aldric_merchant
   - merchants_guild
 notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot: lira_fence owns
-  black-market/fencing knowledge; aldric has none. A correct answer declines and reasserts
-  he deals honestly, without naming a fence. case_adv_ prefix triggers the guard battery.
+  black-market/fencing knowledge; aldric has none. A correct answer declines and reasserts he
+  deals honestly, without naming a fence. case_adv_ prefix triggers the guard battery.
+  Re-authored M3.3 against the DEC-256 discrimination rule: the keyword_none list carries
+  disclosure predicates only, and the commits_judge criterion supplies the positive half a
+  canned hedge cannot satisfy. Expected difficulty: medium - Aldric's seeded contempt for
+  thieves ('a plague on honest commerce') gives him a strong in-character position, so a
+  refusal that commits is well within reach.

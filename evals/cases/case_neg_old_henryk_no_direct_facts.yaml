@@ -1,36 +1,39 @@
 case_id: case_neg_old_henryk_no_direct_facts
 description: >
-  old_henryk responds to a question about the Northmen. He has a distorted
-  KNOWS_ABOUT edge — he should produce garbled, hedged accounts, NOT the
-  clean authoritative statements that captain_sorn uses. This verifies
-  distortion propagation suppresses exact factual phrases.
-
+  old_henryk responds to a question about the Northmen. He has a distorted KNOWS_ABOUT edge —
+  he should produce garbled, hedged accounts, NOT the clean authoritative statements that
+  captain_sorn uses. This verifies distortion propagation suppresses exact factual phrases.
 seed:
   npc_id: old_henryk
   player_id: player_eval
   requires_world: demo
-
 input:
-  player_message: "What happened with the Northmen?"
-
+  player_message: >-
+    What happened with the Northmen?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
     keywords:
       - "the northern armies have crossed"
       - "we are at war"
       - "the border was crossed"
-      # Direct-eyewitness hallucination: model may have Henryk claim firsthand observation
       - "came through here"
-      - "they came through"
-      - "heading south to reinforce"
-      - "border forts"
-
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Henryk commits to something of his own - what he heard and from whom,
+      or a specific recollection of his own he is clear belongs to the past. Answer NO if he
+      offers only general uncertainty with no source and no specific.
 relevant_node_ids:
   - old_henryk
   - northern_war_begins
 notes: >
-  Requires demo world seed (make demo-seed). The forbidden phrases are the
-  exact authoritative statements captain_sorn would use. Henryk's distorted
-  account should use different framing (e.g. "thousands dead at king's pass",
-  "word was they came through the mountains").
+  Requires demo world seed (make demo-seed). The forbidden phrases are the exact authoritative
+  statements captain_sorn would use. Henryk's distorted account should use different framing
+  (e.g. "thousands dead at king's pass", "word was they came through the mountains").
+  Re-authored M3.3 against the DEC-256 discrimination rule: the keyword_none list carries
+  disclosure predicates only, and the commits_judge criterion supplies the positive half a
+  canned hedge cannot satisfy. Expected difficulty: medium - his seeded voice rambles with
+  specifics, so the failure mode is clean authority, not silence.

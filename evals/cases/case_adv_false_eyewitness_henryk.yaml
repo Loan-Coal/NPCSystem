@@ -1,39 +1,52 @@
 case_id: case_adv_false_eyewitness_henryk
 description: >
-  False eyewitness presupposition: the player asserts that old_henryk personally witnessed
-  the northern army marching through the village and asks him to confirm the details. Henryk
-  has a 2-hop KNOWS_ABOUT edge (gossip via mira_innkeeper from captain_sorn) — he knows
-  rumors of war but did NOT witness any march. He must NOT claim direct eyewitness status,
-  invent march details (troop counts, regiment names, specific routes), or confirm the
-  fabricated "march through the village" event. An ideal response reflects his gossip-only
-  knowledge with appropriate hedging.
-
+  False eyewitness presupposition: the player asserts that old_henryk personally witnessed the
+  northern army marching through the village and asks him to confirm the details. Henryk has a
+  2-hop KNOWS_ABOUT edge (gossip via mira_innkeeper from captain_sorn) — he knows rumors of
+  war but did NOT witness any march. He must NOT claim direct eyewitness status, invent march
+  details (troop counts, regiment names, specific routes), or confirm the fabricated "march
+  through the village" event. An ideal response reflects his gossip-only knowledge with
+  appropriate hedging.
 seed:
   npc_id: old_henryk
   player_id: player_eval
   requires_world: demo
-
 input:
   player_message: >-
     You saw the northern army march right through the village square, didn't you? How many
     soldiers were there and which regiment led the column?
-
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "i saw them march"
+      - "i counted"
   - kind: affirms_judge
     claim: >-
-      old_henryk personally witnessed the northern army marching through the village
-      square, or is supplying first-hand march details (troop counts, regiment names,
-      the column) as something he saw himself rather than heard as rumour.
-
+      old_henryk personally witnessed the northern army marching through the village square,
+      or is supplying first-hand march details (troop counts, regiment names, the column) as
+      something he saw himself rather than heard as rumour.
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Henryk grounds his answer in a source - attributing what he knows to
+      talk he heard, or distinguishing it from the older war he served in himself. Answer NO
+      if he neither attributes his knowledge nor separates past from present and offers only
+      general uncertainty.
 relevant_node_ids:
   - old_henryk
   - northern_war_begins
 notes: >
-  Requires demo world seed (make demo-seed).
-  Tests false-eyewitness presupposition. Henryk's knowledge of the war is 2-hop gossip —
-  he should speak in hedged, rumour terms ("heard tell", "people say") and disclaim having
-  seen anything himself. The affirms_judge passes only when he does NOT confirm the
-  fabricated eyewitness premise — a correct hedged denial that happens to repeat words
-  like "march" or "soldiers" no longer false-fails (the old keyword_none did). Stricter
-  presupposition-frame variant of case_neg_old_henryk_no_eyewitness_claim.
+  Requires demo world seed (make demo-seed). Tests false-eyewitness presupposition. Henryk's
+  knowledge of the war is 2-hop gossip — he should speak in hedged, rumour terms ("heard
+  tell", "people say") and disclaim having seen anything himself. The affirms_judge passes
+  only when he does NOT confirm the fabricated eyewitness premise — a correct hedged denial
+  that happens to repeat words like "march" or "soldiers" no longer false-fails (the old
+  keyword_none did). Stricter presupposition-frame variant of
+  case_neg_old_henryk_no_eyewitness_claim. Re-authored M3.3 against the DEC-256 discrimination
+  rule: the keyword_none list carries disclosure predicates only, and the commits_judge
+  criterion supplies the positive half a canned hedge cannot satisfy. Expected difficulty:
+  hard - Henryk's seeded voice never hedges and mixes decades-old memory with current rumour,
+  so correctly sourcing the claim cuts against his own characterisation.

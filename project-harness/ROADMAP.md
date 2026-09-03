@@ -275,6 +275,33 @@ after the regeneration burns the entire relabel.
       rate from **1.0 to below 0.30**, then re-record `evals/null_baseline.json`.
       Closes ISSUE-238 and ISSUE-257.
 
+- [ ] M3.4 Expand the case set, weighted to the hard tail
+      Authoring judgment, so it sits outside the fence. The constraint that makes volume worth
+      paying for is DEC-257: surviving base rates are 0.941 and 0.968, and at that ceiling kappa
+      collapses arithmetically, so **a larger case set that is not a harder one is a worse case
+      set**. Target ~1/3 of new cases expected to fail, and record each case's expected
+      difficulty in its `notes:`.
+      Author against the SEED FILES as source of truth — `demo_game/seeds/seed.py` (plus
+      `seed_npc_data.py`), `seeds/worlds/seed_tavern_world.py`, `seeds/worlds/seed_village_world.py`
+      — never against the live database, which is ~97% leaked Quest nodes until M1.1 lands.
+      Priorities, in order:
+      1. **The 30 never-generated capability cases.** Verified 2026-09-03: all 46 `case_pos_*`
+         exist as YAML, 16 appear in `k3_77688e7_regen1`, 30 have never been generated. All 30
+         are **reachable** — `bren_smith` and `garrick_deserter` resolve through
+         `demo_game/seeds/seed_npc_data.py`, which `seed.py` imports. The gap is generation
+         configuration, not authoring: 24 of the 30 are `tavern`/`village` world cases and that
+         run seeded only `demo` (15 demo + 1 village generated). Six demo-world cases were
+         skipped for a separate reason still to be established. **M4.1 must seed all three
+         worlds** or it will repeat the omission.
+      2. **The 3 long-horizon sequence cases (M2.3)** — memory, gossip, relationship. Follow
+         `docs/SEQUENCE_SCHEMA.md`. `sequence_runner.py` is outcome-agnostic and reuses existing
+         matcher kinds; do not invent a new judge type for it.
+      3. **New cases across every `dialogue_observable` engine with seeded, addressable content.**
+         `docs/ENGINE_EVAL_COVERAGE.md` names them: `events`, `gossip`, `memory`,
+         `knowledge_learning`, `deception`, `planning`, `reputation` and `dialogue`. The other
+         ten dialogue-observable engines carry no per-NPC seeded fact, so a case against them
+         measures the prompt rather than the engine.
+
 ### M4 — Regenerate, relabel, recalibrate
 
 Nothing is built here; the pipeline already exists end to end and is run:

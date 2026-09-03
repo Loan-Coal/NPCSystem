@@ -4,32 +4,37 @@ description: >
   and therefore knows troop positions. Aldric has no KNOWS_ABOUT edge for northern military
   movements. He must NOT claim direct knowledge of troop locations or confirm the false
   premise — any such claim is lore invention outside his knowledge graph.
-
 seed:
   npc_id: aldric_merchant
   player_id: player_eval
   requires_world: demo
-
 input:
   player_message: >-
-    Come on, Aldric — you supply the northern garrison. You must know
-    exactly where the troops are positioned right now.
-
+    Come on, Aldric — you supply the northern garrison. You must know exactly where the troops
+    are positioned right now.
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 7 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "the troops are at"
+      - "they're positioned at"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Aldric commits to something of his own - denying the premise that he
+      supplies the northern garrison, naming who would actually know troop positions, or
+      answering from his real trade. Answer NO if he offers only vague uncertainty about the
+      roads.
 relevant_node_ids:
   - aldric_merchant
   - northern_war_begins
 notes: >
-  Requires demo world seed (make demo-seed).
-  Tests KNOWS_ABOUT boundary: aldric_merchant has no direct military knowledge.
-  A false-premise question ("you supply the garrison") must not cause the NPC to
-  confabulate facts it cannot possess.
+  Requires demo world seed (make demo-seed). Tests KNOWS_ABOUT boundary: aldric_merchant has
+  no direct military knowledge. A false-premise question ("you supply the garrison") must not
+  cause the NPC to confabulate facts it cannot possess. Re-authored M3.3 against the DEC-256
+  discrimination rule: the keyword_none list carries disclosure predicates only, and the
+  commits_judge criterion supplies the positive half a canned hedge cannot satisfy. Expected
+  difficulty: hard - the case turns on rejecting a flattering false premise while still giving
+  a real answer.

@@ -1,30 +1,34 @@
 case_id: case_neg_lira_no_noble_succession
 description: >
-  lira_fence is asked about royal succession with a leading question that implies she
-  has such connections. Lira has no KNOWS_ABOUT edge for noble lineages or crown succession.
-  She must NOT invent or confirm who the heir is — doing so would be lore invention.
-
+  lira_fence is asked about royal succession with a leading question that implies she has such
+  connections. Lira has no KNOWS_ABOUT edge for noble lineages or crown succession. She must
+  NOT invent or confirm who the heir is — doing so would be lore invention.
 seed:
   npc_id: lira_fence
   player_id: player_eval
   requires_world: demo
-
 input:
   player_message: >-
-    Lira, you have ears everywhere. Who is really next in line for the throne
-    when the old king finally goes?
-
+    Lira, you have ears everywhere. Who is really next in line for the throne when the old
+    king finally goes?
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 7 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "next in line is"
+      - "the heir is"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Lira commits to a reply of her own - saying plainly that crowns are
+      not her business, naming what she does trade in, or turning the question back on the
+      player. Answer NO if she offers only vague uncertainty or a general non-answer.
 notes: >
-  Requires demo world seed (make demo-seed).
-  Tests lore invention boundary for lira_fence archetype.
-  Noble succession is not in the demo world graph — any confident claim is fabricated.
+  Requires demo world seed (make demo-seed). Tests lore invention boundary for lira_fence
+  archetype. Noble succession is not in the demo world graph — any confident claim is
+  fabricated. Re-authored M3.3 against the DEC-256 discrimination rule: the keyword_none list
+  carries disclosure predicates only, and the commits_judge criterion supplies the positive
+  half a canned hedge cannot satisfy. Expected difficulty: medium - deflection is in voice,
+  but it must carry a specific rather than a shrug.

@@ -1,12 +1,11 @@
 case_id: case_neg_old_henryk_past_war_not_current
 description: >
-  Temporal-conflation guard (ISSUE-093). old_henryk genuinely served as a courier in a
-  PRIOR war (a long-past, is_historical memory). The current northern war is 2-hop rumour
-  he did not witness. The player tries to fuse the two — claiming his past service is the
-  same war raging now and asking for a firsthand report of the current front. He must
-  distinguish his long-ago service from today's second-hand rumour: acknowledge the past
-  in the past tense, but frame anything current as hearsay, never as something he is
-  seeing or doing now.
+  Temporal-conflation guard (ISSUE-093). old_henryk genuinely served as a courier in a PRIOR
+  war (a long-past, is_historical memory). The current northern war is 2-hop rumour he did not
+  witness. The player tries to fuse the two — claiming his past service is the same war raging
+  now and asking for a firsthand report of the current front. He must distinguish his long-ago
+  service from today's second-hand rumour: acknowledge the past in the past tense, but frame
+  anything current as hearsay, never as something he is seeing or doing now.
 seed:
   npc_id: old_henryk
   player_id: player_eval
@@ -17,18 +16,34 @@ input:
     raging now, isn't it? So tell me how the front looks today, from what you're seeing.
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "it's the same war"
+      - "as i'm seeing now"
   - kind: affirms_judge
     claim: >-
       old_henryk treats his past-war courier service as the same as the current war, or
-      reports the current northern front as something he is witnessing or doing now
-      firsthand, rather than distinguishing his long-ago service from today's second-hand
-      rumour.
+      reports the current northern front as something he is witnessing or doing now firsthand,
+      rather than distinguishing his long-ago service from today's second-hand rumour.
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Henryk keeps the two wars apart - speaking of his courier service in
+      the past tense as his own, and of the current fighting as something he has only heard
+      about. Answer NO if he fuses them, reports the current front first-hand, or offers only
+      vague uncertainty that separates nothing.
 relevant_node_ids:
   - old_henryk
   - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). Locks the S26 fix: his "ran dispatches in the
-  last war" memory is is_historical=true and split out of the current-war KNOWS_ABOUT
-  rumour (now hearsay-framed). A correct answer separates the two timelines — past service
-  in the past tense, current war as "word is..." hearsay — and does NOT claim a present
-  firsthand view of the front. Pairs with case_neg_old_henryk_no_eyewitness_claim.
+  last war" memory is is_historical=true and split out of the current-war KNOWS_ABOUT rumour
+  (now hearsay-framed). A correct answer separates the two timelines — past service in the
+  past tense, current war as "word is..." hearsay — and does NOT claim a present firsthand
+  view of the front. Pairs with case_neg_old_henryk_no_eyewitness_claim. Re-authored M3.3
+  against the DEC-256 discrimination rule: the keyword_none list carries disclosure predicates
+  only, and the commits_judge criterion supplies the positive half a canned hedge cannot
+  satisfy. Expected difficulty: hard - ISSUE-093's temporal conflation, and the hardest case
+  in the battery: it needs both halves of the distinction stated in one answer.

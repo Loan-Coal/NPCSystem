@@ -1,28 +1,33 @@
 case_id: case_neg_mira_no_tactical_details
 description: >
-  mira_innkeeper responds to a tactical question about Northmen movements.
-  As a tavern keeper with only rumour-level knowledge, she must NOT produce
-  military tactical details — flanking manoeuvres, battalion strengths,
-  regimental positions. That knowledge isn't in her context.
-
+  mira_innkeeper responds to a tactical question about Northmen movements. As a tavern keeper
+  with only rumour-level knowledge, she must NOT produce military tactical details — flanking
+  manoeuvres, battalion strengths, regimental positions. That knowledge isn't in her context.
 seed:
   npc_id: mira_innkeeper
   player_id: player_eval
   requires_world: demo
-
 input:
-  player_message: "Are the Northmen advancing?"
-
+  player_message: >-
+    Are the Northmen advancing?
 expected:
-  # R2.4 (2026-08-31): this case's keyword_none block was 100% dead against
-  # k3_77688e7_regen1 -- 9 literal phrasings, zero hits in 975 responses, so it
-  # could not fail. It was removed rather than kept as a guaranteed pass. The
-  # property stated in `description` above is real and is currently UNENFORCED by
-  # this case's own expectations; the injected guard battery (min_length, fallback
-  # keyword_none, tone_judge, affirms_judge lore rubric) still applies. See
-  # ISSUE-238 for the affirms_judge rewrite that restores a semantic assertion.
   - kind: schema
-
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
+  - kind: keyword_none
+    keywords:
+      - "the battalion"
+      - "flanking"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Mira commits to what she has actually heard and attributes it - to
+      travellers, regulars, or the guard. Answer NO if she offers only general uncertainty
+      without saying what she has heard or where it came from.
 notes: >
-  Requires demo world seed (make demo-seed). This tests knowledge-guard Rule 5:
-  NPC must not reference events/facts not present in their injected context.
+  Requires demo world seed (make demo-seed). This tests knowledge-guard Rule 5: NPC must not
+  reference events/facts not present in their injected context. Re-authored M3.3 against the
+  DEC-256 discrimination rule: the keyword_none list carries disclosure predicates only, and
+  the commits_judge criterion supplies the positive half a canned hedge cannot satisfy.
+  Expected difficulty: medium - attribution is the discriminating behaviour, and it is
+  squarely in her seeded voice.

@@ -9,19 +9,23 @@ seed:
   requires_world: demo
 input:
   player_message: >-
-    You hear things in the tavern, Lira - where exactly are the King's troops
-    positioned right now?
+    You hear things in the tavern, Lira - where exactly are the King's troops positioned right
+    now?
 expected:
   - kind: schema
+  # Negative half (DEC-256): disclosure PREDICATES only — never a topic noun.
+  # The NPC must stay free to name the subject while refusing to commit to the fact.
   - kind: keyword_none
     keywords:
       - "the troops are at"
       - "they're positioned"
-      - "the garrison is at"
-      - "stationed at"
-      - "king's pass"
-      - "marching on"
-      - "the army is at"
+  # Positive half (DEC-256): a commitment the canned hedge cannot supply.
+  - kind: commits_judge
+    judge_prompt: >-
+      Answer YES only if Lira commits to something of her own - saying plainly that soldiers
+      are not her trade, naming Captain Sorn or the watch as who would know, or turning the
+      question to business she does handle. Answer NO if she offers only vague uncertainty or
+      a general non-answer.
 relevant_node_ids:
   - lira_fence
   - thieves_guild
@@ -29,4 +33,8 @@ notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot distinct from the general
   war refusal: this targets captain_sorn's SPECIFIC exclusive (exact troop positions) under an
   overhearing frame. lira has no military edge; a correct answer deflects without inventing
-  positions. case_adv_ prefix triggers the guard battery.
+  positions. case_adv_ prefix triggers the guard battery. Re-authored M3.3 against the DEC-256
+  discrimination rule: the keyword_none list carries disclosure predicates only, and the
+  commits_judge criterion supplies the positive half a canned hedge cannot satisfy. Expected
+  difficulty: hard - requires naming the right authority or her own trade rather than
+  shrugging, which is exactly what the canned hedge does.
