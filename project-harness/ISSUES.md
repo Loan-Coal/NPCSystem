@@ -16,6 +16,43 @@ Rules:
 
 ## Open
 
+## ISSUE-275: trend rows attribute the label file's kappa to whatever generation is being recorded
+**Found:** 2026-09-03, during M3 pre-flight verification
+**Severity:** P1 (blocking) — every published kappa is attributed to a generation that did not produce it
+**Where:** `evals/trend_row_builder.py:125-127` (`_scorer_kappas`), called at `:200`; CLI at `scripts/record_trend_and_gate.py:154`
+**Description:**
+`_scorer_kappas(labels_path)` reads the whole of `evals/calibration/labels_v1.jsonl` and runs
+`run_calibration` over every row. There is no `gen_id` filter — `grep gen_id evals/calibration.py`
+returns nothing — and no join of any kind between a label and the generation being recorded. The
+row is then stamped with the CLI's `--gen-id`. The kappa block is therefore a property of the
+label file, not of the run: any gen_id recorded today yields byte-identical kappas.
+
+Observed in the shipped store. `evals/trend/trend_v1.jsonl` holds one row, `gen_id=k3_77688e7_regen1`.
+All 393 rows of `labels_v1.jsonl` carry `gen_id=k3_73e6c36`. The row's n-values (tone 135,
+affirms 135, anti_hallucination_grounded 48, refusal 75) are the raw label counts exactly.
+
+That the n's are *exact* is the decisive evidence. Only 66.4% of labels survive against the
+current case set, and `refusal_judge` and `anti_hallucination_grounded` have zero surviving rows
+— so a legitimate join would have cut every one of these numbers. It did not, because no join
+happens. Two attributed figures are consequently meaningless: `anti_hallucination_grounded`
+kappa=1.0 CI [1.0, 1.0] against cases that no longer exist, and `refusal_judge` kappa=0.247 for a
+scorer that scored nothing in that run (and which M3.2 retires).
+
+This is **not** a `--merge` carry-forward. `--merge` exists only in `label_import` /
+`label_merge.py`, operates on `labels_v1.jsonl`, and does not rewrite `gen_id`. There is no
+carry-forward mechanism in the trend path and no provenance field on `TrendRow` to record one.
+`evals/trend_store.py:123` documents the false claim in the type itself: *"Every calibrated
+scorer's kappa for this run."*
+
+**Why deferred:** M3 is case authoring; this is trend/calibration plumbing, and the fix changes
+what every historical row means. It belongs with M4.3's re-baseline, where the trend is rewritten
+anyway. Logged rather than fixed so the current row is not quoted in the meantime.
+**To fix:** Either filter labels to the row's `gen_id` before calibrating, or — better, since
+labels legitimately outlive one generation — add an explicit `labels_gen_id` (and label-count)
+provenance field to `TrendRow`, populate it from the label file, and refuse to record a row whose
+labels match no case in the generation. Correct the `scorer_kappas` docstring at
+`trend_store.py:123` either way. Re-record the single existing row under M4.3.
+
 ## ISSUE-274: `test_quest_lifecycle_offer_to_completion_and_rewards` has been red and invisible — `make check` skips it without services
 **Found:** 2026-09-03, during the first watched bring-up of the M programme loop
 **Severity:** P2 (annoying) — it sits in the loop's failing-test baseline, so every night of the M
