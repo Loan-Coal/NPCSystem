@@ -109,7 +109,7 @@ def _record_events_limit(monkeypatch, seen: list[int]) -> None:
         return []
 
     monkeypatch.setattr(
-        "npc_engine.retrieval.context.context_builder.get_events_for_npc", fake_events
+        "npc_engine.retrieval.context.context_graph_readers.get_events_for_npc", fake_events
     )
 
 

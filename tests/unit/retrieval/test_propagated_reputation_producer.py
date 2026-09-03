@@ -17,11 +17,9 @@ from typing import Any
 
 import pytest
 
-from npc_engine.retrieval.context import context_builder
-from npc_engine.retrieval.context.context_builder import (
-    _build_tier_a_extended,
-    _fetch_player_data,
-)
+from npc_engine.retrieval.context import context_graph_readers
+from npc_engine.retrieval.context.context_builder import _build_tier_a_extended
+from npc_engine.retrieval.context.context_graph_readers import _fetch_player_data
 from npc_engine.config import Settings
 
 
@@ -86,11 +84,11 @@ async def test_the_reader_is_called_with_the_npc_and_the_player(monkeypatch) -> 
     async def none_(*args: Any, **kwargs: Any) -> Any:
         return None
 
-    monkeypatch.setattr(context_builder, "get_propagated_reputation_for_npc", fake_propagated)
-    monkeypatch.setattr(context_builder, "get_trust_scores_for_events", empty)
-    monkeypatch.setattr(context_builder, "get_second_hop_events", empty)
-    monkeypatch.setattr(context_builder, "get_active_quest_for_player", none_)
-    monkeypatch.setattr(context_builder, "get_npc_player_edge", none_)
+    monkeypatch.setattr(context_graph_readers, "get_propagated_reputation_for_npc", fake_propagated)
+    monkeypatch.setattr(context_graph_readers, "get_trust_scores_for_events", empty)
+    monkeypatch.setattr(context_graph_readers, "get_second_hop_events", empty)
+    monkeypatch.setattr(context_graph_readers, "get_active_quest_for_player", none_)
+    monkeypatch.setattr(context_graph_readers, "get_npc_player_edge", none_)
 
     result = await _fetch_player_data(object(), "mira_innkeeper", "player_1", [])
 
@@ -111,9 +109,9 @@ async def test_an_anonymous_turn_does_not_read_propagated_reputation(monkeypatch
     async def empty(*args: Any, **kwargs: Any) -> Any:
         return []
 
-    monkeypatch.setattr(context_builder, "get_propagated_reputation_for_npc", fake_propagated)
-    monkeypatch.setattr(context_builder, "get_trust_scores_for_events", empty)
-    monkeypatch.setattr(context_builder, "get_second_hop_events", empty)
+    monkeypatch.setattr(context_graph_readers, "get_propagated_reputation_for_npc", fake_propagated)
+    monkeypatch.setattr(context_graph_readers, "get_trust_scores_for_events", empty)
+    monkeypatch.setattr(context_graph_readers, "get_second_hop_events", empty)
 
     result = await _fetch_player_data(object(), "mira_innkeeper", None, [])
 

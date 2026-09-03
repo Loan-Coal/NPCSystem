@@ -96,8 +96,8 @@ def _patch_scope(monkeypatch, *, scope_ids: set[str], known_ids: set[str]) -> No
     async def fake_known(session, npc_id):
         return set(known_ids)
 
-    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_rag_scope_ids_for_npc", fake_scope)
-    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc", fake_known)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_rag_scope_ids_for_npc", fake_scope)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_known_event_ids_for_npc", fake_known)
 
 
 async def _build(monkeypatch, index, *, tier_a_items=None) -> dict:
