@@ -15,7 +15,7 @@ is one cohesive async pipeline, each stage already in a private helper (DECISION
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Protocol
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -55,6 +55,7 @@ from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_wit
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
 from .context_profile_policy import apply_slot_policy, tier_enabled
+from .context_protocols import EmbeddingIndexProtocol
 from .context_slots import slot_for_key
 from .context_builder_helpers import (
     expand_query,
@@ -79,7 +80,6 @@ from npc_engine.world.time_utils import TimePoint
 from .context_utils import NON_PROMPT_NODE_FIELDS, serialize_json
 from npc_engine.retrieval.dialogue_context.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
-from npc_engine.retrieval.embedding.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.graph.world_state.world_state_reader import get_world_state
@@ -107,27 +107,6 @@ class NeedSnapshot(BaseModel):
     kind: str
     level: int
     character_id: str
-
-
-class EmbeddingIndexProtocol(Protocol):
-    """Minimal protocol required by context builder."""
-
-    async def search(
-        self,
-        query: str,
-        top_k: int,
-        filter_ids: set[str] | None = None,
-    ) -> list[VectorSearchResult]:
-        """Return top-k semantic retrieval rows.
-
-        Args:
-            query: Text query to embed and search.
-            top_k: Maximum number of results to return.
-            filter_ids: When provided, restrict results to items with these IDs.
-
-        Returns:
-            List of VectorSearchResult dicts sorted by descending score.
-        """
 
 
 # ---------------------------------------------------------------------------
