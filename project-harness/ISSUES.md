@@ -16,6 +16,59 @@ Rules:
 
 ## Open
 
+## ISSUE-276: the "orphaned calibration labels" finding is false — 393/393 survive, and refusal_judge is a live scorer
+**Found:** 2026-09-03, during M3.2
+**Severity:** P1 (blocking) — M3.2 as planned would delete a live, fully-calibrated measurement
+**Where:** `evals/matchers.py` (`judge_refusal`), `evals/anti_hallucination_runner.py:252`,
+`evals/refusal_rate.py`, `evals/generation_records.py:128`, `evals/cases/anti_hallucination_demo.json`,
+Makefile targets at lines 413 and 524
+**Description:**
+The M-programme plan states that `refusal_judge` (75 labels) and `anti_hallucination_grounded`
+(48) "have **zero** surviving rows — both were labelled against the deleted `ah_demo_*` family",
+and that 66.4% of the 393 labels survive. M3.2 acts on that by retiring `refusal_judge`.
+
+Measured against the actual checker, every part of this is wrong:
+
+```
+$ python scripts/check_label_survival.py --transcript evals/generations/k3_77688e7_regen1/outputs.jsonl
+Labels checked: 393
+  survive:  393
+  drift:    0
+  orphaned: 0
+```
+
+- The `ah_demo_*` family was **never deleted**. It lives in `evals/cases/anti_hallucination_demo.json`
+  — 41 real cases, 25 `expected_verdict: refusal` and 16 `grounded`. It is loaded by
+  `anti_hallucination_runner`, not by the YAML case globber, which is why a `evals/cases/*.yaml`
+  search does not see it.
+- All **123** `ah_demo_` records are present in **both** generations' `outputs.jsonl`
+  (`k3_73e6c36` and `k3_77688e7_regen1`), which is 75 refusal + 48 grounded at k=3 repetitions.
+- Every one of the 25 refusal_judge label case ids and all 16 anti_hallucination_grounded ids
+  resolve to live cases. The only genuinely unmatched labels are **3 tone_judge cases**.
+
+`refusal_judge` is therefore **not a zombie**. The narrow claims are true — `matchers.evaluate`
+has no `refusal_judge` branch and no `evals/cases/*.yaml` uses it — but the scorer runs through a
+different path entirely: `anti_hallucination_runner.py:252` calls `matchers.judge_refusal`,
+`evals/refusal_rate.py` is built on it, `generation_records.build_ah_refusal_record` produces its
+records, and two Makefile targets drive the fixture. `guard_expectations.py` already documents
+this in its own comment ("ah_demo_ cases are authored for refusal_judge +
+anti_hallucination_grounded"). Deleting `prompts/eval/refusal_judge.yaml` would additionally break
+`import matchers` outright, because `_REFUSAL_CRITERIA` is loaded eagerly at module import
+(`matchers.py:107`).
+
+**Why deferred:** M3.2 is halted, not attempted. Proceeding would have deleted 25 live cases'
+scorer, broken two make targets and several test modules, and discarded 75 valid hand-adjudicated
+verdicts — the irreplaceable-data class this programme explicitly protects.
+**To fix:** Two separable questions, neither of which is "delete it".
+1. Decide whether `refusal_judge` should be retired **as a scorer of the YAML guard battery**
+   (where it genuinely has no dispatch branch and no case) while remaining the AH fixture's
+   scorer. That is a documentation change, not a deletion.
+2. ISSUE-141 (the twice-failed rubric rewrite) stays open on its own merits; a scorer at
+   kappa 0.247 is HIDDEN under `docs/SCORER_TRUST_POLICY.md` and may not be quoted — but a
+   HIDDEN scorer is one to remediate or retire *deliberately*, on a correct premise.
+Correct the plan's survival figures wherever they are repeated (ROADMAP M4.2 prioritises
+"re-ground `anti_hallucination_grounded`, of whose 48 labels zero survive" — all 48 survive).
+
 ## ISSUE-275: trend rows attribute the label file's kappa to whatever generation is being recorded
 **Found:** 2026-09-03, during M3 pre-flight verification
 **Severity:** P1 (blocking) — every published kappa is attributed to a generation that did not produce it

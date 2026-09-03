@@ -253,7 +253,7 @@ after the regeneration burns the entire relabel.
       "stolen goods", so "I don't deal in stolen goods" fails for refusing correctly), and a
       predicate list alone is beaten by a fluent hedge.
 
-- [ ] M3.2 Retire `refusal_judge`
+- [ ] M3.2 Retire `refusal_judge` — **HALTED 2026-09-03 on a false premise, see ISSUE-276**
       It is a zombie: `evals/matchers.py` dispatches `schema`, `min_length`,
       `keyword_any/all/none`, `in_set`, `range`, `substring`, `regex`, `tone_judge`,
       `affirms_judge` and `context_block_expected` — there is **no `refusal_judge` branch, and
