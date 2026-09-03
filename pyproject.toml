@@ -28,6 +28,11 @@ dev = [
     "ruff==0.13.0",
     "mypy==1.18.2",
 ]
+# packaging: build-time only, needed by `make package` (PyInstaller spec in packaging/).
+# Not a runtime or dev dependency — install with `pip install -e .[packaging]`.
+packaging = [
+    "pyinstaller>=6.22,<7",
+]
 
 [project.scripts]
 npc-engine = "npc_engine.main:app"

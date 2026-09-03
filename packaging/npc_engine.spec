@@ -25,9 +25,30 @@ a = Analysis(
     pathex=[str(SRC_ROOT)],
     binaries=[],
     datas=[
-        (str(REPO_ROOT / "src" / "npc_engine" / "prompts"), "npc_engine/prompts"),
-        (str(REPO_ROOT / "config"), "config"),
-        (str(REPO_ROOT / "game_schema.yaml"), "."),
+        # Mirrors [tool.setuptools.package-data] in pyproject.toml. Both lists are
+        # pinned together by tests/unit/scripts/test_packaging_spec.py, which reds when
+        # a declared runtime asset is not bundled here (R5.3, CR-L12-02).
+        (str(SRC_ROOT / "npc_engine" / "prompts"), "npc_engine/prompts"),
+        (str(SRC_ROOT / "npc_engine" / "config"), "npc_engine/config"),
+        (str(SRC_ROOT / "npc_engine" / "data"), "npc_engine/data"),
+        (str(SRC_ROOT / "npc_engine" / "observability"), "npc_engine/observability"),
+        (str(SRC_ROOT / "npc_engine" / "type_registry" / "base_nodes"), "npc_engine/type_registry/base_nodes"),
+        (str(SRC_ROOT / "npc_engine" / "type_registry" / "base_edges"), "npc_engine/type_registry/base_edges"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "chapter"), "npc_engine/engines/chapter"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "contracts"), "npc_engine/engines/contracts"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "dialogue"), "npc_engine/engines/dialogue"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "economy"), "npc_engine/engines/economy"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "events"), "npc_engine/engines/events"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "faction_politics"), "npc_engine/engines/faction_politics"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "gossip"), "npc_engine/engines/gossip"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "memory_consolidation"), "npc_engine/engines/memory_consolidation"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "proactive_dialogue"), "npc_engine/engines/proactive_dialogue"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "quest_generation"), "npc_engine/engines/quest_generation"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "reputation"), "npc_engine/engines/reputation"),
+        (str(SRC_ROOT / "npc_engine" / "engines" / "story_pacing"), "npc_engine/engines/story_pacing"),
+        # GAME_SCHEMA_PATH defaults to the bare relative "game_schema.yaml" (config.py),
+        # so this one lands at the bundle root, not under npc_engine/.
+        (str(SRC_ROOT / "npc_engine" / "game_schema.yaml"), "."),
     ],
     hiddenimports=[
         # uvicorn runtime imports (not statically discoverable)

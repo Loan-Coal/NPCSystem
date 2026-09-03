@@ -31,6 +31,7 @@ from neo4j import AsyncSession
 from npc_engine.engines.base_engine import ConsolidationTickEngine, RoutineTickEngine, TickEngine
 from npc_engine.graph.scheduling.tick_scheduler_queries import is_tick_done, mark_tick_done
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
+from npc_engine.scheduler.engine_tick_timer import EngineTickTimer
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
@@ -231,18 +232,19 @@ class TickScheduler:
         Returns:
             Engine result dict[str, Any], or None if the engine raised an exception.
         """
+        timer = EngineTickTimer(
+            engine_name=engine_name, tick_id=tick_id, status_store=self._engine_status_store
+        )
         try:
             result = await coro
-            if self._engine_status_store is not None:
-                self._engine_status_store.record_success(engine_name, tick_id)
+            timer.record_success()
             return result
         except Exception as exc:
             LOGGER.error(
                 "tick_engine_error",
                 extra={"engine": engine_name, "tick_id": tick_id, "error": str(exc)},
             )
-            if self._engine_status_store is not None:
-                self._engine_status_store.record_error(engine_name, tick_id, str(exc))
+            timer.record_error(str(exc))
             return None
 
     async def _run_with_lease_timeout(self, coro: Awaitable[dict[str, Any]]) -> dict[str, Any]:
@@ -376,6 +378,9 @@ class TickScheduler:
         response: dict[str, Any],
     ) -> bool:
         """Run one interval engine via distributed lease; return True if tick is unresolved."""
+        timer = EngineTickTimer(
+            engine_name=name, tick_id=tick_id, status_store=self._engine_status_store
+        )
         try:
             unresolved, row = await self._run_distributed_engine_tick(
                 session=session,
@@ -385,12 +390,12 @@ class TickScheduler:
             )
         except Exception as exc:
             LOGGER.error("tick_engine_error", extra={"engine": name, "tick_id": tick_id, "error": str(exc)})
-            if self._engine_status_store is not None:
-                self._engine_status_store.record_error(name, tick_id, str(exc))
+            timer.record_error(str(exc))
             return False
         else:
-            if row is not None and self._engine_status_store is not None:
-                self._engine_status_store.record_success(name, tick_id)
+            # row is None when another scheduler held the lease: nothing ran here to time.
+            if row is not None:
+                timer.record_success()
         if row is not None:
             response[name].append(row)
         return unresolved

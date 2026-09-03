@@ -22,6 +22,9 @@ class EngineStatusRecord(BaseModel):
         last_error: Error message from the most recent failure, or None.
         last_error_tick: Tick ID on which the last error occurred, or None.
         error_count: Total number of errors recorded since server start.
+        last_duration_ms: Wall-clock milliseconds the most recent run took, or None
+            if this engine last ran before timing existed.
+        tick_count: Total runs recorded since server start, successes and errors alike.
     """
 
     engine_name: str
@@ -29,6 +32,8 @@ class EngineStatusRecord(BaseModel):
     last_error: str | None = None
     last_error_tick: int | None = None
     error_count: int = 0
+    last_duration_ms: float | None = None
+    tick_count: int = 0
 
     model_config = ConfigDict(frozen=True)
 
@@ -45,14 +50,18 @@ class EngineStatusStore:
         """Initialise with an empty status map."""
         self._records: dict[str, EngineStatusRecord] = {}
 
-    def record_success(self, engine_name: str, tick_id: int) -> None:
+    def record_success(
+        self, engine_name: str, tick_id: int, *, duration_ms: float | None = None
+    ) -> None:
         """Record a successful engine tick.
 
-        Updates last_tick_id; preserves last_error and error_count unchanged.
+        Updates last_tick_id and increments tick_count; preserves last_error and
+        error_count unchanged.
 
         Args:
             engine_name: Canonical engine key.
             tick_id: Tick ID that completed successfully.
+            duration_ms: Wall-clock milliseconds the run took, or None when untimed.
         """
         existing = self._records.get(engine_name)
         self._records[engine_name] = EngineStatusRecord(
@@ -61,18 +70,23 @@ class EngineStatusStore:
             last_error=existing.last_error if existing else None,
             last_error_tick=existing.last_error_tick if existing else None,
             error_count=existing.error_count if existing else 0,
+            last_duration_ms=duration_ms,
+            tick_count=(existing.tick_count if existing else 0) + 1,
         )
 
-    def record_error(self, engine_name: str, tick_id: int, error: str) -> None:
+    def record_error(
+        self, engine_name: str, tick_id: int, error: str, *, duration_ms: float | None = None
+    ) -> None:
         """Record an engine tick failure.
 
         Updates last_error and last_error_tick; preserves last_tick_id.
-        Increments error_count.
+        Increments error_count and tick_count - a tick that ran and raised still ran.
 
         Args:
             engine_name: Canonical engine key.
             tick_id: Tick ID on which the error occurred.
             error: String representation of the exception.
+            duration_ms: Wall-clock milliseconds the run took, or None when untimed.
         """
         existing = self._records.get(engine_name)
         self._records[engine_name] = EngineStatusRecord(
@@ -81,6 +95,8 @@ class EngineStatusStore:
             last_error=error,
             last_error_tick=tick_id,
             error_count=(existing.error_count if existing else 0) + 1,
+            last_duration_ms=duration_ms,
+            tick_count=(existing.tick_count if existing else 0) + 1,
         )
 
     def get(self, engine_name: str) -> EngineStatusRecord | None:
