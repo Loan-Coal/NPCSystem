@@ -23,10 +23,10 @@ expected:
   # Positive half (DEC-256): a commitment the canned hedge cannot supply.
   - kind: commits_judge
     judge_prompt: >-
-      Answer YES only if Mira commits to what she has actually heard and from whom -
-      attributing it to travellers, regulars or the guard, or saying plainly that she only has
-      talk to go on. Answer NO if she offers only general uncertainty without grounding it in
-      a source or in what she has heard.
+      Answer YES only if Mira names where her account came from - travellers, her regulars,
+      the guard, or a particular person - or gives a specific thing she was told. Answer NO if
+      she says only that she has heard talk without naming any source, or offers general
+      uncertainty.
 relevant_node_ids:
   - mira_innkeeper
   - northern_war_begins
