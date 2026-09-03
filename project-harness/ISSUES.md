@@ -2096,3 +2096,47 @@ it.
 **To fix:** scope pair selection to the test's location, or raise the cap above the global
 candidate count. Prefer scoping — a test that depends on global DB state is order-dependent
 whatever the cap.
+
+## ISSUE-264: the documented way to drive ticks is refused in the default local config
+**Found:** 2026-09-03, during the per-engine timing work
+**Severity:** P3 (nice-to-fix)
+**Where:** `.env:53` (`CLOCK_MODE=realtime`), `src/npc_engine/config.py:220`, `:243`
+**Description:** `POST /v1/clock/advance` is the documented way to advance the world, but with
+the shipped `.env` it returns HTTP 400 `CLOCK_MODE_INVALID` ("Clock can only be advanced in
+game_driven mode"). `CLOCK_MODE` defaults to `realtime` and `TICK_AUTOPILOT_ENABLED` defaults
+to `True`, so the autopilot owns the clock and manual advance is rejected. Measured on a live
+server at tick 23169.
+**Why deferred:** not a defect in the engine - both modes work as designed. It is a
+discoverability problem, and changing a shipped default is a wider decision than this task.
+**To fix:** say in `docs/overview.md` (or the clock route docstring) that `/v1/clock/advance`
+requires `CLOCK_MODE=game_driven`, and that the realtime default hands the clock to the
+autopilot at `TICK_INTERVAL_SECONDS`.
+
+## ISSUE-265: a dialogue turn against an unconfigured Ollama model silently serves the fallback
+**Found:** 2026-09-03, during the per-engine timing work
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/dialogue/`, metrics labels in `/v1/admin/system/metrics`
+**Description:** With `llm_config.yaml` pinning `qwen2.5:7b` and Ollama holding only
+`llama3.1:8b`, every dialogue turn returns the fallback ("I need a moment to think.") while
+`llm_calls_total` is labelled `backend=qwen2_5_7b` and `llm_tokens_out_total` carries
+`fallback=request_error`. The fallback contract works as documented, but the counter reads as
+though the pinned model answered - only the `fallback=` label on a *different* counter says
+otherwise, and `/v1/admin/system/engines` shows nothing at all.
+**Why deferred:** out of scope for this task, which was engine-tick timing; changing metric
+labelling is an observability decision of its own.
+**To fix:** either label `llm_calls_total` with the fallback outcome too, or surface a
+model-availability check at startup that fails loudly when the pinned model is absent.
+
+## ISSUE-266: the docstring audit's Layer vocabulary does not know about scheduler/
+**Found:** 2026-09-03, during the per-engine timing work
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/docstring_audit.py`, every module in `src/npc_engine/scheduler/`
+**Description:** `scheduler` is a real layer with its own rank (5) in `scripts/check_layers.py`,
+but `make check-docstrings` rejects `Layer: scheduler` as an invalid value. Every module in
+`scheduler/` therefore declares `Layer: engines`, so the two gates disagree about what layer
+these files are in. Reproduced by writing `Layer: scheduler` in a new scheduler module: the
+gate exits 2 with "Layer: invalid value 'scheduler'".
+**Why deferred:** single-task focus - this task added engine timing, and widening a gate's
+accepted vocabulary touches every scheduler module's docstring.
+**To fix:** add `scheduler` (and any other ranked package the audit lacks) to the audit's
+accepted Layer values, then correct the seven `scheduler/` docstrings in one commit.

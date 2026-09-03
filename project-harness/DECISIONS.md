@@ -8069,3 +8069,54 @@ gain beyond making one assertion pass.
 without the field, becomes invisible to all 37 readers rather than to 36 of them. That is the intended
 behaviour and it is louder than the alternative, but it does move the failure earlier for raw-Cypher
 writers — see ISSUE-263.
+
+---
+
+## DEC-253: split context_builder on SRP, and time both scheduler paths with one helper
+
+**Date:** 2026-09-03
+**Status:** accepted
+**Context:** `context_builder.py` was 799 lines against an unwaivable 800-line gate (DEC-226),
+and `/v1/admin/system/engines` could say an engine ran but never how long it took.
+
+**Decision (1) — the split is on category, not on line count.** `context_builder.py` held five
+of CLAUDE.md's mutually exclusive SRP categories: model (`NeedSnapshot`), protocol
+(`EmbeddingIndexProtocol`), reader (seven `_fetch_*`), builder (seven `_build_*`) and cache
+state. Each moved to a module of its own — `context_need_models`, `context_graph_readers`,
+`context_tier_builders`, `context_cache_state` — leaving an orchestrator-only module at 359
+lines, under the 400-line advisory tier. The protocol was not moved but **deleted**:
+`context_protocols.py` already defined it identically and `__init__.py` already re-exported it
+from there, so the copy was dead weight.
+
+The line count was the symptom and is deliberately not quoted in the new module docstring. The
+previous note quoted "~448" against a real 799 — a number in prose rots, so `make check-rules`
+owns the limit.
+
+**Decision (2) — one `EngineTickTimer`, not a timer per call site.** `TickScheduler` runs
+engines down two paths: `_run_engine_safe` for the simple per-tick engines and
+`_run_distributed_interval` for the lease-held gossip and event engines (the latter is live by
+default — `DISTRIBUTED_TICK_LEASE_ENABLED` is `True` at `config.py:239`). Those two had already
+drifted apart in their error handling, which is the argument against duplicating a stopwatch
+into both. `EngineTickTimer` owns the stopwatch, the store write and the metric emission; each
+path keeps its own rule about *when* a run counts, so the distributed path still records only
+when it actually held the lease (`row is not None`).
+
+`tick_count` counts errors as well as successes: a tick that ran and raised still ran, and a
+count that excluded failures would understate load exactly when an engine is misbehaving.
+
+**Rationale:** the split had to be behaviour-preserving, and the honest risk was not the code
+but the tests. Twenty-four graph readers are monkeypatched *by module path*, so moving the
+readers moved the patch target. `monkeypatch.setattr` raises on a missing attribute, so every
+stale target failed loudly rather than silently rebinding to a real graph reader — the failure
+mode that would have made this refactor dangerous did not exist. `context_slots.PRODUCER_MODULES`
+needed the two new producer modules for the same reason, and its contract test is explicitly
+designed to fail when a producer module moves.
+
+**Trade-off accepted:** this was NOT a zero-test-edit move. Twenty-four patch targets across
+five test files and one import line were retargeted at the new modules. That is mechanically
+equivalent to an import-path edit, but it is more than one, and it is recorded here rather than
+described as a pure move.
+
+**Explicitly not closed:** ISSUE-235. That gate counts `logger.info` sites inside `engines/`
+that lack `duration_ms`; `scheduler/` is a different layer and none of those 42 sites is
+touched. `scripts/engine_logs_baseline.txt` stays at 42.
