@@ -66,6 +66,7 @@ A new wrapper that is not named here makes the contract test fail, not pass.
 PRODUCER_MODULES: tuple[str, ...] = (
     "npc_engine/retrieval/context/context_builder.py",
     "npc_engine/retrieval/context/context_graph_readers.py",
+    "npc_engine/retrieval/context/context_tier_builders.py",
     "npc_engine/retrieval/graph_rag/subgraph_retriever.py",
     "npc_engine/engines/dialogue/negotiation_context.py",
 )

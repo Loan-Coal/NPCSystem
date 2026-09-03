@@ -103,7 +103,7 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_location_context", fake_location_context)
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_events_for_npc", fake_events)
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_reputation_context_for_npc", fake_reputation)
-    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.assemble_tier_a_context", fake_assemble)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_tier_builders.assemble_tier_a_context", fake_assemble)
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_memories_for_character", fake_memories)
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_beliefs_for_character", fake_beliefs)
     monkeypatch.setattr("npc_engine.retrieval.context.context_graph_readers.get_goals_for_character", fake_goals)
