@@ -1,7 +1,13 @@
 # NPCSystem — Engine Roadmap
 
-**Status (2026-08-28):** the active and only program is the **2026-08 remediation program**,
-sequenced from the strategic codebase review. 145 findings → 118 canonical problems after
+**Status (2026-09-02): the 2026-08 remediation programme is COMPLETE.** R0–R4 are done; the
+one unchecked box, R1.7, is an explicit ask-gate that needs a human judgment per gate and was
+never in the loop's scope. R5, R6 and R7 sit outside the programme and outside the queue.
+DEC-250's exit condition is met — see Phase R3. There is no active programme; the next work is
+ordinary backlog from `ISSUES.md`, and DEC-250's apparatus freeze (`evals/`, `scripts/check_*`,
+`prompts/eval/`, `docs/EVAL_*`, `docs/SCORER_*`) lapses with end-of-R4 per DEC-252.
+
+Sequenced from the strategic codebase review: 145 findings → 118 canonical problems after
 [adversarial triage](review-2026-08/TRIAGE.md) → 37 work items in 8 phases.
 
 **Substance lives in [FIX_PLANS.md](review-2026-08/FIX_PLANS.md).** This file holds sequence,
@@ -332,9 +338,9 @@ Unblocking needs a NEW generation run with CR-L15-01's fatal-`None`-digest fix a
 until that generation exists there is no second row, nothing to compare, and nothing to test.
 It is a prerequisite, not a task — do not plan work against it.
 
-### Phase R4
+### Phase R4 — **complete 2026-09-02**
 
-Subtraction and documentation. Mechanical and well-specified. Plans: `FIX_PLANS.md#r4`.
+Subtraction and documentation. The last phase of the programme. Plans: `FIX_PLANS.md#r4`.
 
 - [x] **R4.1** Delete the unreferenced archive; gitignore the one-shot prompt pattern ✅ AUTO (2026-08-28) — 229 files / 26,794 lines, DEC-225
 - [x] **R4.2** ✅ DONE 2026-09-02 — fresh-clone steps documented and verified in a real clone
@@ -427,7 +433,32 @@ with `make check` as the real backstop. Closes ISSUE-251.
 Validation: `wc -l project-harness/CLAUDE.md` ≤ 250 (476 today); every remaining numeric claim
 reproduces from its cited command (26 of 109 fail today). CR-L09-04 +7.
 
-- [ ] **R4.5** Ledger hygiene — reused IDs, stale P1s, dead queue file
+- [x] **R4.5** ✅ DONE — landed 2026-09-01 in `9247e8f3`; audited and ticked 2026-09-02
+**This task was already complete when R4 resumed, and the checkbox was the only thing left.**
+Audited item by item rather than taken on the commit message's word:
+`check-ledger-ids` reports "DEC: 4 reused, 0 undocumented / ISSUE: 2 reused, 0 undocumented"
+and exits 0; it is the 20th target in `make check`. ISSUE-145 and ISSUE-122 have zero
+declarations in `ISSUES.md` and one each in the archive. `SKILLS_QUEUE.md` opens
+"RETIRED 2026-09-01 (R4.5)", and `docs/overview.md` — the last file describing it as live —
+was corrected under ISSUE-251, closed by R4.4.
+
+**Three of the spec's numbers were corrected by that commit and stand corrected here.**
+"5 reused DEC ids" is **4** (DEC-116 is one decision under a question heading plus an outcome
+heading; a regex counting headings reports it as a collision). The contract chosen was
+**document every reuse**, not renumber (DEC-239): all four colliding DEC ids are cited *by
+number from live source*, so renumbering would silently repoint a code comment at a decision it
+was not written about. And "three scripts share a stale corpus default" is **two** — ISSUE-252,
+still open by design: both are `scripts/check_*` files, which DEC-250 freezes through
+end-of-R4, and neither is reachable from any gate since R1.3 removed them from `make check`.
+
+**The DEC-250 exception this task was granted is recorded as GRANTED BUT UNUSED.** R4.5's
+duplicate-id detector was expected to need one; it had already landed on 2026-09-01, the day
+before the freeze, so no new gate was added under the exception. See DEC-252.
+Validation: `make check-ledger-ids` exits 0. CR-L07-02, CR-L07-01, CR-L07-04, CR-L07-06,
+CR-L07-07, CR-L07-08.
+
+<!-- superseded spec below, kept for the record -->
+- [x] ~~**R4.5** Ledger hygiene — reused IDs, stale P1s, dead queue file~~
 Files: `project-harness/ISSUES.md`, `project-harness/DECISIONS.md`,
 `project-harness/archive/ISSUES_RESOLVED.md`, `project-harness/SKILLS_QUEUE.md`, `scripts/`
 Spec: repair the 5 reused DEC ids and 2 reused ISSUE ids — assign the duplicates new ids and
@@ -518,17 +549,17 @@ in a live EVAL-P30 task spec — a genuine trap, now repointed at `make openapi`
 CR-L13-11 are annotated CLOSED in place, with the evidence left as written.
 Validation: `make check` green; `make openapi` exits 0 and is deterministic. CR-L08-09, CR-L13-11.
 
-### Phase R3
+### Phase R3 — **complete 2026-09-02**
 
-**THIS IS THE ACTIVE PHASE (DEC-250, 2026-09-02).** Everything before it is done, retired or
-frozen. Work order is fixed: **R3.6 → R3.1 → R3.2 → R3.4**. R3.6 is report-only and goes first so
+Closed by R3.5. Work order was **R3.6 → R3.1 → R3.2 → R3.4 → R3.5**. R3.6 is report-only and goes first so
 the eight unknown integration failures are sized before anything is committed to. R3.1 must
 precede R3.2 — the degradation ladder's bare `except Exception` would swallow a
 `GraphUnavailableError` before any handler saw it.
 
-**Programme exit condition (DEC-250):** R3 green and the integration suite at zero unexplained
-failures. Not an empty issue list — that never happens. Anything found after that is ordinary
-backlog, not programme scope.
+**Programme exit condition (DEC-250): MET 2026-09-02.** R3 is green and the integration suite
+is at zero *unexplained* failures — 43 passed / 3 failed, each of the 3 with a measured cause
+and an owning issue (ISSUE-259, ISSUE-260 ×2). Not an empty issue list; that never happens.
+Everything found after this point is ordinary backlog, not programme scope.
 
 Product correctness — the safe half. Gossip (R3.3) and the fallback-policy decision are outside
 the loop's scope. Needs services: bring up the test override first. Plans: `FIX_PLANS.md#r3`.

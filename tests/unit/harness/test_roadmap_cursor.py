@@ -343,21 +343,28 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # Structural only — pending shrinks on every success and must not fire this gate.
     known_task_ids = {t.id for p in phases for t in p.tasks}
     pending = [task_id for p in phases for task_id in p.pending]
-    # 2026-08-28 (DEC-233): reverted to the STRUCTURAL assertion the docstring above
-    # describes, deliberately. `assert pending == []` was correct while the EVAL queue was
-    # honestly drained of loop-available work; it is exactly wrong now. The remediation
-    # queue is deliberately FULL — 14 unflagged tasks the loop is meant to work through —
-    # so pinning an empty pending list would fail on a correctly-loaded queue and, worse,
-    # would go green again only once the loop had drained it. That inverts the tripwire:
-    # it would fire on a healthy queue and pass on an empty one.
+    # 2026-09-02 (DEC-252): `assert pending` replaced by an equivalence, because BOTH of
+    # its predecessors fired on a correct queue and this one now has too.
     #
-    # What still needs catching is a CORRUPTED queue, which the two assertions below do:
-    # a queue that parsed to nothing actionable (the ALL_DONE-on-a-full-file failure that
-    # made the fence bug invisible on 2026-08-28), and a pending id that belongs to no
-    # parsed phase.
-    assert pending, (
-        "queue parsed to zero actionable tasks while phases exist — this is the silent "
-        "no-op that made the misplaced fence look like 'queue drained' on 2026-08-28"
+    # The history is the argument. `assert pending == []` was right while the EVAL queue
+    # was honestly drained and wrong the moment the remediation queue was loaded full.
+    # DEC-233 flipped it to `assert pending` — right for a full queue, and wrong the moment
+    # the remediation programme finished, which is today: R0–R4 are complete and the only
+    # unticked task in the fence is R1.7, a flagged ask-gate. Each version pinned a
+    # snapshot of how much work happened to be left, so each was guaranteed to go red on
+    # a legitimate state change. That is a tripwire that fires on success, which the
+    # docstring above already names as the thing to avoid.
+    #
+    # The invariant that holds in EVERY state is that `pending` is exactly the tasks the
+    # loop can act on: unticked and unflagged. It catches the 2026-08-28 corruption —
+    # a full file parsing to ALL_DONE leaves actionable tasks missing from `pending`, so
+    # the two sides diverge — while permitting both an honestly full and an honestly
+    # drained queue, and it shrinks in step with progress rather than against it.
+    actionable = sorted(t.id for p in phases for t in p.tasks if not t.done and not t.skippable)
+    assert sorted(pending) == actionable, (
+        "pending diverged from the tasks the loop can act on. Missing ids mean the queue "
+        "parsed to less than the file holds — the silent no-op that made the misplaced "
+        "fence look like 'queue drained' on 2026-08-28. Extra ids mean the reverse."
     )
     assert set(pending) <= known_task_ids
 
