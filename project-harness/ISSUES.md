@@ -1933,6 +1933,20 @@ one line each. Fixing them drops 2 ids from `scripts/integration_baseline.txt` v
 4. `test_faction_gossip_integration.py::test_hostile_pairs_rank_lower_than_neutral_pairs` —
    `AssertionError: hostile pair not found in results; assert []`. Same mechanism, same file, same
    `max_pairs` truncation.
+
+   **Re-measured 2026-09-04 on the clean M1.3 corpus — this does NOT clear with the wipe.** The
+   M1.3 plan predicted both tests would go green once the corpus shrank, on the premise that
+   `select_pairs` ranks over a "graph-wide unscoped candidate set" that the 23,375 leaked Quest
+   nodes were crowding. That premise is wrong. `fetch_gossip_pairs`
+   (`graph/gossip/gossip_queries.py:142`) returns **co-located** active non-player NPC pairs only,
+   so Quest and TickLease nodes were never candidates and their removal changes nothing. Measured
+   against the freshly restored 250-node fixture: 23 Characters, and **18 seeded co-located pairs**
+   (`loc_tavern` 5 chars → 10 pairs, `loc_market_square` 3 → 3, `loc_guard_barracks` 3 → 3,
+   `tw_tavern` 2 → 1, `vw_gate` 2 → 1). Each test then adds 4 characters at one fresh location,
+   contributing C(4,2) = **6 more**, for 24 candidates against `max_pairs=20` — and the hostile
+   pair is by construction the lowest-weighted, so it is exactly the one truncated. The fix
+   remains as stated above (scope to the test's location, or raise the cap); the corpus is not
+   the variable. Both ids stay in `scripts/integration_baseline.txt`, which remains at 3.
 5. `test_scheme_detection_tick_integration.py::test_witnessed_scheme_is_discovered` —
    `assert 0 == 1`. **Ordering bug in the test, not the engine.** `:89-92` calls `upsert_scheme()`
    *before* `_setup()` at `:94` creates the Character node. `scheme_writer.py:36-37` is
