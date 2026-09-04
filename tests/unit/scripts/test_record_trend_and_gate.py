@@ -52,7 +52,15 @@ def _require_real_artifact() -> None:
 
 def test_build_trend_row_against_real_k3_artifact() -> None:
     """Assembling a TrendRow from the real k3_73e6c36 artifact must not raise
-    and must populate every axis the metrics contract requires."""
+    and must populate every axis the metrics contract requires.
+
+    scorer_kappas is empty here — not because there are no labels (there are 393,
+    named by labels_gen_id/labels_n below), but because label_adequacy.check_label_adequacy
+    (DEC-260) refuses every one of the four scorers on this corpus: measured 2026-09-04,
+    their minority-class counts are 7/8/8/11, all under the 25-item floor. That refusal is
+    the point of this batch — before it, this row silently carried tone_judge at kappa
+    0.849 with a 95% CI of [-0.010, 1.000], which is the row test_kappas_match_calibration.py
+    still reads its RECORDED_KAPPAS comparison from (a committed artifact, not this call)."""
     _require_real_artifact()
     row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=_LABELS_PATH,
                            recorded_at="2026-08-17T00:00:00+00:00")
@@ -61,13 +69,19 @@ def test_build_trend_row_against_real_k3_artifact() -> None:
     assert row.guard_adversarial.n > 0
     assert row.capability is not None
     assert row.inconclusive_rate is not None
-    assert len(row.scorer_kappas) > 0  # every scorer with >=2 adjudicated rows
+    assert row.scorer_kappas == ()  # every scorer refused by label_adequacy (DEC-260)
+    assert row.labels_gen_id == "k3_73e6c36"
+    assert row.labels_n == 393
 
 
 def test_build_trend_row_with_no_labels_file_yields_empty_kappas(tmp_path: Path) -> None:
     """A gen_dir with no calibration labels must still produce a row — the
     rate axis is independent of calibration, and an empty kappa tuple is a
-    valid (if uninformative) state, never a crash."""
+    valid (if uninformative) state, never a crash.
+
+    labels_gen_id/labels_n being None (rather than "k3_73e6c36"/393, as the populated
+    file above now also yields an empty scorer_kappas) is what still distinguishes "no
+    labels at all" from "labels present but every scorer refused"."""
     _require_real_artifact()
     row = build_trend_row(
         "k3_73e6c36_nolab", _GEN_DIR,
@@ -75,6 +89,8 @@ def test_build_trend_row_with_no_labels_file_yields_empty_kappas(tmp_path: Path)
         recorded_at="2026-08-17T00:00:00+00:00",
     )
     assert row.scorer_kappas == ()
+    assert row.labels_gen_id is None
+    assert row.labels_n is None
     assert row.guard_adversarial is not None  # rates still computed from gen_dir alone
 
 

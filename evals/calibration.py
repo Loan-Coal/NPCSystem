@@ -6,7 +6,7 @@ Purpose: Per-scorer calibration reports with two confusion matrices each: a head
          each with Cohen's κ, a seeded cluster-bootstrap CI, and a Holm-Bonferroni
          companion interval. Prints one pair of matrices per scorer — never a single
          aggregate. Called by `make eval-calibrate`.
-Dependencies: calibration_records, dataclasses, logging, math, random, pathlib, sys, typing
+Dependencies: calibration_records, dataclasses, label_adequacy, logging, math, random, pathlib, sys, typing
 Used by: make eval-calibrate (CLI), tests/unit/evals/test_calibration.py
 
 NOTE: This file exceeds the 300-line limit (DEC-169). Split would be artificial because
@@ -31,6 +31,7 @@ from calibration_records import (
     is_human_pre_labeller,
     read_calibration_labels,
 )
+from label_adequacy import check_label_adequacy
 from paired_stats import boundary_ci_note, is_boundary_ci
 from scorer_trust_policy import PUBLISH_THRESHOLD, check_publication
 
@@ -811,7 +812,7 @@ def run_calibration(
         all_rows: CalibrationLabel rows across all scorers.
         print_fn: Output callable (injectable for testing).
     Returns:
-        List of ScorerReport, one per scorer with ≥2 adjudicated rows.
+        List of ScorerReport, one per scorer whose labels clear label_adequacy's floor.
     """
     scorers = list(dict.fromkeys(r.scorer for r in all_rows))
     eligible = [
@@ -822,10 +823,9 @@ def run_calibration(
     _print_family_disclosure(len(eligible), family_size, print_fn)
     reports: list[ScorerReport] = []
     for scorer in scorers:
-        scorer_rows = [r for r in all_rows if r.scorer == scorer]
-        adj_count = sum(1 for r in scorer_rows if r.human_verdict is not None)
-        if adj_count < 2:
-            print_fn(f"\n[SKIP] {scorer}: only {adj_count} adjudicated row(s) — need ≥2")
+        refusal = check_label_adequacy(scorer, [r for r in all_rows if r.scorer == scorer])
+        if refusal is not None:
+            print_fn(f"\n[REFUSED] {scorer}: {refusal.reason}")
             continue
         report = calibrate_scorer(scorer, all_rows, family_size=family_size)
         _print_scorer_report(report, print_fn)

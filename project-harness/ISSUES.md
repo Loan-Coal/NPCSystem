@@ -16,6 +16,31 @@ Rules:
 
 ## Open
 
+## ISSUE-282: run_calibration's family_size still counts every >=2-adjudicated scorer, not every adequacy-passing one
+**Found:** 2026-09-04, during the M1.4 label-adequacy fix
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/calibration.py::run_calibration` (`eligible`/`family_size`, immediately above
+the per-scorer loop that now calls `label_adequacy.check_label_adequacy`)
+**Description:** `run_calibration` computes `family_size` (for the Holm-Bonferroni disclosure)
+from `eligible` — scorers with >=2 adjudicated rows — before the per-scorer loop, which now
+separately refuses any scorer `check_label_adequacy` rejects. On the committed corpus all four
+scorers pass the old `>=2` filter and enter `family_size`, then all four are refused by
+adequacy inside the loop, so the Holm disclosure is computed for a family of scorers none of
+which end up reported. This is conservative, not wrong — `family_size` only ever ends up equal
+to or larger than the count of scorers that actually publish, so the resulting Holm-adjusted
+bounds are wider than strictly necessary, never narrower — but the two numbers (`family_size`
+and "scorers actually reported") can now diverge, which a future reader could misread as a bug
+rather than a known conservative choice.
+**Why deferred:** Recomputing `family_size` from `check_label_adequacy` instead of the `>=2`
+filter collapses it to 0 whenever every scorer is refused (today's corpus), which deletes the
+Holm-Bonferroni disclosure text entirely and breaks
+`tests/unit/evals/test_calibration.py::test_calibration_report_names_family_size_and_holm_ci`,
+which asserts "holm" appears in the output. DEC-260 records this as a deliberate choice for v1,
+not an oversight.
+**To fix:** Decide what a Holm disclosure should say when 0 scorers publish (a "no publishable
+scorer this run" state distinct from "no Holm adjustment needed"), update the test's fixture or
+assertion accordingly, then switch `eligible` to use `check_label_adequacy`.
+
 ## ISSUE-283: the committed trend row (k3_77688e7_regen1) carries kappas measured on k3_73e6c36's labels
 **Found:** 2026-09-04, during the M1.4 kappa-attribution fix
 **Severity:** P3 (nice-to-fix)

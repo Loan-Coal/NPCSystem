@@ -21,7 +21,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-ledger-ids check-cited-reports check-ceiling-baseline \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
-        openapi harness-status check-readme-paths verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
+        openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
@@ -62,6 +62,15 @@ harness-status:
 # `make check` -- same coverage, no new gate (R4.6).
 check-readme-paths:
 	$(PYTHON) scripts/check_readme_paths.py
+
+# check-label-adequacy: per-scorer report — do this labels file's human verdicts clear the
+# count floor a kappa estimate needs (DEC-260)? Deliberately NOT added to `make check`, same
+# reasoning as check-readme-paths above: DEC-250/DEC-224. Enforcement comes from
+# tests/unit/evals/test_label_adequacy.py instead, which test-cov-evals already runs inside
+# `make check` -- same coverage, no new gate. Measured 2026-09-04: all 4 scorers in the
+# committed corpus refuse (7/8/8/11 minority items, need >=25) -- run this by hand to see why.
+check-label-adequacy:
+	$(PYTHON) scripts/check_label_adequacy.py
 
 smoke:
 	$(PYTHON) -m pytest tests/unit/conformance/test_boot_smoke.py -q
