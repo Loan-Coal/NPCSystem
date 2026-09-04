@@ -16,6 +16,30 @@ Rules:
 
 ## Open
 
+## ISSUE-281: the Makefile pins no `SHELL`, so POSIX recipes silently fail when make is run from PowerShell
+**Found:** 2026-09-04, during M1.3 row 5 handoff
+**Severity:** P2 (annoying)
+**Where:** `Makefile` (no `SHELL :=` assignment); affects every recipe using POSIX syntax —
+`eval-world-snapshot` (:807), `eval-world-reset` (:820), `restore-with-app-stopped` (:830),
+`boot-check` (:72), `app-frozen`.
+**Description:** GNU make picks its shell from the environment when the Makefile does not set
+one. Run from Git Bash it resolves to `C:/Program Files/Git/usr/bin/sh.exe` and everything
+works; run from PowerShell it falls back to `cmd.exe`, which cannot parse the `VAR=value cmd`
+prefix, `$PWD`, `$(seq 1 60)` or backslash-continued blocks. The failure surfaces as a bare
+`The system cannot find the path specified.` followed by `make: *** [Makefile:856:
+restore-with-app-stopped] Error 1`, which names neither the shell nor the real cause.
+
+This is worse than a normal portability wart because the failure is **partial**:
+`restore-with-app-stopped` runs `docker compose stop app` successfully (a simple line cmd.exe
+can parse) and only then dies on the `MSYS_NO_PATHCONV=1 docker compose run` line. The operator
+is left with the app stopped and the graph un-restored, while believing the restore ran.
+**Why deferred:** Setting `SHELL` in the Makefile affects every target and both CI and local
+runs on three platforms, which is a deliberate change, not a drive-by. It is also adjacent to
+CI configuration, which requires approval before touching.
+**To fix:** Set `SHELL := /bin/sh` (or a detected Git Bash `sh.exe` on Windows) at the top of
+the Makefile, and add a guard target that fails with a readable message when the resolved shell
+cannot run a POSIX test. Until then, run make from Git Bash on Windows.
+
 ## ISSUE-279: faction-standing decay appends unbounded — the corpus grows ~2,500 nodes/hour while the app ticks
 **Found:** 2026-09-04, during M1.3 (row 4 wipe/reseed/freeze)
 **Severity:** P2 (annoying)
