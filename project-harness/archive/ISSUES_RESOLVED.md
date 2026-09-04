@@ -3786,3 +3786,37 @@ positive, case-specific commitment the hedge cannot supply (naming what the NPC 
 who to ask) — record it as a DEC, then re-author the cases against it. Prove it by re-running
 `python scripts/hedge_responder_probe.py --battery adversarial` and requiring the null rate
 below the 0.30 gate, and re-record `evals/null_baseline.json`.
+
+## [FIXED] ISSUE-286: R2.1's digest gate is unconditionally fatal against Ollama 0.33.2 — no generation can run on this machine
+**Found:** 2026-09-04, during the fresh eval generation run (case set from `docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
+**Severity:** P1 (blocking)
+**Where:** `evals/engine_adapter.py::fetch_model_digest`, called from
+`evals/run_config.py::resolve_run_config` (R2.1, `ModelDigestUnavailableError` at line ~328)
+**Description:** `fetch_model_digest` POSTs to Ollama's `/api/show` and reads
+`response.json()["digest"]`. On this machine's current Ollama server (`0.33.2`, confirmed via
+`GET /api/version`), `/api/show`'s response body has no `digest` key anywhere in its JSON tree
+(checked recursively against the `qwen2.5:7b` response — keys present are `license, modelfile,
+template, system, details, model_info, tensors, capabilities, modified_at`; `details` itself
+carries no digest either). `fetch_model_digest` therefore always returns `None` for every
+model, so `_require_digest` always raises `ModelDigestUnavailableError` — `make eval-generate`
+cannot succeed against this Ollama install at all, regardless of whether Ollama is reachable or
+the model is pulled (both confirmed fine: `GET /api/tags` lists `qwen2.5:7b` with a real digest
+field there). The last successful generation (`evals/generations/k3_77688e7_regen1/meta.json`,
+2026-08-25) recorded `ollama_version: "0.32.15"` with **null** digests — i.e. it ran before R2.1
+was enforced, against an older Ollama where this was already true or masked; the R2.1 gate
+appears to have never actually been exercised end-to-end against this machine's real Ollama
+server, only against test doubles that fabricate a `digest` field (`tests/unit/evals/
+test_run_config.py`).
+**Fixed:** 2026-09-04, during the same generation-run task, with the user's explicit approval to
+patch `fetch_model_digest` (this session was otherwise scoped as operator-only, no code). RED
+first: `tests/unit/evals/test_engine_adapter.py::test_fetch_model_digest_matches_tag_in_api_tags`
+against the real function called `httpx.post`, which the unit-test network guard rejected with
+`NetworkAccessInUnitTestError`, confirming the old code path was exercised and not the fix.
+GREEN: `fetch_model_digest` now reads `GET /api/tags`, matching the requested tag against each
+entry's `model` field (falling back to `name`) and returning that entry's `digest`. Verified live
+against the real running Ollama (not just the mock): `qwen2.5:7b` ->
+`845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e`, `mixtral:8x7b` ->
+`a3b6bef0f836ff29ddb576a80eeb1b7def43ec9b809466f62e96adb871fe8498`. Three new unit tests (happy
+path / unlisted model / unreachable server) all pass; full `tests/unit/evals/` suite (890 tests),
+`make check-docstrings`, `make check-layers`, `make check-rules`, and `make type-evals` all green
+with no new violations.

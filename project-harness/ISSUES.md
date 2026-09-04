@@ -16,37 +16,6 @@ Rules:
 
 ## Open
 
-## ISSUE-286: R2.1's digest gate is unconditionally fatal against Ollama 0.33.2 — no generation can run on this machine
-**Found:** 2026-09-04, during the fresh eval generation run (case set from `docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
-**Severity:** P1 (blocking)
-**Where:** `evals/engine_adapter.py::fetch_model_digest`, called from
-`evals/run_config.py::resolve_run_config` (R2.1, `ModelDigestUnavailableError` at line ~328)
-**Description:** `fetch_model_digest` POSTs to Ollama's `/api/show` and reads
-`response.json()["digest"]`. On this machine's current Ollama server (`0.33.2`, confirmed via
-`GET /api/version`), `/api/show`'s response body has no `digest` key anywhere in its JSON tree
-(checked recursively against the `qwen2.5:7b` response — keys present are `license, modelfile,
-template, system, details, model_info, tensors, capabilities, modified_at`; `details` itself
-carries no digest either). `fetch_model_digest` therefore always returns `None` for every
-model, so `_require_digest` always raises `ModelDigestUnavailableError` — `make eval-generate`
-cannot succeed against this Ollama install at all, regardless of whether Ollama is reachable or
-the model is pulled (both confirmed fine: `GET /api/tags` lists `qwen2.5:7b` with a real digest
-field there). The last successful generation (`evals/generations/k3_77688e7_regen1/meta.json`,
-2026-08-25) recorded `ollama_version: "0.32.15"` with **null** digests — i.e. it ran before R2.1
-was enforced, against an older Ollama where this was already true or masked; the R2.1 gate
-appears to have never actually been exercised end-to-end against this machine's real Ollama
-server, only against test doubles that fabricate a `digest` field (`tests/unit/evals/
-test_run_config.py`).
-**Why deferred:** Blocking-but-not-mine-to-fix under this task's scope (operator session, no
-code changes; a fix to `fetch_model_digest` is a behavior change to a public run-config
-contract and needs its own TDD pass per project rules). This blocked the scheduled generation
-run outright — see the run report for what could and could not be verified as a result.
-**To fix:** Point `fetch_model_digest` at `GET /api/tags` (list models, match by name, read that
-entry's `digest` field) instead of `POST /api/show`, or add whatever field Ollama 0.33.2 uses in
-`/api/show` if one exists under a different key than the code currently reads. Add an
-integration test that calls the real local Ollama (skipped when unreachable, like the rest of
-this suite) so a server-side API change like this fails a test instead of silently blocking
-every generation run.
-
 ## ISSUE-285: `tone_judge` and `affirms_judge` cannot clear the label-adequacy floor from the authored corpus
 **Found:** 2026-09-04, choosing the case set for the next generation (`docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
 **Severity:** P2 (annoying)

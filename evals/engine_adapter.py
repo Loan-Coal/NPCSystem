@@ -81,30 +81,39 @@ def neo4j_uri() -> str:
 
 
 def fetch_model_digest(model: str, ollama_url: str) -> str | None:
-    """Fetch the model's content digest from Ollama /api/show.
+    """Fetch the model's content digest from Ollama /api/tags.
 
-    Returns None if Ollama is unavailable. None is fatal upstream since R2.1:
-    run_config.resolve_run_config raises ModelDigestUnavailableError rather than
-    recording an unattributable run. This function stays total so callers that
-    genuinely only want a probe (health checks) keep working.
+    Reads GET /api/tags (the model listing) rather than POST /api/show: Ollama
+    0.33 dropped the top-level 'digest' key /api/show used to return, which made
+    this function return None for every model and R2.1's gate unconditionally
+    fatal (ISSUE-286). /api/tags still carries a digest per listed model, so this
+    matches the requested tag against each entry's 'model' (falling back to
+    'name', since either key holds the tag depending on server version) and
+    returns that entry's digest.
+
+    Returns None if Ollama is unavailable or the model tag is not listed. None is
+    fatal upstream since R2.1: run_config.resolve_run_config raises
+    ModelDigestUnavailableError rather than recording an unattributable run. This
+    function stays total so callers that genuinely only want a probe (health
+    checks) keep working.
 
     Args:
         model: Ollama model tag (e.g. 'qwen2.5:7b').
         ollama_url: Ollama base URL (e.g. 'http://localhost:11434').
     Returns:
-        Digest string from the /api/show response, or None on any failure.
+        Digest string for the matching /api/tags entry, or None on any failure.
     """
     import httpx
 
     try:
-        r = httpx.post(
-            f"{ollama_url}/api/show",
-            json={"name": model},
-            timeout=10.0,
-        )
+        r = httpx.get(f"{ollama_url}/api/tags", timeout=10.0)
         r.raise_for_status()
-        value = r.json().get("digest")
-        return str(value) if value is not None else None
+        models = r.json().get("models", [])
+        for entry in models:
+            if entry.get("model") == model or entry.get("name") == model:
+                digest = entry.get("digest")
+                return str(digest) if digest is not None else None
+        return None
     except Exception as exc:
         _logger.warning("fetch_model_digest model=%s error=%r", model, exc)
         return None
