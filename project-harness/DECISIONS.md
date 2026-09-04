@@ -8367,3 +8367,61 @@ test, each expected value cited to the query file that witnesses it.
 
 **Governance.** DEC-250 froze `evals/`, `scripts/check_*`, `prompts/eval/` and
 `docs/EVAL_*`/`docs/SCORER_*` "until R3 is green". This change touches none of those.
+
+---
+
+## DEC-259: freeze the corpus by disabling the tick autopilot, and gate both halves of the M1.3 anchor separately
+
+**Date:** 2026-09-04
+**Context:** M1.3 (plan step 3 / row 4) — wipe, reseed, prove quiescence, freeze.
+**Status:** Accepted.
+
+**What forced this.** The reseed produced a clean 250-node corpus, and then it grew. Measured
+against the freshly seeded world: `:FactionStandingEvent` went 114 → 126 → 138 → 150 → 162 → 174
+over six samples, exactly +6 per tick, plus ~1 `:Event` per tick
+(`engines/faction_politics/faction_politics_engine.py:171`). At `TICK_INTERVAL_SECONDS=10` that
+is ~2,500 nodes/hour, so the `< 1,000` census anchor holds for about thirteen minutes and then
+stops holding. A fixture snapshotted at an arbitrary moment therefore records how long the app
+happened to be up, which is the opposite of the reproducibility the whole eval stack rests on
+(ISSUE-279).
+
+**Decision 1 — use the flag that already exists, do not add config surface.**
+`TICK_AUTOPILOT_ENABLED` was already declared (`config.py:243`) and already read once at startup
+to decide whether to create the autopilot task (`main.py:216`). It was set nowhere and consumed
+by nothing but the dashboard view. The gap was wiring, not capability, so this adds
+`docker-compose.freeze.yml` (a three-line override) and `make app-frozen`, and no new setting.
+Everything request-driven still works while frozen — `POST /v1/dialogue`, which is what
+`eval-generate` and `eval-judge` drive, does not depend on the autopilot — so a measurement run
+loses nothing by freezing.
+
+**Decision 2 — reseed under the freeze rather than delete the churn.** The churn was cleanly
+separable: every one of the 189 accrued rows carried `cause_rule_id="decay"`, and the generated
+events carried machine ids (`battle_loc_guard_barracks_9_c7c90aad`, 17 properties) against the
+seeders' authored ids (`northern_war_begins`, 13 properties). Deleting on those discriminators
+would have worked. It was still rejected: a delete-list is a derived rule that has to be kept
+correct as new writers appear, whereas wiping and reseeding against an already-frozen app makes
+the corpus *by construction* exactly what the three seeders wrote. The result is 250 nodes and
+236 relationships with zero decay rows, zero generated events and zero `TickLease` — the same
+node and relationship counts as the previous fixture, differing only in the four labels M1.2
+corrected (`belief`→`Belief` 44→45, `need`→`Need`, `leverage`→`Leverage`, `army`→`Army`).
+
+**Decision 3 — two gates, because the two anchors have opposite preconditions.** The quiescence
+anchor needs ticks *flowing* (a scope that is stable while nothing writes proves nothing — the
+plan's own honest note). The freeze gate needs ticks *stopped*. One target cannot serve both, and
+the first attempt at a single `check-corpus-frozen` over the whole file duly failed on the
+quiescence test. So each test skips when the engine is in the other mode, and each has an env
+switch — `REQUIRE_TICKING_CORPUS` / `REQUIRE_FROZEN_CORPUS` — that turns its own skip into a
+failure for its own gate (`make check-corpus-quiescent` / `make check-corpus-frozen`). Neither
+can pass vacuously, which is the same executed-floor reasoning as `check-integration-baseline`.
+The quiescence test additionally refuses to pass unless it observes the world tick counter
+advance by at least two, so it cannot go green against a stopped app.
+
+**Measured result.** Corpus 27,620 → 250 nodes, all PascalCase, no lowercase duplicates.
+`captain_sorn`'s RAG scope held at exactly 18 ids across 5 observed ticks with the app ticking,
+against the roadmap's recorded 30 → 49 → 52 → 54 growth. `Quest` 23,375 → 17 and `TickLease`
+3,566 → 0. Both anchors green; ISSUE-221 is a duplicate of ISSUE-273 and closes with it.
+
+**What this does not do.** It does not bound the decay writer — the corpus still grows whenever
+the app runs unfrozen, and ISSUE-279 stays open for that. `make app-frozen` moves the problem
+out of the measurement path; it does not solve it. Nor should the freeze be used in production:
+an NPC world that never ticks is not alive.

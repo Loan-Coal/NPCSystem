@@ -16,6 +16,63 @@ Rules:
 
 ## Open
 
+## ISSUE-279: faction-standing decay appends unbounded — the corpus grows ~2,500 nodes/hour while the app ticks
+**Found:** 2026-09-04, during M1.3 (row 4 wipe/reseed/freeze)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/faction_politics/faction_politics_engine.py:171`; the
+`:Event` half in the event tick.
+**Description:** Every tick, the decay pass appends one `:FactionStandingEvent` per decaying
+faction pair with `cause_rule_id="decay"`, and the event tick appends ~1 `:Event`. Measured
+2026-09-04 against a freshly seeded world at the shipped `TICK_INTERVAL_SECONDS=10`: **+6
+FactionStandingEvent and +1 Event per tick, exactly linear over 6 samples spanning 10 ticks**
+(114 → 126 → 138 → 150 → 162 → 174). That is ~7 nodes/tick ≈ 2,500/hour. There is no retention
+policy and nothing prunes them. A corpus frozen at 250 nodes passes the M1.3 `< 1,000` census
+anchor for about thirteen minutes of uptime and then does not.
+
+Two mitigating facts, both measured, neither a fix. **All of these nodes are orphaned** — 189
+decay rows and 32 generated `battle` events all returned `count(r) = 0` for
+`OPTIONAL MATCH (n)-[r]-()`. The RAG scope is relationship-based
+(`graph/graph_rag_queries.py:86`), so it structurally cannot see them, which is why the M1.3
+quiescence anchor held at exactly 18 ids for `captain_sorn` across 5 ticks while 189 nodes
+appeared. So this is corpus noise and a reproducibility problem, not (today) a retrieval
+correctness problem.
+**Why deferred:** Row 4's scope is wipe/reseed/freeze, and bounding the writer is engine work
+in `engines/faction_politics/` that the plan did not schedule. The measurement risk it created
+is already closed by `make app-frozen` + `make check-corpus-frozen` (DEC-259), which stop the
+writer for the length of a measurement run and gate that it actually stopped.
+**To fix:** Either bound the history (retention window, or collapse repeated `decay` rows for
+the same pair into one row with a count) or add a cleanup pass. Prefer bounding at the writer
+over a sweeper — a sweeper is a second thing that can be forgotten. Note the same question
+applies to generated `:Event` nodes, which unlike the decay rows *can* be retrieved once they
+attach to a character.
+
+## ISSUE-280: `docker compose up`/`run` without the test override silently un-publishes Neo4j's bolt port
+**Found:** 2026-09-04, during M1.3 (row 4)
+**Severity:** P2 (annoying)
+**Where:** `docker-compose.test.yml`; any `docker compose` invocation that omits it, including
+`make eval-world-snapshot` (`Makefile:807`) and `make demo-restore` / `make eval-world-reset`
+(`Makefile:830`), which all run `docker compose run` with the base file only.
+**Description:** The published bolt port lives only in `docker-compose.test.yml` (opt-in per
+DEC-232). Any later `docker compose` command that omits that file recomputes the desired state
+from the base file, **recreates the neo4j container without the `ports:` stanza**, and every
+integration run then fails to connect until someone re-ups with the override. Observed twice in
+one session: `docker compose up -d app` and again `make eval-world-snapshot`, each time taking
+`127.0.0.1:7687->7687/tcp` down to a bare `7687/tcp`.
+
+It has a second, more confusing symptom. Recreating neo4j under a running app leaves the app
+holding pooled connections to the dead container, so the next few requests return **HTTP 503**
+with `GraphUnavailableError(... Failed to read from defunct connection ... OSError('No data'))`
+against a database that is up and healthy. It looks like a data or label defect and is not one —
+it clears once the pool refreshes.
+**Why deferred:** Fixing it means either making the override sticky (a `COMPOSE_FILE` env
+default) or teaching the snapshot/restore targets to pass it, and both touch how every developer
+and CI invokes compose. Out of scope for a wipe-and-reseed task, and worth deciding deliberately.
+**To fix:** Likely set `COMPOSE_FILE=docker-compose.yml:docker-compose.test.yml` in the
+developer `.env`, or add the override to the `docker compose run` lines in the snapshot and
+restore targets. Do **not** solve it by moving `ports:` into the base file — DEC-232 and the
+header of `docker-compose.test.yml` explain why that is a real weakening of the isolation
+posture.
+
 ## ISSUE-277: the integration suite writes into the live Neo4j — there is no separate test database
 **Found:** 2026-09-04, during M1.2 (row 0 baseline)
 **Severity:** P2 (annoying)

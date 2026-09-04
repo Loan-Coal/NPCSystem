@@ -84,7 +84,7 @@ RED anchor: a test that runs five ticks under a stable `war` epoch and asserts t
 after tick five equals the count after tick one. Today it is five times larger.
 Blocks: M1.3, and every number M2 and M4 produce. ISSUE-273. ✅ AUTO (M1.1, 2026-09-03)
 
-- [ ] **M1.2** Make `resolve_node_label` read the registry's declared `node_type`
+- [x] **M1.2** Make `resolve_node_label` read the registry's declared `node_type`
 Files: `src/npc_engine/graph/generic/generic_graph_utils.py`,
 `evals/fixtures/eval_world_baseline.json`, plus a new contract test
 Spec: `BASE_NODE_LABELS` (`:20-28`) holds seven entries. `resolve_node_label` (`:101`) lowercases
@@ -101,8 +101,14 @@ RED anchor: a contract test asserting every `base_nodes/*.yaml` `node_type` roun
 `resolve_node_label`. Today the 27 kinds absent from `BASE_NODE_LABELS` fail it.
 Ordering: this mutates the checked-in eval baseline, so it must land before M4's regeneration and
 never between a generation and its comparison. ISSUE-213.
+✅ DONE (462908a8, 2026-09-04). **Implemented with a departure from the spec above:** the
+prescribed precedence (declared `node_type` first) resolves `character` to whatever
+`character.yaml` declares, which is lowercase for 20 of the 34 kinds and 404s every eval case at
+`evals/runner.py:97`. `BASE_NODE_LABELS` stays FIRST, and the registry gained a separate `label:`
+field so `node_type:` is the snake_case key and `label:` the Cypher label — one concept per
+field. See DEC-258.
 
-- [ ] **M1.3** Wipe, reseed, and prove the eval world is quiescent
+- [x] **M1.3** Wipe, reseed, and prove the eval world is quiescent
 Files: a new quiescence test under `tests/integration/`, `evals/fixtures/eval_world_baseline.json`
 Spec: only after M1.1 and M1.2 — a wipe before the leak is fixed refills within a day, and a wipe
 before the label fix re-seeds the same split labels. Reseed from `demo_game/seeds/seed.py` plus
@@ -115,6 +121,14 @@ RED anchor: measure `captain_sorn`'s 1-hop scope twice, minutes apart, against t
 database. It grows (30 -> 49 -> 52 -> 54 when last measured). After the reseed it must not move.
 Validation: a live label census shows no lowercase duplicates, and the total node count is under
 1,000. ISSUE-221.
+✅ DONE (2026-09-04). Corpus 27,620 → **250 nodes**, all PascalCase, no lowercase duplicates;
+`Quest` 23,375 → 17, `TickLease` 3,566 → 0. `captain_sorn`'s scope held at **18 ids across 5
+observed ticks with the app ticking**, against the 30 → 49 → 52 → 54 recorded above. The new
+fixture is byte-for-byte the same shape as the old one — 250 nodes, 236 relationships, identical
+per-kind counts — differing only in the four labels M1.2 corrected. ISSUE-221 closes as a
+duplicate of ISSUE-273. Two findings came out of it: the corpus still grows ~2,500 nodes/hour
+while the app ticks (ISSUE-279), now excluded from measurement runs by `make app-frozen` +
+`make check-corpus-frozen` (DEC-259), and compose silently un-publishes bolt (ISSUE-280).
 
 ### Phase M2
 

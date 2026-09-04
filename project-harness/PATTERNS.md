@@ -174,3 +174,44 @@ Restore the level in a `finally` — leaving the module logger at DEBUG leaks in
 **Applied in:** `tests/unit/conformance/test_sev22_rng_determinism.py:80`,
 `tests/unit/llm/test_ollama_prompt_eval_logging.py:91`,
 `tests/unit/engines/test_event_rng_seed_logging.py` (R3.4c).
+
+---
+
+## Pattern: an environment-mode test skips by default and a per-gate env switch turns that skip into a failure
+
+A test that can only be measured in one runtime mode — services frozen, services ticking,
+a real LLM up — has two bad default behaviours. If it **fails** when the mode is absent, it
+becomes a permanent entry in the failing baseline and stops carrying information. If it
+**skips**, the gate that is supposed to enforce it passes vacuously and nobody notices the
+check stopped running.
+
+Do both, selected by the caller. The test skips when the mode is absent, so the ordinary
+suite stays clean, and reads an env var that the dedicated gate sets, which converts that
+same skip into an explicit failure naming the remedy.
+
+```python
+REQUIRE_FROZEN_ENV = "REQUIRE_FROZEN_CORPUS"
+
+if autopilot_on:
+    message = "tick autopilot is ENABLED ... Bring the stack up with `make app-frozen`."
+    if os.getenv(REQUIRE_FROZEN_ENV) == "1":
+        pytest.fail(message)
+    pytest.skip(message)
+```
+
+```makefile
+check-corpus-frozen:
+	REQUIRE_FROZEN_CORPUS=1 $(PYTHON) -m pytest tests/integration/test_....py -q
+```
+
+The message must name the command that establishes the mode, because whoever trips the gate
+is by definition in the wrong mode and needs to be told how to get into the right one.
+
+This is the same reasoning as `check-integration-baseline`'s executed-test floor: a gate must
+be able to distinguish "the property holds" from "the check did not run". Use it whenever two
+gates have **opposite** preconditions — `check-corpus-frozen` needs the tick autopilot off and
+`check-corpus-quiescent` needs it on, so one pytest target could never serve both, and each
+test skips in the other's mode.
+
+**Applied in:** `tests/integration/test_eval_world_corpus_integration.py` — `REQUIRE_FROZEN_CORPUS`
+(`make check-corpus-frozen`) and `REQUIRE_TICKING_CORPUS` (`make check-corpus-quiescent`), DEC-259.

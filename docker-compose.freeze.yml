@@ -1,0 +1,31 @@
+# Measurement-only override: stops the engine writing to the graph on its own, so a
+# frozen eval corpus stays frozen for the length of a measurement run (M1.3, ISSUE-279).
+#
+#   make app-frozen          # bring the stack up frozen
+#   make check-corpus-frozen # prove the running app is frozen and the graph is still
+#
+# Why this exists. With the autopilot running, the faction-standing decay pass appends
+# ~6 :FactionStandingEvent nodes per tick and the event tick appends ~1 :Event, measured
+# 2026-09-04 at 6 and 1 per tick against a freshly seeded world. At the shipped
+# TICK_INTERVAL_SECONDS=10 that is ~2,500 nodes per hour, so a corpus frozen at ~260
+# nodes passes the <1,000 census anchor for roughly thirteen minutes and then does not.
+# Every one of those nodes is orphaned (zero relationships), so none of them enters the
+# relationship-based RAG scope and none of them changes what an NPC retrieves — but they
+# make the corpus non-reproducible, which is the property the whole eval stack rests on.
+#
+# TICK_AUTOPILOT_ENABLED already existed (config.py) and is read once at startup
+# (main.py) to decide whether to create the autopilot task. It was never set anywhere.
+# This override is the wiring, not a new setting.
+#
+# What still works when frozen: everything request-driven. POST /v1/dialogue, which is
+# what `make eval-generate` and `make eval-judge` drive, does not depend on the
+# autopilot, and POST /v1/admin/clock/advance still advances the clock deliberately.
+# What stops: faction standing decay, event generation, quest generation, gossip and
+# memory-decay ticks, and TickLease churn.
+#
+# Do NOT use this override in production — an NPC world that never ticks is not alive.
+
+services:
+  app:
+    environment:
+      TICK_AUTOPILOT_ENABLED: "false"

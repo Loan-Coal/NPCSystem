@@ -10,6 +10,7 @@ BASE_URL ?= http://localhost:8000
 API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)', open('.env').read(), re.M); print(m.group(1).strip() if m else '')")
 
 .PHONY: install run test test-cov test-cov-v13 test-cov-full-report \
+        app-frozen check-corpus-frozen check-corpus-quiescent \
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
@@ -72,6 +73,28 @@ smoke:
 boot-check:
 	BUILD_SHA=$$(git rev-parse --short HEAD) docker-compose up -d --build app
 	$(PYTHON) e2e/scripts/boot_check.py --base-url $(BASE_URL) --expect-sha $$(git rev-parse --short HEAD)
+
+# app-frozen: bring the stack up with the tick autopilot disabled, so the graph stops
+# growing under measurement (M1.3, ISSUE-279). See docker-compose.freeze.yml for why.
+# Includes the test override so bolt stays reachable for check-corpus-frozen.
+app-frozen:
+	docker compose -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.freeze.yml up -d
+	$(PYTHON) e2e/scripts/boot_check.py --base-url $(BASE_URL) --expect-sha $$(git rev-parse --short HEAD)
+
+# check-corpus-frozen: prove the running app is actually frozen AND that the node census
+# does not move across two tick intervals. REQUIRE_FROZEN_CORPUS=1 turns the test's skip
+# into a failure, so this gate cannot pass vacuously against a still-ticking app — the
+# same executed-floor reasoning as check-integration-baseline.
+# Run this before any measurement run that must quote numbers from a frozen corpus.
+check-corpus-frozen:
+	REQUIRE_FROZEN_CORPUS=1 $(PYTHON) -m pytest tests/integration/test_eval_world_corpus_integration.py -q -p no:cacheprovider
+
+# check-corpus-quiescent: the M1.3 quiescence anchor. Requires the app UP and TICKING
+# (i.e. NOT brought up with docker-compose.freeze.yml), because a RAG scope that is
+# stable while nothing writes is not evidence of anything. REQUIRE_TICKING_CORPUS=1
+# turns the frozen-mode skip into a failure, so this gate cannot pass vacuously either.
+check-corpus-quiescent:
+	REQUIRE_TICKING_CORPUS=1 $(PYTHON) -m pytest tests/integration/test_eval_world_corpus_integration.py -q -p no:cacheprovider -k quiescent
 
 test:
 	$(PYTHON) -m pytest tests/ -q
