@@ -16,6 +16,27 @@ Rules:
 
 ## Open
 
+## ISSUE-283: the committed trend row (k3_77688e7_regen1) carries kappas measured on k3_73e6c36's labels
+**Found:** 2026-09-04, during the M1.4 kappa-attribution fix
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/trend/trend_v1.jsonl` (the one committed row); `evals/trend_row_builder.py`
+**Description:** Before this fix, `build_trend_row` computed `scorer_kappas` from whatever
+`evals/calibration/labels_v1.jsonl` held at record time, with no check that those labels
+named the run being recorded. The one row in the store — `gen_id=k3_77688e7_regen1` — was
+built that way: its `scorer_kappas` are measured on `k3_73e6c36`'s 393 labels, not on
+anything from `k3_77688e7_regen1`. `build_trend_row` now stamps `labels_gen_id` and refuses
+a mismatch unless `allow_foreign_labels=True` is passed, but the store is append-only
+(`trend_store.append_trend_row` refuses to overwrite a `gen_id`), so the existing row cannot
+be corrected in place — only a new row can be attributed correctly going forward.
+**Why deferred:** Rewriting store history is out of scope for a fix that made this exact
+kind of silent mis-attribution impossible for every row recorded after it. The row is now
+readable as unattributed (`labels_gen_id` would be `None` if reread) rather than falsely
+attributed, which is the honest state to leave it in.
+**To fix:** Either accept the one historical row as a known gap (it predates the provenance
+fields entirely, so it can't even be backfilled without re-deriving which labels a 2026-08
+run actually used), or regenerate `k3_77688e7_regen1` and re-record it once fresh, correctly
+attributed labels exist for it.
+
 ## ISSUE-281: the Makefile pins no `SHELL`, so POSIX recipes silently fail when make is run from PowerShell
 **Found:** 2026-09-04, during M1.3 row 5 handoff
 **Severity:** P2 (annoying)

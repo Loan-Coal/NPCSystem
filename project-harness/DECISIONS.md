@@ -8425,3 +8425,95 @@ against the roadmap's recorded 30 → 49 → 52 → 54 growth. `Quest` 23,375 �
 the app runs unfrozen, and ISSUE-279 stays open for that. `make app-frozen` moves the problem
 out of the measurement path; it does not solve it. Nor should the freeze be used in production:
 an NPC world that never ticks is not alive.
+
+## DEC-260: attribute trend-row kappas to the labels that produced them, and refuse to calibrate a scorer whose labels cannot support kappa
+**Date:** 2026-09-04 · **Status:** ✅ ACCEPTED · **Scope:** `evals/trend_store.py`, `evals/trend_row_builder.py`,
+`scripts/record_trend_and_gate.py`, `evals/calibration.py`, new `evals/label_adequacy.py`,
+new `scripts/check_label_adequacy.py`
+
+**Freeze status, stated explicitly.** DEC-250 clause (2) froze `evals/`, `scripts/check_*`,
+`prompts/eval/` and `docs/EVAL_*`/`SCORER_*` "until R3 is green"; `Makefile:59-62` restates it as
+"through end-of-R4". `project-harness/ROADMAP.md:3` records R0–R5 complete and archived — both
+readings of the exit condition are met, so this work is permitted under the freeze as written.
+
+**What forced this.** Two measured defects in the metrics stack. (1) `evals/trend/trend_v1.jsonl`
+holds one row (`gen_id=k3_77688e7_regen1`) whose `scorer_kappas` were computed from
+`evals/calibration/labels_v1.jsonl` — 393 rows, all naming `gen_id=k3_73e6c36`, a different
+generation. `trend_row_builder._scorer_kappas` read the labels file off a module-level default
+with no join against the row's own `gen_id`; per-scorer label counts (135/135/48/75) matched the
+recorded row's `n` values exactly, confirming no join of any kind ever ran. (2) Even for the
+generation the labels do name, the label set cannot support the kappa computed from it: the
+bootstrap resamples by case cluster, and tone_judge's 7 minority-class items sit in only 3 of 45
+clusters — a resample that misses them goes degenerate. The system nonetheless emitted kappa
+0.849 with a 95% CI of [-0.010, 1.000] into the trend store, past `check_publication`'s existing
+threshold gate (DEC-244), because that gate only fires at print time and nothing stopped the
+number from being trended in the first place.
+
+**Decision, part 1 — attribution.** `TrendRow` gains two additive, defaulted fields:
+`labels_gen_id: str | None` (the single `gen_id` every label row names; `None` when there are no
+labels, the labels carry no `gen_id`, or they carry more than one — unattributable either way) and
+`labels_n: int | None` (total labels read, a provenance count, distinct from `ScorerKappa.n`'s
+per-scorer adjudicated count). `build_trend_row` reads the labels once, derives both, and raises
+`LabelsGenerationMismatchError` when `labels_gen_id` names a generation other than `gen_id`, unless
+the caller passes `allow_foreign_labels=True` — in which case the row still names whose labels
+they were. The false docstring at the old `trend_store.py:123` ("Every calibrated scorer's kappa
+for this run") is corrected to name `labels_gen_id` as what the kappas are actually measured on.
+`scripts/record_trend_and_gate.py` gains a matching `--allow-foreign-labels` CLI flag.
+
+**Decision, part 2 — adequacy.** A new `evals/label_adequacy.py`, shaped like the existing
+`scorer_trust_policy.py` (a policy module: named constants, a frozen refusal dataclass, one pure
+function): `MIN_MINORITY_LABELS = 25`, `MIN_CASE_CLUSTERS = 10`. `check_label_adequacy(scorer, rows)`
+refuses when the minority human-verdict class has fewer than 25 labels, or the scorer's labels span
+fewer than 10 case clusters total — v1 is a count check, not a power analysis; `kappa_interval` and
+the bootstrap are untouched. `run_calibration`'s per-scorer loop calls it in place of the old
+`adjudicated < 2` skip, which the new floor strictly dominates. On the real committed corpus all
+four scorers (7/3, 8/5, 8/4, 11/5 minority-items/clusters) are refused — that is the point: no
+report published today would have survived this gate, and none should have.
+
+**Why total clusters, not minority-class clusters, for the second arm.** The floor's two arms
+measure different things: minority-item count bounds whether the confusion matrix itself is
+informative; total-cluster count bounds whether the bootstrap has enough independent draws to
+avoid the degenerate-resample failure mode described above. A tighter "minority clusters ≥ 10"
+reading was considered and rejected for v1 — it conflates the two questions into one number
+without adding discriminating power at the sizes this corpus has (every scorer fails on the
+minority-item arm alone; the choice of cluster arm changes no scorer's verdict today).
+
+**Why `run_calibration`'s `eligible`/`family_size` (used only for the Holm-Bonferroni disclosure)
+keep the old `≥2 adjudicated` rule instead of also switching to the adequacy floor.** Recomputing
+`family_size` from adequacy collapses it to 0 on the current corpus (every scorer refused),
+which deletes the Holm disclosure entirely and breaks `test_calibration.py`'s
+`test_calibration_report_names_family_size_and_holm_ci`. Left as-is, `family_size` is
+conservative — it counts scorers that adequacy then refuses, so the Holm-adjusted bounds it
+produces (for scorers that do publish) are wider than strictly necessary, never narrower. Logged
+as ISSUE-282 rather than fixed now, because fixing it moves existing Holm numbers.
+
+**Why `check-label-adequacy` is a Makefile target but not a `make check` prerequisite.** DEC-224
+requires a recorded counterfactual (the gate shown red with the guarded behaviour removed) before
+any gate joins `make check`; DEC-250's standing governance adds "no new gate without retiring
+one." `check-readme-paths` (`Makefile:58-62`, R4.6) already established the compliant shape for
+this situation: a real, directly runnable target, deliberately excluded from `check:`, with
+enforcement coming from a unit test (`tests/unit/evals/test_label_adequacy.py`) that
+`test-cov-evals` already runs inside `make check`. Same cover, no new gate, no exception needed.
+
+**Consequences.** `tests/unit/scripts/test_record_trend_and_gate.py::test_build_trend_row_against_real_k3_artifact`'s
+assertion that `scorer_kappas` is non-empty on the real corpus is now false and is rewritten to
+assert the refusal instead. The one existing trend row (`k3_77688e7_regen1`) cannot be corrected
+in place — the store is append-only — and is left readable as unattributed (ISSUE-283) rather than
+falsely attributed, which is the honest state to leave it in.
+
+**Adversarially reviewed before sign-off**, per standing instruction.
+- *"Dropping the report loses the number entirely — why not keep it and only print the refusal,
+  like `check_publication` does?"* Considered and rejected: `check_publication` gates *printing*
+  a number that is nonetheless computed and trended; the defect here is that the number reaches
+  `trend_v1.jsonl` at all. Only omitting `scorer_kappas` for a refused scorer stops that.
+- *"25/10 are arbitrary."* Conceded — v1 is explicitly a count check, named as constants so it can
+  be revisited with evidence rather than silently drifting. No claim of statistical optimality is
+  made; the claim is only that 7-of-45 and 11-of-25 are clearly inadequate, and 25/10 says so
+  without requiring a power analysis this batch was scoped to avoid.
+- *"Pushing the floor into `calibrate_scorer` or `kappa_interval` would be more thorough."*
+  Rejected: those functions are called directly by five other tests
+  (`test_calibration_trust_gate.py`, `test_single_rater_tautology.py`) exercising properties
+  orthogonal to adequacy (trust-policy wiring, single-rater tautology detection), and by
+  `evals/dashboard/headline.py`'s own CI computation. Placing the floor only in
+  `run_calibration`'s per-scorer loop is the minimal placement that fixes the actual defect
+  (a number reaching the trend store) without collaterally blanking unrelated call sites.

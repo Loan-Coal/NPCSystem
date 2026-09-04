@@ -86,6 +86,13 @@ def _build_parser() -> argparse.ArgumentParser:
              "row to gate against (expected on the very first recorded run, and "
              "after a harness_version change).",
     )
+    parser.add_argument(
+        "--allow-foreign-labels", action="store_true",
+        help="Record the row even when its calibration labels name a different "
+             "generation than --gen-id. Refused by default (see "
+             "trend_store.LabelsGenerationMismatchError) — a row's kappas silently "
+             "attributed to another run's labels is a real defect, not an edge case.",
+    )
     return parser
 
 
@@ -151,7 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_baseline:
         return _print_baseline(args)
 
-    row = build_trend_row(args.gen_id, args.gen_dir)
+    row = build_trend_row(
+        args.gen_id, args.gen_dir, allow_foreign_labels=args.allow_foreign_labels,
+    )
     # Resolved BEFORE appending: afterwards the candidate is itself the most
     # recent comparable row, and a run would gate against itself.
     choice = _resolve(key_for(row), args.baseline_gen_id, args.trend_store)

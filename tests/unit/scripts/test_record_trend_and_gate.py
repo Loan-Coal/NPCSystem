@@ -22,8 +22,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "evals"))
 
+import pytest  # noqa: E402
+
 from record_trend_and_gate import build_trend_row, main  # noqa: E402
-from trend_store import RateWithCI, TrendRow, append_trend_row, read_trend_rows  # noqa: E402
+from trend_store import (  # noqa: E402
+    LabelsGenerationMismatchError,
+    RateWithCI,
+    TrendRow,
+    append_trend_row,
+    read_trend_rows,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _GEN_DIR = _REPO_ROOT / "evals" / "generations" / "k3_73e6c36"
@@ -71,6 +79,44 @@ def test_build_trend_row_with_no_labels_file_yields_empty_kappas(tmp_path: Path)
 
 
 # ---------------------------------------------------------------------------
+# Labels attribution — the kappas must belong to the generation the row names
+# ---------------------------------------------------------------------------
+
+
+def test_a_row_whose_labels_name_another_generation_is_refused() -> None:
+    """RED anchor. The committed trend row is `k3_77688e7_regen1`; all 393 committed
+    labels carry `k3_73e6c36`. Before this, build_trend_row returned a row whose
+    scorer_kappas were silently attributed to the wrong run — the per-scorer label
+    counts 135/135/48/75 equal the recorded row's n values exactly, which is only
+    possible if no join ever ran."""
+    _require_real_artifact()
+    with pytest.raises(LabelsGenerationMismatchError):
+        build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=_LABELS_PATH,
+                        recorded_at="2026-08-17T00:00:00+00:00")
+
+
+def test_the_override_is_the_only_way_to_record_foreign_labels() -> None:
+    """The refusal is a gate, not a wall: an operator who knows the labels are
+    borrowed says so explicitly, and the row then names whose labels they are."""
+    _require_real_artifact()
+    row = build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-17T00:00:00+00:00",
+                          allow_foreign_labels=True)
+    assert row.gen_id == "k3_77688e7_regen1"
+    assert row.labels_gen_id == "k3_73e6c36"
+    assert row.labels_n == 393
+
+
+def test_matching_labels_are_recorded_without_an_override() -> None:
+    """The happy path stays plain: labels that name this run need no flag."""
+    _require_real_artifact()
+    row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-17T00:00:00+00:00")
+    assert row.labels_gen_id == "k3_73e6c36"
+    assert row.labels_n == 393
+
+
+# ---------------------------------------------------------------------------
 # main() — CLI wiring
 # ---------------------------------------------------------------------------
 
@@ -103,10 +149,11 @@ def test_main_gates_against_a_recorded_baseline(tmp_path: Path) -> None:
     _require_real_artifact()
     store = tmp_path / "trend.jsonl"
     row = build_trend_row("baseline_run", _GEN_DIR, labels_path=_LABELS_PATH,
-                           recorded_at="2026-08-16T00:00:00+00:00")
+                           recorded_at="2026-08-16T00:00:00+00:00", allow_foreign_labels=True)
     append_trend_row(row, store)
 
-    exit_code = main(["--gen-id", "candidate_run", "--gen-dir", str(_GEN_DIR), "--trend-store", str(store)])
+    exit_code = main(["--gen-id", "candidate_run", "--gen-dir", str(_GEN_DIR),
+                      "--trend-store", str(store), "--allow-foreign-labels"])
     assert exit_code == 0  # identical artifact -> identical numbers -> no regression
 
 
@@ -132,7 +179,8 @@ def test_main_refuses_a_baseline_from_another_harness_version(tmp_path: Path) ->
     _require_real_artifact()
     store = tmp_path / "trend.jsonl"
     append_trend_row(_foreign_row("gen_other_harness"), store)
-    exit_code = main(["--gen-id", "cand", "--gen-dir", str(_GEN_DIR), "--trend-store", str(store)])
+    exit_code = main(["--gen-id", "cand", "--gen-dir", str(_GEN_DIR),
+                      "--trend-store", str(store), "--allow-foreign-labels"])
     assert exit_code == 2
     assert len(read_trend_rows(store)) == 2  # the candidate row is still recorded
 
@@ -144,12 +192,13 @@ def test_main_walks_back_past_an_incomparable_row(tmp_path: Path, capsys) -> Non
     store = tmp_path / "trend.jsonl"
     append_trend_row(
         build_trend_row("comparable_baseline", _GEN_DIR, labels_path=_LABELS_PATH,
-                        recorded_at="2026-08-01T00:00:00+00:00"),
+                        recorded_at="2026-08-01T00:00:00+00:00", allow_foreign_labels=True),
         store,
     )
     append_trend_row(_foreign_row("gen_other_harness"), store)
 
-    exit_code = main(["--gen-id", "cand", "--gen-dir", str(_GEN_DIR), "--trend-store", str(store)])
+    exit_code = main(["--gen-id", "cand", "--gen-dir", str(_GEN_DIR),
+                      "--trend-store", str(store), "--allow-foreign-labels"])
     out = capsys.readouterr().out
     assert exit_code == 0  # identical artifact -> identical numbers -> no regression
     assert "comparable_baseline" in out   # names the baseline it actually used
@@ -164,7 +213,7 @@ def test_print_baseline_names_the_row_the_gate_would_pick(tmp_path: Path, capsys
     store = tmp_path / "trend.jsonl"
     append_trend_row(
         build_trend_row("the_baseline", _GEN_DIR, labels_path=_LABELS_PATH,
-                        recorded_at="2026-08-01T00:00:00+00:00"),
+                        recorded_at="2026-08-01T00:00:00+00:00", allow_foreign_labels=True),
         store,
     )
     exit_code = main([
@@ -196,11 +245,13 @@ def test_explicit_baseline_gen_id_is_gated_against(tmp_path: Path, capsys) -> No
     store = tmp_path / "trend.jsonl"
     for gen_id, when in (("older", "2026-08-01T00:00:00+00:00"), ("newer", "2026-08-10T00:00:00+00:00")):
         append_trend_row(
-            build_trend_row(gen_id, _GEN_DIR, labels_path=_LABELS_PATH, recorded_at=when), store
+            build_trend_row(gen_id, _GEN_DIR, labels_path=_LABELS_PATH, recorded_at=when,
+                            allow_foreign_labels=True),
+            store,
         )
     exit_code = main([
         "--gen-id", "cand", "--gen-dir", str(_GEN_DIR),
-        "--trend-store", str(store), "--baseline-gen-id", "older",
+        "--trend-store", str(store), "--baseline-gen-id", "older", "--allow-foreign-labels",
     ])
     assert exit_code == 0
     assert "older" in capsys.readouterr().out
@@ -249,7 +300,7 @@ def test_build_trend_row_reads_kappa_from_run_status(tmp_path: Path) -> None:
     _write_status(gen_dir, kappa=0.5256, ci_low=0.227, ci_high=0.730)
 
     row = build_trend_row("cand", gen_dir, labels_path=_LABELS_PATH,
-                          recorded_at="2026-08-18T00:00:00+00:00")
+                          recorded_at="2026-08-18T00:00:00+00:00", allow_foreign_labels=True)
     assert row.panel_kappa is not None
     assert row.panel_kappa.kappa == 0.5256
     assert row.panel_kappa.ci_high == 0.730
@@ -270,11 +321,12 @@ def test_kappa_drop_exits_three_not_one(tmp_path: Path, capsys) -> None:
     _write_status(gen_dir, kappa=0.72, ci_low=0.60, ci_high=0.81)
     append_trend_row(
         build_trend_row("baseline_run", gen_dir, labels_path=_LABELS_PATH,
-                        recorded_at="2026-08-01T00:00:00+00:00"),
+                        recorded_at="2026-08-01T00:00:00+00:00", allow_foreign_labels=True),
         store,
     )
     _write_status(gen_dir, kappa=0.30, ci_low=0.15, ci_high=0.45)
-    exit_code = main(["--gen-id", "cand", "--gen-dir", str(gen_dir), "--trend-store", str(store)])
+    exit_code = main(["--gen-id", "cand", "--gen-dir", str(gen_dir),
+                      "--trend-store", str(store), "--allow-foreign-labels"])
 
     out = capsys.readouterr().out
     assert exit_code == 3
@@ -290,10 +342,11 @@ def test_stable_kappa_still_exits_zero(tmp_path: Path, capsys) -> None:
     _write_status(gen_dir, kappa=0.72, ci_low=0.60, ci_high=0.81)
     append_trend_row(
         build_trend_row("baseline_run", gen_dir, labels_path=_LABELS_PATH,
-                        recorded_at="2026-08-01T00:00:00+00:00"),
+                        recorded_at="2026-08-01T00:00:00+00:00", allow_foreign_labels=True),
         store,
     )
-    exit_code = main(["--gen-id", "cand", "--gen-dir", str(gen_dir), "--trend-store", str(store)])
+    exit_code = main(["--gen-id", "cand", "--gen-dir", str(gen_dir),
+                      "--trend-store", str(store), "--allow-foreign-labels"])
     assert exit_code == 0
     assert "INSTRUMENT STABLE" in capsys.readouterr().out
 
@@ -314,7 +367,7 @@ def test_the_row_records_the_instrument_that_actually_scored_the_run(tmp_path: P
     _write_status(gen_dir, kappa=0.5256, ci_low=0.227, ci_high=0.730)
 
     row = build_trend_row("cand", gen_dir, labels_path=_LABELS_PATH,
-                          recorded_at="2026-08-25T00:00:00+00:00")
+                          recorded_at="2026-08-25T00:00:00+00:00", allow_foreign_labels=True)
     # roster sorted, so seat ORDER cannot cause a spurious refusal while a
     # changed seat still does (judge_identity.render_panel_identity)
     assert row.judge_identity == "panel:llama3.1:8b+mixtral:8x7b+qwen2.5:14b"
@@ -329,7 +382,7 @@ def test_a_single_judge_run_records_that_model_as_its_instrument(tmp_path: Path)
         encoding="utf-8",
     )
     row = build_trend_row("cand", gen_dir, labels_path=_LABELS_PATH,
-                          recorded_at="2026-08-25T00:00:00+00:00")
+                          recorded_at="2026-08-25T00:00:00+00:00", allow_foreign_labels=True)
     assert row.judge_identity == "mixtral:8x7b"
 
 
@@ -346,7 +399,7 @@ def test_a_panel_baseline_does_not_gate_a_single_judge_candidate(tmp_path: Path,
     _write_status(gen_dir, kappa=0.72, ci_low=0.60, ci_high=0.81)  # panel
     append_trend_row(
         build_trend_row("panel_baseline", gen_dir, labels_path=_LABELS_PATH,
-                        recorded_at="2026-08-01T00:00:00+00:00"),
+                        recorded_at="2026-08-01T00:00:00+00:00", allow_foreign_labels=True),
         store,
     )
     (gen_dir / "run_status.json").write_text(
@@ -355,7 +408,7 @@ def test_a_panel_baseline_does_not_gate_a_single_judge_candidate(tmp_path: Path,
         encoding="utf-8",
     )
     exit_code = main(["--gen-id", "single_cand", "--gen-dir", str(gen_dir),
-                      "--trend-store", str(store)])
+                      "--trend-store", str(store), "--allow-foreign-labels"])
     out = capsys.readouterr().out
     assert exit_code == 2
     assert "NO COMPARABLE BASELINE" in out
@@ -405,7 +458,7 @@ def test_prompt_token_budget_is_read_from_the_engines_receipts(tmp_path: Path) -
     _set_receipt_budgets(gen_dir, [512, 512, 512])
 
     row = build_trend_row("receipts", gen_dir, labels_path=_LABELS_PATH,
-                          recorded_at="2026-08-26T00:00:00+00:00")
+                          recorded_at="2026-08-26T00:00:00+00:00", allow_foreign_labels=True)
 
     assert row.prompt_token_budget == 512
 
@@ -420,7 +473,7 @@ def test_receipts_that_disagree_are_reported_rather_than_averaged(tmp_path: Path
 
     with caplog.at_level(logging.WARNING):
         row = build_trend_row("disagree", gen_dir, labels_path=_LABELS_PATH,
-                              recorded_at="2026-08-26T00:00:00+00:00")
+                              recorded_at="2026-08-26T00:00:00+00:00", allow_foreign_labels=True)
 
     assert row.prompt_token_budget is None
     assert "512" in caplog.text and "1024" in caplog.text
@@ -433,7 +486,7 @@ def test_an_arm_with_no_receipts_still_builds_a_valid_row(tmp_path: Path) -> Non
     gen_dir = _copy_gen_dir(tmp_path)
 
     row = build_trend_row("no_receipts", gen_dir, labels_path=_LABELS_PATH,
-                          recorded_at="2026-08-26T00:00:00+00:00")
+                          recorded_at="2026-08-26T00:00:00+00:00", allow_foreign_labels=True)
 
     assert row.prompt_token_budget is None
     assert row.guard_adversarial is not None

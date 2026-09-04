@@ -45,6 +45,25 @@ class DuplicateGenIdError(ValueError):
         )
 
 
+class LabelsGenerationMismatchError(ValueError):
+    """Raised when a trend row's kappas would be computed from another run's labels.
+
+    Attributes:
+        gen_id: The generation this row is being recorded for.
+        labels_gen_id: The generation the calibration labels actually name.
+    """
+
+    def __init__(self, gen_id: str, labels_gen_id: str) -> None:
+        self.gen_id = gen_id
+        self.labels_gen_id = labels_gen_id
+        super().__init__(
+            f"row {gen_id!r} would record kappas measured on {labels_gen_id!r}'s "
+            "labels — a different generation. Pass allow_foreign_labels=True to "
+            "record it anyway (the row will name whose labels they are), or point "
+            "labels_path at labels for this gen_id instead."
+        )
+
+
 class RateWithCI(BaseModel):
     """One published rate with its Wilson CI and denominator.
 
@@ -120,7 +139,19 @@ class TrendRow(BaseModel):
         capability: Capability battery rate with CI and n; None when none ran.
         inconclusive_rate: Fraction of judged expectations that returned
             score=None (infra failure) rather than a real verdict.
-        scorer_kappas: Every calibrated scorer's kappa for this run.
+        scorer_kappas: Every calibrated scorer's kappa, measured on labels_gen_id's
+            labels — normally but not necessarily this row's gen_id (see
+            labels_gen_id). Corrected 2026-09-04: this used to claim the kappas were
+            "for this run" when build_trend_row never checked that; the one committed
+            row (k3_77688e7_regen1) carried kappas measured on k3_73e6c36's labels.
+        labels_gen_id: The generation the calibration labels actually name, or None
+            when no labels were read, the labels file is empty, or the labels carry
+            more than one gen_id (unattributable). build_trend_row refuses to record
+            a row whose labels_gen_id differs from gen_id unless the caller passes
+            allow_foreign_labels=True — so a mismatched row is always deliberate and
+            always visible in this field, never silent.
+        labels_n: Total rows read from the labels file (provenance, not a per-scorer
+            statistic — see ScorerKappa.n for that). None when no labels were read.
         panel_agreement_rate: Inter-judge pairwise agreement rate, when the
             panel judge ran (EVAL-P21.2); None otherwise. Kept for continuity
             with rows already written — it is NOT the number to trend on, being
@@ -169,6 +200,9 @@ class TrendRow(BaseModel):
     git_sha: str | None = None
     prompt_token_budget: int | None = None
     mean_precision_at_k: float | None = None
+    # --- Labels provenance: WHICH labels produced scorer_kappas ----------------
+    labels_gen_id: str | None = None
+    labels_n: int | None = None
 
 
 def read_trend_rows(path: Path = TREND_STORE_FILE) -> list[TrendRow]:

@@ -5,13 +5,14 @@ Purpose: Assemble one TrendRow from a completed run's on-disk artifacts — the
          published rates, the calibration kappas, the panel's agreement statistics,
          the run's variant identity, and the instrument that actually scored it.
 Dependencies: datetime, json, logging, pathlib; calibration (run_calibration),
-         calibration_records (LABELS_FILE, read_calibration_labels), eval_records
-         (read_transcript), judge_identity (resolve_judge_identity),
+         calibration_records (LABELS_FILE, CalibrationLabel, read_calibration_labels),
+         eval_records (read_transcript), judge_identity (resolve_judge_identity),
          retrieval_summary (RETRIEVAL_METRICS_FILE), run_status (read_run_status),
-         summary (summarize_from_dir), trend_store (RateWithCI, ScorerKappa, TrendRow),
-         comparability (ComparabilityKey — imported inside comparability_key, since
-         comparability imports trend_store and a module-level import would read as a
-         cycle to a future reader even though it is not one)
+         summary (summarize_from_dir), trend_store (LabelsGenerationMismatchError,
+         RateWithCI, ScorerKappa, TrendRow), comparability (ComparabilityKey —
+         imported inside comparability_key, since comparability imports trend_store
+         and a module-level import would read as a cycle to a future reader even
+         though it is not one)
 Used by: scripts/record_trend_and_gate.py (which re-exports build_trend_row and owns
          the CLI, the baseline resolution and the gate flow)
 Does NOT: choose a baseline, decide whether anything regressed, or write anything.
@@ -32,13 +33,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from calibration import run_calibration
-from calibration_records import LABELS_FILE, read_calibration_labels
+from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
 from eval_records import read_transcript
 from judge_identity import resolve_judge_identity
 from retrieval_summary import RETRIEVAL_METRICS_FILE
 from run_status import RunStatus, read_run_status
 from summary import EvalSummary, summarize_from_dir
-from trend_store import RateWithCI, ScorerKappa, TrendRow
+from trend_store import LabelsGenerationMismatchError, RateWithCI, ScorerKappa, TrendRow
 
 if TYPE_CHECKING:
     from comparability import ComparabilityKey
@@ -112,22 +113,50 @@ def _panel_status(gen_dir: Path, status_path: Path | None) -> RunStatus | None:
     return read_run_status(status_path or gen_dir / _RUN_STATUS_FILENAME)
 
 
-def _scorer_kappas(labels_path: Path) -> tuple[ScorerKappa, ...]:
-    """Compute every calibrated scorer's kappa from the human labels.
+def _read_labels(labels_path: Path) -> list[CalibrationLabel]:
+    """Read calibration labels, tolerating a missing file.
 
     Args:
-        labels_path: Calibration labels file; a missing file yields an empty tuple
+        labels_path: Calibration labels file; a missing file yields an empty list
             rather than raising — the rate axis is independent of calibration, and
             an uncalibrated run is a valid (if less informative) trend row.
     Returns:
-        One ScorerKappa per scorer with enough adjudicated rows to calibrate.
+        The file's rows in order, or [] when the file does not exist.
     """
-    labels = read_calibration_labels(labels_path) if labels_path.exists() else []
+    return read_calibration_labels(labels_path) if labels_path.exists() else []
+
+
+def _scorer_kappas(labels: list[CalibrationLabel]) -> tuple[ScorerKappa, ...]:
+    """Compute every calibrated scorer's kappa from already-read human labels.
+
+    Args:
+        labels: Calibration labels already read from disk (see _read_labels).
+    Returns:
+        One ScorerKappa per scorer whose labels clear label_adequacy.check_label_adequacy.
+    """
     reports = run_calibration(labels, print_fn=lambda *_a, **_k: None) if labels else []
     return tuple(
         ScorerKappa(scorer=r.scorer, kappa=r.kappa, ci_low=r.kappa_lo, ci_high=r.kappa_hi, n=r.counts.n)
         for r in reports
     )
+
+
+def _labels_provenance(labels: list[CalibrationLabel]) -> tuple[str | None, int | None]:
+    """Return (labels_gen_id, labels_n) — which generation the labels name, and how many.
+
+    Args:
+        labels: Calibration labels already read from disk (see _read_labels).
+    Returns:
+        (None, None) when there are no labels. (None, n) when the labels carry no gen_id
+        (legacy rows, CalibrationLabel.gen_id defaults to "") or name more than one —
+        either way the generation is not attributable, which is a fact worth keeping
+        distinct from "there are no labels at all". Otherwise the single gen_id every
+        row names, and the row count.
+    """
+    if not labels:
+        return None, None
+    gen_ids = {label.gen_id for label in labels if label.gen_id}
+    return (gen_ids.pop() if len(gen_ids) == 1 else None), len(labels)
 
 
 def _battery_rates(eval_summary: EvalSummary) -> tuple[RateWithCI, RateWithCI, RateWithCI]:
@@ -175,6 +204,7 @@ def build_trend_row(
     labels_path: Path = LABELS_FILE,
     recorded_at: str | None = None,
     status_path: Path | None = None,
+    allow_foreign_labels: bool = False,
 ) -> TrendRow:
     """Assemble a TrendRow from a completed run's on-disk artifacts.
 
@@ -184,11 +214,14 @@ def build_trend_row(
         labels_path: Calibration labels file to compute per-scorer kappa from.
         recorded_at: ISO-8601 override (tests only); real callers omit it.
         status_path: run_status.json override; defaults to gen_dir's own.
+        allow_foreign_labels: See _check_labels_attribution.
     Returns:
         A TrendRow ready for trend_store.append_trend_row. Panel agreement is
         recorded chance-corrected (kappa with its interval, per criterion, plus
         the repeat-flip split) as well as raw — raw pairwise agreement alone is
         inflated by the pass base rate (DEC-188).
+    Raises:
+        LabelsGenerationMismatchError: See _check_labels_attribution.
     """
     eval_summary = summarize_from_dir(gen_dir)
     status = _panel_status(gen_dir, status_path)
@@ -197,12 +230,58 @@ def build_trend_row(
         harness_version=_harness_version(gen_dir),
         recorded_at=recorded_at or datetime.now(timezone.utc).isoformat(),
         inconclusive_rate=_inconclusive_rate(eval_summary),
-        scorer_kappas=_scorer_kappas(labels_path),
         prompt_token_budget=_receipt_token_budget(gen_dir),  # the engine's, not meta.json's
+        **_labels_fields(gen_id, labels_path, allow_foreign_labels),
         **_rate_fields(eval_summary),
         **_panel_fields(status),
         **_variant_fields(gen_dir),
     )
+
+
+def _labels_fields(
+    gen_id: str, labels_path: Path, allow_foreign_labels: bool
+) -> dict[str, object]:
+    """Read labels, verify attribution, and return the kappa/provenance TrendRow kwargs.
+
+    Split out of build_trend_row purely to keep that function under the 40-line cap —
+    this is glue, not new computation.
+
+    Args:
+        gen_id: The generation this row is being recorded for.
+        labels_path: Calibration labels file to compute per-scorer kappa from.
+        allow_foreign_labels: See _check_labels_attribution.
+    Returns:
+        scorer_kappas, labels_gen_id and labels_n as TrendRow kwargs.
+    Raises:
+        LabelsGenerationMismatchError: See _check_labels_attribution.
+    """
+    labels = _read_labels(labels_path)
+    labels_gen_id, labels_n = _labels_provenance(labels)
+    _check_labels_attribution(gen_id, labels_gen_id, allow_foreign_labels)
+    return {
+        "scorer_kappas": _scorer_kappas(labels),
+        "labels_gen_id": labels_gen_id,
+        "labels_n": labels_n,
+    }
+
+
+def _check_labels_attribution(
+    gen_id: str, labels_gen_id: str | None, allow_foreign_labels: bool
+) -> None:
+    """Refuse to build a row whose labels name a different generation.
+
+    Args:
+        gen_id: The generation this row is being recorded for.
+        labels_gen_id: The generation the calibration labels actually name; None when
+            unattributable (no labels, or labels naming zero or more than one gen_id) —
+            unattributable labels never refuse, since there is no claim to contradict.
+        allow_foreign_labels: Set True to record the row anyway.
+    Raises:
+        LabelsGenerationMismatchError: labels_gen_id names another generation and the
+            override was not passed.
+    """
+    if labels_gen_id is not None and labels_gen_id != gen_id and not allow_foreign_labels:
+        raise LabelsGenerationMismatchError(gen_id, labels_gen_id)
 
 
 
