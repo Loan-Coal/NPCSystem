@@ -16,6 +16,29 @@ Rules:
 
 ## Open
 
+## ISSUE-287: `make eval-generate`'s own recipe never populates a generation's corpus fingerprint
+**Found:** 2026-09-04, during the fresh eval generation run (`k3_61b01dad_negadv`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/_run_config_corpus.py::default_corpus_fetcher`; `Makefile` `eval-generate` recipe
+**Description:** `default_corpus_fetcher` reads the API key from the `API_KEY_SECRET`
+*environment variable*, not from the `--api-key` CLI flag `eval-generate` passes to `evals
+generate`. The Makefile recipe computes `API_KEY` from `.env` and forwards it only as
+`--api-key`, never exporting it into the recipe's own subshell — so the corpus-fingerprint
+probe (`GET /v1/admin/debug/vector-store`) always sends `Authorization: Bearer ` (empty),
+fails with `LocalProtocolError("Illegal header value b'Bearer '")`, and every generation
+records `corpus_item_count/embedding_model/embedding_dim/sha` as null/empty. Confirmed this is
+not new to today's run: `k3_73e6c36`, `k3_77688e7_regen1`, `seedrepro_a_1742e8f` and
+`seedrepro_b_1742e8f` all carry the same nulls in `meta.json`. Harmless to today's run's core
+deliverable (model digests are unaffected and both populated), but DEC-210 Decision 2 added
+these fields specifically so "was RAG live during this run?" would be a recorded fact rather
+than an inference — that fact has never actually been recorded by any `make eval-generate` run.
+**Why deferred:** Out of scope for an operator run; not blocking (an empty corpus fingerprint
+degrades a record, it does not corrupt one — `corpus_fields` is deliberately designed to leave
+these fields at their None/"" defaults rather than lie).
+**To fix:** Either export `API_KEY_SECRET=$(API_KEY)` in the `eval-generate` recipe's own
+shell, or have `default_corpus_fetcher` read the same value `evals generate`'s `--api-key`
+resolves to instead of a separate env var.
+
 ## ISSUE-285: `tone_judge` and `affirms_judge` cannot clear the label-adequacy floor from the authored corpus
 **Found:** 2026-09-04, choosing the case set for the next generation (`docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
 **Severity:** P2 (annoying)

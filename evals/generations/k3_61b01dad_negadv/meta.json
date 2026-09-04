@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "generated_at": "2026-09-04T16:55:52.222505+00:00",
+  "gen_id": "k3_61b01dad_negadv",
+  "k": 3,
+  "config": {
+    "prompt_version": "stage_b_v2.13",
+    "generation_model": "qwen2.5:7b",
+    "generation_model_digest": "845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+    "temperature": 0.15,
+    "top_p": 0.95,
+    "max_tokens": 512,
+    "seed": 20260814,
+    "judge_model": "mixtral:8x7b",
+    "judge_model_digest": "a3b6bef0f836ff29ddb576a80eeb1b7def43ec9b809466f62e96adb871fe8498",
+    "judge_temperature": 0.0,
+    "ollama_version": "0.33.2",
+    "retrieval_profile": "default",
+    "git_sha": "8f2786b",
+    "golden_set_version": "099d79bd3645",
+    "harness_version": "014abac09947",
+    "dialogue_prompt_hash": "c8d5f7a2e438",
+    "corpus_item_count": null,
+    "corpus_embedding_model": "",
+    "corpus_embedding_dim": null,
+    "corpus_sha": ""
+  }
+}
