@@ -97,6 +97,18 @@ def reset_world(client: Any, base_url: str, baseline: WorldBaseline) -> None:
         raise PreconditionError("world_condition", (f"world_state:{baseline.epoch}",))
 
 
+def npc_exists(client: Any, base_url: str, npc_id: str) -> bool:
+    """True if npc_id's Character node exists in the graph.
+
+    The shared world guard (ISSUE-284): both eval verbs skip a case whose NPC is
+    absent — the world it needs was never seeded — rather than let it either 404
+    mid-run (report, evals/runner.py) or silently generate a record against a
+    nonexistent NPC (generate, evals/generation_collection.py).
+    """
+    resp = client.get(f"{base_url}{_CHARACTER_NODE_PATH}/{npc_id}", timeout=_DEFAULT_TIMEOUT_S)
+    return bool(resp.status_code != 404)
+
+
 def ensure_player_node(client: Any, base_url: str, player_id: str) -> None:
     """Create the player Character node if it does not exist (strict-player policy)."""
     check = client.get(f"{base_url}{_CHARACTER_NODE_PATH}/{player_id}", timeout=_DEFAULT_TIMEOUT_S)

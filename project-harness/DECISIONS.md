@@ -8517,3 +8517,41 @@ falsely attributed, which is the honest state to leave it in.
   `evals/dashboard/headline.py`'s own CI computation. Placing the floor only in
   `run_calibration`'s per-scorer loop is the minimal placement that fixes the actual defect
   (a number reaching the trend store) without collaterally blanking unrelated call sites.
+
+## DEC-261: extract runner.py's requires_world skip into a shared preconditions helper
+**Date:** 2026-09-04 · **Status:** ✅ ACCEPTED · **Scope:** `evals/preconditions.py`,
+`evals/runner.py`, `evals/generation_collection.py`, new `tests/unit/evals/test_generation_world_guard.py`
+
+**What forced this.** Measured 2026-09-04: the `requires_world` skip that keeps a case whose
+NPC isn't in the graph from running at all lived only in `runner.py::_run_case` (the `report`
+verb). `generate_runner.py`/`generation_collection.py` (the `generate` verb) had no such guard
+at any layer — `collect_yaml_case_records` called `POST /v1/dialogue` unconditionally. Against
+an unseeded world this doesn't fail loud: `post_dialogue`'s own try/except (EVAL-P15.5,
+`tests/unit/evals/test_no_silent_drops.py`) catches the resulting HTTP error and returns `{}`,
+and a real `GenerationRecord` is still built
+from that empty response — an eval record silently attesting to a turn that never happened,
+which is exactly the shape of corruption an expensive `k>1` generation run cannot afford to
+discover after the fact.
+
+**Decision.** Two callers (`runner._run_case`, `generation_collection.collect_yaml_case_records`)
+justify extraction (DIP threshold, `npc-coding-principles`): a new `preconditions.npc_exists(client,
+base_url, npc_id) -> bool` does the one HTTP check (`GET /v1/graph/nodes/Character/{npc_id}`,
+`404` → `False`) both verbs need. `preconditions.py` is the existing home for this class of
+concern (`reset_world`, `ensure_player_node`, `assert_preconditions` already live there; `runner.py`
+already imported the module). Each verb keeps building its own result shape from the boolean —
+`runner._run_case` its skip dict (unchanged shape, so `report.py`/`test_runner_skips.py` needed no
+changes), `collect_yaml_case_records` an early `return []` plus a `logger.info` skip line, mirroring
+the existing `if inp is None: return []` early return one line above it. No shared "skip result"
+type was introduced: the two verbs' result shapes are genuinely different (a report-line dict vs a
+`GenerationRecord` list), and forcing them through one shape would be the widened-abstraction
+mistake the design bar rules out.
+
+**RED anchor.** `test_unseeded_world_case_skips_instead_of_generating` (new test file): a case
+requiring an NPC the mock graph 404s on, run through `collect_yaml_case_records`. Confirmed
+failing pre-fix with a real `GenerationRecord` in the result (`npc_response=''`) — the exact
+corruption this decision closes — not an import error or a typo.
+
+**Deferred.** `collect_ah_case_records` (the anti-hallucination fixture path of the same `generate`
+verb) still has no equivalent guard — logged as ISSUE-284 rather than folded in here, since no case
+in the current corpus exercises it and the YAML-case fix was the one blocking the next generation
+run.

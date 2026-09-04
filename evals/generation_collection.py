@@ -100,13 +100,26 @@ def stamp_records(
 def collect_yaml_case_records(
     case: dict, client: httpx.Client, base_url: str, rep: int, retrieval_profile: str | None = None,
 ) -> list[GenerationRecord]:
-    """Call /v1/dialogue for one YAML case and build its judge + deterministic records."""
+    """Call /v1/dialogue for one YAML case and build its judge + deterministic records.
+
+    Returns an empty list, without calling the engine, when the case's NPC has no
+    Character node in the graph — the world its seed declares was never seeded
+    (ISSUE-284: the shared world guard, preconditions.npc_exists, used by both eval
+    verbs so this path can no longer generate a record against a nonexistent NPC).
+    """
     inp = case.get("input")
     if inp is None:
         return []
-    player_id = case.get("seed", {}).get("player_id", DEFAULT_PLAYER_ID)
+    seed = case.get("seed", {})
+    npc_id = seed.get("npc_id", "")
+    if not preconditions.npc_exists(client, base_url, npc_id):
+        _logger.info(
+            "case skipped: NPC not found in graph (world not seeded) case_id=%s npc_id=%s requires_world=%s",
+            case.get("case_id", ""), npc_id, seed.get("requires_world"),
+        )
+        return []
+    player_id = seed.get("player_id", DEFAULT_PLAYER_ID)
     preconditions.ensure_player_node(client, base_url, player_id)
-    npc_id = case.get("seed", {}).get("npc_id", "")
     player_message = inp["player_message"]
 
     t0 = time.perf_counter()

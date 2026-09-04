@@ -94,8 +94,7 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
     npc_id = seed.get("npc_id", "npc_eval")
     requires_world = seed.get("requires_world")
 
-    npc_check = client.get(f"{base_url}/v1/graph/nodes/Character/{npc_id}", timeout=10.0)
-    if npc_check.status_code == 404:
+    if not preconditions.npc_exists(client, base_url, npc_id):
         world_cmd = (
             "make demo-seed"
             if requires_world == "demo"

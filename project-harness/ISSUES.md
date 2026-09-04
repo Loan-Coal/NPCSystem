@@ -16,6 +16,43 @@ Rules:
 
 ## Open
 
+## ISSUE-285: `tone_judge` and `affirms_judge` cannot clear the label-adequacy floor from the authored corpus
+**Found:** 2026-09-04, choosing the case set for the next generation (`docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
+**Severity:** P2 (annoying)
+**Where:** `evals/cases/case_neg_*.yaml`, `evals/cases/case_adv_*.yaml` (37 cases total)
+**Description:** DEC-260's adequacy floor (25 minority labels, 10 case clusters) currently
+refuses all four labeled scorers. `case_neg`/`case_adv` — the only cases authored to elicit
+a minority verdict — carry zero `tone_judge` expectations and only 8 `affirms_judge`
+expectations across the 37 cases. Even under a best-case labeling outcome (every candidate
+lands on the minority side), `tone_judge` gains nothing (0 available) and `affirms_judge`
+tops out at 16 (8 current + 8 available), both short of the 25 floor. Full numbers in
+`docs/EVAL_NEXT_GENERATION_CASE_SET.md`.
+**Why deferred:** The task that found this explicitly rules out lowering the floor and
+authoring new `case_pos`; authoring new negative cases for `tone_judge`/`affirms_judge` is
+new case-authoring work, out of scope for a case-*selection* task.
+**To fix:** Author new `case_neg`/`case_adv` cases whose `expected` list carries a
+`tone_judge` and/or `affirms_judge` expectation, sized to give each scorer a realistic path
+past 25 minority labels across at least 10 clusters.
+
+## ISSUE-284: the generate verb's AH-fixture path still has no world guard
+**Found:** 2026-09-04, during DEC-261 (the requires_world guard extraction for YAML cases)
+**Severity:** P2 (annoying)
+**Where:** `evals/generation_collection.py::collect_ah_case_records`
+**Description:** DEC-261's new shared guard (`preconditions.npc_exists`, used by both
+`runner._run_case` and `generation_collection.collect_yaml_case_records`) only covers YAML
+cases. `collect_ah_case_records` still POSTs to `/v1/dialogue` unconditionally for every
+`anti_hallucination_demo.json` case. When the NPC is missing, `post_dialogue`'s own
+try/except catches the resulting HTTP error and returns `{}` (logged as a warning, not a
+skip), and a record is still built from that empty response — an AH case degrades to a
+wrong-shaped record instead of skipping cleanly, the same failure mode ISSUE-284 fixed for
+YAML cases, one layer down.
+**Why deferred:** Out of scope for the YAML-case fix this was found during (single-task
+focus); no AH case in the corpus currently requires an unseeded world, so nothing is
+corrupted by this today.
+**To fix:** Add the same `preconditions.npc_exists` check to the top of
+`collect_ah_case_records`, returning `[]` and logging a skip exactly as the YAML path now
+does.
+
 ## ISSUE-282: run_calibration's family_size still counts every >=2-adjudicated scorer, not every adequacy-passing one
 **Found:** 2026-09-04, during the M1.4 label-adequacy fix
 **Severity:** P3 (nice-to-fix)
