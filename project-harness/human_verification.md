@@ -625,3 +625,7 @@ The original text, verbatim:
 ## 2026-09-03 19:17:08 — task M1.1 committed with a pre-existing red gate
 
 Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-09-04 09:38:21 — no status token from task M1.2
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-M1.2-1788507313.log
