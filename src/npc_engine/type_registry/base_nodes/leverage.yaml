@@ -2,7 +2,8 @@
 # GROUNDED_IN graph traversal to a Secret node (F3 fix).
 # Relationships: Character -[HAS_LEVERAGE]→ Leverage -[AGAINST]→ Character
 #                Leverage -[GROUNDED_IN]→ Secret
-node_type: Leverage
+node_type: leverage
+label: Leverage  # graph/political/political_leverage_writer.py:18
 fields:
   id:              { type: str, required: true }
   demand:          { type: str, required: true }

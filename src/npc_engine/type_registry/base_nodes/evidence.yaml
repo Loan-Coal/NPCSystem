@@ -1,4 +1,5 @@
-node_type: Evidence
+node_type: evidence
+label: Evidence  # graph/intrigue/investigation_queries.py:24
 fields:
   id:                          { type: str, required: true }
   kind:                        { type: str, required: true }   # physical/testimonial/documentary

@@ -9,6 +9,7 @@ Dependencies injected: None.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from types import MappingProxyType
 
@@ -22,6 +23,12 @@ from npc_engine.utils.errors import RegistryValidationError
 
 
 YAML_GLOB = "*.yaml"
+
+# node_type is the registry key: snake_case, and the form base_edges/*.yaml reference in
+# src_type/dst_type. label is the Cypher label; it is backtick-escaped by cypher_identifier
+# at every call site, and constrained here so a malformed value fails at load, not in a query.
+NODE_TYPE_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
+NODE_LABEL_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _normalize_src_type(src_type: str | list[str]) -> str | tuple[str, ...]:
@@ -42,6 +49,33 @@ def load_base_node_types() -> MappingProxyType[str, MappingProxyType[str, Runtim
         if node_key in loaded:
             raise RegistryValidationError(source=str(path), detail=f"duplicate base node type: {node_key}")
         loaded[node_key] = _build_runtime_fields(document.fields)
+    return MappingProxyType(loaded)
+
+
+def load_base_node_labels() -> MappingProxyType[str, str]:
+    """Load the declared Cypher label for every package-shipped base node kind.
+
+    Additive companion to load_base_node_types (M1.2): the field maps are unchanged and
+    their eight consumers are untouched. This reads the same files for the one piece of
+    information the field maps discard — the label the generic write path must emit so it
+    agrees with graph/'s hand-written Cypher.
+
+    Returns:
+        Immutable mapping of registry key (snake_case node_type) to Cypher label.
+
+    Raises:
+        RegistryValidationError: If a contract file is unreadable, fails schema validation,
+            declares a non-identifier node_type or label, or duplicates a node type.
+    """
+
+    directory = Path(__file__).resolve().parent / "base_nodes"
+    loaded: dict[str, str] = {}
+    for path in sorted(directory.glob(YAML_GLOB)):
+        document = _load_node_document(path=path)
+        node_key = document.node_type.strip().lower()
+        if node_key in loaded:
+            raise RegistryValidationError(source=str(path), detail=f"duplicate base node type: {node_key}")
+        loaded[node_key] = document.label
     return MappingProxyType(loaded)
 
 
@@ -69,9 +103,40 @@ def _load_node_document(*, path: Path) -> BaseNodeTypeDocument:
     source = str(path)
     loaded = _load_yaml(path=path, source=source)
     try:
-        return BaseNodeTypeDocument.model_validate(loaded)
+        document = BaseNodeTypeDocument.model_validate(loaded)
     except ValidationError as error:
         raise RegistryValidationError(source=source, detail=str(error)) from error
+    _validate_node_identifiers(document=document, source=source)
+    return document
+
+
+def _validate_node_identifiers(*, document: BaseNodeTypeDocument, source: str) -> None:
+    """Reject a base node contract whose key or label is not a strict identifier.
+
+    ``label`` reaches Cypher through resolve_node_label, so a YAML file is the one place a
+    file-supplied value could enter a query. cypher_identifier() backtick-escapes it
+    downstream and remains the injection guard; this is the fail-fast boundary check that
+    keeps a malformed label from ever getting that far.
+
+    Args:
+        document: Parsed base node contract.
+        source: Path string used for error attribution.
+
+    Raises:
+        RegistryValidationError: If node_type is not snake_case or label is not a bare
+            identifier.
+    """
+
+    if not NODE_TYPE_PATTERN.fullmatch(document.node_type):
+        raise RegistryValidationError(
+            source=source,
+            detail=f"node_type must be snake_case matching {NODE_TYPE_PATTERN.pattern}: {document.node_type!r}",
+        )
+    if not NODE_LABEL_PATTERN.fullmatch(document.label):
+        raise RegistryValidationError(
+            source=source,
+            detail=f"label must be a bare identifier matching {NODE_LABEL_PATTERN.pattern}: {document.label!r}",
+        )
 
 
 def _load_edge_document(*, path: Path) -> BaseEdgeTypeDocument:

@@ -12,7 +12,11 @@ from __future__ import annotations
 import dataclasses
 
 from npc_engine.schema.schema_models import SchemaConfig
-from npc_engine.type_registry.base_contract_loader import load_base_edge_types, load_base_node_types
+from npc_engine.type_registry.base_contract_loader import (
+    load_base_edge_types,
+    load_base_node_labels,
+    load_base_node_types,
+)
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.extension_loader import load_registry_extensions
 from npc_engine.type_registry.merge_rules import merge_registry
@@ -42,6 +46,7 @@ def build_type_registry(*, base_schema: SchemaConfig, extension_sources: tuple[s
     structural = TypeRegistry(
         schema_version=extension_registry.schema_version,
         base_node_types=load_base_node_types(),
+        base_node_labels=load_base_node_labels(),
         base_edge_types=load_base_edge_types(),
         core_types=extension_registry.core_types,
         custom_node_types=extension_registry.custom_node_types,

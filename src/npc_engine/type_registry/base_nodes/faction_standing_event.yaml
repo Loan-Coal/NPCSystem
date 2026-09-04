@@ -1,4 +1,5 @@
-node_type: FactionStandingEvent
+node_type: faction_standing_event
+label: FactionStandingEvent  # graph/faction/faction_history_queries.py:22
 fields:
   id: { type: str, required: true }
   src_faction_id: { type: str, required: true }

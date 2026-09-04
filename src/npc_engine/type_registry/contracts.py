@@ -70,6 +70,7 @@ class TypeRegistry:
 
     schema_version: str
     base_node_types: Mapping[str, Mapping[str, RuntimeFieldDefinition]] = field(default_factory=dict)
+    base_node_labels: Mapping[str, str] = field(default_factory=dict)
     base_edge_types: Mapping[str, RuntimeEdgeTypeDefinition] = field(default_factory=dict)
     core_types: Mapping[str, Mapping[str, RuntimeFieldDefinition]] = field(default_factory=dict)
     custom_node_types: Mapping[str, Mapping[str, RuntimeFieldDefinition]] = field(default_factory=dict)

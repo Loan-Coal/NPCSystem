@@ -1,4 +1,5 @@
 node_type: goal
+label: Goal  # graph/group/group_queries.py:91
 fields:
   id: { type: str, required: true }
   description: { type: str, required: true }

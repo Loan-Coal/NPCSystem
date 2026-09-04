@@ -1,4 +1,5 @@
 node_type: character
+label: Character  # graph/character/character_reader.py:28
 fields:
   id: { type: str, required: true }
   name: { type: str, required: true }

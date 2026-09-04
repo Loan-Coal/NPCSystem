@@ -1,4 +1,5 @@
 node_type: chapter
+label: Chapter  # graph/narrative/chapter_queries.py:22
 fields:
   id: { type: str, required: true }
   name: { type: str, required: true }

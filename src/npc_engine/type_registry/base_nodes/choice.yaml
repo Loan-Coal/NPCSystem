@@ -1,4 +1,5 @@
 node_type: choice
+label: Choice  # no graph/ witness; PascalCase by convention
 fields:
   id: { type: str, required: true }
   chosen_at_tick: { type: int, required: true }

@@ -16,6 +16,54 @@ Rules:
 
 ## Open
 
+## ISSUE-277: the integration suite writes into the live Neo4j — there is no separate test database
+**Found:** 2026-09-04, during M1.2 (row 0 baseline)
+**Severity:** P2 (annoying)
+**Where:** `docker-compose.test.yml`; `tests/integration/*`; `Makefile:182` (`test-integration`)
+**Description:** `docker-compose.test.yml` does not stand up a second database. It publishes the
+bolt port of the **same** `neo4j` service the application and the eval corpus use, so
+`make test-integration` reads and writes the production graph. Proof is in the live data: the
+graph holds `TickLease` rows whose `scheduler_id` is `"test-<uuid>"` — e.g.
+`test-b84e331c-9333-4510-9b76-6e14029b83ce`, `test-64e15d2c-0fc3-43d7-8206-a79af623929e` —
+alongside the 3,498 rows written by `scheduler_id = "main"`. Those `test-` leases are integration
+runs, persisted in the same store as the corpus.
+
+The operational consequence is that a frozen eval corpus is **not durable across an integration
+run**. Any measurement taken after a corpus freeze is invalid if `make test-integration` ran in
+between.
+**Why deferred:** Fixing it properly means standing up a second Neo4j service (or a second
+database inside the same instance) and pointing the integration suite at it — a compose and
+configuration change well outside M1.2, and one that touches the test topology every gate
+depends on. Sequencing the runs is sufficient for the current programme.
+**To fix:** Add a dedicated `neo4j-test` service to `docker-compose.test.yml` on its own volume,
+bound to loopback like the existing override, and have the integration suite read its URI from a
+distinct variable. Until then, treat "no `make test-integration` between a corpus freeze and its
+generation" as an operating rule (DEC-232).
+
+## ISSUE-278: `test_advance_creates_covert_event_and_step` flakes when the app container is running
+**Found:** 2026-09-04, during M1.2 (row 0 baseline)
+**Severity:** P3 (nice-to-fix)
+**Where:** `tests/integration/test_scheme_advance_tick_integration.py:118`
+**Description:** With `npcsystem-app-1` up, a full `make check` failed this test on
+`assert row["step_order"] == 1` with `assert 2 == 1`. The test creates a scheme, asserts
+`step_count == 0`, runs one `SchemeAdvanceTick.run_tick`, and expects the single resulting step to
+be ordered 1. A second step existed. `next_order` is `scheme.step_count + 1`
+(`engines/scheming/scheme_advance_tick.py:100`), so a concurrent writer that advanced the same
+scheme explains the observed value; the app's live tick scheduler is that writer, and it shares
+the database per ISSUE-277.
+
+Run in isolation the test passed **both** with the app up and with the app stopped, so this is a
+race, not a deterministic failure. It is in neither `scripts/integration_baseline.txt` nor
+`project-harness/.loop-state/gate_baseline.json`, and both baselines were recorded while the app
+was down.
+**Why deferred:** It is a test-isolation defect that only manifests under a service topology the
+Makefile does not prescribe — `Makefile:179` documents the integration prerequisite as
+`docker compose ... up -d neo4j`, neo4j only. Not on M1.2's path.
+**To fix:** Either scope `_read_step_event` to the step this run created rather than
+`.single()` over all `SCHEME_STEP` edges, or resolve ISSUE-277 so the suite cannot share a graph
+with a live scheduler. Note the test's own `.single()` silently returns the first of several
+records, which is what let a second step masquerade as the first.
+
 ## ISSUE-276: the "orphaned calibration labels" finding is false — 393/393 survive, and refusal_judge is a live scorer
 **Found:** 2026-09-03, during M3.2
 **Severity:** P1 (blocking) — M3.2 as planned would delete a live, fully-calibrated measurement

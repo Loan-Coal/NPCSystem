@@ -36,9 +36,21 @@ class BaseFieldConfig(BaseModel):
 
 
 class BaseNodeTypeDocument(BaseModel):
-    """One package-internal base node contract document."""
+    """One package-internal base node contract document.
+
+    ``node_type`` and ``label`` are deliberately separate fields (M1.2). ``node_type`` is
+    the registry key: snake_case, API-facing, and referenced by ``src_type``/``dst_type``
+    in base_edges/*.yaml. ``label`` is the Cypher label the generic write path emits, and
+    must equal the label graph/'s hand-written Cypher uses for the same kind — a contract
+    pinned by tests/unit/graph/test_node_label_contract.py.
+
+    Collapsing the two into one field is what produced the split-label graph M1.2 fixes:
+    the loader derived the key by lowercasing the declared value, so `ResourceNode` keyed
+    as `resourcenode` and no caller could reach it.
+    """
 
     node_type: str
+    label: str
     fields: dict[str, BaseFieldConfig] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True, extra="forbid")

@@ -1,4 +1,5 @@
 node_type: item
+label: Item  # graph/economy/item_queries.py:22
 fields:
   id: { type: str, required: true }
   name: { type: str, required: true }

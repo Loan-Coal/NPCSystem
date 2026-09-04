@@ -8317,3 +8317,53 @@ written, instead of being discovered out of band a generation later.
 disagrees with the measurement is information — the case set is calibrated by comparing the
 declared difficulty against the observed pass rate after M4.1, not by refusing to author a case
 whose label an author guessed wrong. Gating it would turn a hypothesis into a rubber stamp.
+
+---
+
+## DEC-258: M1.2 splits `node_type` from `label` rather than PascalCasing `node_type`
+
+**Date:** 2026-09-04, during M1.2 (ISSUE-213).
+
+**Decision:** A base node contract declares **two** fields: `node_type:` is the registry key
+(snake_case, API-facing, and the form `base_edges/*.yaml` reference in `src_type`/`dst_type`),
+and a new `label:` carries the Cypher label the generic write path emits. `resolve_node_label`
+resolves `BASE_NODE_LABELS` → declared `label` → key unchanged.
+
+**Why not the prescribed fix.** ISSUE-213 and the M1.2 plan both prescribed correcting the
+`node_type:` field itself to the PascalCase label. That cannot work, because
+`base_contract_loader` derives the registry key by `node_type.strip().lower()`, so a PascalCase
+value **collapses a multi-word key**. This is not hypothetical — it already shipped:
+`ResourceNode` keys as `resourcenode`, `PendingIntent` as `pendingintent`,
+`FactionStandingEvent` as `factionstandingevent`. `base_node_types.get("resource_node")` misses,
+so a generic write with that node type raises `NODE_TYPE_UNKNOWN`, and
+`base_edges/produces.yaml` declares `dst_type: resource_node` against a key that does not exist.
+
+Applying the prescribed fix would have extended the same defect to `dialogue_turn`,
+`narrative_beat`, `player_model`, `quest_template` and — worst — `world_state`, a **base kind**
+that `generic_node_service._resolve_node_type` looks up as `world_state`. Every generic
+WorldState write would have started failing. The prescribed fix was strictly worse than the bug
+it was written to fix.
+
+**Why two fields and not a smarter derivation.** The alternative was to keep one field and
+derive the key with a Pascal→snake normaliser. That collapses two concepts with different
+consumers and different constraints — the key is an identifier that appears in request payloads
+and edge contracts, the label is a Cypher identifier — into one value, makes the key implicit,
+and puts a casing algorithm with real edge cases (`NPCState` → `n_p_c_state`) on the hot path of
+type resolution. Deriving the *label* from the key instead (`snake_to_pascal`) is correct for all
+34 shipped kinds today, but gives the label no declared home at all and forces the first
+divergent kind back into the hardcoded `BASE_NODE_LABELS` dict this work exists to stop growing.
+
+**Why `BASE_NODE_LABELS` still wins.** Reading the declared label first is the inversion
+ISSUE-213 originally prescribed, and it resolves `character` → whatever `character.yaml` says.
+A lowercase value there 404s every eval case at `evals/runner.py:97`. The dict stays first as a
+regression guard over the seven kinds the engine cannot function without;
+`tests/unit/graph/test_node_label_contract.py` pins dict and YAML to agree, so the guard cannot
+silently mask a divergence.
+
+**Scope note.** The label is still written in two places overall — the registry YAML and ~90
+hand-written Cypher files in `graph/` that use `:Belief` as a literal. This decision does not
+unify those. It makes the YAML authoritative for the generic path and *pins* it to `graph/` by
+test, each expected value cited to the query file that witnesses it.
+
+**Governance.** DEC-250 froze `evals/`, `scripts/check_*`, `prompts/eval/` and
+`docs/EVAL_*`/`docs/SCORER_*` "until R3 is green". This change touches none of those.

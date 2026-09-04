@@ -1,109 +1,16 @@
 {
-  "Agenda": [
+  "agenda": [
     "id",
     "description",
     "proposed_by_faction_id",
     "status"
   ],
-  "Army": [
+  "army": [
     "id",
     "faction_id",
     "strength",
     "current_location_id",
     "composition"
-  ],
-  "Deduction": [
-    "id",
-    "held_by_character_id",
-    "claim",
-    "confidence",
-    "status"
-  ],
-  "Evidence": [
-    "id",
-    "kind",
-    "description",
-    "discovered_at_tick",
-    "discovered_by_character_id",
-    "confidence"
-  ],
-  "FactionStandingEvent": [
-    "id",
-    "src_faction_id",
-    "dst_faction_id",
-    "delta",
-    "new_standing",
-    "tick_id"
-  ],
-  "Group": [
-    "id",
-    "name",
-    "kind",
-    "cohesion",
-    "is_secret",
-    "formed_at_tick"
-  ],
-  "Leverage": [
-    "id",
-    "demand",
-    "status",
-    "created_at_tick"
-  ],
-  "Need": [
-    "id",
-    "kind",
-    "level",
-    "decay_rate",
-    "character_id"
-  ],
-  "PendingIntent": [
-    "id",
-    "npc_id",
-    "player_id",
-    "tick",
-    "score",
-    "reason",
-    "trigger_type",
-    "trigger_ref",
-    "status",
-    "created_tick"
-  ],
-  "ResourceNode": [
-    "id",
-    "kind",
-    "yield_per_tick",
-    "depletion"
-  ],
-  "Rumor": [
-    "id",
-    "content",
-    "created_at_tick",
-    "mutation_distance",
-    "severity",
-    "is_fabricated"
-  ],
-  "Skill": [
-    "id",
-    "name",
-    "category"
-  ],
-  "Title": [
-    "id",
-    "name",
-    "faction_id",
-    "power",
-    "is_inheritable"
-  ],
-  "Trait": [
-    "id",
-    "name"
-  ],
-  "Treaty": [
-    "id",
-    "terms_narrative",
-    "terms_conditions",
-    "signed_at_tick",
-    "status"
   ],
   "belief": [
     "id",
@@ -137,6 +44,13 @@
     "chosen_by_character_id",
     "selected_option"
   ],
+  "deduction": [
+    "id",
+    "held_by_character_id",
+    "claim",
+    "confidence",
+    "status"
+  ],
   "dialogue_turn": [
     "id",
     "npc_id",
@@ -156,6 +70,14 @@
     "is_public",
     "last_graph_updated_at"
   ],
+  "evidence": [
+    "id",
+    "kind",
+    "description",
+    "discovered_at_tick",
+    "discovered_by_character_id",
+    "confidence"
+  ],
   "faction": [
     "id",
     "name",
@@ -164,12 +86,28 @@
     "created_at",
     "last_graph_updated_at"
   ],
+  "faction_standing_event": [
+    "id",
+    "src_faction_id",
+    "dst_faction_id",
+    "delta",
+    "new_standing",
+    "tick_id"
+  ],
   "goal": [
     "id",
     "description",
     "urgency",
     "status",
     "created_at_game_time"
+  ],
+  "group": [
+    "id",
+    "name",
+    "kind",
+    "cohesion",
+    "is_secret",
+    "formed_at_tick"
   ],
   "item": [
     "id",
@@ -179,6 +117,12 @@
     "rarity",
     "type",
     "is_unique"
+  ],
+  "leverage": [
+    "id",
+    "demand",
+    "status",
+    "created_at_tick"
   ],
   "location": [
     "id",
@@ -199,6 +143,25 @@
     "kind",
     "intensity",
     "chapter_id"
+  ],
+  "need": [
+    "id",
+    "kind",
+    "level",
+    "decay_rate",
+    "character_id"
+  ],
+  "pending_intent": [
+    "id",
+    "npc_id",
+    "player_id",
+    "tick",
+    "score",
+    "reason",
+    "trigger_type",
+    "trigger_ref",
+    "status",
+    "created_tick"
   ],
   "player_model": [
     "id",
@@ -223,6 +186,20 @@
     "reward_template",
     "severity"
   ],
+  "resource_node": [
+    "id",
+    "kind",
+    "yield_per_tick",
+    "depletion"
+  ],
+  "rumor": [
+    "id",
+    "content",
+    "created_at_tick",
+    "mutation_distance",
+    "severity",
+    "is_fabricated"
+  ],
   "schedule": [
     "id",
     "name",
@@ -239,6 +216,29 @@
     "id",
     "content",
     "severity"
+  ],
+  "skill": [
+    "id",
+    "name",
+    "category"
+  ],
+  "title": [
+    "id",
+    "name",
+    "faction_id",
+    "power",
+    "is_inheritable"
+  ],
+  "trait": [
+    "id",
+    "name"
+  ],
+  "treaty": [
+    "id",
+    "terms_narrative",
+    "terms_conditions",
+    "signed_at_tick",
+    "status"
   ],
   "world_state": [
     "id",

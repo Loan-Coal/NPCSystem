@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Mapping
 
+from npc_engine.type_registry.base_contract_loader import load_base_node_labels
 from npc_engine.type_registry.contracts import RuntimeFieldDefinition
 from npc_engine.utils.errors import RegistryPayloadValidationError
 
@@ -98,18 +100,39 @@ def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
     return decoded
 
 
+@lru_cache(maxsize=1)
+def _declared_base_node_labels() -> Mapping[str, str]:
+    """Registry-declared label per base node kind, read once from the shipped contracts."""
+
+    return load_base_node_labels()
+
+
 def resolve_node_label(node_type: str) -> str:
     """Resolve graph label for base and custom node types.
+
+    Precedence is BASE_NODE_LABELS, then the label declared in
+    type_registry/base_nodes/<kind>.yaml, then the key unchanged (M1.2).
+
+    BASE_NODE_LABELS stays first deliberately. It is the regression guard against a YAML
+    file declaring a label that disagrees with the seven kinds the engine cannot function
+    without: reading the declared value first would resolve "character" to whatever
+    character.yaml happens to say, and a lowercase value there 404s every eval case at
+    evals/runner.py:97. tests/unit/graph/test_node_label_contract.py pins the two to agree,
+    so the guard can never silently mask a divergence.
 
     Args:
         node_type: Node type key (e.g. "character") or custom type name.
 
     Returns:
-        Cypher node label string (e.g. "Character"); falls back to node_type if not in base map.
+        Cypher node label string (e.g. "Character"); falls back to node_type when the key
+        is neither a base kind nor a shipped registry contract (i.e. a custom type).
     """
 
     node_key = node_type.strip().lower()
-    return BASE_NODE_LABELS.get(node_key, node_type)
+    base_label = BASE_NODE_LABELS.get(node_key)
+    if base_label is not None:
+        return base_label
+    return _declared_base_node_labels().get(node_key, node_type)
 
 
 def resolve_src_label_expr(src_type: str | tuple[str, ...]) -> str:

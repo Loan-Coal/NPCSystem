@@ -1,4 +1,5 @@
 node_type: event
+label: Event  # graph/economy/pricing_queries.py:23
 fields:
   id: { type: str, required: true }
   summary: { type: str, required: true }

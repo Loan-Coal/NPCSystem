@@ -1,5 +1,6 @@
 # F2 fix: no current_holder_id field. Always query current holder via HOLDS_TITLE edge.
-node_type: Title
+node_type: title
+label: Title  # graph/political/political_queries.py:27
 fields:
   id:            { type: str,  required: true }
   name:          { type: str,  required: true }
