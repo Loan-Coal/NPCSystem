@@ -215,3 +215,35 @@ test skips in the other's mode.
 
 **Applied in:** `tests/integration/test_eval_world_corpus_integration.py` — `REQUIRE_FROZEN_CORPUS`
 (`make check-corpus-frozen`) and `REQUIRE_TICKING_CORPUS` (`make check-corpus-quiescent`), DEC-259.
+
+---
+
+## Pattern: import a sibling module's private helper instead of re-deriving its logic
+
+Two modules sometimes need the exact same small piece of logic that belongs conceptually to
+one of them (a predicate, a count, a classification rule) but is not yet used by 2+ callers
+in a way that would justify promoting it to a public, documented API (the DIP threshold).
+Re-deriving it in the second module is how two "the same rule" implementations quietly drift
+apart the first time either one is edited.
+
+Import the leading-underscore name directly, with a `# noqa: E402`-style import if needed and
+a comment at the use site naming why it's safe: the function is a small, stable, single-purpose
+helper whose behaviour the second module depends on staying in sync with the first's.
+
+```python
+# deterministic_records.py reusing anti_hallucination_runner's grounded-check predicate:
+from anti_hallucination_runner import _is_grounded
+
+# label_export_yield.py reusing label_adequacy's floor helpers, so a projected ceiling
+# and the floor it is projected against can never silently diverge in what they count:
+from label_adequacy import MIN_CASE_CLUSTERS, MIN_MINORITY_LABELS, _clean_adjudicated, _minority_count
+```
+
+This is a deliberate exception to "no abstraction until 2+ implementors or 3+ callers" — it
+is not an abstraction being added, it is an abstraction (the private function) being reused
+without inventing a second one. Promote the helper to public API instead once a third module
+needs it, or once its contract needs to be documented for consumers outside its home module.
+
+**Applied in:** `evals/deterministic_records.py` → `anti_hallucination_runner._is_grounded`
+(EVAL-P6.1); `evals/label_export_yield.py` → `evals/label_adequacy.py`'s floor constants and
+`_minority_count`/`_clean_adjudicated` (DEC-262).

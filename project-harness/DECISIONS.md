@@ -8555,3 +8555,229 @@ corruption this decision closes — not an import error or a typo.
 verb) still has no equivalent guard — logged as ISSUE-284 rather than folded in here, since no case
 in the current corpus exercises it and the YAML-case fix was the one blocking the next generation
 run.
+
+## DEC-262: stratified label-export oversampling expected-negative cases, gated on a projected adequacy ceiling
+**Date:** 2026-09-04 · **Status:** ✅ ACCEPTED · **Scope:** new `evals/calibration/case_strata.yaml`,
+new `evals/label_export_strata.py`, `evals/label_export_yield.py`, `evals/label_export_sampling.py`,
+`evals/label_export_stratified.py`; `evals/__main__.py` (new verb), `Makefile` (new target),
+`scripts/evals_baseline.txt` (one new R002 entry)
+
+**What forced this.** DEC-260's adequacy floor (25 minority labels, 10 case clusters) refuses every
+scorer in the committed 393-row corpus. `k3_61b01dad_negadv` (generated 2026-09-04, the run
+`docs/EVAL_NEXT_GENERATION_CASE_SET.md` specified) regenerated `case_neg`+`case_adv` under the
+current case definitions, giving `commits_judge` its first-ever data. `make label-export` exports
+every record unfiltered — a human labelling that output in file order would spend most of the pass
+on majority-verdict rows, reproducing the same useless-CI shape DEC-260 exists to prevent, and
+nothing would report in advance whether the floor is even reachable before that time is spent.
+
+**Correction to ISSUE-285 / `docs/EVAL_NEXT_GENERATION_CASE_SET.md` (measured against the real
+transcript, not just the case YAML).** Both documents count each case's own authored `expected:`
+list and conclude `tone_judge` (0 expectations) and `affirms_judge` (8) cannot reach the floor from
+`case_neg`/`case_adv` "full stop". That count misses `evals/guard_expectations.expected_with_guards`
+— every `case_neg_`/`case_adv_` case (`GUARD_PREFIXES`) gets `min_length`, a fallback `keyword_none`,
+and a `tone_judge` (`GUARD_TONE_RUBRIC`) expectation auto-injected at generation time regardless of
+what its own YAML declares, plus an `affirms_judge` (`GUARD_LORE_RUBRIC`) injection for every
+`requires_world: demo` case (all 37 here). Measured directly against `k3_61b01dad_negadv/outputs.jsonl`
+(k=3): `tone_judge` 111 records / 37 clusters, `affirms_judge` 132 / 37, `commits_judge` 111 / 37 —
+all three clear the 25-minority / 10-cluster ceiling in the best case, where the two documents
+claimed `tone_judge` was flatly unreachable and `affirms_judge` topped out at 16. ISSUE-285 is
+resolved (moved to `archive/ISSUES_RESOLVED.md`) with this correction; the case-set document gets a
+dated addendum rather than a rewrite, so the (still-accurate) historical measurement it opens with
+stays legible. The floor being *reachable* is not a guarantee it is *met* — DEC-260's ceiling is a
+count check, not a power analysis, and the real numbers depend on how humans actually label the
+batch this decision produces.
+
+**Decision, part 1 — declared strata, not a prefix heuristic at export time.** A checked-in
+`evals/calibration/case_strata.yaml` lists the 37 `case_neg`/`case_adv` case_ids verbatim under
+`expected_negative_cases`; `label_export_strata.load_expected_negative_cases` reads it and
+`stratum_of` classifies a case_id against the loaded set. The exporter never calls
+`guard_expectations.is_guard_case` or re-derives membership from a `case_id.startswith(...)` check
+of its own: the task instruction was explicit ("strata declared in a file rather than derived by a
+heuristic"), and a declared list survives a future rename or a new case family that changes what a
+prefix means, where a second independent prefix check would silently drift from the first.
+
+**Decision, part 2 — project before exporting, refuse per judge, never per run.**
+`label_export_yield.project_yield` computes, per scorer: existing minority count and cluster span
+among labels that *survive* against the candidate transcript (`label_survival.simulate_survival` —
+a label against output the transcript no longer produces cannot anchor a future kappa), plus every
+unlabelled expected-negative candidate the transcript offers. The ceiling is existing + available,
+best case. `check_label_adequacy`'s own floor constants and its private `_minority_count`/
+`_clean_adjudicated` helpers are imported and reused rather than re-derived (the same
+already-established precedent as `deterministic_records` reusing
+`anti_hallucination_runner._is_grounded`). A judge whose ceiling cannot clear the floor is reported
+by name with its numbers and gets no batch; a judge in the same run that DOES clear it still gets
+its batch — refusal is per-judge, matching what ISSUE-285's own methodology already assumed
+(`tone_judge`/`affirms_judge` staying blocked must never block `commits_judge`, the one judge this
+run exists to unblock).
+
+**Decision, part 3 — oversampling is a seeded, capped join, not "export negative only".**
+`label_export_sampling.select_stratified_batch` takes every unlabelled expected-negative candidate
+(the rare stratum is never dropped) plus a `random.Random(seed)`-shuffled sample of unlabelled
+expected-positive candidates capped at the negative count, so a batch never silently discards the
+majority stratum outright when both exist. Seed is `DEFAULT_SEED = 20260904`, printed on every run
+(DEC-176 convention: every RNG seed the harness uses is pinned and logged, never left to draw from
+system entropy) and overridable via `--seed` for a deliberate re-draw.
+
+**Why `refusal_judge` is a compile-time exclusion, not a runtime one.** `IN_SCOPE_SCORERS` in
+`label_export_stratified.py` omits `refusal_judge` with a comment, rather than computing it out via
+some general "excluded scorers" mechanism: the task explicitly forbids touching `refusal_judge` or
+ISSUE-276, and this transcript's case set (`case_neg`/`case_adv`) carries zero `refusal_judge`
+records anyway (that judge is driven entirely by `anti_hallucination_demo.json`, an unrelated case
+family) — there is nothing for a general mechanism to generalize over yet, and DIP's own 2+/3+
+threshold (`npc-coding-principles`) is not met by one caller.
+
+**Why R002 (`print()`) is re-baselined for `label_export_stratified.py` rather than switched to
+`utils/logging.py`.** Every other verb dispatched through `evals.__main__` — `label_export.py`,
+`calibration.py`, `runner.py`, thirteen files in total — is already on `scripts/evals_baseline.txt`
+for exactly this rule; a CLI verb's user-facing report is its actual output, the same shape as
+`check_label_adequacy.py`'s report. Adding a fourteenth entry for a fourteenth report-emitting verb
+is not new debt in kind, only in count, and `check_rules.py`'s own ratchet is designed to accept
+exactly this via `--update-baseline` plus a documented reason (this entry) rather than a waiver
+file. R003 (`except: pass`) and R006 (function length) were fixed instead of baselined: both were
+genuinely avoidable — R003 by not duplicating `evals.__main__`'s already-applied stdout UTF-8
+reconfiguration (dispatched verbs get it for free at import time), R006 by extracting one
+15-30-line helper per oversized function (`_build_projection`, `_unlabelled_negative_candidates`,
+`_unlabelled_pool`, `_export_cleared_batches`) — genuine debt has no standing precedent to lean on
+and a gate should not be relaxed for it.
+
+**Measured result, real corpus (`k3_61b01dad_negadv`, seed 20260904, `--scorer` unset → the three
+in-scope judges).** `check_label_survival` against this transcript: 3 of the 393 existing labels
+survive (all `affirms_judge`, one cluster, all human_verdict=True — majority class, so they add
+nothing to any minority ceiling), 390 orphaned, 0 drifted — the 393-row corpus is against a
+superseded transcript and is correctly treated as spent, not re-adjudicated (explicit task
+constraint; re-adjudicating it would reproduce the same ~94/6 distribution DEC-260 exists to
+refuse). Projected ceilings: `commits_judge` 111/37c, `tone_judge` 111/37c, `affirms_judge` 132/37c
+— all three CLEAR the floor and each got a written batch under
+`evals/calibration/stratified_batches_negadv/<judge>/`. This is a ceiling, not an outcome: whether
+the real human-labelled minority count actually reaches 25 is unmeasured until the batches are
+labelled, which is explicitly not done here (task boundary — the relabeling is the user's).
+
+**Not decided here.** Whether the realistic (not best-case) yield is anywhere near the ceiling —
+the guard rubrics (`GUARD_TONE_RUBRIC`, `GUARD_LORE_RUBRIC`) are near-always-YES by design, so the
+true minority rate for the guard-injected share of these candidates is likely far below 100%; DEC-260
+already accepts this as a known v1 limitation (count check, not a power analysis) and this decision
+does not revisit it.
+
+## DEC-263: `battery_trust.py` — a declared battery→judged-scorer map, worst-level-wins, additive gate
+
+**Decision.** New module `evals/battery_trust.py` maps each of the three published batteries
+(`adversarial`, `anti_hallucination`, `capability`) to the judge-calibrated scorers whose
+verdicts feed it, and wires `scorer_trust_policy.check_publication` into `evals/summary.py`
+(`_gated_rate_strs` -> `_one_battery_rate_str` -> `trust_gate`), then into `evals/report.py`'s
+`write_report` via `battery_trust.load_current_scorer_kappas()`. This is the wiring
+`docs/SCORER_TRUST_POLICY.md` already documented as required and that measured 2026-09-04 as
+absent everywhere on the report-generation path.
+
+**The map is declared, not derived (DEC-249).** `BATTERY_JUDGED_SCORERS` was read off the
+`kind:` fields actually present in `evals/cases/case_adv_*.yaml`, `case_neg_*.yaml` and
+`case_pos_*.yaml` (measured 2026-09-05: adversarial -> affirms_judge + commits_judge;
+capability -> tone_judge only; anti_hallucination -> anti_hallucination_grounded, from the
+scorer name in the calibration corpus, since no `ah_demo_*.yaml` case file exists any more).
+Mechanical matchers (schema, keyword_none, keyword_any, in_set, range) are excluded on
+purpose — they carry no Cohen's kappa, so `check_publication` has nothing to gate. `refusal_judge`
+is excluded from `capability` on purpose too: no current `case_pos_*` case exercises it, and
+touching it at all is out of scope (M3.2/ISSUE-276 stays halted).
+
+**Worst level wins when a battery has 2+ contributing scorers.** `adversarial` currently names
+two (`affirms_judge`, `commits_judge`); `battery_publication_status` takes the HIDDEN-beats-
+RESTRICTED-beats-PUBLISHABLE maximum across whichever of them have a recorded `ScorerKappa`,
+rather than averaging or requiring unanimity — a single untrustworthy contributor is enough to
+make the combined rate untrustworthy, the same reasoning `check_publication` already applies
+per-scorer (kappa AND CI floor must BOTH clear, CR-L03-02/DEC-244).
+
+**A scorer with no recorded kappa does not gate its battery — absence of evidence, not evidence
+of untrustworthiness**, mirroring `headline_refusal.refusal_for_battery`'s rule for an
+unmeasured null baseline. Measured 2026-09-05: this is not a hypothetical — every one of the
+five scorers in the post-negadv-merge `labels_v1.jsonl` is currently refused by
+`label_adequacy.check_label_adequacy` (a floor below `check_publication`, on human-verdict
+*count* rather than kappa), so `load_current_scorer_kappas()` returns `()` and every battery
+renders trust-ungated today. That is a correct, honestly-reported state, not a silent pass —
+see the M-programme report for what closes it (real `make eval-adjudicate` time).
+
+**`evals/dashboard/headline.py` is deliberately NOT unified with this gate.** It already calls
+`check_publication` itself, per-scorer, with its own two-tier (refused/shown) rendering — adding
+a third RESTRICTED-caveat tier there, or replacing its logic with `battery_trust`, is a second
+surface this task did not ask for and risks a dashboard regression with no test budget assigned
+to it here. Logged as a natural follow-on, not fixed now (single-task focus).
+
+**Additive, not widened (DEC-249's design bar).** `scorer_kappas` is a new keyword-only
+parameter defaulting to `()` on `format_summary_lines`, `format_summary_markdown` and the
+private `_gated_rate_strs`/`_one_battery_rate_str` — every existing caller that omits it
+renders byte-identical output to before (pinned by
+`test_no_scorer_kappas_argument_renders_ungated_as_before`).
+
+**`load_current_scorer_kappas` duplicates `trend_row_builder._scorer_kappas`'s ~10-line glue
+rather than importing it**, which is normally the wrong call per the PATTERNS.md "import a
+sibling module's private helper" entry — but here it is required: `trend_row_builder.py`
+already imports `summary` (`from summary import EvalSummary, summarize_from_dir`), so
+`battery_trust` importing `trend_row_builder` would close a real cycle
+(`summary` -> `battery_trust` -> `trend_row_builder` -> `summary`), not the "reads as a cycle
+but isn't" case `comparability_key` calls out in that file's own docstring. The kappa *math*
+still lives once, in `calibration.run_calibration`; only the "which four fields to pull into a
+`ScorerKappa`" glue is duplicated.
+
+## DEC-264: `latency_stats.py` dedupes by (case_id, repetition), not by GenerationRecord
+
+**Decision.** `evals/latency_stats.py` computes p50/p95 turn latency by first collapsing every
+`GenerationRecord` sharing one engine call down to a single `duration_ms` value, keyed on
+`(record_id.split(":")[0], repetition)` — mirroring `label_adequacy._cluster_count`'s existing
+case-cluster key. `generation_collection.stamp_records` stamps every expectation derived from
+one `/v1/dialogue` call with the *same* `duration_ms`, so computing percentiles over raw records
+would silently weight a case by how many expectations it happens to carry (a `schema` +
+`keyword_none` + `commits_judge` case counts 3x a bare `schema`-only case) rather than by how
+many turns actually ran. Nearest-rank percentile (`ceil(pct/100 * n)`-th smallest, 1-indexed) was
+chosen over linear interpolation for the same reason `rate_stats`'s Wilson interval is exact
+rather than approximate elsewhere in this codebase: a turn's latency is a real observed value,
+and the reported percentile should name one of them, not an interpolated point between two.
+
+**Wired as new optional `TrendRow` fields**, `latency_p50_ms`/`latency_p95_ms`, both `None`-
+defaulted (the store is append-only; old rows have neither) and computed in
+`trend_row_builder._latency_fields` from the same `read_transcript` call `_harness_version`
+already makes — no new file read, no new I/O.
+
+## DEC-265: recover `k3_61b01dad_negadv`'s panel `run_status.json` from persisted votes
+rather than re-running the 3-model panel
+
+**Decision.** `make eval-judge ARGS=--panel` against `k3_61b01dad_negadv` ran the real
+~4.5-hour local panel pass correctly and persisted `judged.jsonl` (consensus) and
+`judged_panel_votes.jsonl` (357 records × 3 seats) before crashing inside `write_report`
+(ISSUE-288 — this generation has zero capability cases by design, and
+`_assert_paired_rates` refuses to render an unpaired headline). `judge_runner.main`
+writes `run_status.json` *after* `write_report`, so the crash meant the panel's real,
+already-computed agreement statistics were never persisted anywhere.
+
+Rather than re-running the panel (another ~4.5h of local Ollama inference for numbers
+already sitting on disk), a one-off scratchpad script
+(`recover_run_status.py`, deleted at task close, not part of the repo) reconstructed
+`PanelScoredRecord`s directly: `outputs.jsonl` supplies each `(record_id, repetition)`'s
+real `GenerationRecord` (needed for `expected_polarity`/`judge_kind`, absent from the
+slimmed vote rows), `judged_panel_votes.jsonl` supplies the three seats' verdicts in their
+already-preserved roster order (`judge_panel.seat_rows` writes `for verdict in
+item.verdicts`, so the file's per-record vote order already IS roster order — no
+judge_model matching needed), and `panel_metrics.compute_panel_metrics` computes the
+identical statistics the live pipeline would have. All 357 records reconstructed cleanly
+(0 missing, 0 with != 3 seats) — the artifact was complete, only the aggregation step's
+output was lost.
+
+**Not a general "replay judging from disk" feature.** This recovers exactly the fields
+`compute_panel_metrics` reads off `PanelScoredRecord.record`
+(`record_id`, `judge_kind`, `expected_polarity`) — no new judgment is synthesized, no LLM
+is called, and the script is not committed. `evals/generations/k3_61b01dad_negadv/
+RECOVERED_NOTE.md` stands in for the markdown report `write_report` never produced, and is
+named as `run_status.json.report_path` so that reference is not dangling.
+
+**ISSUE-288 itself is not fixed by this** — the next guard-only `--panel` run hits the
+same crash and needs the same recovery, or a real fix. Recovering this one run's data is
+in-scope (it directly blocks Task 6, "make the labels and the generation agree" needing
+real panel kappa); rewriting `judge_runner.main`'s exception boundary is not (single-task
+focus — ISSUE-288's own entry already scopes that decision).
+
+**Measured result.** Panel Fleiss κ = 0.831 (95% CI [0.742, 0.912], n=357) — strong
+inter-judge agreement, raw pairwise agreement 93.4%. Per-criterion: `commits_judge` κ=0.308
+(111 items, 81 unanimous), `affirms_judge` κ=0.254 (135 items, 132 unanimous), `tone_judge`
+κ≈0.003 (111 items, 109 unanimous) — the base-rate-inflation signature `kappa_by_criterion`'s
+own docstring names (tone_judge, ISSUE-184): near-total raw agreement with near-zero
+chance-corrected kappa means almost every seat is voting the same way regardless of content,
+not that the seats are truly agreeing. Case-turn pass rate 17/111 (15.3%) — corroborates the
+single-judge run's 9.9% adversarial rate (both judge instruments agree the battery is mostly
+failing, not a single-judge artifact).

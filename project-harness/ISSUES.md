@@ -16,6 +16,64 @@ Rules:
 
 ## Open
 
+## ISSUE-289: `mypy.ini`'s `mypy_path = src` silently Any-types every intra-`evals/` import
+**Found:** 2026-09-05, wiring `battery_trust.trust_gate` into `evals/summary.py`
+**Severity:** P2 (annoying — `make type-evals` still catches real errors when they
+happen to surface as a mismatched *return*, which is how this was found; it silently
+misses everything else)
+**Where:** `mypy.ini:3` (`mypy_path = src`); affects every module under `evals/`
+**Description:** `evals/` has no `__init__.py` and `mypy_path` never lists it, so when
+mypy analyzes an `evals/*.py` file as a root (exactly what `mypy evals/` — the real
+`scripts/mypy_evals_ratchet.py` invocation — does), a sibling import like
+`from battery_trust import trust_gate` resolves to `Any` rather than the real
+`(battery: str, current_str: str, scorer_kappas: Sequence[ScorerKappa]) -> str`
+signature (confirmed via `reveal_type`; `ignore_missing_imports = True` swallows the
+"cannot find module" error that would otherwise surface this). This is not new to
+`battery_trust.py` — `evals/summary.py` already imported `headline_refusal.
+refusal_for_battery`, `battery_rates`, `panel_metrics` etc. the identical way; none of
+those calls happened to be a bare `return <call>` from a function with a concrete return
+annotation, which is the one shape `[no-any-return]` catches, so the gap was invisible
+until now.
+**Why deferred:** out of scope for the M metrics-bring-online task; fixing `mypy_path`
+properly (adding `evals` alongside `src`, or giving `evals/` an `__init__.py`) would very
+likely surface a batch of newly-real `[no-any-return]`/`[no-untyped-def]` errors across
+every sibling import in the package — a remediation pass this task has no budget for, and
+`type-evals`'s 0-baseline ratchet does not distinguish "genuinely 0 errors" from "0 because
+most of the package type-checks as Any".
+**To fix:** add `evals` to `mypy_path` (or convert it to a real package), run
+`make type-evals`, and baseline whatever newly-real error count results with
+`make type-evals-update` plus a DECISIONS.md entry — do not silently raise the baseline
+without recording why.
+
+## ISSUE-288: `make eval-judge` crashes uncaught on a guard-only generation (no capability cases)
+**Found:** 2026-09-05, running `make eval-judge` against `k3_61b01dad_negadv` (the
+case_neg/case_adv-only generation from `docs/EVAL_NEXT_GENERATION_CASE_SET.md` — no
+case_pos_*, no AH fixture, per that doc's decision).
+**Severity:** P2 (annoying — the judge pass itself completes and judged.jsonl is written
+correctly before the crash; only report generation fails)
+**Where:** `evals/report.py:51` -> `evals/summary.py:598` `format_summary_markdown` ->
+`evals/summary.py:469` `_assert_paired_rates`, raised from `evals/judge_runner.py:237`
+`write_report(...)`, which is called OUTSIDE the `try/except` in `judge_runner.main`
+(`evals/judge_runner.py:230-232` only wraps `_run_judging`).
+**Description:** `_assert_paired_rates` requires the guard rates and the capability rate
+to be either both present or both absent (`_UNPAIRED_GUARD_ONLY` / `_UNPAIRED_CAPABILITY_ONLY`).
+A generation with guard cases and zero capability cases — a real, deliberately-authored
+shape, not a malformed transcript — trips `_UNPAIRED_CAPABILITY_ONLY` and raises. Because
+`judge_runner.main`'s `try/except` ends before `write_report` is called, the exception is
+never caught by `record_error`; it propagates as a raw traceback and the process exits 1
+(not the documented 3-way 0/1/2 contract). `--json-out judged.jsonl` is written before this
+point, so the actual judging work survives — only the console/markdown report is lost.
+**Why deferred:** out of scope for the M metrics-bring-online task in progress; fixing the
+pairing invariant or `judge_runner`'s exception boundary is a design decision (does a
+guard-only generation get an exemption from `_assert_paired_rates`, or does `write_report`
+get its own try/except with a graceful degrade?) that this task did not ask for.
+**To fix:** either (a) extend `write_report`'s call to `format_summary_markdown` with a
+guard clause that skips `_assert_paired_rates` when the caller declares the generation
+guard-only (a new explicit flag, not silent), or (b) move `write_report` inside
+`judge_runner.main`'s `try/except` so this degrades to exit 2 with a recorded error
+instead of an uncaught crash. Either way, add a regression test that runs `judge_runner.main`
+against a guard-only transcript and asserts the process does not crash.
+
 ## ISSUE-287: `make eval-generate`'s own recipe never populates a generation's corpus fingerprint
 **Found:** 2026-09-04, during the fresh eval generation run (`k3_61b01dad_negadv`)
 **Severity:** P3 (nice-to-fix)
@@ -38,24 +96,6 @@ these fields at their None/"" defaults rather than lie).
 **To fix:** Either export `API_KEY_SECRET=$(API_KEY)` in the `eval-generate` recipe's own
 shell, or have `default_corpus_fetcher` read the same value `evals generate`'s `--api-key`
 resolves to instead of a separate env var.
-
-## ISSUE-285: `tone_judge` and `affirms_judge` cannot clear the label-adequacy floor from the authored corpus
-**Found:** 2026-09-04, choosing the case set for the next generation (`docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
-**Severity:** P2 (annoying)
-**Where:** `evals/cases/case_neg_*.yaml`, `evals/cases/case_adv_*.yaml` (37 cases total)
-**Description:** DEC-260's adequacy floor (25 minority labels, 10 case clusters) currently
-refuses all four labeled scorers. `case_neg`/`case_adv` — the only cases authored to elicit
-a minority verdict — carry zero `tone_judge` expectations and only 8 `affirms_judge`
-expectations across the 37 cases. Even under a best-case labeling outcome (every candidate
-lands on the minority side), `tone_judge` gains nothing (0 available) and `affirms_judge`
-tops out at 16 (8 current + 8 available), both short of the 25 floor. Full numbers in
-`docs/EVAL_NEXT_GENERATION_CASE_SET.md`.
-**Why deferred:** The task that found this explicitly rules out lowering the floor and
-authoring new `case_pos`; authoring new negative cases for `tone_judge`/`affirms_judge` is
-new case-authoring work, out of scope for a case-*selection* task.
-**To fix:** Author new `case_neg`/`case_adv` cases whose `expected` list carries a
-`tone_judge` and/or `affirms_judge` expectation, sized to give each scorer a realistic path
-past 25 minority labels across at least 10 clusters.
 
 ## ISSUE-284: the generate verb's AH-fixture path still has no world guard
 **Found:** 2026-09-04, during DEC-261 (the requires_world guard extraction for YAML cases)

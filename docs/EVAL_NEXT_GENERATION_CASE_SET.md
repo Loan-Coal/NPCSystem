@@ -84,3 +84,27 @@ and a real (not guaranteed) shot at clearing both floors. It does **not** unbloc
 `tone_judge`, `affirms_judge`, or `refusal_judge` — those stay refused after this run
 exactly as they are today, because the corpus has nothing left in it that could move them.
 Closing those three needs new case authorship, logged as follow-up rather than done here.
+
+## Addendum, 2026-09-04: the `tone_judge`/`affirms_judge` conclusion above was wrong
+
+**Corrected by DEC-262** (label-export stratification task), after this run actually happened
+(`evals/generations/k3_61b01dad_negadv`, k=3). The "what `case_neg`+`case_adv` can contribute
+per judge" table above counts each case's own authored `expected:` list only. It misses
+`evals/guard_expectations.expected_with_guards`: every `case_neg_`/`case_adv_` case gets
+`tone_judge` (`GUARD_TONE_RUBRIC`) auto-injected at generation time regardless of what its own
+YAML declares, plus `affirms_judge` (`GUARD_LORE_RUBRIC`) for every `requires_world: demo` case
+(all 37 here) — a mechanism this document's counting method never accounted for.
+
+Measured directly against the real transcript: `tone_judge` 111 records across 37 clusters,
+`affirms_judge` 132 across 37 (not 0 and 16 as claimed above). Both clear the 25-minority /
+10-cluster ceiling in the best case, same as `commits_judge`. ISSUE-285 (which restated this
+document's wrong conclusion) is closed with this correction — see `archive/ISSUES_RESOLVED.md`
+and `project-harness/DECISIONS.md` DEC-262 for the full numbers and the label-export tooling
+that now uses this document's declared case set
+(`evals/calibration/case_strata.yaml`).
+
+This does not retroactively validate the rest of the document: the case-set decision itself
+(run `case_neg`+`case_adv`, k=3, no `case_pos`) was sound and is what actually got generated.
+Only the per-judge reachability table's `tone_judge`/`affirms_judge` rows were wrong, and only
+because of the missed injection mechanism above — the `refusal_judge` row's conclusion (out of
+scope, ISSUE-276, no case in this set touches it) is unaffected and still correct.

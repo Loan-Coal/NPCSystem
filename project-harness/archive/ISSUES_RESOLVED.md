@@ -3820,3 +3820,35 @@ against the real running Ollama (not just the mock): `qwen2.5:7b` ->
 path / unlisted model / unreachable server) all pass; full `tests/unit/evals/` suite (890 tests),
 `make check-docstrings`, `make check-layers`, `make check-rules`, and `make type-evals` all green
 with no new violations.
+
+## [FIXED] ISSUE-285: `tone_judge` and `affirms_judge` cannot clear the label-adequacy floor from the authored corpus
+**Found:** 2026-09-04, choosing the case set for the next generation (`docs/EVAL_NEXT_GENERATION_CASE_SET.md`)
+**Severity:** P2 (annoying)
+**Where:** `evals/cases/case_neg_*.yaml`, `evals/cases/case_adv_*.yaml` (37 cases total)
+**Description:** DEC-260's adequacy floor (25 minority labels, 10 case clusters) currently
+refuses all four labeled scorers. `case_neg`/`case_adv` — the only cases authored to elicit
+a minority verdict — carry zero `tone_judge` expectations and only 8 `affirms_judge`
+expectations across the 37 cases. Even under a best-case labeling outcome (every candidate
+lands on the minority side), `tone_judge` gains nothing (0 available) and `affirms_judge`
+tops out at 16 (8 current + 8 available), both short of the 25 floor. Full numbers in
+`docs/EVAL_NEXT_GENERATION_CASE_SET.md`.
+**Why deferred:** The task that found this explicitly rules out lowering the floor and
+authoring new `case_pos`; authoring new negative cases for `tone_judge`/`affirms_judge` is
+new case-authoring work, out of scope for a case-*selection* task.
+**To fix:** Author new `case_neg`/`case_adv` cases whose `expected` list carries a
+`tone_judge` and/or `affirms_judge` expectation, sized to give each scorer a realistic path
+past 25 minority labels across at least 10 clusters.
+**Fixed:** 2026-09-04, during the label-export stratification task (DEC-262) — as a correction,
+not as case-authoring. The premise was measured against each case's own authored `expected:`
+list only, which misses `evals/guard_expectations.expected_with_guards`: every `case_neg_`/
+`case_adv_` case gets `tone_judge` (`GUARD_TONE_RUBRIC`) auto-injected at generation time
+regardless of its own YAML, plus `affirms_judge` (`GUARD_LORE_RUBRIC`) for every
+`requires_world: demo` case (all 37 here) — a mechanism this issue's own counting method never
+ran the cases through. Measured directly against the real regenerated transcript
+(`evals/generations/k3_61b01dad_negadv/outputs.jsonl`, k=3): `tone_judge` 111 records / 37
+clusters, `affirms_judge` 132 / 37 — both clear the 25-minority / 10-cluster ceiling in the best
+case, where this issue claimed `tone_judge` was unreachable and `affirms_judge` topped out at 16.
+See DEC-262 for the full correction and the label-export tooling this measurement now feeds.
+Reachable is not the same as met: whether real human labelling actually reaches 25 for either
+scorer is still unmeasured, and remains open work if it does not — but that is a labelling
+outcome, not this issue's (wrong) premise that the corpus could not possibly produce one.
