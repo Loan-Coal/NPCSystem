@@ -147,7 +147,13 @@ def test_format_survival_report_names_drifted_and_orphaned_keys(tmp_path: Path) 
 def test_real_labels_file_survives_its_own_transcript() -> None:
     """Sanity check against the real committed artifact: labelling and generation
     are in sync today, so simulating against the transcript they came from
-    must show zero drift and zero orphaning."""
+    must show zero drift and zero orphaning.
+
+    Filtered to gen_id="k3_73e6c36": the shared labels_v1.jsonl now also carries
+    354 rows for k3_61b01dad_negadv (merged 2026-09-05), which are correctly
+    orphaned against THIS transcript — they belong to a different one. This test
+    is about k3_73e6c36's own labels staying in sync with k3_73e6c36's own
+    transcript, not about every generation ever merged into the shared file."""
     repo_root = Path(__file__).resolve().parents[3]
     labels_path = repo_root / "evals" / "calibration" / "labels_v1.jsonl"
     transcript_path = repo_root / "evals" / "generations" / "k3_73e6c36" / "outputs.jsonl"
@@ -156,7 +162,7 @@ def test_real_labels_file_survives_its_own_transcript() -> None:
 
     from calibration_records import read_calibration_labels
 
-    labels = read_calibration_labels(labels_path)
+    labels = [r for r in read_calibration_labels(labels_path) if r.gen_id == "k3_73e6c36"]
     report = simulate_survival(labels, transcript_path)
     assert report.drifts == ()
     assert report.orphaned == ()

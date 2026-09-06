@@ -91,14 +91,23 @@ def test_label_sha256_matches_transcript(
     labels: list[dict[str, Any]],
     outputs: list[dict[str, Any]],
 ) -> None:
-    """All 393 labels' output_sha256 fields match an npc_response in the transcript."""
+    """All of k3_73e6c36's labels' output_sha256 fields match an npc_response in
+    the transcript.
+
+    Filtered to gen_id="k3_73e6c36": the shared labels_v1.jsonl now also carries
+    354 rows for k3_61b01dad_negadv (merged 2026-09-05), whose output_sha256
+    values correctly reference THAT transcript's npc_response text, not this
+    module's k3_73e6c36 one. This test is an integrity check on k3_73e6c36's own
+    labels against k3_73e6c36's own transcript, not on every generation ever
+    merged into the shared labels file."""
     transcript_hashes = {
         hashlib.sha256(r["npc_response"].encode("utf-8")).hexdigest()
         for r in outputs
     }
+    own_labels = [lbl for lbl in labels if lbl.get("gen_id") == "k3_73e6c36"]
     mismatches = [
         lbl["record_id"]
-        for lbl in labels
+        for lbl in own_labels
         if lbl.get("output_sha256") not in transcript_hashes
     ]
     assert mismatches == [], (

@@ -18,6 +18,7 @@ R002|evals/generate_runner.py
 R002|evals/judge_run_artifacts.py
 R002|evals/judge_runner.py
 R002|evals/label_export.py
+R002|evals/label_export_stratified.py
 R002|evals/label_import.py
 R002|evals/retrieval_runner.py
 R002|evals/runner.py

@@ -170,6 +170,10 @@ class TrendRow(BaseModel):
         prompt_token_budget: Serving-tier context budget in effect (see the retrieval- vs
             serving-tier split: this varies by restart, not per request).
         mean_precision_at_k: Retrieval precision@k for the run, when measured.
+        latency_p50_ms: Median per-turn wall-clock latency (evals/latency_stats.py,
+            deduped across the several GenerationRecords one engine call produces).
+            None when the run's transcript carried no duration_ms values.
+        latency_p95_ms: 95th-percentile per-turn latency, same computation.
         repeat_flips: Unanimous-vs-solo verdict flips across the k repetitions —
             the engine-noise / judge-noise split that bounds what an A/B
             comparison can resolve.
@@ -200,6 +204,8 @@ class TrendRow(BaseModel):
     git_sha: str | None = None
     prompt_token_budget: int | None = None
     mean_precision_at_k: float | None = None
+    latency_p50_ms: float | None = None
+    latency_p95_ms: float | None = None
     # --- Labels provenance: WHICH labels produced scorer_kappas ----------------
     labels_gen_id: str | None = None
     labels_n: int | None = None

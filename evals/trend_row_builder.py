@@ -7,7 +7,8 @@ Purpose: Assemble one TrendRow from a completed run's on-disk artifacts — the
 Dependencies: datetime, json, logging, pathlib; calibration (run_calibration),
          calibration_records (LABELS_FILE, CalibrationLabel, read_calibration_labels),
          eval_records (read_transcript), judge_identity (resolve_judge_identity),
-         retrieval_summary (RETRIEVAL_METRICS_FILE), run_status (read_run_status),
+         latency_stats (latency_summary), retrieval_summary (RETRIEVAL_METRICS_FILE),
+         run_status (read_run_status),
          summary (summarize_from_dir), trend_store (LabelsGenerationMismatchError,
          RateWithCI, ScorerKappa, TrendRow), comparability (ComparabilityKey —
          imported inside comparability_key, since comparability imports trend_store
@@ -36,6 +37,7 @@ from calibration import run_calibration
 from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
 from eval_records import read_transcript
 from judge_identity import resolve_judge_identity
+from latency_stats import latency_summary
 from retrieval_summary import RETRIEVAL_METRICS_FILE
 from run_status import RunStatus, read_run_status
 from summary import EvalSummary, summarize_from_dir
@@ -235,7 +237,22 @@ def build_trend_row(
         **_rate_fields(eval_summary),
         **_panel_fields(status),
         **_variant_fields(gen_dir),
+        **_latency_fields(gen_dir),
     )
+
+
+def _latency_fields(gen_dir: Path) -> dict[str, float | None]:
+    """Compute per-turn p50/p95 latency from the transcript's duration_ms values.
+
+    Args:
+        gen_dir: The completed run's generation directory.
+    Returns:
+        latency_p50_ms and latency_p95_ms as TrendRow kwargs; both None when the
+        transcript has no records (see latency_stats.latency_summary).
+    """
+    records = read_transcript(gen_dir / TRANSCRIPT_FILENAME).records
+    p50, p95 = latency_summary(records)
+    return {"latency_p50_ms": p50, "latency_p95_ms": p95}
 
 
 def _labels_fields(

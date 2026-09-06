@@ -123,7 +123,14 @@ def test_is_single_rater_false_with_no_eligible_rows() -> None:
 def test_real_labels_file_is_detected_as_single_rater() -> None:
     """The actual 393-row artifact this fix exists for: every scorer must be
     flagged single-rater, so `make eval-calibrate` never publishes the
-    tautological 1.000 for it."""
+    tautological 1.000 for it.
+
+    Filtered to gen_id="k3_73e6c36" — the original 393-row artifact this test
+    names. The shared labels_v1.jsonl now also carries 354 k3_61b01dad_negadv
+    rows (merged 2026-09-05, Opus-pre-labelled — a genuinely independent
+    pre_labeller_model, not the human-* tautology), none yet adjudicated, so
+    they are correctly absent from is_single_rater's eligible set and must not
+    be folded into this specific historical assertion."""
     from pathlib import Path
 
     from calibration_records import read_calibration_labels
@@ -135,7 +142,7 @@ def test_real_labels_file_is_detected_as_single_rater() -> None:
 
         pytest.skip("real committed artifact not present in this checkout")
 
-    rows = read_calibration_labels(labels_path)
+    rows = [r for r in read_calibration_labels(labels_path) if r.gen_id == "k3_73e6c36"]
     scorers = sorted({r.scorer for r in rows})
     assert scorers, "expected at least one scorer in the real labels file"
     for scorer in scorers:
