@@ -4,7 +4,8 @@ Layer: evals harness (standalone — not part of the npc_engine layer model)
 Purpose: Compute the published anti-hallucination headline metric and a
          categorized failure breakdown from a completed eval run's results.
 Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction),
-              refusal_rate (over-refusal rate display, EVAL-P20.3).
+              battery_trust (scorer trust policy gate), refusal_rate (over-refusal
+              rate display, EVAL-P20.3), trend_store (ScorerKappa).
 Used by: runner.py (console output), report.py (markdown summary section).
 """
 
@@ -12,14 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from battery_rates import BatteryRate, compute_battery_rate
+from battery_trust import trust_gate
 import case_stats
 from headline_refusal import refusal_for_battery
 from null_baseline import load_null_baseline
 from panel_metrics import PanelMetrics
 from panel_metrics_format import console_lines, markdown_rows
 from refusal_rate import RefusalRateResult, fmt_refusal_rate
+from trend_store import ScorerKappa
 import verdict_sources
 
 # Matcher kinds tracked individually in the failure breakdown.
@@ -490,45 +494,63 @@ def _format_refusal_rate_row(refusal_result: RefusalRateResult | None) -> list[s
     return [f"| Over-refusal (grounded, excludes infra failures) | {fmt_refusal_rate(refusal_result)} |"]
 
 
+def _one_battery_rate_str(
+    battery: str,
+    battery_rate: BatteryRate | None,
+    passes: int,
+    turns: int,
+    rate: float | None,
+    ci_low: float | None,
+    ci_high: float | None,
+    marks: dict[str, dict],
+    scorer_kappas: Sequence[ScorerKappa],
+) -> str:
+    """Compose one battery's rate string, then null-gate and trust-gate it in order."""
+    picked = _pick_rate_str(battery_rate, passes, turns, rate, ci_low, ci_high)
+    picked = refusal_for_battery(battery, rate, marks) or picked
+    gated: str = trust_gate(battery, picked, scorer_kappas)
+    return gated
+
+
 def _gated_rate_strs(
     summary: EvalSummary,
     baseline: dict[str, dict] | None,
+    scorer_kappas: Sequence[ScorerKappa] = (),
 ) -> tuple[str, str, str]:
-    """The three battery rate strings, each refused where engine <= null (R2.5 step 3c).
+    """The three battery rate strings: null-gated (R2.5 step 3c), then trust-gated.
 
-    Applied strictly per population — adversarial, anti-hallucination and capability
-    are compared to their own recorded null and never to each other's, because
-    combining populations is the error DEC-243 removed.
+    Applied strictly per population, never as a union (DEC-243); the two gates are
+    independent, so a battery can be null-gated, trust-gated, both, or neither.
 
     Args:
         summary: The run being rendered.
-        baseline: {battery: entry} from null_baseline.load_null_baseline; None loads
-            the recorded artifact. Pass {} to render rates ungated.
+        baseline: {battery: entry}; None loads the recorded null_baseline artifact,
+            {} renders null-ungated.
+        scorer_kappas: Calibration kappas for the trust gate; () (default) renders
+            trust-ungated, so callers that omit this render exactly as before.
     Returns:
         (adversarial, anti_hallucination, capability) display strings.
     """
     marks = load_null_baseline() if baseline is None else baseline
-    adv = _pick_rate_str(
-        summary.adversarial_battery_rate,
+    adv = _one_battery_rate_str(
+        "adversarial", summary.adversarial_battery_rate,
         summary.adversarial_passes, summary.adversarial_turns,
         summary.adversarial_rate, summary.adversarial_ci_low, summary.adversarial_ci_high,
+        marks, scorer_kappas,
     )
-    ah = _pick_rate_str(
-        summary.anti_hallucination_battery_rate,
+    ah = _one_battery_rate_str(
+        "anti_hallucination", summary.anti_hallucination_battery_rate,
         summary.anti_hallucination_passes, summary.anti_hallucination_turns,
         summary.anti_hallucination_rate, summary.anti_hallucination_ci_low,
-        summary.anti_hallucination_ci_high,
+        summary.anti_hallucination_ci_high, marks, scorer_kappas,
     )
-    cap = _pick_rate_str(
-        summary.capability_battery_rate,
+    cap = _one_battery_rate_str(
+        "capability", summary.capability_battery_rate,
         summary.capability_passes, summary.capability_turns,
         summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
+        marks, scorer_kappas,
     )
-    return (
-        refusal_for_battery("adversarial", summary.adversarial_rate, marks) or adv,
-        refusal_for_battery("anti_hallucination", summary.anti_hallucination_rate, marks) or ah,
-        refusal_for_battery("capability", summary.capability_rate, marks) or cap,
-    )
+    return (adv, ah, cap)
 
 
 def format_summary_lines(
@@ -537,6 +559,7 @@ def format_summary_lines(
     refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
     null_baseline: dict[str, dict] | None = None,
+    scorer_kappas: Sequence[ScorerKappa] = (),
 ) -> list[str]:
     """Render as plain-text console lines; guard and capability rates adjacent.
 
@@ -551,11 +574,14 @@ def format_summary_lines(
             headline, raw pairwise agreement, the per-criterion breakdown and the
             repeat-flip decomposition are printed. Omitted when None — single-judge
             runs have no panel to agree within.
+        scorer_kappas: Calibration kappas gating each battery's rate through
+            battery_trust.trust_gate; defaults to () (no gating), so callers that
+            do not pass this render exactly as before.
     Raises:
         ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline)
+    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline, scorer_kappas)
     return [
         _SEPARATOR,
         "ANTI-HALLUCINATION GUARANTEE",
@@ -583,6 +609,7 @@ def format_summary_markdown(
     refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
     null_baseline: dict[str, dict] | None = None,
+    scorer_kappas: Sequence[ScorerKappa] = (),
 ) -> list[str]:
     """Render as markdown lines for the report; guard and capability rates adjacent.
 
@@ -592,11 +619,14 @@ def format_summary_markdown(
             the rate table. See format_summary_lines for why this is optional.
         panel_metrics: Optional panel agreement statistics; when supplied, adds rows.
             See format_summary_lines for why this is optional.
+        scorer_kappas: Calibration kappas gating each battery's rate through
+            battery_trust.trust_gate; defaults to () (no gating). See
+            format_summary_lines for why this is additive.
     Raises:
         ValueError: When the guard rates and the capability rate are not paired.
     """
     _assert_paired_rates(summary)
-    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline)
+    adv_rate_str, ah_rate_str, c_rate_str = _gated_rate_strs(summary, null_baseline, scorer_kappas)
     return [
         "## Anti-Hallucination Guarantee",
         "",

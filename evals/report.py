@@ -3,7 +3,8 @@ Module: report
 Layer: evals harness (standalone — not part of the npc_engine layer model)
 Purpose: Write markdown reports for completed eval runs, embedding the anti-hallucination
          guarantee section (guard + capability rates paired) and per-case pass/fail details.
-Dependencies: summary.py, retrieval_summary.py, stdlib (datetime, pathlib).
+Dependencies: summary.py, battery_trust.py (load_current_scorer_kappas — the scorer
+              trust policy gate), retrieval_summary.py, stdlib (datetime, pathlib).
 Used by: runner.py (writes report at end of run), __main__.py.
 """
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from battery_trust import load_current_scorer_kappas
 from retrieval_summary import RetrievalSummary, format_retrieval_summary_markdown
 from summary import format_summary_markdown, summarize
 
@@ -48,7 +50,9 @@ def write_report(
         "---",
         "",
     ]
-    lines.extend(format_summary_markdown(summarize(results)))
+    lines.extend(format_summary_markdown(
+        summarize(results), scorer_kappas=load_current_scorer_kappas(),
+    ))
     if retrieval_summary is not None:
         lines.extend(format_retrieval_summary_markdown(retrieval_summary))
 
