@@ -22,7 +22,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-export-stratified label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
@@ -714,6 +714,17 @@ label-export:
 	$(PYTHON) -m evals label-export --transcript $(TRANSCRIPT) --out-dir $(OUT_DIR) \
 		$(if $(VOCABULARY),--vocabulary $(VOCABULARY),) \
 		$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),)
+
+# label-export-stratified: stratified label-export oversampling expected-negative
+# cases (case_neg/case_adv) until each in-scope judge's projected best-case
+# ceiling clears DEC-260's adequacy floor; prints the per-judge projection table
+# and refuses (no batch, exit 1) any judge whose ceiling cannot reach it
+# (this task, 2026-09-04). refusal_judge is out of scope (ISSUE-276).
+# Usage: make label-export-stratified TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/stratified_batches
+label-export-stratified:
+	$(PYTHON) -m evals label-export-stratified --transcript $(TRANSCRIPT) --out-dir $(OUT_DIR) \
+		$(if $(VOCABULARY),--vocabulary $(VOCABULARY),) \
+		$(if $(SEED),--seed $(SEED),)
 
 # label-import: import a CLI labelling session into CalibrationLabel rows (EVAL-P5.6).
 # Usage: make label-import RAW=<path> TRANSCRIPT=<outputs.jsonl> JUDGED=<judged.jsonl> [MERGE=1]

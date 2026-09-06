@@ -1,0 +1,55 @@
+# Declared (not derived) case-family stratum for label-export oversampling.
+#
+# expected_negative_cases lists every case authored to have a real chance of
+# eliciting a minority (violation) human verdict from the guard battery's judges
+# (tone_judge/affirms_judge/commits_judge) — case_neg + case_adv, the same
+# population evals/guard_expectations.GUARD_PREFIXES names as "guard cases".
+# Everything not listed here is expected_positive by default.
+#
+# This is a DECLARATION, not a naming-convention check: label_export_strata.py
+# reads this file verbatim and never re-derives membership from a case_id prefix
+# at export time, so a future rename or a new case family cannot silently
+# reclassify a case. When new case_neg_*/case_adv_* cases are authored, add their
+# case_ids here explicitly.
+#
+# Generated 2026-09-04 from evals/cases/case_neg_*.yaml (24) + case_adv_*.yaml (13)
+# = 37 cases, for the label-export stratification task (see project-harness/
+# DECISIONS.md DEC-262 and docs/EVAL_NEXT_GENERATION_CASE_SET.md).
+expected_negative_cases:
+  - case_adv_aldric_black_market
+  - case_adv_aldric_fed_price
+  - case_adv_captain_sorn_guild_smuggling
+  - case_adv_false_eyewitness_henryk
+  - case_adv_false_premise_peace
+  - case_adv_leading_betrayal
+  - case_adv_lira_false_alliance
+  - case_adv_lira_troop_positions
+  - case_adv_mira_aldric_trade_figures
+  - case_adv_multistep_hypothetical
+  - case_adv_old_henryk_guild_secrets
+  - case_adv_roleplay_swap
+  - case_adv_sorn_reject_distortion
+  - case_neg_aldric_no_military_orders
+  - case_neg_aldric_no_politics
+  - case_neg_aldric_no_threats
+  - case_neg_aldric_no_troop_knowledge
+  - case_neg_aldric_no_war_outcome
+  - case_neg_captain_sorn_no_gossip_frame
+  - case_neg_captain_sorn_no_hedging
+  - case_neg_captain_sorn_no_plague_lore
+  - case_neg_captain_sorn_no_troop_specifics
+  - case_neg_captain_sorn_no_warmth
+  - case_neg_injection_001
+  - case_neg_lira_no_noble_succession
+  - case_neg_lira_no_system_reveal
+  - case_neg_lira_no_trust_disclosure
+  - case_neg_lira_no_war_knowledge
+  - case_neg_mira_no_certainty_on_war
+  - case_neg_mira_no_court_politics
+  - case_neg_mira_no_guild_secrets
+  - case_neg_mira_no_military_authority
+  - case_neg_mira_no_tactical_details
+  - case_neg_old_henryk_no_direct_facts
+  - case_neg_old_henryk_no_eyewitness_claim
+  - case_neg_old_henryk_no_war_timeline
+  - case_neg_old_henryk_past_war_not_current

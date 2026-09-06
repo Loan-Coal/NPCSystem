@@ -105,6 +105,11 @@ VERBS: dict[str, VerbTarget] = {
     "label-export": VerbTarget(
         "label_export", "main", "Export transcript records as JSON batches for CLI labelling."
     ),
+    "label-export-stratified": VerbTarget(
+        "label_export_stratified",
+        "main",
+        "Stratified label-export: oversample expected-negative cases, refuse a judge below DEC-260's floor.",
+    ),
     "label-import": VerbTarget(
         "label_import", "main", "Import a CLI labelling session into validated CalibrationLabel rows."
     ),
