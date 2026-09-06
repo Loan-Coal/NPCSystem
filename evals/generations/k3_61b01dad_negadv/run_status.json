@@ -1,0 +1,47 @@
+{
+  "status": "gate_failed",
+  "cases_passed": 17,
+  "cases_total": 111,
+  "judge_panel": [
+    "mixtral:8x7b",
+    "qwen2.5:14b",
+    "llama3.1:8b"
+  ],
+  "judge_model": "",
+  "fleiss_kappa": 0.8313819547815351,
+  "kappa_ci_low": 0.7419209600956828,
+  "kappa_ci_high": 0.9118364799117715,
+  "kappa_n_items": 357,
+  "kappa_by_criterion": [
+    {
+      "judge_kind": "affirms_judge",
+      "kappa": 0.2536286919831172,
+      "n_items": 135,
+      "unanimous": 132
+    },
+    {
+      "judge_kind": "commits_judge",
+      "kappa": 0.3083218661175653,
+      "n_items": 111,
+      "unanimous": 81
+    },
+    {
+      "judge_kind": "tone_judge",
+      "kappa": 0.002966381015163611,
+      "n_items": 111,
+      "unanimous": 109
+    }
+  ],
+  "repeat_flips": {
+    "records_with_flips": 21,
+    "unanimous_flips": 1,
+    "solo_flips": 18,
+    "n_records": 119
+  },
+  "raw_agreement": 0.9342230695900858,
+  "report_path": "evals\\generations\\k3_61b01dad_negadv\\RECOVERED_NOTE.md",
+  "votes_path": "evals\\generations\\k3_61b01dad_negadv\\judged_panel_votes.jsonl",
+  "duration_s": null,
+  "provenance": "",
+  "error": ""
+}

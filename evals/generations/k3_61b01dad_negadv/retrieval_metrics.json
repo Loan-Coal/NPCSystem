@@ -1,0 +1,8 @@
+{
+  "cases_above_threshold": 20,
+  "mean_mrr": 0.75,
+  "mean_precision_at_k": 0.6,
+  "mean_recall_at_k": 0.825,
+  "retrieval_profile": "default",
+  "total_cases": 20
+}
