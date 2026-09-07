@@ -1150,6 +1150,288 @@ hallucination guards remain unaffected (separate axis).
 
 ---
 
+## ISSUE-301: `API_KEY_GRAPH_WRITE`/`API_KEY_GRAPH_ADMIN` have no weak-secret validation
+**Found:** 2026-09-07, during full-review (L1-02)
+**Severity:** P2
+**Where:** `src/npc_engine/config_validators.py`, `src/npc_engine/config.py`
+**Description:** `API_KEY_SECRET` has a weak-secret validator rejecting shipped defaults in staging/prod. The two higher-privilege scopes, `API_KEY_GRAPH_WRITE` and `API_KEY_GRAPH_ADMIN`, have none — so the keys granting write and admin access can ship with a dev default while the lowest-privilege key cannot.
+**Why deferred:** Not exploitable on the default loopback-bound deployment; the review's five CRITICALs took the slot.
+**To fix:** Extend the existing validator to cover both fields. Non-breaking, internal.
+
+## ISSUE-302: admin-scoped `npc_ids`/`location_ids` request lists have no upper bound
+**Found:** 2026-09-07, during full-review (L1-03)
+**Severity:** P3
+**Where:** `src/npc_engine/api/routes/admin/batch.py`, `graph_admin.py`
+**Description:** Batch admin endpoints accept unbounded `npc_ids`/`location_ids` lists. CLAUDE.md requires input caps at the API boundary; these have none.
+**Why deferred:** Admin-auth gated, so the blast radius is an authenticated operator only.
+**To fix:** Add a `max_length` to the list fields, sized from realistic batch use.
+
+## ISSUE-303: `is_public_path` treats `/setup` as a prefix match, not a route allow-list
+**Found:** 2026-09-07, during full-review (L1-04)
+**Severity:** P3
+**Where:** `src/npc_engine/auth/middleware_helpers.py:71-72`
+**Description:** The public-path check appears to prefix-match `/setup` rather than matching an explicit route allow-list, so a future route beginning with that prefix would be public by accident. Graded **Suspected** — not confirmed by a live request.
+**Why deferred:** Unconfirmed, and the `/setup/*` surface is already env-gated and loopback-bound (CR-L05-11 fixed).
+**To fix:** Confirm by adding a route under the prefix and asserting it is NOT public; then convert the check to an exact allow-list.
+
+## ISSUE-304: two god-ports pair a 9- and 11-method interface with a single caller
+**Found:** 2026-09-07, during full-review (L2-03)
+**Severity:** P3
+**Where:** `src/npc_engine/engines/ports/chapter_port.py:21-70`, `quest_generation_port.py:17-76`
+**Description:** `ChapterGraphPort` (9 methods, 1 implementor, 1 caller) and `QuestGenerationGraphPort` (11 methods, 1 implementor, 2 callers) provide none of ISP's benefit and all of its cost.
+**Why deferred:** Subsumed by the wider port-sizing decision (34 of 44 ports fail the repo's own DIP threshold), which is awaiting a human call.
+**To fix:** Fold into whichever direction that decision takes.
+
+## ISSUE-305: two ports import graph-owned types, one an explicitly private Protocol
+**Found:** 2026-09-07, during full-review (L2-04)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/ports/event_port.py:19-20,33`; also `relation_read_port.py:21`, `scheming_port.py:22`
+**Description:** `event_port.py` imports `_EventNode` from `graph/event/event_writer.py:20` — a leading-underscore Protocol the writer marks private — and uses it as a parameter type. The port's own docstring (`:6-7`) says engines use it "instead of importing graph writers." The dependency inversion the port exists to create is undone through the type import. Layer-rank direction is legal, so `check-layers` correctly does not flag it; the defect is ownership.
+**Why deferred:** No live failure; it is a latent coupling.
+**To fix:** Have the port own its DTO (in `event_port.py` or a shared `engines/ports/_dtos.py`) and have the graph writer conform to it.
+
+## ISSUE-306: three sibling quest Protocols redeclare identical methods
+**Found:** 2026-09-07, during full-review (L2-05)
+**Severity:** P3
+**Where:** `src/npc_engine/engines/ports/quest_port.py:21-124`
+**Description:** `QuestLifecycleGraphPort`, `QuestOfferGraphPort` and `QuestRewardGraphPort` each redeclare a method a sibling in the same file declares (`get_quest_state`, `update_quest_node_status`), all satisfied by one implementor. Structural typing lets the copies drift with no type-checker cross-check.
+**Why deferred:** Cosmetic today.
+**To fix:** Extract a shared base Protocol, or record "ISP over DRY" as deliberate in DECISIONS.md.
+
+## ISSUE-307: CLAUDE.md's inline layer diagram omits `observability/` and `setup/`
+**Found:** 2026-09-07, during full-review (L2-06)
+**Severity:** P3
+**Where:** `project-harness/CLAUDE.md` (Architecture section); `scripts/check_layers.py:28-49`
+**Description:** `LAYER_RANK` ranks `observability` and `setup` at rank 1 (`:45-49`, SHIP-03/DEC-127). The CLAUDE.md diagram — billed as "the one rule this file states in full" — lists 16 packages and omits both. DEC-249 says layer lists should be pointers precisely because inline copies rot; this one already has, for 2 of 18 ranked packages.
+**Why deferred:** Both are leaf rank-1 dirs; no live impact.
+**To fix:** Add the two rows, or replace the diagram with a pointer to `LAYER_RANK`.
+
+## ISSUE-308: the WS connection cap is tested at the helper, not at the endpoint
+**Found:** 2026-09-07, during full-review (L4-04)
+**Severity:** P2
+**Where:** `src/npc_engine/api/routes/dialogue/dialogue_ws.py:221-225`; tests for `check_ws_connection_limit()`
+**Description:** The guard test exercises the limit helper in isolation. The endpoint's own accounting is untested — which is exactly where the CRITICAL slot leak (SEV-01) lives. Asserted-not-measured.
+**Why deferred:** SEV-01's brief includes the sequential-close endpoint test; this entry records the wider pattern for the WS surface.
+**To fix:** Add endpoint-level tests via `TestClient(app).websocket_connect`, covering both acquire and release.
+
+## ISSUE-309: repository-passthrough and Cypher-substring test patterns remain asserted-not-measured
+**Found:** 2026-09-07, during full-review (L4-05)
+**Severity:** P2
+**Where:** `tests/unit/graph/` (e.g. `test_story_pacing_repository.py:31-41`)
+**Description:** 127 delegate tests prove a mock echoed itself; an executed counterfactual gutting 105 repository passthroughs produced only 66 failures. Restated from CR-L14-02, confirmed unchanged at HEAD `8d30a3e1`. The wrapped Cypher is exercised only by `tests/integration`, which skips 34 of 43 in the default environment.
+**Why deferred:** The remedy depends on whether the CI `integration-tests` job is merge-gating — an open question in DECISIONS.
+**To fix:** Resolve the CI-gating question, then either rely on CI or add real-Cypher coverage locally.
+
+## ISSUE-310: existence-only tests assert wiring, not behaviour
+**Found:** 2026-09-07, during full-review (L4-06)
+**Severity:** P3
+**Where:** across `tests/unit/`
+**Description:** Several tests assert `hasattr(...)` or `iscoroutinefunction(...)` — they prove a symbol exists and is async, not that it does anything. They survive any implementation change that keeps the signature.
+**Why deferred:** Low individual value; better fixed opportunistically alongside the modules they cover.
+**To fix:** Replace each with a behavioural assertion, or delete it as noise.
+
+## ISSUE-311: ISSUE-107's "wired into the e2e battery" claim is false
+**Found:** 2026-09-07, during full-review (L6-02)
+**Severity:** P2
+**Where:** `e2e/scenarios/scenario_memory_recall_e2e.py`
+**Description:** ISSUE-107 was resolved with the claim that the cross-session memory-recall scenario is "wired into the e2e battery". It is not: the file has no `test_*` function or marker and is collected by nothing. The persistent-memory guarantee — the product's headline capability — has no automatic cross-session test. Contradicts a resolved issue, so this is a **regression** of the resolution, not a new gap.
+**Why deferred:** Needs a decision on where cross-session e2e runs (it needs live services).
+**To fix:** Give the scenario a collectable test entry point and put it in a suite something actually runs.
+
+## ISSUE-312: the entire branch system is one two-option stub, undocumented as final scope
+**Found:** 2026-09-07, during full-review (L6-03)
+**Severity:** P2
+**Where:** `demo_game/branches/`
+**Description:** The branching system is a single two-option branch (`garrick_deserter`). Its docstring says "First-slice"; no second slice exists anywhere and no DECISIONS entry records that one-branch is the intended final scope.
+**Why deferred:** Product-scope call, not a defect.
+**To fix:** Either add branches or record the intended scope in DECISIONS.md so the "First-slice" docstring stops implying unfinished work.
+
+## ISSUE-313: `matchers.py`'s `_DISPATCH` table is a closed seam for new eval-scorer kinds
+**Found:** 2026-09-07, during full-review (L7-01)
+**Severity:** P3
+**Where:** `evals/matchers.py`
+**Description:** Adding a scorer kind requires editing the `_DISPATCH` table — a closed module — whereas eval cases and generation are both file-glob open. Deliberate per DEC-145's size waiver, but it is the one closed eval-authoring surface.
+**Why deferred:** Deliberate; low churn.
+**To fix:** Registry-style registration if scorer kinds start changing often; otherwise leave and note the choice.
+
+## ISSUE-314: `engines/llm/factory.py` docstrings describe a self-registration pattern the code does not use
+**Found:** 2026-09-07, during full-review (L7-02)
+**Severity:** P3
+**Where:** `src/npc_engine/engines/llm/factory.py`
+**Description:** The docstrings describe adapter self-registration; the code uses an explicit factory mapping. Documentation asserting capability the code lacks (systemic pattern §3.6).
+**Why deferred:** Docs-only.
+**To fix:** Correct the docstrings to describe the explicit registry.
+
+## ISSUE-315: adding a tick-driven engine requires editing 4 existing files
+**Found:** 2026-09-07, during full-review (L7-03)
+**Severity:** P2
+**Where:** `scheduler/tick_scheduler.py`, `scheduler/engine_slots.py`, a getter module, `api/dependencies_engines/__init__.py`
+**Description:** The OCP verdict for the repo's main expansion axis is **closed**: a new engine is not a new file, it is 4 edits to closed modules. A good introspection-based wiring guard (`_assert_every_engine_slot_wired`) now exists and catches a missed edit, but the edits are still required.
+**Why deferred:** A generic-registry refactor is a large change; L7 recommends deferring until a fifth distinct call signature appears.
+**To fix:** Either a registry-driven engine table, or accept and document the 4-file cost.
+
+## ISSUE-316: location-connection `kind` is still an unconstrained `str`
+**Found:** 2026-09-07, during full-review (L7-04)
+**Severity:** P3
+**Where:** location graph models
+**Description:** A fixed value set typed as `str`, against CLAUDE.md's `Literal`/`Enum` rule. Carried over from the 2026-06-03 L7-04 finding; still live.
+**Why deferred:** Blocks nothing today; relevant when the PART_OF location hierarchy lands.
+**To fix:** Convert to `Literal`/`Enum` with the hierarchy work.
+
+## ISSUE-317: `distortion_strategy.registry_keys()`'s docstring overclaims openness
+**Found:** 2026-09-07, during full-review (L7-06)
+**Severity:** P3
+**Where:** `src/npc_engine/engines/gossip/distortion_strategy.py`
+**Description:** The docstring implies new distortion strategies register themselves; adding one still edits this module. The axis improved from closed to partly-open, but the docstring describes more openness than the code delivers.
+**Why deferred:** Docs-only.
+**To fix:** Correct the docstring.
+
+## ISSUE-318: `llm_tokens_in_total` excludes the system channel and under-counts input tokens 4.3×
+**Found:** 2026-09-07, during full-review (L9-05)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/llm/llm_metrics.py`
+**Description:** Measured live: the counter omits the system channel, so real input tokens are ~4.3× the reported figure. Any prompt-budget reasoning done from this metric is wrong by that factor — directly relevant given the ~4,245-token static system prompt.
+**Why deferred:** Observability defect, not a runtime failure.
+**To fix:** Include the system channel, and state the change in DECISIONS since it moves a published number.
+
+## ISSUE-319: the latency instrumentation cannot express the budget it exists to defend
+**Found:** 2026-09-07, during full-review (L9-06)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/llm/llm_metrics.py:12-14`
+**Description:** `llm_backend_latency_seconds` is a count/sum/min/max summary with **no buckets**, so no p50/p95 is derivable from the metrics endpoint. The 3–7s dialogue budget is a percentile claim that the shipped instrumentation cannot evaluate.
+**Why deferred:** DEC-273's instrumentation work just landed; this is the follow-on.
+**To fix:** Add histogram buckets sized around the 3–7s budget.
+
+## ISSUE-320: `check-rules` reports a resolved baseline entry on every run and never ratchets it down
+**Found:** 2026-09-07, during full-review (L9-07)
+**Severity:** P3
+**Where:** `scripts/rules_baseline.txt`, `scripts/check_rules.py`
+**Description:** A baseline entry whose underlying violation is resolved is still reported each run; the ratchet does not remove it. A baseline that cannot shrink stops being a ratchet.
+**Why deferred:** Cosmetic noise.
+**To fix:** Prune resolved entries and make the ratchet remove them automatically.
+
+## ISSUE-321: `BASELINE_2026-08-28.md` no longer matches the tree
+**Found:** 2026-09-07, during full-review (L9-09)
+**Severity:** P2
+**Where:** `project-harness/review-2026-08/BASELINE_2026-08-28.md`
+**Description:** Measured at HEAD `8d30a3e1`: `make test` is 4,571 passed / 41 skipped (baseline records 4,048 / 36); coverage 88.13% (baseline 87.86%). The file's stated purpose is that "a number that moved without an explanation is a finding" — but it is a point-in-time record that must not be edited, so "no delta" can no longer be used as a check against it.
+**Why deferred:** The file is deliberately immutable.
+**To fix:** Capture a new dated baseline for the post-review cycle and point `/fix-next` at it, leaving the 2026-08-28 file as history.
+
+## ISSUE-322: the `stream`/`stream_text` call site is dead in the production dialogue path
+**Found:** 2026-09-07, during full-review (L11-01)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/dialogue/`, `engines/llm/` streaming methods
+**Description:** The streaming protocol methods are implemented but unreachable from the production dialogue path. Related to ISSUE-299 (docs describe WS streaming frames the code does not send).
+**Why deferred:** Deleting a protocol method is a public-interface change.
+**To fix:** Either wire streaming into the WS path (which is what the docs already claim) or delete the dead methods and correct the docs.
+
+## ISSUE-323: memory consolidation asks for structured JSON through the unstructured `generate` protocol
+**Found:** 2026-09-07, during full-review (L11-04)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/memory_consolidation/`
+**Description:** The engine requests JSON via plain `generate` rather than `generate_structured`, so it gets no schema enforcement and must parse free text. This is precisely the cognitive-demand class a smaller model handles worst without structural constraints.
+**Why deferred:** Requires a schema definition and a fallback path for parse failure.
+**To fix:** Move to `generate_structured` with a Pydantic schema; keep the existing failure path.
+
+## ISSUE-324: proactive dialogue line generation has zero fallback and no timeout enforcement
+**Found:** 2026-09-07, during full-review (L11-05)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/proactive_dialogue/`
+**Description:** Unlike dialogue, the proactive path has no local fallback when the model fails, and its declared timeout is not enforced (see also the `timeouts_ms` dead-config finding). A model failure surfaces as no line at all.
+**Why deferred:** Needs a product decision on what a failed proactive line should do (silence is arguably correct).
+**To fix:** Decide the failure contract, then implement it explicitly rather than by omission.
+
+## ISSUE-325: two dialogue rules are both numbered 17, and rule 15 is out of sequence
+**Found:** 2026-09-07, during full-review (L12-01)
+**Severity:** P3
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml`, `system_state_v1.yaml`
+**Description:** `system_state_v1.yaml`'s appended rule collides with `system_v1.yaml`'s own Rule 17 in the assembled prompt, and Rule 15 is out of sequence. Cosmetic today (no broken cross-reference), but it is evidence the assembled artifact was never proofread as one document.
+**Why deferred:** Any prompt edit changes `dialogue_prompt_hash` and breaks eval comparability.
+**To fix:** Renumber when the next deliberate prompt change is taken, so the comparability cost is paid once.
+
+## ISSUE-326: Rule 9 (ECHO PROHIBITION) and Rule 5 (verbatim inclusion) can collide
+**Found:** 2026-09-07, during full-review (L12-03)
+**Severity:** P3
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml`
+**Description:** When the player's claim matches the NPC's own true account, Rule 9 forbids echoing it while Rule 5 requires including `MY_ACCOUNT_N` verbatim. Graded **Suspected** — not demonstrated in a live turn.
+**Why deferred:** Unconfirmed, and prompt edits cost eval comparability.
+**To fix:** Construct the colliding case and observe the model's behaviour before editing anything.
+
+## ISSUE-327: the Rule 16 vs Rule 2 tie-break is delegated to model "judgement" with no algorithm
+**Found:** 2026-09-07, during full-review (L12-04)
+**Severity:** P2
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml`
+**Description:** When STANDING (Rule 16) and PLAYER REPUTATION (Rule 2) disagree, the prompt tells the model to use its judgement rather than giving a rule. That is the single instruction most likely to degrade on a smaller model, since it asks for arbitration rather than a lookup.
+**Why deferred:** Prompt edit; costs `dialogue_prompt_hash` comparability.
+**To fix:** Specify a deterministic precedence, or merge the two systems (see ISSUE-328).
+
+## ISSUE-328: two independent 5-band tone systems do the same job from different data
+**Found:** 2026-09-07, during full-review (L12-05)
+**Severity:** P2
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Rules 2 and 16)
+**Description:** Rule 2 (PLAYER REPUTATION) and Rule 16 (STANDING) each define a 5-band tone system from a different data source, leaving the model to reconcile them per turn. L12 recommends a structural server-side merge over prompt-side arbitration — resolve the bands in code and hand the model one answer.
+**Why deferred:** Behavioural change plus prompt-hash cost; needs sign-off.
+**To fix:** Merge the bands server-side, pass one resolved tone into the prompt, delete the second rule.
+
+## ISSUE-329: three rules restate the same anti-hallucination policy for three context objects
+**Found:** 2026-09-07, during full-review (L12-06)
+**Severity:** P3
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Rules 5, 14, 17)
+**Description:** One policy stated three times, costing static prompt tokens on every turn without adding constraint.
+**Why deferred:** Prompt-hash comparability cost.
+**To fix:** Collapse into one rule that names the three objects.
+
+## ISSUE-330: Output-rules prose restates constraints the JSON schema already enforces
+**Found:** 2026-09-07, during full-review (L12-07)
+**Severity:** P2
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Output rules block)
+**Description:** The block restates enum and range constraints the generation schema enforces structurally. Free to cut in the sense that it does not affect decoded tokens — but it is static prompt tokens on every turn, and it is exactly the "should be structural, not textual" class.
+**Why deferred:** Prompt-hash comparability cost.
+**To fix:** Delete the restated constraints, keep the rules the schema cannot express.
+
+## ISSUE-331: Rule 8's guard/soldier register carve-out plausibly contributes to ISSUE-128
+**Found:** 2026-09-07, during full-review (L12-10)
+**Severity:** P3
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Rule 8)
+**Description:** ISSUE-128 records `captain_sorn` inventing a warlord name ("bjorn") under adversarial pressure. L12 judges Rule 8's register carve-out a plausible contributing factor but explicitly **not** a sufficient explanation. Graded **Suspected**.
+**Why deferred:** Unconfirmed; and the judged scorers that would evaluate a fix are currently REFUSED.
+**To fix:** Investigate alongside ISSUE-128 once the scorer layer is trustworthy.
+
+## ISSUE-332: two dead prompt YAMLs, and `llm_config.yaml` still names the dead `v1`
+**Found:** 2026-09-07, during full-review (L12-15)
+**Severity:** P3
+**Where:** `src/npc_engine/prompts/quest_generation/slot_fill_v1.yaml`, `prompts/quest_generation/flavor_v1.yaml`; the engine's `llm_config.yaml`
+**Description:** Both files are superseded by hardcoded v2 loads and are loaded by nothing. The engine's `llm_config.yaml` still declares the dead `v1` prompt name. (Note `escort_npc.yaml`/`fetch_item.yaml` are loaded via glob and are NOT dead despite zero literal-name hits.)
+**Why deferred:** Deleting files is ask-gated.
+**To fix:** Delete both YAMLs and correct the config's prompt name.
+
+## ISSUE-333: `prompts/eval/tone_judge.yaml` construction weaknesses
+**Found:** 2026-09-07, during full-review (L12-18)
+**Severity:** P3
+**Where:** `prompts/eval/tone_judge.yaml`
+**Description:** Construction assessment only — no judged score cited, per the trust policy. Four of the five currently-REFUSED scorers share this one template, so its criteria clarity is a common-mode factor in the scorer-adequacy work.
+**Why deferred:** The scorer layer is under repair; changing the shared template mid-repair would confound it.
+**To fix:** Fold into the scorer-adequacy remediation rather than editing standalone.
+
+## ISSUE-334: `military` resolves a battle every tick while its docstring calls it a no-op stub
+**Found:** 2026-09-07, during full-review (L13-03, L10-04)
+**Severity:** P2
+**Where:** `src/npc_engine/scheduler/tick_scheduler.py:131-132`; `src/npc_engine/engines/military/`
+**Description:** `MilitaryEngine` resolves battles and processes resource yield for real, reporting `battles_resolved: 1` on every tick indefinitely. The scheduler docstring calls it a no-op stub and cites `ISSUE-001`, an unrelated already-resolved issue. The underlying no-op was fixed 2026-06-19 (ISSUE-111); only the comment never caught up. This stale docstring is why the brief for this very review described `military` as a stub — and it is the engine that auto-loses the demo.
+**Why deferred:** The engine's *behaviour* is covered by the CRITICAL demo auto-lose decision; this entry is the docstring half.
+**To fix:** Correct the docstring and drop the wrong ISSUE reference. Also see CR-L14-01/CR-L09-06 (stale session-kwarg tests in the same directory).
+
+## ISSUE-335: two unbounded appenders nobody has logged — `:TickLease` nodes and the `SchedulerState` tick-id array
+**Found:** 2026-09-07, during full-review (L13-08)
+**Severity:** P2
+**Where:** `src/npc_engine/graph/` scheduler state writes
+**Description:** `:TickLease` nodes accumulate without retention, and `SchedulerState` holds a tick-id **array property** that grows unboundedly and is scanned O(n) on every interval tick — so it is a performance regression as well as a storage leak. Same retention gap as ISSUE-279 (faction-standing decay, ~2,500 nodes/hour) but different nodes, so logged separately rather than folded in.
+**Why deferred:** Needs a retention decision consistent with ISSUE-279's.
+**To fix:** Decide one retention policy covering ISSUE-279 and both of these, then implement pruning; replace the array property with a bounded structure.
+
+---
+
 ## Closed
 
 ---

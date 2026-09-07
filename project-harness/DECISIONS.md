@@ -9628,3 +9628,274 @@ in the suite, and it risks reviving review finding SEV-27, which is why
 `STRUCTURED_OUTPUT_TEMPERATURE` exists (dialogue previously ran at "uncontrolled ~0.8"). Logged as
 ISSUE-298, with the related finding that three of five engines never read their YAML temperature at
 all.
+
+---
+
+## DEC-274: How should the demo stop auto-losing itself three seconds after seeding? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (findings L6-01 ≡ L9-02, CRITICAL, confirmed live)
+
+**The situation.** An untouched demo reaches its LOSE state with zero player input. Measured live:
+`battle_resolved … winner iron_legion … loser city_guard … tick 5`, **3 seconds after the seed
+completed**; the CONTROLS edge was observable over the API ≤15s later, and the battle re-resolves every
+tick forever. The chain is deterministic, not probabilistic:
+
+- `demo_game/seeds/seed.py:900-921` seeds `army_iron_legion` (strength 100) and `army_city_guard_main`
+  (strength 60) **already co-located** at `loc_guard_barracks`, both `OCCUPIES … since_tick 0`
+- `scheduler/tick_scheduler.py:356` runs `military` in the plain every-tick list, with **no cadence gate**
+- `engines/military/military_engine.py:49` calls `resolve_battles(...)` unconditionally each tick
+- `demo_game/world_objectives.py:37-38` — `DEMO_LOSE_LOCATION_ID = "loc_guard_barracks"`,
+  `DEMO_LOSE_FACTION_ID = "iron_legion"` — the lose target **is** the barracks the seed stages the battle in
+- `demo_game/game_end_checker.py:414-416` — other lose conditions **override win**
+- `demo_game/pollers/game_end_poller.py:91-95,253-263` — latches exist for bankruptcy and the deadline;
+  **none on the legion path**
+
+`TICK_AUTOPILOT_ENABLED` is unset and defaults `True` (`config.py:269`) at a 10s interval; no `.env` or
+compose file overrides it for the demo.
+
+This is a **regression** against the 2026-06-03 review's §4 attestation that SEV-11 ("win AND lose
+reachable") held — though the attestation was likely wrong when written rather than describing something
+that later broke. It is invisible to every gate: `make check` is green and all 1,116 `make test-demo`
+tests pass, because they exercise `evaluate_game_end` as a pure function against synthetic
+`iron_legion_controls` lists, never against the world the seed actually produces.
+
+**Why this needs a decision.** The three candidate fixes have different meanings, and one of them hides
+the problem rather than solving it. Touches seed data and demo balance — a gameplay call, not an
+engineering one.
+
+**Options.**
+1. **Seed the armies apart** — stage `army_iron_legion` at a marching/staging location so the
+   confrontation is something the player's choices *cause*. The honest fix; changes the demo's opening
+   fiction.
+2. **Give `military` a cadence gate**, as other engines have, so no battle resolves in a world's first
+   ticks. Narrow, but leaves two hostile armies sharing a location at t=0.
+3. **Latch the legion lose path** in `game_end_poller` the way bankruptcy is latched — arm only after
+   `_start_tick + N`. Alone, this **hides** the auto-battle without stopping it.
+
+Not mutually exclusive; (1) plus (2) is defensible. **Recommendation: (1), optionally with (2).**
+
+Whichever is chosen, the regression test must run against the **seed data**, not a synthetic list:
+assert `DEMO_LOSE_LOCATION_ID` is not controlled by `DEMO_LOSE_FACTION_ID` in the seeded world at tick 0,
+and that no two opposing armies share a location at tick 0.
+
+**Decision:** _pending_
+
+---
+
+## DEC-275: Are the ~40 `engines/ports/*` Protocols abstraction or ceremony? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (finding L2-02, HIGH, confirmed)
+
+**The situation.** CLAUDE.md's own DIP rule is: abstract behind a protocol at **2+ implementors or 3+
+callers**; below that, inject the concrete class. Mechanically counted, **34 of 44 Protocol classes
+(77%) fail that threshold** — most have exactly one implementor and one or two callers. Two are
+god-ports (`ChapterGraphPort`, 9 methods, 1 caller; `QuestGenerationGraphPort`, 11 methods, 2 callers).
+`TraitReadPort` has **zero** implementors.
+
+That is 39 port files, ~170 Protocol methods and 39 matching `Neo4j*Repository` classes sustaining
+polymorphism that is never exercised anywhere in the tree.
+
+**Why this needs a decision.** Collapsing them changes public interfaces with callers outside their
+modules — explicitly ask-gated. And there may be a reason the review cannot see: if the ports pre-stage
+the planned Kùzu graph-backend swap (`OD-Ship-graph`), they are deliberate, not accidental. **No
+DECISIONS entry records such a rationale today, so the current state reads as "rule violated" rather
+than "rule consciously waived"** — which is itself the problem, whichever way it goes.
+
+**Options.**
+1. **Collapse** each single-implementor/single-caller port into direct injection of the concrete
+   `Neo4j*Repository`, per CLAUDE.md's own below-threshold rule. Removes ~30 files. Concrete injection is
+   equally testable — constructor injection, still mockable.
+2. **Waive**, recording the Kùzu-swap rationale explicitly, so the threshold breach is a documented
+   choice with a named future payoff.
+3. **Split**: collapse the ports with no plausible second backend (quest, chapter, event) and keep those
+   on the graph-swap path.
+
+Relevant to the standing small-model goal only indirectly — but it is the largest "fewer moving parts"
+lever the review found.
+
+**Decision:** _pending_
+
+---
+
+## DEC-276: Should the demo seed write `:Schedule` and `HAS_NEED` edges, reviving five engines? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (findings L13-01, L13-02, both HIGH, confirmed live)
+
+**The situation.** Across six live tick advances, 27 engines ran, every `last_error` was null, and **only
+6 did any work**. Two of the 17 inert engines have identified root causes, both graph-shape defects in
+the seed:
+
+- **No `:Schedule` node or `FOLLOWS_SCHEDULE` edge exists at all** — `routine` returns
+  `{'moved': 0, 'skipped': 0}`; `skipped` is 0 too, so its query matched nothing. This also starves
+  `mood_contagion`, `proactive_dialogue`, `player_model` and `need_decay`'s satisfier join, all of which
+  depend on NPC co-location that `routine` was supposed to produce.
+- **28 `:Need` nodes are orphans** — the seed writes a `character_id` *property* but never the `HAS_NEED`
+  edge. A complete live relationship census (13 types) contains no `HAS_NEED`. This kills `need_decay`
+  and `need_quest_trigger` outright.
+
+The second is partially known as ISSUE-210/213, but scoped there as a cosmetic empty prompt field
+(`npc.top_need`). It is not cosmetic: it is two dead engines and four starved ones.
+
+**Why this needs a decision.** Adding edges to the seeded world is seed-data change — ask-gated — and it
+is not obviously free: reviving `need_quest_trigger` **increases** the quest-generation LLM amplification
+that SEV-03 exists to bound, so ordering matters. It also changes what the demo shows.
+
+**Options.**
+1. **Add both** (`FOLLOWS_SCHEDULE` + `HAS_NEED`), reviving `routine`, `need_decay`,
+   `need_quest_trigger` and unstarving four more. Land **after** SEV-03 and SEV-08 so the extra LLM load
+   is bounded and the frozen-`world_state` bug is fixed first.
+2. **Add `HAS_NEED` only** — smaller, fixes ISSUE-210's real defect, leaves the routine/co-location
+   system dormant.
+3. **Neither** — accept that these engines are dormant in the demo and document it, re-scoping
+   ISSUE-210 so it stops reading as cosmetic.
+
+Regardless of choice: **ISSUE-210's severity is wrong** and should be corrected.
+
+**Decision:** _pending_
+
+---
+
+## DEC-277: Which prompt changes are worth the `dialogue_prompt_hash` comparability cost, and when? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (findings L12-11, L12-02, L12-14)
+
+**The situation.** The dialogue system prompt was reviewed for content for the first time. Findings that
+require prompt edits — each of which changes `dialogue_prompt_hash` and breaks eval comparability:
+
+- **L12-11 (HIGH):** `facial_expression` and `mood_update` are model-generated with **zero** prompt
+  guidance, and `relation_deltas.fear` is omitted from the Output rules (only `trust`/`affection` are
+  named). `facial_expression` is player-visible in `demo_game/` **and** judged by evals. The prompt
+  instructs 4 of 13 schema fields.
+- **L12-02 (HIGH):** Rule 8 (VOICE) and Rule 2 (PLAYER REPUTATION, ALLIED band) pull opposite ways for
+  guard/soldier archetypes.
+- Plus the deferred set: ISSUE-325 through ISSUE-330.
+
+**And the constraint itself is mis-specified. L12-14 (HIGH):** `dialogue_prompt_hash` hashes the
+**entire** `src/npc_engine/prompts/` tree, not just the dialogue prompt — so editing an unrelated prompt
+already breaks comparability, while the caution everyone has been observing is simultaneously too broad
+(it blocks unrelated prompt work) and misleading (it implies dialogue-only scope).
+
+**Why this needs a decision.** Timing is a judgement call about eval continuity, and it interacts with
+the scorer-adequacy repair: all five scorers are currently REFUSED, so **there is no trustworthy
+before/after measurement available for a prompt change today anyway**. That argues for batching prompt
+edits and paying the comparability cost once, at a moment of your choosing.
+
+**Options.**
+1. **Batch and land once** — take L12-11, L12-02 and ISSUE-325–330 together in a single prompt revision,
+   accepting one comparability break. Cheapest total cost.
+2. **Wait for the scorer layer** — fix scorer adequacy first so the change can be measured, then edit.
+3. **Land L12-11 alone now** — it is the only one with a downstream consumer actively guessing
+   (`facial_expression` in the demo and evals).
+
+Separately, **re-scoping `dialogue_prompt_hash`** to cover only `prompts/dialogue/` is an `evals/`
+semantics change: existing recorded hashes would not reproduce under a narrower scope, so it needs its
+own entry and a migration note.
+
+**Note:** SEV-06 (tighten `max_tokens`, add `max_length` to `npc_response`) is deliberately **not** in
+this decision — it touches config and schema only, leaves the hash untouched, and is already in the
+Fix-now backlog as the free latency win.
+
+**Decision:** _pending_
+
+---
+
+## DEC-278: Is the CI `integration-tests` job required for merge? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (finding L4-03, HIGH; also CR-L06-06)
+
+**The situation.** `make check` is green and **executes zero real Cypher**: 40 of 51 integration tests
+skip in the default local environment. A dedicated CI `integration-tests` job now starts a real
+dockerized Neo4j and runs `make check-integration-baseline`, which asserts a 34-test execution floor to
+stop a silent all-skip reading green. But `check-integration-baseline` is **not** in the `check` target
+list, so the local workflow still verifies no Cypher at all.
+
+ISSUE-274 is the symptom already observed: a quest-lifecycle test was red and invisible because
+`make check` skips it without services.
+
+**Why this needs a decision.** Whether this is "mitigated in CI, local-only gap" or "fully open" depends
+on a fact the review could not determine locally: whether that CI job is a **required** status check for
+merge. The answer changes the disposition of L4-03, L4-05 and ISSUE-309.
+
+**Options.**
+1. **It is required** → the gap is local-workflow only. Document it, and consider a `make check-full`
+   that developers run before pushing.
+2. **It is not required** → real-Cypher correctness is unverified on the merge path, and making it
+   required is the fix.
+
+Note ISSUE-277: integration tests write to the **live** Neo4j — there is no separate test database — so
+"just run them locally" is not a safe answer without that separation.
+
+**Decision:** _pending_
+
+---
+
+## DEC-279: What should be deleted from the engine portfolio? — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (findings L10-01, L10-02, L10-03)
+
+**The situation.** A mechanical census of all 35 directories under `engines/` (wired into the scheduler?
+reachable from a route? touched by `demo_game/`? exercised by any eval case?) produced **7
+delete-candidates**: `clique`, `currency`, `deception`, `mood`, `routine`, `skill`, `succession`. Plus:
+
+- **`currency` is fully vaporware** yet ships its own contract YAML **and** a passing contract test — it
+  actively misrepresents shipped capability.
+- **`DeceptionEngine` and `SchemingEngine` are dead classes**, unit-tested in isolation, never
+  constructed in production. (`SchemeAdvanceTick` is live and distinct — do not delete that.)
+- **Five of seven political/social tick engines** (`oath`, `treaty`, `faction_politics`, `player_model`,
+  `reputation`) are structurally invisible to the API: routes read the same domain through a separate,
+  hand-written graph-service layer instead of the Engine class. Two parallel implementations of one
+  domain.
+
+Confirmed duplicates: **`oath` and `treaty` are near-identical** in shape (port/expiry/violation) and
+both unreachable from the API. **Partially refuted:** `agenda` + `succession` share real infrastructure
+but differ in logic (tally vs. grant), and `faction_politics` is architecturally separate — the brief's
+"three engines doing one job" was overstated. **Refuted:** `military` is *not* a no-op stub (see
+ISSUE-334) — it is the engine that auto-loses the demo.
+
+Caveat: `routine` appears on the delete list only because it is inert, and it is inert because of a seed
+defect (DEC-276), not because it is unwanted. **Resolve DEC-276 before deleting `routine`.**
+
+**Why this needs a decision.** Deleting files is ask-gated, and the review did not check `ROADMAP.md` to
+see whether any candidate is pre-wired for a near-term phase.
+
+**Options.**
+1. **Delete the unambiguous set** — `currency` (plus its contract and contract test), `DeceptionEngine`,
+   `SchemingEngine` — and merge `oath`/`treaty`.
+2. **Delete all 7** after checking each against `ROADMAP.md`.
+3. **Keep, and document** which are roadmap pre-wiring, so the census stops re-finding them.
+
+Also to decide: **which side of the political-engine duplication is canonical** — the Engine class or the
+graph service? Two implementations of one domain is the more expensive problem than any single deletion.
+
+Every inert engine is surface area a model, a prompt, a context assembler and a maintainer all pay for,
+so this bears directly on the small-model goal.
+
+**Decision:** _pending_
+
+---
+
+## DEC-280: Two smaller calls — a live demo gate, and the fate of `TraitReadPort` — OPEN
+
+**Raised:** 2026-09-07, full codebase+demo review (findings L9-08; L2-01 ≡ L7-05)
+
+**(a) A live demo gate.** The only gate on the scripted demo is `make demo-run ARGS=--dry-run`, which
+makes **no API calls**. That is exactly why a demo which dies at ACT 6 (SEV-01) and loses itself in 3
+seconds (DEC-274) passed every check. Adding a `demo-run-live` target for the nightly would have caught
+both. This brushes against **DEC-224** (retire-a-gate-to-add-one); the review reads it as a new *target*
+runnable by the nightly, **not** a new gate inside `make check`, and therefore outside DEC-224's scope —
+**please confirm that reading.**
+
+**(b) `TraitReadPort`.** Zero implementors. `engines/ports/trait_read_port.py:9` documents an implementor
+"in the graph.repositories layer (slice 2 wiring)"; no such class exists.
+`engines/emotion/emotion_updater.py:56,76,152-155` takes `trait_reader: TraitReadPort | None = None`, and
+`None` is the only reachable state, so `_get_model_for` always returns the shared model and
+`TraitModulatedEmotionModel` is dead code. Nothing in `api/` ever constructs one. DEC-137 (2026-06-19)
+deferred this to "slice-2"; ~2.5 months later it has not landed, and per-NPC trait-modulated emotion —
+DEC-137's entire point — silently never happens.
+
+Options: **implement** `Neo4jTraitReadRepository` and wire it in `api/dependencies_stores.py`, closing
+the loop DEC-137 opened; or **delete** the port, the constructor parameter, the `_get_model_for` branch
+and `TraitModulatedEmotionModel`, and log the deferred feature as an issue instead of leaving it as
+silent dead code. Either is fine; the current state — a documented feature that cannot execute — is not.
+
+**Decision:** _pending_
