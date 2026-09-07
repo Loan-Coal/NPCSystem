@@ -34,6 +34,18 @@ bugs only).
 **To fix:** author N `case_tone_fail_*` cases that a working tone_judge should fail, run
 them through the panel, re-check label_adequacy's minority count, and calibrate.
 
+**Update 2026-09-07 (measurement-remediation Phase 5, DEC-272) — quantified, and it is now
+blocking a specific piece of work.** `make adjudication-yield` puts an exact number on this:
+of tone_judge's 111 pending Opus pre-labels, **111 are PASS and 0 are FAIL**, so adjudicating
+every one of them as `keep` leaves the minority class at **7**, unchanged. Reaching the floor
+of 25 by adjudication alone would require the adjudicator to flip **≥18** of Opus's PASS calls
+to FAIL — i.e. to assert Opus was wrong in one direction ~16% of the time, on a case set that
+by this issue's own diagnosis contains no tone failures to find. Consequence for the labelling
+push: **tone_judge's 111 pending rows should not be adjudicated yet.** That is several hours of
+keep/flip that cannot lift the scorer above REFUSED. `affirms_judge` (keep-all 32 minority) and
+`commits_judge` (keep-all 45) both clear the floor and are where the push should go. This issue
+is the gate on tone_judge's half of Phase 5, not a backlog item that can wait behind it.
+
 ## ISSUE-290: instrument_gate.py compares only pooled panel_kappa, never per-criterion
 **Found:** 2026-09-07, fixing the pooled-panel-kappa reporting gap (panel_metrics_format.py)
 **Severity:** P3 (nice-to-fix — no live run has hit this yet; it is a gap in what the gate
@@ -2665,3 +2677,227 @@ quests per NPC and a prune path for stale drafts, and add a regression test that
 ticks under a stable epoch and asserts the quest count does not grow with N. The 23,292
 leaked nodes must be deleted before any graph-scale or retrieval number is measured, and
 the fix must land first or the wipe refills.
+
+## ISSUE-292: 5 of 18 serialized context slots are read by no dialogue prompt rule
+**Found:** 2026-09-07, during measurement-remediation Phase 4 (DEC-271, probe_dialogue.py)
+**Severity:** P2 (annoying — budget and ranking are spent on data the model is never told to read)
+**Where:** `src/npc_engine/retrieval/context/context_slots.py` (`CONTEXT_SLOTS`,
+`default_enabled=True` rows) vs `src/npc_engine/prompts/dialogue/system_v1.yaml`
+**Description:** `serialized_slots()` returns exactly 18 `default_enabled=True` slot keys.
+Cross-referencing every one against `system_v1.yaml`'s numbered rules (verified by grep,
+2026-09-07), 13 are read by a rule; 5 are not: `nearby_npcs`, `player_memories`,
+`active_quest`, `beliefs`, `top_need`. Each is assembled, ranked, and charged to the tier-A
+or tier-B budget on every turn, and then the prompt never once instructs the model to read
+it — distinct from ISSUE-200 (fixed): that issue was slots with no serialization key at
+all; this is the reverse — slots WITH a key that the prompt simply never names. Also
+distinct from ISSUE-210 (`top_need` is structurally empty because no `Need` node seeder
+exists) — that is a data-emptiness problem; this issue holds even for a slot that IS
+populated (`nearby_npcs`, `beliefs`), because the gap is in the prompt, not the data.
+**Why deferred:** found while building probe_dialogue.py's per-slot inclusion-rate metric
+(measurement-remediation Phase 4), which is what surfaced it — not the task fixing it.
+Deciding whether each of the 5 gets a prompt rule (spending more prompt budget on
+instructions) or gets `default_enabled=False`'d (matching how ISSUE-200's leftover-8 were
+resolved) is a prompt-schema decision needing its own change and its own
+`prompt_schema_version` bump, per that issue's own precedent.
+**To fix:** for each of the 5, either add a numbered rule to `system_v1.yaml` teaching the
+model to read it, or flip `default_enabled=False` in `context_slots.py` and let
+`_drop_withheld_items` stop assembling it (the ISSUE-200 pattern). `make eval-probe`'s
+dialogue probe reports `slot_inclusion:<prefix>` for exactly the slots that DID reach a
+turn's `item_keys` — comparing that list against this issue's 5 names is the check.
+
+## ISSUE-293: dialogue prompt Rule 11 references `context.available_interactions`, which no producer emits
+**Found:** 2026-09-07, during measurement-remediation Phase 4 (DEC-271, probe_dialogue.py)
+**Severity:** P2 (annoying — a standing prompt instruction the model can never satisfy)
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml:181-183` (Rule 11); no producer
+under `src/npc_engine/retrieval/context/` (verified: repo-wide grep for
+`available_interactions` across `src/npc_engine/**/*.py` returns zero matches)
+**Description:** Rule 11 reads: "When CONTEXT contains an `available_interactions` list,
+you MUST surface those interactions naturally in your response and set the `action` field
+accordingly." No producer, slot, or `CONTEXT_SLOTS` entry named `available_interactions`
+exists anywhere in the engine. This is a dead prompt reference: the model is instructed to
+act on a key that is structurally never present. (ISSUE-200's fix note references a
+DIFFERENT Rule 11 gap in the same rule number — a dangling `quest_id` reference — which was
+fixed by serializing `active_quest`; that fix did not touch this `available_interactions`
+clause, which is a separate, still-live gap in the same rule.)
+**Why deferred:** found while auditing prompt-rule coverage for probe_dialogue.py's context
+metrics (measurement-remediation Phase 4), not the task fixing it. Whether the fix is
+"build an `available_interactions` producer" or "delete the clause from Rule 11" is a
+product decision (does the interaction-affordance feature exist yet at all?), not a bug fix.
+**To fix:** decide whether NPC-offered interactions (trade, follow, etc.) are a feature this
+engine already models elsewhere under a different key — if so, wire that key's producer to
+populate `available_interactions` (or rename the rule to the real key); if the feature does
+not exist yet, delete the clause from Rule 11 until it does.
+
+## ISSUE-294: Memory nodes carry no source-linking property — "no memory without a source" cannot be checked as a graph property
+**Found:** 2026-09-07, during measurement-remediation Phase 4 (DEC-271, probe_memory.py)
+**Severity:** P3 (nice-to-fix — a measurement-design gap, not a data-integrity bug)
+**Where:** `src/npc_engine/type_registry/base_nodes/memory.yaml`;
+`src/npc_engine/graph/memory/memory_queries.py` (`CYPHER_CREATE_MEMORY`)
+**Description:** the measurement-remediation plan's memory-probe invariant is phrased "no
+memory without a source." Verified against the schema: a `Memory` node has no
+`source_event_id`, `source_character_id`, or any comparable source-linking field — its
+declared properties are `id, content, vividness, emotional_charge, created_at_game_time`
+(required) plus `occurred_at_game_time, is_historical, last_recalled_at, subject_player_id,
+recall_count, never_forget, kind` (optional). The only source-adjacent structure that
+exists is the `REMEMBERS` edge (`character -[:REMEMBERS {since_game_time}]-> memory`),
+which links a memory to the character who holds it, not to the event/dialogue turn that
+produced it. `probe_memory.py`'s invariant (`memory_is_remembered`) checks the nearest
+structural equivalent this schema supports — an orphan Memory node with no `REMEMBERS`
+edge — documented inline as a deliberate substitution, not a fix.
+**Why deferred:** found while building the memory probe (measurement-remediation Phase 4),
+which is a measurement task, not a schema change. Adding real source-linking (e.g. a
+`source_event_id` property set at creation, or a `DERIVED_FROM` edge to the consolidated
+dialogue turns) is a graph-schema change requiring its own migration
+(`scripts/migrations/`) and is out of this plan's scope (DEC-271; the plan's own
+"Explicitly not in this plan" section excludes engine-behaviour changes).
+**To fix:** decide what "source" should mean for a Memory node (the originating Event? the
+consolidated dialogue turn range? the character who formed it, already covered by
+REMEMBERS?), add the chosen property or edge at creation time
+(`graph/memory/memory_queries.py`), add a migration for existing Memory nodes, and update
+`probe_memory.py`'s invariant to check the real property instead of the REMEMBERS
+substitute.
+
+## ISSUE-295: the calibration population is derived from the labels file, so retired scorers are still calibrated
+**Found:** 2026-09-07, during measurement-remediation Phase 5 (DEC-272)
+**Severity:** P3 (nice-to-fix — noise in a report, not a wrong number; every affected scorer
+is REFUSED anyway, so nothing untrustworthy is published as a result)
+**Where:** `evals/calibration.py:817` (`scorers = list(dict.fromkeys(r.scorer for r in all_rows))`);
+the same derivation in `scripts/check_label_adequacy.py:69`
+**Description:** `run_calibration` derives which scorers to calibrate from the distinct
+`scorer` values present in `labels_v1.jsonl`, not from any roster. Retiring a scorer in the
+engine therefore does not remove it from calibration, because its historical labels stay in
+the file (correctly — they are evidence about a real past run and DEC-130's never-delete rule
+applies). So `python -m evals calibrate` today iterates **five** scorers: the three in scope
+after DEC-269 (`tone_judge`, `affirms_judge`, `commits_judge`) plus `refusal_judge`, retired
+into `affirms_judge` by DEC-269/ISSUE-276, and `anti_hallucination_grounded`, which is not in
+`label_export_stratified.IN_SCOPE_SCORERS` and so can never be given fresh labels by the only
+export verb that exists. Both print a `[REFUSED]` line on every run and always will. The
+measurement-remediation plan's "3 scorers" framing is therefore true of the exporter
+(`IN_SCOPE_SCORERS`) but not of the calibrator, which is the surface an operator actually
+reads.
+**Why deferred:** it is a change to what calibration reports, and the honest fix is a decision
+about where the scorer roster lives, not a filter bolted onto one function. Phase 5's scope was
+the labelling push's tooling; changing the calibrated population mid-push would also change the
+family-size used for the Holm disclosure (`calibration.py:818-822`), which is a live number in
+every published report.
+**To fix:** decide whether the roster is declared (a constant, like
+`label_export_stratified.IN_SCOPE_SCORERS` or `battery_trust.BATTERY_JUDGED_SCORERS` — note
+those two already disagree with each other on `anti_hallucination_grounded`) or derived with a
+retirement list, then have `run_calibration` take the population as a parameter rather than
+deriving it inline. Whichever is chosen, make the Holm `family_size` follow the same
+population, and add a test that a retired scorer's historical labels stay readable while
+dropping out of the report.
+
+## ISSUE-296: check-engine-logs is blind to the `_LOGGER` naming convention, so the ratchet undercounts
+**Found:** 2026-09-07, during the dialogue-latency work (DEC-273)
+**Severity:** P2 (annoying — a gate that silently measures less than it claims; it under-reports,
+so it cannot produce a false failure, only a false sense of coverage)
+**Where:** `scripts/check_engine_logs.py:29` —
+`_LOGGER_NAMES: frozenset[str] = frozenset({"logger", "_logger", "log"})`
+**Description:** `_is_logger_info` matches a call only when the receiver name is in that set,
+which is lowercase-only. Ten files under `src/npc_engine/engines/` use the uppercase `_LOGGER`
+convention, carrying **12** `logger.info` calls the gate never sees: `agenda/agenda_engine.py`,
+`clique/clique_formation_engine.py`, `dialogue/relation_mutator.py`,
+`faction_politics/faction_politics_engine.py`, `llm/prompt_eval_log.py`,
+`military/military_battle_service.py`, `military/military_engine.py`,
+`military/military_resource_service.py`, `story_pacing/story_pacing_engine.py`,
+`succession/succession_engine.py`. The recorded baseline of 42 is therefore a count over a
+subset of the engines tree, not over the tree. This surfaced because DEC-273 added `duration_ms`
+to `prompt_eval_log.py` expecting the count to drop to 41; it stayed at 42, because that file's
+calls were never counted.
+**Why deferred:** Adding `_LOGGER` to the set changes what the gate measures and will raise the
+count, requiring a deliberate baseline re-record — a gate-behaviour change that belongs in its
+own task with its own review, not folded into a latency change. Single-task focus.
+**To fix:** Add `"_LOGGER"` (and consider a case-insensitive match, or matching any Name whose
+lowercase form is in the set) to `_LOGGER_NAMES`, re-record `scripts/engine_logs_baseline.txt`
+with `python scripts/check_engine_logs.py --update`, and extend
+`tests/unit/scripts/test_check_engine_logs.py` with a fixture using the uppercase receiver so
+the blind spot cannot return.
+
+## ISSUE-297: two divergent `.env.example` files, neither gated, both drifted from the shipped defaults
+**Found:** 2026-09-07, during the dialogue-latency work (DEC-273)
+**Severity:** P3 (nice-to-fix — misleads a fresh checkout, but `config.py` defaults are what
+actually ship, so no running system is wrong because of it)
+**Where:** `./.env.example` (75 lines) and `./src/npc_engine/.env.example` (81 lines)
+**Description:** Two example files carry the same key set but different values and comments, and
+no test or gate compares either against `config.py` (`grep "env.example"` over all `*.py` returns
+nothing). Both have drifted: the root file says `OLLAMA_CONTEXT_LENGTH=8192` and the nested one
+says `4096`, where the shipped default is `12288`; the root file's comment still claims "At 8192
+the budget derives to 1312", a figure `config.py:171-179` records as wrong from P8 onward. Both
+also omit many shipped settings entirely (`OPENAI_API_URL`, `STRUCTURED_OUTPUT_TEMPERATURE`,
+`RETRIEVAL_PROFILE`, the `TTS_*` block). DEC-273 added `OLLAMA_KEEP_ALIVE=30m` to both rather
+than pick a winner.
+**Why deferred:** Reconciling them means deciding which is authoritative and whether the nested
+copy should exist at all — a packaging question, not a latency one.
+**To fix:** Decide whether `src/npc_engine/.env.example` should exist (the app is configured from
+the repo root via `docker-compose.yml`'s `env_file: .env`); delete it if not. Then add a
+`check-env-example` gate asserting every non-secret `Settings` field appears in the surviving
+file with a value matching its shipped default, and wire it into `make check`.
+
+## ISSUE-298: three of five engines never read their `llm_config.yaml` temperature
+**Found:** 2026-09-07, during the dialogue-latency work (DEC-273)
+**Severity:** P2 (annoying — the YAML reads as configuration but is inert, so tuning it produces
+no effect and no error; `quest_generation` is the live case, tuned to 0.7 for variety and running
+at 0.1)
+**Where:** `src/npc_engine/engines/quest_generation/quest_generation_engine.py` (no `temperature`
+parameter on `__init__`; `grep -n temperature` over the package returns nothing),
+`src/npc_engine/engines/proactive_dialogue/proactive_engine.py:38-39` (`_MAX_TOKENS`/`_TEMPERATURE`
+as module constants), `src/npc_engine/engines/llm/protocols.py:71-79`
+(`generate_structured` has no `temperature` parameter)
+**Description:** Only `chapter` (0.5) and `memory_consolidation` (0.4) actually forward their
+configured temperature, because both call plain `generate`. `dialogue` (0.15) and
+`quest_generation` (0.7) call `generate_structured`, which takes no temperature argument at all,
+so the adapters substitute `STRUCTURED_OUTPUT_TEMPERATURE` (0.1). `proactive_dialogue` (0.8)
+honours a hardcoded module constant that merely happens to equal its YAML value. So three of five
+engines run at a temperature their config file does not determine.
+**Why deferred:** This is not a config edit. There is no clobbered caller value to restore —
+fixing it means adding `temperature` to `LLMStructuredProtocol.generate_structured`, which is an
+ask-gated public-interface change across three adapters, the mock, and every hand-rolled fake in
+the suite. It also risks reviving review finding SEV-27, the reason
+`STRUCTURED_OUTPUT_TEMPERATURE` was introduced: before it, dialogue ran at "uncontrolled ~0.8"
+and structured output was unreliable. See DEC-273.
+**To fix:** Get human approval for the Protocol change; add `temperature` to
+`generate_structured` across `LLMStructuredProtocol`, `OllamaAdapter`, `OpenAICompatibleAdapter`
+and `MockLLMAdapter`; keep `STRUCTURED_OUTPUT_TEMPERATURE` as the default when a caller passes
+none, so SEV-27's guarantee survives; give `QuestGenerationEngine` a `temperature` parameter and
+`ProactiveDialogueEngine` its config values; then re-measure quest-generation variety, which is
+the behaviour that motivated 0.7.
+
+## ISSUE-299: `docs/API.md` and `docs/ARCHITECTURE.md` document WS streaming frames the code does not send
+**Found:** 2026-09-07, during the dialogue-latency work (DEC-273)
+**Severity:** P3 (nice-to-fix — misleads an integrator reading the published contract)
+**Where:** `docs/API.md:138-149`, `docs/ARCHITECTURE.md:495-520`
+**Description:** `API.md` documents `WS /v1/ws/dialogue` emitting `{"type":"action"}` and
+`{"type":"expression"}` frames and a bare `{"type":"done"}`. The implementation
+(`api/routes/dialogue/dialogue_ws.py:189-202`) sends neither of the first two, and its `done`
+frame carries a data payload. `ARCHITECTURE.md`'s sequence diagram shows `llm.stream()` followed
+by "parse full response" — a design that does not exist: the route calls the blocking
+`handler.handle()` and then re-chops the finished string into words via `_iter_token_chunks`.
+DEC-273 rejected wiring real streaming on correctness grounds, so the docs should be corrected
+toward the code rather than the code toward the docs.
+**Why deferred:** Documentation accuracy, not behaviour; out of scope for a latency change.
+**To fix:** Rewrite both sections to describe what the route actually sends (a word-chunked
+replay of a completed generation, then one `done` frame with the payload
+`_build_done_data` assembles), and state plainly that time-to-first-frame equals full generation
+latency. Cross-reference DEC-273 for why it is not real streaming.
+
+## ISSUE-300: importing `dialogue_models` as the first `npc_engine` import raises a circular ImportError
+**Found:** 2026-09-07, during the dialogue-latency work (DEC-273)
+**Severity:** P3 (nice-to-fix — invisible under pytest and in the running app, which import in an
+order that happens to work; it bites scripts and any future entry point)
+**Where:** `src/npc_engine/retrieval/dialogue_context/dialogue_context_adapter.py:21` importing
+`build_serialized_context_with_receipt` from `npc_engine.retrieval.context.context_builder`
+**Description:** A standalone script whose first `npc_engine` import is
+`from npc_engine.engines.dialogue.dialogue_models import DialogueResponse` fails with
+`ImportError: cannot import name 'build_serialized_context_with_receipt' from partially
+initialized module ... (most likely due to a circular import)`. The cycle exists today and is
+merely masked by the import order pytest and `main.py` happen to establish. It was hit while
+writing the DEC-273 token measurement, which had to be routed through a temporary test to obtain
+two Pydantic JSON schemas.
+**Why deferred:** Breaking the cycle means moving or deferring an import inside `retrieval/`,
+which touches the context-assembly path — a change that deserves its own regression run, not a
+drive-by during a latency task.
+**To fix:** Make `dialogue_context_adapter` import `context_builder` lazily inside the function
+that needs it, or move `build_serialized_context_with_receipt` to a leaf module neither package
+imports at module scope. Add a test that imports `npc_engine.engines.dialogue.dialogue_models`
+in a fresh subprocess as the very first `npc_engine` import, so the cycle cannot silently return.

@@ -9117,3 +9117,514 @@ share the word "refusal" — it is not part of the `refusal_judge` scorer this p
 retires. An earlier draft of the governing plan named `evals/headline_refusal.py` for
 deletion in error, conflating the two; verified live before touching anything, and left
 alone.
+
+## DEC-270: measurement-remediation Phase 3 — per-engine probe framework
+(`EngineProbe`, `probe_runner`, `metrics` on `RepetitionRecord`)
+**Date:** 2026-09-07 · **Status:** ACCEPTED · **Drives:** `evals/probe_protocol.py`
+(new), `evals/probe_runner.py` (new), `evals/sequence_runner.py`,
+`evals/sequence_fidelity.py`, `evals/sequence_rates.py`, `evals/__main__.py`, `Makefile`,
+`scripts/evals_baseline.txt` (R002)
+
+**Context.** Phase 2 (DEC-269) fixed *how* the three surviving judges are scored. Phase 3
+is the next step in the governing measurement-remediation plan: a generalisation of
+`evals/scenario_adapters*.py`'s six promoted scenarios, which return one `bool` per
+k-repetition run, into a per-engine probe contract that returns a numeric metric dict. A
+bool is one bit per run; the run's cost (a live tick, a reset, an HTTP round trip) is paid
+regardless of how much the run reports, so paying it for one bit is the gap this phase
+closes. This phase builds the framework only — no concrete probes. Phase 4 (unchanged,
+not started) is where gossip/events/memory/quest/dialogue probes and context-budget
+measurement land.
+
+**1. `evals/probe_protocol.py` (new) — `EngineProbe` as a `typing.Protocol`.** Four
+members: `engine_name: str`, `invariants: dict[str, InvariantFn]` (`InvariantFn =
+Callable[[httpx.Client], bool]`), `setup(client)`, `drive(client, ticks)`,
+`measure(client) -> dict[str, float]`. `setup()` is called once **per repetition**, not
+once per probe instance — `reset_world()` wipes state between repetitions, so a probe must
+re-seed every time, matching the existing convention in `scenario_adapters*.py` where
+each `make_*()` factory's returned closure creates fresh entities per call. `invariants`
+and `measure()` stay two separate concerns per the plan's own framing: metrics are
+additive measurement, invariants are still boolean pass/fail correctness gating
+`RepetitionRecord.passed`. No `@runtime_checkable` — nothing in this phase does an
+`isinstance` check against the protocol; structural typing plus one conformance test
+(`test_probe_protocol.py`) is enough (ISP/LSP: the mock matches the real contract's
+shape).
+
+**2. `evals/probe_runner.py` (new) — the k-repetition loop and the free engine-status
+snapshot.** `run_probe(client, probe, k, ticks, reset_fn)` does reset -> setup -> drive ->
+measure -> check invariants, k times, reusing `sequence_reset.make_reset_fn` for the reset
+and `sequence_fidelity.sequence_stat`/`RepetitionRecord` for aggregation rather than
+rebuilding either (the plan's explicit "reuse rather than rebuild" list). It does **not**
+call `sequence_runner.run_sequence`/`_run_one` directly — `EngineProbe`'s
+setup/drive/measure/invariants shape does not fit `ScenarioFn`'s bare `() -> bool`, and
+forcing it through a closure that discards metrics to fit that signature would defeat the
+entire point of this phase. Instead `probe_runner` builds `RepetitionRecord` instances
+itself (`_run_one_probe_repetition`, mirroring `sequence_runner._run_one`'s
+record-not-abort contract: a raising probe step is caught and recorded as a failed
+repetition rather than aborting the k-set) and reuses the shared aggregation/receipt
+types. `read_engine_status(client)` is a standalone `GET /v1/clock/state` snapshot,
+independent of any registered probe — the plan's "free liveness and timing for all 46
+engines, whether or not a probe exists" line. It is folded into a probe's own metrics
+dict too (`_merge_status_metrics`, via `dict.setdefault` so the probe's own `measure()`
+keys always win on a name collision) so every probe run gets `tick_count`/`error_count`/
+`duration_ms` for its engine without writing a line of code for it. `EngineStatusSnapshot`
+mirrors `npc_engine.scheduler.engine_status_store.EngineStatusRecord`'s field names by
+hand rather than importing it — `engine_adapter.py` is the only sanctioned npc_engine
+import point (DEC-147 §2), and this is an HTTP response contract, not a source-model
+import; the same pattern `context_receipt_record.py` already uses for the engine's
+`context_receipt` field.
+
+**3. `RepetitionRecord.metrics: dict[str, float]` (additive, `sequence_runner.py`).**
+Defaults to `{}` via `Field(default_factory=dict)` — every existing promoted-scenario
+call path is unaffected, since no `ScenarioFn` today has a channel to populate it.
+`run_sequence` threads `tuple(r.metrics for r in records)` into `sequence_stat(...)` (one
+new line) so the field is never silently dropped even though nothing populates it yet.
+`sequence_fidelity.sequence_stat` gained a `metrics: Sequence[dict[str, float]] = ()`
+parameter and `SequenceStat.metrics_summary: dict[str, float]` — the mean of each key
+across the repetitions that *reported* it (`_mean_metrics`; a key missing from some
+repetitions is averaged only over the ones that have it, so a metric that only applies
+under some post-drive state is not silently zero-padded into a misleading mean). Unlike
+`interval`, `metrics_summary` is **never** fidelity-gated — a mean is descriptive
+regardless of repetition independence; only the Wilson interval assumes i.i.d. Bernoulli
+trials (SEQUENCE_STATS_POLICY.md §3, unchanged). `sequence_rates._format_stat_line`
+appends a `" | metrics: k=v, ..."` suffix when `metrics_summary` is non-empty and nothing
+when it is empty, so every existing scenario-report rendering and its tests are
+byte-for-byte unchanged (verified: `test_sequence_runner.py`, `test_sequence_fidelity.py`,
+`test_sequence_rates.py` all still pass, plus new tests added for every new branch).
+
+**4. `probe` verb.** `evals/__main__.py` gained `VERBS["probe"] -> probe_runner.main`;
+`Makefile` gained `eval-probe` (`make eval-probe [K=3] [TICKS=1]`), added to the
+`.PHONY` list. With `PROBE_FACTORIES: dict[str, ProbeFactory] = {}` empty (Phase 3's
+baseline — Phase 4 populates it, OCP: a new probe module arrives as a new file, no CLI
+change needed), `main()` still does real, useful work today: it advances the clock once
+and prints the free per-engine liveness/timing snapshot for all tick-registered engines.
+It prints "No probes registered yet" rather than nothing, so a user is never left
+wondering whether the command did anything.
+
+**Found and fixed while implementing:** `_check_invariants`'s loop variable typed as
+`Any` under mypy (returning `name` from `probe.invariants.items()` where `probe:
+EngineProbe` is a `Protocol`) — fixed with an explicit `name: str` annotation rather than
+loosening the return type. `_run_one_probe_repetition`, `run_probe` and `main` each
+initially exceeded 40 AST-counted lines (R006) purely from full Args/Returns/Raises
+docstrings on short bodies — resolved by extracting one helper from each
+(`_execute_probe_cycle`, `_run_k_repetitions` + `_build_probe_result`,
+`_build_arg_parser` + `_print_report`) rather than trimming documentation, matching
+DEC-269's `matchers.evaluate()` precedent (extract, don't strip docstrings).
+
+**Re-baselined `check-evals-rules`' R002 (print-in-evals) for the new
+`evals/probe_runner.py`** via `make check-evals-rules-update`, adding one line to
+`scripts/evals_baseline.txt` alongside the other CLI verbs' `main()` functions
+(`sequence_rates.py`, `runner.py`, `generate_runner.py`, and the rest already
+grandfathered there) — `probe_runner.main()`'s `print()` calls are the same kind of
+verb-report CLI output every other `python -m evals <verb>` entry point already emits,
+not a new class of violation.
+
+**Not done here:** no concrete `EngineProbe` implementation for any engine — Phase 4's
+job. No `ProbeFactory` is registered, so `make eval-probe` today only ever prints the
+free engine-status snapshot; that is the intended Phase 3 baseline, not a bug.
+`sequence_runner._run_one`'s own body is unchanged (metrics flows through it only because
+`RepetitionRecord.metrics` has a default — no caller of `run_sequence` needed a new
+`metrics_fn` parameter added, since none of the six promoted scenarios produce metrics
+yet); adding one was considered and rejected as speculative for a phase with no caller
+that would use it.
+
+## DEC-271: measurement-remediation Phase 4 — probes for the in-scope engines, and context measurement
+
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `evals/probe_legacy_adapters.py`
+(new), `evals/probe_gossip.py` (new), `evals/probe_events.py` (new), `evals/probe_memory.py`
+(new), `evals/probe_quest.py` (new), `evals/probe_dialogue.py` (new),
+`evals/probe_runner.py`, `evals/context_receipt_record.py`, `project-harness/ISSUES.md`
+(ISSUE-292/293/294)
+
+Implements the plan's Phase 4 literally: port the 6 promoted scenarios to `EngineProbe`,
+then add one probe per named engine (gossip, events, memory, quest, dialogue) with the
+plan's own invariant/metric table, plus context-management measurement folded into the
+dialogue probe (the only place `context_receipt` exists). Several of the plan's
+invariant/metric names assume schema properties or routes this codebase does not have —
+each such gap is resolved below with the nearest checkable equivalent, documented rather
+than silently substituted, per CLAUDE.md's "unsure about something small: choose, and note
+it." No `src/npc_engine/` file changed. No new dependency.
+
+**1. `evals/probe_legacy_adapters.py` — the 6 scenario adapters, ported.** Each of the 6
+`SCENARIO_ADAPTER_FACTORIES` scenarios is a single build→tick→assert unit with no natural
+setup/drive/measure seam (unlike the 5 new probes below, none was authored against this
+protocol). Rather than restructure them — out of scope, and risks regressing 6 live tested
+scenarios — `LegacyScenarioProbe` wraps the existing `() -> bool` closure: `setup()` is a
+no-op (the scenario builds its own fresh, uuid-suffixed entities per call, unchanged),
+`drive()` runs the whole scenario once and remembers the bool, `measure()` reports it as
+`scenario_holds: 1.0/0.0`, and the same remembered value backs one invariant of the same
+name. `ticks` is accepted but unused — each scenario hardcodes its own tick count
+internally (e.g. `gossip_chain` always runs exactly 2 gossip ticks), which this port does
+not change. Registered under each scenario's own id (`scenario_gossip_chain`, …) in
+`LEGACY_PROBE_FACTORIES`, not under an engine name — these are ported scenarios, not new
+per-engine probes, and the registry key is never displayed (`run_probe` reads
+`probe.engine_name`, not the `PROBE_FACTORIES` key).
+
+**2. `probe_gossip.py` (engine_name="gossip").** No `hop_count` or path property exists on
+`KNOWS_ABOUT` (verified against `type_registry/base_edges/knows_about.yaml` and the gossip
+write Cypher) — the plan's "no NPC knows an event it has no path to" is checked instead as
+"every non-origin knower's edge carries a `source_character_id`", the only structural
+evidence a knower was reached by propagation rather than appearing without attribution.
+"Hops-to-knowledge" and "distortion delta per hop" both read
+`GET /v1/admin/gossip/trace/{event_id}` (the only route that reconstructs an ordered
+propagation chain), which directly gives ISSUE-228's own instrument: distortion levels
+along the chain should strictly increase and today do not — this probe measures that, it
+does not fix it.
+
+**3. `probe_events.py` (engine_name="events").** There is no server-side count/filter route
+for `Event` nodes (`GET /v1/graph/nodes/Event` pages the full unfiltered set with no
+property filter) — paging every event in a live eval stack to compute a graph-wide orphan
+rate would be unbounded and non-deterministic across repetitions. The probe instead scopes
+severity distribution and orphan rate to the uuid-tagged batch it creates itself: half the
+batch gets an explicit `KNOWS_ABOUT` edge at creation (a deterministic 50% target for
+`orphan_rate`), and "every known event has a `KNOWS_ABOUT` edge" is checked as the
+invariant that the known half never loses its edge — the converse of the metric, over the
+same bounded batch.
+
+**4. `probe_memory.py` (engine_name="memory").** No `source_event_id`-style property (or
+any source-linking field) exists on a `Memory` node — verified against
+`type_registry/base_nodes/memory.yaml` and `CYPHER_CREATE_MEMORY`. The plan's "no memory
+without a source" invariant is substituted with the nearest checkable equivalent this
+schema supports: every memory this probe creates must be reachable via a `REMEMBERS` edge
+from its character — an orphan Memory node (no `REMEMBERS` edge) is the nearest structural
+analogue of "a memory without a source." Logged as ISSUE-294, not fixed here (a real fix is
+a graph-schema change needing its own migration, explicitly out of this plan's scope).
+Vividness is read from `GET /v1/admin/memories/{char_id}`'s listing, never from a generic
+per-type node route — `Memory` is not one of the seven types `BASE_NODE_LABELS` resolves
+(ISSUE-213), so a generic node-by-id fetch for a memory is unreliable; the memories listing
+is the one route already known to work (`scenario_adapters_extra.py`'s
+`memory_consolidation` uses the same route the same way).
+
+**5. `probe_quest.py` (engine_name="quest").** Only `target_id` is ever persisted onto a
+generated Quest node (verified: `quest_generation_engine.py`'s
+`fills_raw.get("target") or fills_raw.get("item")` is the sole slot baked into a graph
+field — the rest survive only in the LLM-authored description text), so slot-validity is
+checked against `target_id` alone, resolved by trying each plausible node type
+(`character`, `item`, `location`, `event`) against `GET /v1/graph/nodes/{type}/{id}` in
+turn — there is no generic "get node by id regardless of type" route. Referential grounding
+reuses `entity_scorer.unsupported_entity_rate` over each generated quest's description text
+(1 − mean unsupported-entity rate), matching the plan's own "via entity_scorer" wording
+exactly rather than inventing a second scorer.
+
+ISSUE-273's leak comes from `WorldStateQuestTrigger`, a background tick-driven engine
+entirely separate from the explicit `POST /v1/admin/quests/generate` path this probe
+drives — the two are not the same code path, so this probe cannot (and does not try to)
+reproduce the leak on demand; doing so would also mean deliberately forcing `epoch="war"`
+and generating more of exactly the garbage ISSUE-273 already documents. Instead
+`no_leak_during_this_run` is a read-only tripwire: it snapshots the leak's known target
+(`captain_sorn` — ISSUE-273's own text: "every quest names captain_sorn") at `setup()` and
+asserts no growth by `measure()`. Because `run_probe`'s reset forces `epoch="age_of_peace"`
+(the default `WorldBaseline`) before every repetition, this invariant passes in the common
+case and is a correct, honest RED the moment the background trigger fires during a probe's
+own window — an invariant that is allowed to fail when reality violates it is the point of
+an invariant, not a bug in the probe.
+
+The quest lifecycle offer→accept→complete chain composes the admin "simple" offer
+transition with the player-facing accept/evaluate routes on the same quest_id; if those two
+paths do not compose today, `accept_rate`/`complete_rate` simply read low or zero.
+ISSUE-259 and ISSUE-274 already independently flag the quest lifecycle integration path as
+broken/stale, so a low reading here would corroborate two already-open issues, not indicate
+a new one — no speculative issue filed on top of them.
+
+**6. `probe_dialogue.py` (engine_name="dialogue") + context measurement.** The plan calls
+out context management as "the largest measurement gap" but names no separate probe for
+it — folded into the dialogue probe because `context_receipt` only exists on
+`POST /v1/dialogue` responses, so that is the only place these metrics can be computed.
+
+The 3 judged rates (tone/affirms/commits) reuse `matchers.evaluate()` with **fixed, generic**
+expectation dicts (not case-authored, case-specific claims) — this probe measures baseline
+dialogue-engine behaviour broadly across every driven turn, not adversarial-case
+correctness, which stays the case battery's job (`runner.py`). Entity/knowledge scorer
+rates reuse `entity_scorer.unsupported_entity_rate` and `knowledge_scorer.unpropagated_references`
+directly, aggregated as raw mention/violation counts across all driven turns rather than
+an average of per-turn rates (sounder when turns have different mention denominators).
+Latency reuses `latency_stats.percentile()` directly against this probe's own
+`duration_ms` list — not `latency_summary`/`unique_turn_durations`, which exist to dedupe
+multiple per-expectation `GenerationRecord`s down to one-per-turn; a probe drives one HTTP
+call per turn already, so there is nothing to dedupe.
+
+Per-slot inclusion rate does **not** import `context_slots.py`'s slot table into evals/
+(CLAUDE.md: "this file states no facts it does not own" — the same principle applies to
+importing a src/ constant that could drift out from under an unrelated evals/ copy, and
+`context_slots.py` sits well above `engine_adapter.py`'s sanctioned import point, DEC-147
+§2). Instead each observed `item_keys` entry is normalised to the text before its first
+`:` (`"character:npc_x"` → `"character:*"`; a key with no `:` is used as-is) — derived
+empirically from what the engine actually returns each turn, stable across repetitions
+despite each repetition's NPC id being fresh. Reported **uncorrected** for ISSUE-222 (an
+empty `"[]"` item is still keyed, ranked and charged) — the plan says to fix ISSUE-222
+*before* building this metric, but that fix lives in `retrieval/context/context_builder.py`
+(a production `src/` change, explicitly out of this plan's "no src/ behaviour changes"
+scope) — so this metric reads high by exactly the amount ISSUE-222 already documents, and
+that document is the correction, not a code change made here. Auditing the plan's other two
+context findings against current code (both independently verified 2026-09-07, not merely
+carried forward from the plan text): "5 of 18 serialized slots read by no prompt rule" is
+still true today — logged as **ISSUE-292** (a new, distinct finding from the already-fixed
+ISSUE-200 and the already-open ISSUE-210, neither of which covers "the prompt never names
+this key"). "Rule 11 references `context.available_interactions`, which no producer emits"
+is also still true today — logged as **ISSUE-293**. ISSUE-225 (session history unbounded)
+and ISSUE-203 (hardcoded weight profiles) were already open before this phase; referenced
+here, not re-logged.
+
+Drop attribution required extending `evals/context_receipt_record.py`'s
+`ContextReceiptRecord` with a `dropped: tuple[DroppedItemRecord, ...]` field mirroring the
+engine's `DroppedItem` (key/tier/reason) — the mirror previously kept only the derived flat
+`dropped_keys` list, which is exactly why the plan calls this data "already emitted, never
+aggregated." Additive and backward compatible: `dropped_keys` is untouched, and a payload
+carrying only the old flat list still parses with `dropped` defaulting to empty (regression
+test added).
+
+**Wiring into `probe_runner.py`.** Each of the 6 probe modules exports its own
+`*_PROBE_FACTORIES: dict[str, ProbeFactory]` constant, merged into `PROBE_FACTORIES` by one
+`**`-spread dict literal in `probe_runner.py` — the exact composition pattern
+`scenario_adapters.py` already uses for `EXTRA_SCENARIO_ADAPTER_FACTORIES`. No change to
+`evals/__main__.py`, the `Makefile`, or any CLI argument — `make eval-probe` picks up all 6
+probes automatically, matching Phase 3's stated OCP design.
+
+**Found and fixed while implementing:** two mypy errors under `mypy_evals_ratchet` — a
+`no-any-return` on `probe_quest.py`'s `_referential_grounding_rate` (fixed with an explicit
+`float(...)` around the final expression) and a `Set comprehension has incompatible type`
+on `probe_memory.py`'s `_recalled_memory_ids` (fixed by extracting a typed `_memory_id(dict)
+-> str | None` helper instead of narrowing inline, since mypy does not link a comprehension
+filter's `m.get("id")` truthiness check to the builder expression's separate `m.get("id")`
+call). Both verified via `python -m mypy evals/` returning to a clean baseline (ratchet
+still 0).
+
+**Not done here:** no `src/npc_engine/` file changed — ISSUE-222, ISSUE-292 and ISSUE-293
+are all logged, not fixed, per the plan's own "log as issues, do not fix" instruction for
+the context-management findings, extended here to ISSUE-222 for the reason above. No
+attempt to reproduce ISSUE-273's background leak on demand (would require forcing
+`epoch="war"` and generating more leaked nodes). Quest lifecycle completion is measured
+honestly rather than engineered to succeed — no simulated game actions were added to make
+`complete_rate` read higher than a short synthetic probe run naturally produces.
+
+## DEC-272: measurement-remediation Phase 5 — the labelling push's tooling, and what the push can actually buy
+
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `evals/prelabel_runner.py` (new),
+`evals/adjudication_yield.py` (new), `evals/__main__.py`, `Makefile`,
+`evals/calibration/README.md`, `scripts/evals_baseline.txt`, `project-harness/ISSUES.md`
+(ISSUE-295, and a quantified update to ISSUE-291)
+
+**The finding that reframes this phase: the Opus pre-labelling pass has already happened.**
+`evals/calibration/labels_v1.jsonl` holds 354 rows stamped `pre_labeller_model="claude-opus-5"`
+against `k3_61b01dad_negadv`, imported in commit `7039c11b` (2026-09-06). Every one of them
+has `human_verdict=None`. So Phase 5's first bullet — "add an Opus pre-labeller writing
+`pre_labeller_model`" — describes plumbing that exists (`label_import._DEFAULT_PRE_LABELLER`
+is already `"claude-opus-5"`) and a pass that has already run. What is outstanding is not
+pre-labelling: it is **adjudication**, and adjudication is human work by construction. A
+pre-label buys nothing statistically on its own — `label_adequacy._clean_adjudicated` and
+calibration's own row filter both keep only rows with a human verdict — so those 354 rows
+currently contribute exactly zero to every kappa.
+
+**What was therefore built: the two instruments that make that human push efficient and
+honest, and nothing that simulates it.** No label in this phase was adjudicated by a model.
+Doing so would defeat `test_single_rater_tautology.py` in substance while passing it in
+form — that guard keys on `pre_labeller_model.startswith("human-")` and has no adjudicator
+field to check, so a model adjudicating a model's pre-labels would report a "genuine
+Opus-vs-human" secondary kappa that is nothing of the kind. The plan says "do not defeat
+it"; the only way not to defeat it is for a person to do the adjudicating.
+
+**1. `evals/prelabel_runner.py` (new) — the pre-labelling pass, committed and resumable.**
+The previous pass ran from a hand-typed PowerShell loop documented in
+`evals/calibration/README.md` step 3. Two defects in it, both found by measurement rather
+than inspection, both fixed here:
+
+*The prompt could not go on argv.* That loop passed prompt+batch as a command-line argument
+(`claude -p $prompt`). The largest exported batch is 37,420 chars and `OPUS_LABEL_PROMPT.md`
+is 15,565, so the combined 52,985 exceeds Windows' 32,767-char `CreateProcess` limit — the
+three largest `tone_judge` batches were **unlabellable** that way. This module sends the
+prompt on the CLI's **stdin**, which has no such limit. That stdin carries the prompt was
+verified empirically before the code was written (`printf ... | claude -p` → correct reply),
+not assumed from the help text.
+
+*The pass left no reproducible trace.* Its only record is an untracked `.log` covering 9 of
+16 batches, so it demonstrably ran in at least two uncoordinated invocations. This module is
+resumable by construction — it reads the output file's `(record_id, scorer)` keys first and
+skips any batch already fully present — and appends a provenance line naming the prompt's
+sha256, the model, the gen_id and the batch directory. Validated against the real corpus: run
+against the committed 354-row file, all 16 batches report `skipped (already labelled)`, which
+also proves the historical pass did cover all 16 despite its log recording only 9.
+
+Deliberately **no `anthropic` SDK dependency and no API key handling** — it shells out to the
+already-installed `claude` CLI, preserving the recorded decision to label without adding a
+dependency (the same reason `OPUS_LABEL_PROMPT.md` was "written, not run"). Every response
+line is validated through the importer's own `check_contamination` + `RawLabelRow` before it
+is written, so a contaminated session fails at write time rather than hours later at import.
+Writing to `labels_v1.jsonl` is refused outright. The `<BATCH>` delimiters are the only
+prompt-adjacent strings in Python — the prompt text itself is never inlined, so CLAUDE.md's
+"no prompt strings outside prompts/" rule holds, and `OPUS_LABEL_PROMPT.md` is deliberately
+**not** moved into `prompts/eval/`: that directory is hashed into `harness_version`
+(`comparability.py`), so moving it would invalidate cross-run comparability for a filing tidy.
+
+**2. `evals/adjudication_yield.py` (new) — what the push can actually buy, before it starts.**
+There was a blind spot between the two existing instruments: `label_export_yield.py` projects
+DEC-260's floor for labels not yet **written**, and `label_adequacy.py` measures it for labels
+already **adjudicated**. A pending pre-label is in neither population — it is excluded from an
+export projection (its key is already labelled) and contributes nothing to adequacy. So
+nothing in the harness could answer the only question that matters before a 4-6 hour keep/flip
+session: *what do the pre-labels I already have buy me?* Measured, against the real corpus:
+
+| scorer | now | pending (P/F) | keep-all | verdict |
+|---|---|---|---|---|
+| `tone_judge` | 7/45c | 111 (111P/0F) | 7/45c | **SHORT** |
+| `affirms_judge` | 8/37c | 132 (108P/24F) | 32/37c | CLEARS |
+| `anti_hallucination_grounded` | 8/16c | 0 | 8/16c | SHORT (no pending) |
+| `refusal_judge` | 11/25c | 0 | 11/25c | SHORT (no pending, retired) |
+| `commits_judge` | 0/0c | 111 (66P/45F) | 45/37c | CLEARS |
+
+The decision-changing row is `tone_judge`: **all 111 of its pending pre-labels are PASS**, so
+adjudicating every one of them as `keep` leaves the minority class at 7, and reaching 25 would
+require the adjudicator to flip ≥18 of Opus's PASS calls to FAIL. That is not an adjudication
+problem, it is ISSUE-291's problem — the case set never probes a tone failure — and without
+this instrument a maintainer would have spent hours on those 111 rows and still been REFUSED.
+The report is framed as **keep-all** rather than a theoretical ceiling because keep is the
+common verdict and a ceiling that assumes arbitrary flips would be arithmetic, not a
+projection. It is a report, not a gate: it always exits 0, and the gate remains
+`check-label-adequacy`.
+
+**3. Bullets that needed no code, verified rather than assumed.** DEC-260's floor is
+`MIN_MINORITY_LABELS = 25` **per scorer**, applied by `check_label_adequacy(scorer, rows)`;
+the plan's "75 minority items, down from 125" is the emergent labelling *budget* across 3
+scorers rather than 5, and appears nowhere in code — so the 125→75 change required no edit
+and none was made. `label-export-stratified` is already the only export verb
+(`label_export.py` has carried no CLI since the Phase 0 trim). `test_single_rater_tautology.py`
+already passes and already treats the 354 `claude-opus-5` rows as a genuine independent
+rater; it was not touched.
+
+**Re-baselined `check-evals-rules`' R002 (print-in-evals)** for both new modules, alongside
+every other `python -m evals <verb>` entry point already grandfathered there — same class of
+verb-report CLI output, not a new violation, exactly as DEC-270 did for `probe_runner.py`.
+
+**Not done here — and this is the honest state of Phase 5.** The adjudication itself is not
+done: 354 rows still sit pending, and `python -m evals calibrate` still reports all five
+scorers REFUSED. That is not a gap in this work, it is the work that only a person can do,
+and it is now correctly instrumented: run `make adjudication-yield`, then `make
+eval-adjudicate` for `affirms_judge` and `commits_judge` (which the projection says will
+clear), and leave `tone_judge` alone until ISSUE-291's failing cases are authored. Also not
+done: the calibration population is still derived from the labels file
+(`calibration.py:817`), so the DEC-269-retired `refusal_judge` and the out-of-scope
+`anti_hallucination_grounded` are still iterated and refused on every run — noise, not
+incorrectness, logged as **ISSUE-295** rather than fixed, because filtering that population
+is a change to what calibration reports and belongs with the scorer roster, not with this
+phase's tooling.
+
+---
+
+## DEC-273: dialogue latency — what was measured, what was fixed, and the two things that turned out not to be true
+
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `src/npc_engine/config.py`,
+`src/npc_engine/config_validators.py`, `src/npc_engine/engines/llm/ollama_payload.py` (new),
+`src/npc_engine/engines/llm/llm_metrics.py` (new), `src/npc_engine/engines/llm/ollama_adapter.py`,
+`src/npc_engine/engines/llm/prompt_eval_log.py`, `src/npc_engine/engines/llm/factory.py`,
+`src/npc_engine/engines/dialogue/dialogue_models.py`, `src/npc_engine/engines/dialogue/llm_client.py`,
+`e2e/helpers/judge_client.py`, `evals/engine_adapter.py`, `evals/run_config.py`, both `.env.example`
+files, `project-harness/ISSUES.md` (ISSUE-296..300)
+
+**Context.** Dialogue has a 3–7s budget before the game stops feeling responsive, and nothing in
+`src/` measured where that time went. Ollama returns `total_duration`, `load_duration`,
+`prompt_eval_duration` and `eval_duration` on every reply; `prompt_eval_log.py` read only the
+token counts and discarded all four. The budget was being managed by impression.
+
+**What was measured** (2026-09-07, `qwen2.5:7b` Q4_K_M, RTX 5070 Ti Laptop, 12,227 MiB, real
+dialogue system prompt and real output schema):
+
+| Condition | Total | Prefill | Decode |
+|---|---|---|---|
+| Structured, cold | 6.94s | 3.39s (5,273 tok) | 3.50s (127 tok @ 36 tok/s) |
+| Structured, warm | 3.49–4.18s | **0.05s** (prefix-cached) | 3.4–4.1s (127–162 tok) |
+| Free-text, warm | 1.31s | 0.03s | 1.23s (54 tok @ 44 tok/s) |
+| Cold model load | **+10.3s** | — | — |
+
+Three consequences. **Decode is ~97% of a warm turn** — prefill is effectively free, and the
+prefix cache survives interleaved calls from other engines (tested explicitly). **Warm dialogue at
+3.5–4.2s matches the harness's own `latency_p50_ms 3607 / p95 6263`**, so the recorded numbers
+were right and unexplained rather than wrong. **The only measured budget breach is the 10.3s cold
+load.**
+
+**Decision 1 — send `keep_alive`, default 30m, as a constructor parameter.** No engine sent it, so
+Ollama's 5-minute default evicted the model and a player idle longer than that paid 10.3s on their
+next line. A configurable `OLLAMA_KEEP_ALIVE` defaulting to `30m` spans a play session without
+holding VRAM overnight, keeping DEC-229's plan to free the graphics budget intact. It is a
+constructor parameter rather than a `get_settings()` read because `e2e/helpers/judge_client.py`
+builds the same adapter class: the judge model does not fit alongside the generation model on a
+12 GB card, so it passes `5m` explicitly — Ollama's own default, a deliberate no-op that keeps eval
+timing baselines from shifting. Typed `str`, because Ollama parses the field with Go's
+`time.ParseDuration` where a *negative* duration means "never unload", so `-1m` covers the pin case
+without a union. Validated at load, because the failure is silent: a malformed value is dropped by
+the backend and residency reverts to 5m with nothing in the logs. The validator rejects `30`,
+`30 minutes`, and notably `30d` — Go has no day unit.
+
+Verified end to end through the shipped code path: `/api/ps` `expires_at` moved from +5m to exactly
++30m.
+
+**`keep_alive` extends the idle timer; it does not reserve memory.** Co-residency was measured the
+same day: `qwen2.5:14b` (10.24 GB) still evicts `qwen2.5:7b` (5.38 GB) on this card, and the next
+7b call pays a 5.47s reload. Only one model fits. `llm_backend_load_latency_seconds` is the channel
+that says whether eviction is still happening.
+
+**Decision 2 — instrument in process, not in the eval harness.** Metrics and structured logs only;
+`evals/` untouched and ROADMAP M2.1 deliberately left open, because the measurement stack is
+mid-remediation and this change should not move its baselines. `log_prompt_eval` now takes the
+request payload and a `perf_counter` stamp instead of four separate values — forced by the 40-line
+rule (`check_rules` counts the docstring), but also more truthful. That hands it the payload, which
+*contains* the prompt, in a record emitted unconditionally regardless of `LOG_LLM_PROMPTS`; the
+module contract says so and `test_the_record_never_contains_prompt_text` fails the moment anyone
+writes `extra={"payload": payload}`.
+
+`load_duration` gets its own metric because it is the number this change moves. An unreported load
+is **skipped, not observed as zero** — `observe()` folds into `min`/`sum`, so faked zeros would read
+as "always warm" and hide exactly the signal the metric exists to show. Metrics carry an `engine`
+label the adapter did not previously have: all five engines share one backend and one model, so
+without it they collapse into a single unattributable bucket. They are otherwise instrumented for
+free, since every engine reaches the backend through those three methods.
+
+Verified live: `load_ms 4.291` on a resident model, and a 283ms gap between wall-clock
+`duration_ms` and the backend's `total_duration_ms` — the transport cost, now visible.
+
+**Decision 3 — send a generation-only schema, and record that it did not do what it was supposed
+to.** The model was handed the full `DialogueResponse` grammar every turn: 13 fields, 6,008 chars,
+including `$defs` for `ContextReceipt`, `DroppedItem` and `TierSpend`, and `audio_bytes` offered as
+a binary string. Seven of those fields are overwritten by `DialogueHandler`'s `model_copy` after
+generation, so any token spent on them was provably discarded. `DialogueGeneration` carries the six
+the model authors, as a separate class rather than a base or subset of `DialogueResponse` — that
+model is the published HTTP schema and is pinned field-by-field by `api_contract_baseline.json`, and
+inheritance would reorder its properties. `check-api-contract` and `check-api-stability` both stay
+green.
+
+**It bought no latency.** Same prompt, same five seeds: median `eval_count` 70.0 → 72.0, median
+decode 1.58s → 1.62s, while the grammar shrank 55%. `required` was already `npc_response` alone, so
+the model was never filling the optional fields and there was nothing to reclaim. Whether the
+grammar induced optional-field emission was the one thing nothing in the repo had measured; the
+answer is no. Kept on the hygiene case alone — eval and observability types have no business in an
+NPC's grammar, and the model can no longer be offered the ability to emit base64 audio — and
+recorded as a null result rather than a win.
+
+**Decision 4 — record the temperature that ran, replacing the one declared.** Dialogue's
+`llm_config.yaml` declares `0.15` and every run recorded that, but the structured path runs at
+`STRUCTURED_OUTPUT_TEMPERATURE` (`0.1`): `LLMStructuredProtocol.generate_structured` carries no
+temperature argument at all, so the adapter substitutes the setting. The harness has been describing
+a run that did not happen, and DEC-176 leans on the recorded figure ("the report states
+`temperature=0.15`") while measuring something else. Read through `engine_adapter`, which
+`test_src_free.py` enforces as the sole gateway.
+
+**This is a deliberate discontinuity.** The three committed generation directories recorded `0.15`;
+new runs record `0.1`. Nothing in `comparability.py` keys on temperature so no run is refused — it
+is recorded here so a future reader reads it as a correction, not a config change.
+
+**Rejected: wiring dialogue streaming.** Not a cost judgement — a correctness one.
+`_apply_output_ceiling` inspects the *complete* `npc_response` and substitutes a canned reply on a
+content-ceiling breach, so streaming tokens as they arrive ships un-moderated NPC text to the
+player. The repair retry (2 attempts at `seed + attempt`) and the degradation ladder both re-run the
+entire generation, and emitted tokens cannot be un-sent. All ten post-response side effects need the
+complete response. `stream_text` also buffers the whole stream into a list before returning, so this
+was never a call swap. And the payoff is smaller than it looks: the WS route already fakes it —
+`handler.handle()` runs to completion, then `_iter_token_chunks` re-chops the finished string into
+words — and the demo client already renders incrementally, so real streaming would change *when* the
+first word appears, not *how*. An earlier costing of this as "field ordering plus incremental JSON
+parsing" was wrong and is corrected here.
+
+**Deferred: making structured calls honour per-engine temperature.** Not a config edit. There is no
+clobbered caller value to restore — `generate_structured` has no temperature parameter — so it is an
+ask-gated `LLMStructuredProtocol` change across three adapters, the mock, and every hand-rolled fake
+in the suite, and it risks reviving review finding SEV-27, which is why
+`STRUCTURED_OUTPUT_TEMPERATURE` exists (dialogue previously ran at "uncontrolled ~0.8"). Logged as
+ISSUE-298, with the related finding that three of five engines never read their YAML temperature at
+all.
