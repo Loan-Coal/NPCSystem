@@ -105,6 +105,36 @@ check-corpus-frozen:
 check-corpus-quiescent:
 	REQUIRE_TICKING_CORPUS=1 $(PYTHON) -m pytest tests/integration/test_eval_world_corpus_integration.py -q -p no:cacheprovider -k quiescent
 
+# --- Eval stack (measurement-remediation Phase 1, DEC-267 follow-on) -------
+# A disposable, isolated Neo4j + app stack for eval-harness probes — see
+# docker-compose.eval.yml for the full rationale (separate project name, separate
+# volume, separate ports, freeze.yml layered in for autopilot-off).
+EVAL_STACK_COMPOSE := docker compose -p npcsystem-eval -f docker-compose.yml -f docker-compose.freeze.yml -f docker-compose.eval.yml
+EVAL_BASE_URL ?= http://localhost:8001
+EVAL_NEO4J_URI ?= bolt://localhost:7688
+
+# eval-stack-up: build with BUILD_SHA stamped (boot-check's pattern, not app-frozen's —
+# app-frozen omits --build/BUILD_SHA and so asserts a SHA no build call actually set) and
+# wait for it to boot.
+eval-stack-up:
+	BUILD_SHA=$$(git rev-parse --short HEAD) $(EVAL_STACK_COMPOSE) up -d --build
+	$(PYTHON) e2e/scripts/boot_check.py --base-url $(EVAL_BASE_URL) --expect-sha $$(git rev-parse --short HEAD)
+
+# eval-stack-seed: seed the demo world into the isolated stack. The seeder reads
+# NPC_BASE_URL/NPC_API_KEY (demo_game/config.py), not BASE_URL/API_KEY — same as
+# `make demo-seed`, just repointed at the isolated stack's port.
+eval-stack-seed:
+	NPC_BASE_URL=$(EVAL_BASE_URL) NPC_API_KEY=$(API_KEY) $(PYTHON) -m demo_game.seeds.seed
+
+# eval-stack-down: stop the isolated stack, keep its volume (fast to bring back up).
+eval-stack-down:
+	$(EVAL_STACK_COMPOSE) down
+
+# eval-stack-reset: stop the isolated stack AND drop its volume — a genuinely clean
+# slate for the next probe suite, distinct from the default stack's `neo4j_data`.
+eval-stack-reset:
+	$(EVAL_STACK_COMPOSE) down -v
+
 test:
 	$(PYTHON) -m pytest tests/ -q
 

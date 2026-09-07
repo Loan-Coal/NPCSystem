@@ -8925,3 +8925,74 @@ removed.
 half into a precondition, retiring `refusal_judge` into `affirms_judge`) is Phase 2 of the
 measurement-remediation plan, not this commit — Phase 0 is trim-only, deliberately kept
 separate so a behavioural change and a dead-code removal are never in the same diff.
+
+## DEC-268: measurement-remediation Phase 1 — a dedicated, isolated eval stack for
+per-engine probes
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `docker-compose.eval.yml`,
+`Makefile` (`eval-stack-*` targets)
+
+**Context.** Per-engine probes (Phase 3/4) need deterministic control of the world clock
+and freedom to mutate graph state without corrupting whatever world the default stack is
+demoing from. Investigated before building: does the repo already have this?
+
+**Finding: `CLOCK_MODE=game_driven` was already the effective default under any
+`docker compose up` — ISSUE-264 is narrower than it reads.** `docker-compose.yml`'s `app`
+service sets `CLOCK_MODE: game_driven` unconditionally in its `environment:` block, which
+wins over `.env`'s `CLOCK_MODE=realtime` (Compose `environment:` beats `env_file:` for the
+same key). ISSUE-264's "the shipped .env blocks `/clock/advance`" is true only for
+`make run`'s bare `uvicorn` invocation, which has no compose file to apply the override.
+Verified live: `POST /v1/clock/advance` against a freshly-built stack returned 200 with
+`"mode":"game_driven"` on the first call, no `.env` edit needed. ISSUE-264 is not closed by
+this finding (bare `make run` still has the gap) but this eval stack needed no fix for it.
+
+**Design: layer `docker-compose.freeze.yml` in rather than duplicate its
+`TICK_AUTOPILOT_ENABLED=false`**, and inline `docker-compose.test.yml`'s
+`networks: [internal, public]` step for neo4j rather than chain that file — chaining both
+would have tried to publish `test.yml`'s `127.0.0.1:7687` alongside this file's `:7688` on
+one container, because Compose concatenates list-valued keys like `ports:` across files by
+default rather than replacing them (confirmed by inspecting `docker compose config`'s
+merged output before deciding, not assumed).
+
+**The same concatenation bit the `app` service's port override during verification.**
+`docker-compose.eval.yml`'s first draft added `ports: - "127.0.0.1:8001:8000"` for `app`;
+`docker compose config` showed it published BOTH `8000` (from the base file) and `8001` to
+one container, which fails to bind whenever the default dev stack already holds `8000` —
+exactly the collision this file exists to avoid. Fixed with the Compose Specification's
+`!override` merge tag (`ports: !override [...]`), which fully replaces the key instead of
+appending to it. Verified via `docker compose config` before and after.
+
+**Isolation achieved via a distinct project name (`-p npcsystem-eval`), not just ports.**
+Compose derives container identity from `(project, service)`; without `-p`, two
+invocations from the same directory reuse the SAME `neo4j`/`app` containers regardless of
+what an override changes. `-p` gives genuinely separate containers, networks
+(`npcsystem-eval_internal`/`_public`), and — combined with a distinctly-named volume key
+(`neo4j_eval_data`, not the default `neo4j_data`) — a separate volume
+(`npcsystem-eval_neo4j_eval_data`), so the eval stack can run alongside a plain
+`docker compose up` or `make app-frozen` dev stack on one machine.
+
+**`eval-stack-up` builds with `BUILD_SHA` stamped and `--build`, unlike `app-frozen`.**
+`app-frozen`'s recipe (`Makefile:89-91`) omits both, so its own `boot_check.py
+--expect-sha` assertion only passes by coincidence of a prior build matching HEAD.
+Discovered live: the first `eval-stack-up` run built an image without `BUILD_SHA`, and
+`boot_check.py` correctly failed it (`version='dev'` != HEAD's SHA). Fixed by mirroring
+`boot-check`'s own pattern (`Makefile:82-84`) instead of `app-frozen`'s, rather than
+weakening the assertion — `app-frozen`'s omission is a pre-existing inconsistency in this
+same file, left alone as out of scope for this phase.
+
+**Verified live, not just via `docker compose config`:** `make eval-stack-up` builds,
+brings up an isolated stack, and passes `boot_check.py --expect-sha`; `POST
+/v1/clock/advance` returns 200 with every one of the 25 tick-registered engines' per-tick
+row in the response body (confirming the earlier validation finding that the advance
+response, not `engine_status`, is the richer per-engine metric source — Phase 3's design
+note); `GET /v1/clock/state`'s `engine_status` is fully populated with per-engine
+`tick_count`/`error_count`/`last_duration_ms` for all 25; `make eval-stack-seed` seeded 236
+demo-world nodes/edges against the isolated port with zero effect on any other stack; `make
+eval-stack-reset` tore down containers, both networks, and the volume cleanly (confirmed
+via `docker volume ls` / `docker ps -a` showing nothing left).
+
+**Not done here:** no change to `evals/engine_adapter.py` — it already resolves
+`NEO4J_URI` in one place via `get_settings()`, so "the eval stack's Neo4j URI resolved in
+one place" was already satisfied architecturally; the Makefile's `EVAL_NEO4J_URI` default
+(`bolt://localhost:7688`) exists for scripts that need direct graph access
+(`retrieval_runner`, `arm_supply`) and is passed by the caller, matching the existing
+`BASE_URL`/`API_KEY` override convention rather than inventing a new one.

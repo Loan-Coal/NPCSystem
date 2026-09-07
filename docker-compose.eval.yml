@@ -1,0 +1,71 @@
+# Measurement-only override: a disposable Neo4j + app stack for the eval harness's
+# per-engine probes (measurement-remediation Phase 1, DEC-267 follow-on), isolated from
+# whatever world the default stack is demoing so a probe can mutate freely and reset
+# cleanly without corrupting it.
+#
+#   make eval-stack-up      # bring the isolated stack up
+#   make eval-stack-seed    # seed the demo world into it
+#   make eval-stack-down    # tear it down (keeps the volume)
+#   make eval-stack-reset   # tear down AND drop the volume — a genuinely clean slate
+#
+# Combine with docker-compose.freeze.yml, not docker-compose.test.yml (see below) — the
+# Makefile targets above already do this:
+#   docker compose -p npcsystem-eval -f docker-compose.yml -f docker-compose.freeze.yml \
+#     -f docker-compose.eval.yml up -d
+#
+# Why a separate project name (`-p npcsystem-eval`), not just a port override. Compose
+# derives container names from (project, service), not from the compose files given — two
+# invocations from the same directory with no `-p` reuse the SAME `neo4j`/`app` containers
+# regardless of what an override changes, which is the opposite of isolation. `-p` makes
+# this a genuinely separate stack: separate containers, separate default network names, and
+# (decisively) separate anonymous-prefix for the named volume below, so it can run ALONGSIDE
+# the default dev stack on one machine, not just instead of it.
+#
+# Why CLOCK_MODE is not repeated here. `docker-compose.yml`'s `app` service already sets
+# `CLOCK_MODE: game_driven` unconditionally — it is NOT read from `.env` at all once Compose
+# is in play (Compose `environment:` wins over `env_file:` for the same key). `.env` shipping
+# `CLOCK_MODE=realtime` (ISSUE-264) only affects `make run`'s bare `uvicorn` invocation, which
+# has no compose file to apply this override. So `POST /v1/clock/advance` already works under
+# any `docker compose up` today; this file adds nothing on that axis and restating the value
+# here would just be two files claiming ownership of one setting.
+#
+# Why docker-compose.freeze.yml (TICK_AUTOPILOT_ENABLED=false) and not docker-compose.test.yml.
+# freeze.yml is exactly what a probe needs: the autopilot's own background ticks stop racing
+# a probe's deliberate `POST /clock/advance` calls (same M1.3/ISSUE-279 reasoning app-frozen
+# already uses). test.yml ALSO publishes neo4j's bolt port at the SAME 127.0.0.1:7687 this
+# file uses on a different port below — Compose concatenates list-valued keys like `ports:`
+# across files rather than replacing them, so chaining both would bind two ports to one
+# container for no reason. This file inlines test.yml's `networks: [internal, public]` step
+# (required for a `ports:` stanza on neo4j to take effect at all — see docker-compose.yml's
+# own header comment) rather than depending on it.
+#
+# Do NOT use this override in production — it is intentionally a throwaway world.
+
+services:
+  neo4j:
+    networks:
+      - internal
+      - public
+    ports:
+      # Distinct from docker-compose.test.yml's 7687, and from the eval stack's own app
+      # port below — so this can run alongside a `make app-frozen` or plain `docker compose
+      # up` dev stack without a port collision. Bound to 127.0.0.1 only, never 0.0.0.0
+      # (same shipped-credential reasoning as docker-compose.test.yml).
+      - "127.0.0.1:7688:7687"
+    volumes:
+      # A distinctly-NAMED volume, not just the default `neo4j_data` re-scoped by the
+      # project prefix — so `docker volume ls` doesn't show two identically-named volumes
+      # under different project prefixes, which is confusing even though it would be safe.
+      - neo4j_eval_data:/data
+
+  app:
+    # `!override` (not the default merge) — Compose concatenates list-valued keys like
+    # `ports:` across files by default, so without this tag the eval app would try to
+    # publish BOTH the base file's 8000 and this file's 8001 to one container, which
+    # fails to start whenever the default dev stack already holds 8000.
+    ports: !override
+      # Distinct from the default stack's 127.0.0.1:8000, so both can run at once.
+      - "127.0.0.1:8001:8000"
+
+volumes:
+  neo4j_eval_data:
