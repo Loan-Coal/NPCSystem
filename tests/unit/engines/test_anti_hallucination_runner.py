@@ -44,7 +44,7 @@ def test_planted_deception_not_scored_as_hallucination() -> None:
     client.post.return_value = _make_dialogue_response(lie)
     client.get.return_value = _make_belief_response(lie, is_deception=True)
 
-    with patch("anti_hallucination_runner.matchers.judge_refusal", return_value=_make_judge_refusal_result(False)):
+    with patch("anti_hallucination_runner.matchers.judge_affirms", return_value=_make_judge_affirms_result(False)):
         result, outcome = _classify_case(case, client, "http://x")
 
     assert outcome == "deception_intended"
@@ -59,7 +59,7 @@ def test_ordinary_unsupported_claim_still_fails() -> None:
     client.post.return_value = _make_dialogue_response(claim)
     client.get.return_value = _make_belief_response(claim, is_deception=False)
 
-    with patch("anti_hallucination_runner.matchers.judge_refusal", return_value=_make_judge_refusal_result(False)):
+    with patch("anti_hallucination_runner.matchers.judge_affirms", return_value=_make_judge_affirms_result(False)):
         result, outcome = _classify_case(case, client, "http://x")
 
     assert outcome == "refusal_fail"
@@ -263,7 +263,7 @@ def test_grounded_case_fails_when_no_substring_present(tmp_path: Path) -> None:
 
 
 def test_refusal_case_passes_when_judge_says_yes(tmp_path: Path) -> None:
-    """refusal case: judge_refusal returns YES → refusal_passed += 1, PASS."""
+    """refusal case: judge_affirms returns score=True (a valid refusal) → refusal_passed += 1, PASS."""
     fixture = _write_fixture(tmp_path, [COMMENT_OBJECT, REFUSAL_PASS_CASE])
     report_dir = tmp_path / "reports"
 
@@ -271,8 +271,8 @@ def test_refusal_case_passes_when_judge_says_yes(tmp_path: Path) -> None:
     health_resp = _make_health_response()
 
     with patch("httpx.Client") as mock_client_cls, patch(
-        "anti_hallucination_runner.matchers.judge_refusal",
-        return_value=_make_judge_refusal_result(True),
+        "anti_hallucination_runner.matchers.judge_affirms",
+        return_value=_make_judge_affirms_result(True),
     ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -296,7 +296,7 @@ def test_refusal_case_passes_when_judge_says_yes(tmp_path: Path) -> None:
 
 
 def test_refusal_case_fails_when_judge_says_no(tmp_path: Path) -> None:
-    """refusal case: judge_refusal returns NO → hallucination_count += 1, FAIL."""
+    """refusal case: judge_affirms returns score=False (affirmed as fact) → hallucination_count += 1, FAIL."""
     fixture = _write_fixture(tmp_path, [COMMENT_OBJECT, REFUSAL_FAIL_CASE])
     report_dir = tmp_path / "reports"
 
@@ -306,8 +306,8 @@ def test_refusal_case_fails_when_judge_says_no(tmp_path: Path) -> None:
     health_resp = _make_health_response()
 
     with patch("httpx.Client") as mock_client_cls, patch(
-        "anti_hallucination_runner.matchers.judge_refusal",
-        return_value=_make_judge_refusal_result(False),
+        "anti_hallucination_runner.matchers.judge_affirms",
+        return_value=_make_judge_affirms_result(False),
     ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -386,18 +386,18 @@ def test_format_summary_contains_expected_strings() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 7: refusal cases route through matchers.judge_refusal (EVAL-B3.2)
+# Test 7: refusal cases route through matchers.judge_affirms (EVAL-B3.2, folded per DEC-269)
 # ---------------------------------------------------------------------------
 
 
-def _make_judge_refusal_result(score: bool | None) -> "MagicMock":
+def _make_judge_affirms_result(score: bool | None) -> "MagicMock":
     """Build a fake JudgeResult with the given score (duck-typed for the test)."""
     from matchers import JudgeResult
     return JudgeResult(score=score, error="" if score else "not a refusal")
 
 
 def test_refusal_case_passes_via_judge_yes(tmp_path: "Path") -> None:
-    """EVAL-B3.2: refusal case with judge_refusal YES verdict → refusal_pass, exit 0."""
+    """EVAL-B3.2: refusal case with judge_affirms score=True verdict → refusal_pass, exit 0."""
     fixture = _write_fixture(tmp_path, [REFUSAL_PASS_CASE])
     report_dir = tmp_path / "reports"
 
@@ -405,8 +405,8 @@ def test_refusal_case_passes_via_judge_yes(tmp_path: "Path") -> None:
     health_resp = _make_health_response()
 
     with patch("httpx.Client") as mock_client_cls, patch(
-        "anti_hallucination_runner.matchers.judge_refusal",
-        return_value=_make_judge_refusal_result(True),
+        "anti_hallucination_runner.matchers.judge_affirms",
+        return_value=_make_judge_affirms_result(True),
     ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -425,7 +425,7 @@ def test_refusal_case_passes_via_judge_yes(tmp_path: "Path") -> None:
 
 
 def test_refusal_case_fails_via_judge_no(tmp_path: "Path") -> None:
-    """EVAL-B3.2: refusal case with judge_refusal NO verdict → refusal_fail (hallucination), exit 1."""
+    """EVAL-B3.2: refusal case with judge_affirms score=False verdict → refusal_fail (hallucination), exit 1."""
     fixture = _write_fixture(tmp_path, [REFUSAL_FAIL_CASE])
     report_dir = tmp_path / "reports"
 
@@ -435,8 +435,8 @@ def test_refusal_case_fails_via_judge_no(tmp_path: "Path") -> None:
     health_resp = _make_health_response()
 
     with patch("httpx.Client") as mock_client_cls, patch(
-        "anti_hallucination_runner.matchers.judge_refusal",
-        return_value=_make_judge_refusal_result(False),
+        "anti_hallucination_runner.matchers.judge_affirms",
+        return_value=_make_judge_affirms_result(False),
     ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -455,7 +455,7 @@ def test_refusal_case_fails_via_judge_no(tmp_path: "Path") -> None:
 
 
 def test_refusal_judge_infra_failure_counts_as_error(tmp_path: "Path") -> None:
-    """EVAL-B3.2: judge_refusal score=None (infra failure) → 'error' outcome, not scored."""
+    """EVAL-B3.2: judge_affirms score=None (infra failure) → 'error' outcome, not scored."""
     fixture = _write_fixture(tmp_path, [REFUSAL_PASS_CASE])
     report_dir = tmp_path / "reports"
 
@@ -463,8 +463,8 @@ def test_refusal_judge_infra_failure_counts_as_error(tmp_path: "Path") -> None:
     health_resp = _make_health_response()
 
     with patch("httpx.Client") as mock_client_cls, patch(
-        "anti_hallucination_runner.matchers.judge_refusal",
-        return_value=_make_judge_refusal_result(None),
+        "anti_hallucination_runner.matchers.judge_affirms",
+        return_value=_make_judge_affirms_result(None),
     ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client

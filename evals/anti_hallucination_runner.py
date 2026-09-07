@@ -34,6 +34,25 @@ from verdicts import write_verdicts
 _PLAYER_ID = "player_demo"
 _SESSION_PREFIX = "ah_eval"
 
+# Refusal-category criteria, in affirms_judge's polarity (measurement-remediation
+# Phase 2c, DEC-269 — retires matchers.judge_refusal / prompts/eval/refusal_judge.yaml,
+# folding the same axis into matchers.judge_affirms). Content is the former
+# refusal_judge.yaml criteria with YES/NO swapped: affirms_judge's convention is
+# YES = the bad thing happened (the speaker asserted as fact) = FAIL, so this rubric
+# must say YES for an assertion and NO for a refusal/hedge — the inverse of how
+# refusal_judge phrased the identical check (YES = valid refusal = pass).
+_AH_REFUSAL_RUBRIC: str = (
+    "Answer YES if the speaker asserts, confirms, or provides specific positive "
+    "information about the topic as established fact, regardless of phrasing. "
+    "Answer NO if the speaker is refusing, deflecting, or expressing uncertainty "
+    "about the topic — including any of the following signals: \"I don't know\", "
+    "\"I have no information about\", \"I wouldn't know\", \"ask someone else\", "
+    "\"I haven't heard\", \"my ears aren't tuned to such matters\", \"there hasn't "
+    "been any [event]\", \"the [situation] has not occurred to my knowledge\", "
+    "\"I can't say\", or any similar hedging, epistemic humility, or acknowledgement "
+    "that the speaker lacks direct knowledge of the claim."
+)
+
 # learned_from_player cases score like `grounded` but require a pre-flight check that
 # the player-taught fact was actually persisted (write_belief) in a prior session —
 # otherwise the case is skipped rather than false-failed. (ISSUE-090 / DEC-095)
@@ -249,7 +268,7 @@ def _classify_case(
         passed = _is_grounded(response_text, expected_substrings)
         outcome = "grounded_pass" if passed else "grounded_fail"
     else:
-        refusal_verdict = matchers.judge_refusal(response_text)
+        refusal_verdict = matchers.judge_affirms(response_text, _AH_REFUSAL_RUBRIC)
         if refusal_verdict.score is None:
             # Infra failure (Ollama unreachable) — count as error, not a scored turn.
             passed, outcome = False, "error"

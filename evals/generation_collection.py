@@ -166,9 +166,10 @@ def collect_records(
 
     Each case runs k times; each repetition captures duration_ms and a retrieval
     context approximation from GET /v1/admin/debug/retrieval. YAML cases first
-    (judge + deterministic records, EVAL-P6.1), then AH cases (refusal cases get a
-    refusal_judge record; grounded cases get a deterministic anti_hallucination_grounded
-    record — no case type is dropped from the transcript).
+    (judge + deterministic records, EVAL-P6.1), then AH cases (refusal cases get an
+    affirms_judge record — refusal_judge was retired, DEC-269; grounded cases get a
+    deterministic anti_hallucination_grounded record — no case type is dropped from
+    the transcript).
 
     Args:
         yaml_cases: Loaded YAML eval cases.

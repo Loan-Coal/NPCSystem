@@ -30,7 +30,10 @@ def test_guard_case_gets_universal_guards_appended() -> None:
     kinds = [e["kind"] for e in expected]
     assert kinds[0] == "keyword_none"  # original preserved first
     assert "min_length" in kinds
-    assert "tone_judge" in kinds
+    # tone_judge's guard-liveness injection was renamed liveness_judge in
+    # measurement-remediation Phase 2b (DEC-269) — it's a liveness precondition,
+    # not the voice-quality judge; authored tone_judge rubrics are unaffected.
+    assert "liveness_judge" in kinds
     # exactly one keyword_none carries the fallback lines
     fallback_block = [e for e in expected if e["kind"] == "keyword_none" and "I need a moment to think." in e.get("keywords", [])]
     assert len(fallback_block) == 1
@@ -44,7 +47,7 @@ def test_non_guard_case_unchanged() -> None:
 def test_guard_case_without_declared_expectations_still_guarded() -> None:
     case = {"case_id": "case_neg_y"}
     kinds = [e["kind"] for e in runner._expected_with_guards(case)]
-    assert kinds == ["min_length", "keyword_none", "tone_judge"]
+    assert kinds == ["min_length", "keyword_none", "liveness_judge"]
 
 
 def test_demo_world_guard_case_gets_lore_affirms_judge() -> None:

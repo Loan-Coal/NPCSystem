@@ -66,6 +66,30 @@ _VERDICT_FILES: tuple[tuple[str, str], ...] = (
     ("judged.jsonl", "judge_kind"),
 )
 
+#: Families excluded from the base-rate measurement itself (measurement-remediation
+#: Phase 2, DEC-269), not just reported separately — a family with zero (or
+#: structurally-suppressed) variance cannot move under any A/B change and cannot
+#: meaningfully enter a breach, so counting its rows in `ALL` only pushes the overall
+#: rate toward its own ceiling and crushes every OTHER family's kappa the same way
+#: affirms_judge's already is (line 8).
+#:   schema/min_length/in_set/range: measured at exactly 1.000 (zero variance) in every
+#:   recorded generation — `docs/CASE_SET_POLICY.md`'s base-rate-contract table: schema
+#:   n=186, min_length n=111, in_set n=18, range n=9. These are response-shape validators
+#:   (matchers.py's `_eval_schema`/`_eval_min_length`/`_eval_in_set`/`_eval_range`), not
+#:   scorers, and none ever carried a Cohen's kappa (BATTERY_JUDGED_SCORERS already
+#:   excludes purely mechanical matchers — see evals/battery_trust.py).
+#:   liveness_judge: the guard battery's auto-injected liveness check (formerly
+#:   mislabelled `tone_judge` — see guard_expectations.GUARD_LIVENESS_RUBRIC), which
+#:   fails on four narrow structural conditions only and cannot produce a content
+#:   verdict by design. Was the dominant contributor to tone_judge's real (authored)
+#:   signal being crushed to kappa 0.003 before the Phase 2b split.
+#: This does not change what a case reports: runner.py's per-expectation gating is
+#: unchanged, so a failure in any of these still fails its case exactly as before.
+#: Only this gate's tally changes.
+_STRUCTURAL_FAMILIES: frozenset[str] = frozenset(
+    {"schema", "min_length", "in_set", "range", "liveness_judge"}
+)
+
 _OVERALL_FAMILY: str = "ALL"
 
 #: The two statuses that count as a breach.
@@ -88,7 +112,11 @@ class MissingBaselineError(ValueError):
 
 
 def _iter_rows(gen_dir: Path) -> Iterable[tuple[str, bool]]:
-    """Yield (family, passed) for every scored row in a generation directory."""
+    """Yield (family, passed) for every scored row in a generation directory.
+
+    Rows whose family is in `_STRUCTURAL_FAMILIES` are excluded — see that constant's
+    docstring for why a zero-variance family has no place in a base-rate measurement.
+    """
     for filename, family_field in _VERDICT_FILES:
         path = gen_dir / filename
         if not path.exists():
@@ -99,7 +127,7 @@ def _iter_rows(gen_dir: Path) -> Iterable[tuple[str, bool]]:
                 continue
             row: dict[str, Any] = json.loads(stripped)
             family = row.get(family_field)
-            if family is not None:
+            if family is not None and str(family) not in _STRUCTURAL_FAMILIES:
                 yield str(family), bool(row.get("passed", False))
 
 

@@ -6,7 +6,8 @@ Purpose: Expectation evaluators that score a single NPC response against a decla
 matchers.py - Expectation evaluators for eval cases.
 
 Supported kinds: schema, min_length, keyword_any, keyword_all, keyword_none,
-in_set, range, substring, regex, tone_judge, affirms_judge, context_block_expected.
+in_set, range, substring, regex, tone_judge, liveness_judge, affirms_judge,
+commits_judge, context_block_expected.
 
 affirms_judge is a polarity-inverted reuse of the tone_judge LLM plumbing: it
 passes when the NPC does NOT affirm a supplied false claim (per-case ``claim`` or a
@@ -34,7 +35,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 import yaml
@@ -70,7 +71,6 @@ class JudgeResult:
 # ---------------------------------------------------------------------------
 
 _PROMPT_YAML_PATH = Path(__file__).resolve().parents[1] / "prompts" / "eval" / "tone_judge.yaml"
-_REFUSAL_YAML_PATH = Path(__file__).resolve().parents[1] / "prompts" / "eval" / "refusal_judge.yaml"
 
 
 def _load_judge_prompt_template() -> str:
@@ -88,23 +88,6 @@ def _load_judge_prompt_template() -> str:
 
 
 _JUDGE_PROMPT_TMPL: str = _load_judge_prompt_template()
-
-
-def _load_refusal_criteria() -> str:
-    """Load the refusal judge criteria string from prompts/eval/refusal_judge.yaml.
-
-    Returns:
-        The criteria string with the YES/NO refusal classification criterion.
-
-    Raises:
-        FileNotFoundError: If prompts/eval/refusal_judge.yaml does not exist.
-    """
-    with _REFUSAL_YAML_PATH.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
-    return str(data["criteria"])
-
-
-_REFUSAL_CRITERIA: str = _load_refusal_criteria()
 
 # ---------------------------------------------------------------------------
 # Structured logger
@@ -165,6 +148,11 @@ def _parse_judge_verdict(raw: str) -> tuple[bool, str]:
 def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResult:
     """Evaluate one expectation against an API response dict.
 
+    Dispatches by `expectation["kind"]` via `_DISPATCH` (defined at the end of this
+    module, after every `_eval_*` function it names — Python resolves the dict's
+    values at import time, not at this function's call time, so definition order
+    below this point is unconstrained).
+
     Returns:
         (passed: bool, detail: str) for most matchers.
         JudgeResult for tone_judge (score=None signals infra failure).
@@ -173,35 +161,10 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResul
         EvalConfigError: If the expectation is mis-configured.
     """
     kind = expectation.get("kind", "")
-
-    if kind == "schema":
-        return _eval_schema(expectation, response)
-    if kind == "min_length":
-        return _eval_min_length(expectation, response)
-    if kind == "keyword_any":
-        return _eval_keyword_any(expectation, response)
-    if kind == "keyword_all":
-        return _eval_keyword_all(expectation, response)
-    if kind == "keyword_none":
-        return _eval_keyword_none(expectation, response)
-    if kind == "in_set":
-        return _eval_in_set(expectation, response)
-    if kind == "range":
-        return _eval_range(expectation, response)
-    if kind == "substring":
-        return _eval_substring(expectation, response)
-    if kind == "regex":
-        return _eval_regex(expectation, response)
-    if kind == "tone_judge":
-        return _eval_tone_judge(expectation, response)
-    if kind == "affirms_judge":
-        return _eval_affirms_judge(expectation, response)
-    if kind == "commits_judge":
-        return _eval_commits_judge(expectation, response)
-    if kind == "context_block_expected":
-        return _eval_context_block_expected(expectation, response)
-
-    return False, f"unknown expectation kind: {kind!r}"
+    handler = _DISPATCH.get(kind)
+    if handler is None:
+        return False, f"unknown expectation kind: {kind!r}"
+    return handler(expectation, response)
 
 
 # ---------------------------------------------------------------------------
@@ -320,13 +283,7 @@ def _eval_affirms_judge(exp: dict, resp: dict) -> JudgeResult:
     if not criteria:
         return JudgeResult(score=False, error="no claim or description in expectation")
 
-    verdict = _run_binary_judge(criteria=criteria, content=npc_response)
-    if verdict.score is None:
-        return verdict  # infra failure — preserve inconclusive signal
-    affirmed = verdict.score  # YES (True) means the NPC affirmed the claim
-    if affirmed:
-        return JudgeResult(score=False, error=f"NPC affirmed false claim: {verdict.error}")
-    return JudgeResult(score=True, error="")
+    return judge_affirms(npc_response, criteria)
 
 
 def _eval_commits_judge(exp: dict, resp: dict) -> JudgeResult:
@@ -363,23 +320,38 @@ def _eval_commits_judge(exp: dict, resp: dict) -> JudgeResult:
     return _run_binary_judge(criteria=str(criteria).strip(), content=npc_response)
 
 
-def judge_refusal(content: str) -> JudgeResult:
-    """Call the LLM judge to decide whether content is a valid refusal.
+def judge_affirms(content: str, criteria: str) -> JudgeResult:
+    """Call the LLM judge to decide whether content affirms something as fact.
 
-    Uses the criteria from prompts/eval/refusal_judge.yaml injected into the shared
-    tone_judge template.  Polarity: YES = valid refusal (pass), NO = assertion (fail).
+    The shared affirms_judge polarity, factored out of `_eval_affirms_judge` so a
+    caller outside the `evaluate()` dispatch (anti_hallucination_runner's refusal
+    category, since measurement-remediation Phase 2c / DEC-269 — see that module's
+    `_AH_REFUSAL_RUBRIC`) can use it directly, the way `judge_refusal` (retired) used
+    to be called directly for the same category. A YES verdict (the speaker asserts,
+    confirms, or provides specific positive information) is a FAIL; a NO verdict
+    (denies/deflects/hedges/expresses uncertainty) is a PASS.
 
     Args:
         content: The NPC response text to classify.
+        criteria: The affirms_judge criteria rubric to check `content` against.
 
     Returns:
-        JudgeResult(score=True) when the judge says YES (valid refusal),
-        JudgeResult(score=False) when the judge says NO (NPC asserted),
+        JudgeResult(score=True) when NOT affirmed (a valid refusal/hedge),
+        JudgeResult(score=False) when affirmed (an assertion of fact),
         JudgeResult(score=None, error='infra_failure') on transport failure.
     """
     if not content:
-        return JudgeResult(score=False, error="empty content cannot be a refusal")
-    return _run_binary_judge(criteria=_REFUSAL_CRITERIA, content=content)
+        return JudgeResult(score=False, error="empty content cannot be evaluated")
+    if not criteria:
+        return JudgeResult(score=False, error="no criteria supplied")
+
+    verdict = _run_binary_judge(criteria=criteria, content=content)
+    if verdict.score is None:
+        return verdict  # infra failure — preserve inconclusive signal
+    affirmed = verdict.score  # YES (True) means the speaker affirmed as fact
+    if affirmed:
+        return JudgeResult(score=False, error=f"affirmed as fact: {verdict.error}")
+    return JudgeResult(score=True, error="")
 
 
 def _eval_context_block_expected(exp: dict, resp: dict) -> tuple[bool, str]:
@@ -543,3 +515,30 @@ def _eval_regex(exp: dict, resp: dict) -> tuple[bool, str]:
     if re.search(pattern, text, re.IGNORECASE):
         return True, f"regex {pattern!r} matched"
     return False, f"regex {pattern!r} did not match: {text[:120]!r}"
+
+
+# ---------------------------------------------------------------------------
+# Dispatch table for evaluate()
+# ---------------------------------------------------------------------------
+
+_Evaluator = Callable[[dict, dict], "tuple[bool, str] | JudgeResult"]
+
+#: kind -> evaluator. liveness_judge shares tone_judge's evaluator (same LLM-judge
+#: mechanics, different statistical family — see guard_expectations.GUARD_LIVENESS_RUBRIC,
+#: measurement-remediation Phase 2b, DEC-269).
+_DISPATCH: dict[str, _Evaluator] = {
+    "schema": _eval_schema,
+    "min_length": _eval_min_length,
+    "keyword_any": _eval_keyword_any,
+    "keyword_all": _eval_keyword_all,
+    "keyword_none": _eval_keyword_none,
+    "in_set": _eval_in_set,
+    "range": _eval_range,
+    "substring": _eval_substring,
+    "regex": _eval_regex,
+    "tone_judge": _eval_tone_judge,
+    "liveness_judge": _eval_tone_judge,
+    "affirms_judge": _eval_affirms_judge,
+    "commits_judge": _eval_commits_judge,
+    "context_block_expected": _eval_context_block_expected,
+}

@@ -1,16 +1,12 @@
 {
   "gen_dir": "evals/generations/k3_77688e7_regen1",
-  "overall_rate": 0.9425641025641026,
-  "overall_n": 975,
+  "overall_rate": 0.9139784946236559,
+  "overall_n": 651,
   "breaches": {
     "keyword_none": "above_band",
-    "schema": "above_band",
     "affirms_judge": "above_band",
     "tone_judge": "above_band",
-    "min_length": "above_band",
     "refusal_judge": "above_band",
-    "anti_hallucination_grounded": "above_band",
-    "in_set": "above_band",
-    "range": "above_band"
+    "anti_hallucination_grounded": "above_band"
   }
 }

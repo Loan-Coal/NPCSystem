@@ -8996,3 +8996,124 @@ one place" was already satisfied architecturally; the Makefile's `EVAL_NEO4J_URI
 (`bolt://localhost:7688`) exists for scripts that need direct graph access
 (`retrieval_runner`, `arm_supply`) and is passed by the caller, matching the existing
 `BASE_URL`/`API_KEY` override convention rather than inventing a new one.
+
+## DEC-269: measurement-remediation Phase 2 — demote the zero-variance/precondition
+families, split `tone_judge`, retire `refusal_judge` into `affirms_judge`, re-record
+the base-rate ratchet
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `evals/matchers.py`,
+`evals/guard_expectations.py`, `evals/runner.py`, `evals/generation_records.py`,
+`evals/anti_hallucination_runner.py`, `evals/transcript_models.py`,
+`evals/battery_trust.py`, `evals/summary.py`, `scripts/check_base_rate.py`,
+`scripts/base_rate_baseline.json`, `project-harness/archive/ISSUES_RESOLVED.md`
+(ISSUE-276)
+
+**Context.** `docs/CASE_SET_POLICY.md`'s recorded base rate, 0.9426 over 10 families,
+crushes every judge's kappa: Cohen's kappa is chance-corrected, so `Pe` rises with base
+rate and κ falls even at unchanged raw agreement (`affirms_judge` at 96.3% raw agreement
+scores κ = 0.530 for this reason alone). Four of the ten families — `schema`,
+`min_length`, `in_set`, `range` — sit at exactly 1.000: zero variance, structurally
+incapable of ever entering a "breach", and present only to inflate the overall rate
+toward its own ceiling. `GUARD_TONE_RUBRIC`, auto-injected into every `case_neg_`/
+`case_adv_` case by `guard_expectations.expected_with_guards`, is a liveness check ("did
+the NPC say anything coherent"), not a voice-quality judgment — grading it alongside
+authored tone rubrics conflates two different questions under one scorer name.
+`refusal_judge` was already halted by ISSUE-276 (measured κ = 0.225 against `tone_judge`'s
+1.000, ISSUE-184) — this phase closes it rather than leaving it halted indefinitely.
+
+**2a — statistical exclusion, not a runtime precondition.** Two designs were possible:
+(1) move `schema`/`min_length`/`in_set`/`range` into `evals/preconditions.py` so a
+failure invalidates the whole case at generation time, or (2) leave `runner.py`'s
+per-expectation gating completely unchanged and exclude these families only from
+`check_base_rate.py`'s measurement/tally. Asked the user explicitly (this touches
+`runner.py`'s per-expectation loop, with 90+ case-file callers) — chose (2), statistical
+exclusion only. Implemented as `check_base_rate._STRUCTURAL_FAMILIES` (a frozenset
+consulted by `_iter_rows`), not a code change to any scorer or to `runner.py`. `in_set`
+and `range` are included in the exclusion set for the same zero-variance reason, even
+though they were never separately called out in earlier drafts — the measured rate for
+both is 1.000 same as `schema`/`min_length`, so keeping them in the base-rate population
+while excluding the other two would have been an arbitrary distinction with no different
+underlying property.
+
+**2b — `tone_judge` splits into `tone_judge` (voice, still judged) and `liveness_judge`
+(guard liveness, demoted to a precondition role but still routed through the judge
+pipeline as its own `judge_kind` for measurement purposes).** `GUARD_TONE_RUBRIC` is
+renamed `GUARD_LIVENESS_RUBRIC`; `guard_expectations.expected_with_guards` injects
+`{"kind": "liveness_judge", ...}` instead of `{"kind": "tone_judge", ...}`. `matchers.py`
+routes `liveness_judge` through the same handler as `tone_judge` (`_eval_tone_judge`) —
+the rubric text is what differs, not the scoring mechanism. `liveness_judge` is added to
+`_STRUCTURAL_FAMILIES` in `check_base_rate.py` (it is near-constant, same rationale as 2a)
+and excluded from `label_export_stratified.IN_SCOPE_SCORERS` (never had case_neg/case_adv
+coverage to oversample from, and is a precondition-shaped check rather than a calibration
+target). Authored voice rubrics in the 9 case files are untouched and remain real
+`tone_judge` scoring.
+
+**2c — `refusal_judge` retired, folded into `matchers.judge_affirms`.**
+`anti_hallucination_runner.py` gains `_AH_REFUSAL_RUBRIC` (the refusal-detection
+criteria, phrased so YES=asserted-as-fact=bad, moved inline now that
+`prompts/eval/refusal_judge.yaml` is deleted) and calls
+`matchers.judge_affirms(response_text, _AH_REFUSAL_RUBRIC)` instead of the deleted
+`matchers.judge_refusal`. `judge_affirms` is extracted from `_eval_affirms_judge` as a
+public function so both call sites (the affirms_judge expectation handler and the AH
+refusal call site) share one polarity-inversion implementation instead of two. **Found
+and fixed a live bug while doing this**: `evals/generation_records.py`'s
+`build_ah_refusal_record` imported the now-deleted `_REFUSAL_CRITERIA` from `matchers`
+and still built `judge_kind="refusal_judge"` records — a false-negative grep (`"judge_kind":
+"refusal_judge"` with a space, against compact-JSON `outputs.jsonl`) initially hid that
+this function is genuinely live (75 rows in each of `k3_73e6c36` and
+`k3_77688e7_regen1`); the corrected grep found them and the function was rewritten to
+build an `affirms_judge` record against `_AH_REFUSAL_RUBRIC` with
+`expected_polarity="pass_on_no"` (traced through `judged_persistence.apply_polarity`: a
+refusal/hedge produces a raw NO under this rubric's phrasing, which needs `pass_on_no` to
+register as a pass — the polarity flips from the old scheme's `pass_on_yes` because the
+rubric's YES/NO meaning is inverted, not because the pass/fail meaning changed).
+`transcript_models.GenerationRecord.judge_kind`'s `Literal` **keeps** `"refusal_judge"` as
+a valid member (not removed) — the 150 already-committed `refusal_judge` rows across two
+generation directories stay parseable through this model if anything ever re-validates
+them, matching the codebase's existing "kept for one release, still parseable"
+convention; no writer produces it anymore. ISSUE-276 is closed and moved to
+`archive/ISSUES_RESOLVED.md` with a resolution note: the original blocking concern (losing
+75 irreplaceable labels) does not apply, because `labels_v1.jsonl` is kept intact — only
+the scorer mechanism is retired, not the label data.
+
+**Also found and fixed:** the `evaluate()` dispatcher in `matchers.py` was an if/elif
+chain that the one-line `liveness_judge` addition pushed from 40 to 42 AST-counted lines
+(R006). Rather than trim comments further or request a waiver, refactored to dict
+dispatch (`_DISPATCH: dict[str, _Evaluator]`, `_Evaluator = Callable[[dict, dict],
+"tuple[bool, str] | JudgeResult"]`) — a legitimate readability improvement that also
+resolves the line count. A first attempt at `_DISPATCH: dict[str, Any]` produced a mypy
+`no-any-return` error on `evaluate()`'s return; fixed by typing the dict with the
+`_Evaluator` alias instead of `Any`.
+
+**2d — re-recorded `scripts/base_rate_baseline.json`** via `make check-base-rate-update`
+against `evals/generations/k3_77688e7_regen1` after 2a–2c landed: `overall_rate` moved
+from 0.9426 (n=975, 9 of 10 families breaching) to 0.9140 (n=651, 5 families breaching —
+`keyword_none`, `affirms_judge`, `tone_judge`, `refusal_judge`, `anti_hallucination_
+grounded`; the `refusal_judge` breach entry is the historical row this generation
+directory's already-committed data still carries, not new data). `n` drops from 975 to
+651 because the four structural families' rows (324 of them) are excluded from the
+population entirely, not because any row was deleted from the generation directory.
+
+**Verification sweep, done as part of this task rather than deferred:** beyond
+`tests/unit/scripts/test_check_base_rate.py` (rewritten for the new `n`/rate and a new
+`test_structural_families_never_appear_in_the_report` test), a second pass outside
+`tests/unit/evals/`/`tests/unit/scripts/` found `tests/unit/engines/
+test_anti_hallucination_runner.py` (7 tests patching the deleted `matchers.judge_refusal`
+— renamed to patch `matchers.judge_affirms`, since the two functions' `score=True` means
+the same thing, "valid refusal", for this call site — a mechanical rename, not a semantic
+rewrite) and `tests/unit/conformance/test_eval_matchers_sev38.py` /
+`tests/unit/test_generate_runner.py` (calling `matchers.judge_refusal`/
+`matchers._REFUSAL_YAML_PATH` directly, and asserting the pre-fix `judge_kind==
+"refusal_judge"` on `build_ah_refusal_record`'s output) — all four rewritten to match
+the new `judge_affirms`-based behavior and its inverted polarity, not merely renamed. A
+whole-tree grep for `refusal_judge`/`judge_refusal`/`GUARD_TONE_RUBRIC` after these fixes
+turned up only comments, docstrings, dated historical narrative (`docs/
+EVAL_NEXT_GENERATION_CASE_SET.md`'s addendum), and already-resolved archive entries —
+none live.
+
+**Not done here:** `evals/headline_refusal.py` and `evals/refusal_rate.py`'s successor
+`evals/null_baseline.py`-driven "REFUSED" headline gate (R2.5: refuse to publish a rate a
+canned null responder matches) is a **different, unrelated** mechanism that happens to
+share the word "refusal" — it is not part of the `refusal_judge` scorer this phase
+retires. An earlier draft of the governing plan named `evals/headline_refusal.py` for
+deletion in error, conflating the two; verified live before touching anything, and left
+alone.

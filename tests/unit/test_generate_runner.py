@@ -8,9 +8,11 @@ Covers:
 - affirms_judge expectations produce expected_polarity="pass_on_no".
 - tone_judge expectations produce expected_polarity="pass_on_yes".
 - Non-judge expectations produce deterministic (judge_kind=None) records (EVAL-P6.1).
-- Anti-hallucination refusal cases produce expected_polarity="pass_on_yes"
-  with judge_kind="refusal_judge"; grounded cases produce a deterministic
-  anti_hallucination_grounded record instead of being dropped (EVAL-P6.1).
+- Anti-hallucination refusal cases produce expected_polarity="pass_on_no"
+  with judge_kind="affirms_judge" (refusal_judge retired and folded into
+  affirms_judge, measurement-remediation Phase 2c, DEC-269); grounded cases
+  produce a deterministic anti_hallucination_grounded record instead of being
+  dropped (EVAL-P6.1).
 - write_transcript is called once with all records.
 - ensure_player_node is called per YAML case.
 """
@@ -154,7 +156,10 @@ def test_non_judge_expectations_produce_deterministic_records() -> None:
     assert deterministic[0].matcher_kind == "min_length"
 
 
-def test_ah_refusal_case_produces_refusal_judge_record() -> None:
+def test_ah_refusal_case_produces_affirms_judge_record() -> None:
+    """refusal_judge is retired (Phase 2c, DEC-269) — AH refusal cases now produce
+    an affirms_judge record via generation_records.build_ah_refusal_record, scored
+    against _AH_REFUSAL_RUBRIC with pass_on_no (a refusal/hedge is a raw NO)."""
     client = _make_mock_client("I know nothing of any dragon.")
     records = collect_records(
         yaml_cases=[],
@@ -163,8 +168,8 @@ def test_ah_refusal_case_produces_refusal_judge_record() -> None:
         base_url="http://localhost:8000",
     )
     assert len(records) == 1
-    assert records[0].judge_kind == "refusal_judge"
-    assert records[0].expected_polarity == "pass_on_yes"
+    assert records[0].judge_kind == "affirms_judge"
+    assert records[0].expected_polarity == "pass_on_no"
     assert records[0].source == "anti_hallucination"
 
 

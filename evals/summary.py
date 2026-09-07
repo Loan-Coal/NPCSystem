@@ -4,8 +4,7 @@ Layer: evals harness (standalone — not part of the npc_engine layer model)
 Purpose: Compute the published anti-hallucination headline metric and a
          categorized failure breakdown from a completed eval run's results.
 Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction),
-              battery_trust (scorer trust policy gate), refusal_rate (over-refusal
-              rate display, EVAL-P20.3), trend_store (ScorerKappa).
+              battery_trust (scorer trust policy gate), trend_store (ScorerKappa).
 Used by: runner.py (console output), report.py (markdown summary section).
 """
 
@@ -22,7 +21,6 @@ from headline_refusal import refusal_for_battery
 from null_baseline import load_null_baseline
 from panel_metrics import PanelMetrics
 from panel_metrics_format import console_lines, markdown_rows
-from refusal_rate import RefusalRateResult, fmt_refusal_rate
 from trend_store import ScorerKappa
 import verdict_sources
 
@@ -475,25 +473,6 @@ def _assert_paired_rates(s: EvalSummary) -> None:
         raise ValueError(_UNPAIRED_CAPABILITY_ONLY)
 
 
-def _format_refusal_rate_line(refusal_result: RefusalRateResult | None) -> list[str]:
-    """Build the over-refusal rate console line, or [] when no result was supplied.
-
-    Kept separate from the guard/capability rates because over-refusal is scored
-    over grounded responses independently of the guard/capability battery split —
-    see refusal_rate.score_refusal_rate.
-    """
-    if refusal_result is None:
-        return []
-    return [f"    Over-refusal rate: {fmt_refusal_rate(refusal_result)}"]
-
-
-def _format_refusal_rate_row(refusal_result: RefusalRateResult | None) -> list[str]:
-    """Build the over-refusal rate markdown table row, or [] when no result was supplied."""
-    if refusal_result is None:
-        return []
-    return [f"| Over-refusal (grounded, excludes infra failures) | {fmt_refusal_rate(refusal_result)} |"]
-
-
 def _one_battery_rate_str(
     battery: str,
     battery_rate: BatteryRate | None,
@@ -556,7 +535,6 @@ def _gated_rate_strs(
 def format_summary_lines(
     summary: EvalSummary,
     *,
-    refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
     null_baseline: dict[str, dict] | None = None,
     scorer_kappas: Sequence[ScorerKappa] = (),
@@ -565,10 +543,6 @@ def format_summary_lines(
 
     Args:
         summary: The EvalSummary to render.
-        refusal_result: Optional over-refusal rate (evals/refusal_rate.py); when
-            supplied, an "Over-refusal rate" line is printed next to the guard and
-            capability rates. Omitted entirely when None — over-refusal scoring is
-            a separate, optional measurement, not every caller runs it.
         panel_metrics: Optional panel agreement statistics
             (evals/panel_metrics.py, EVAL-P21.2); when supplied, the Fleiss-kappa
             headline, raw pairwise agreement, the per-criterion breakdown and the
@@ -592,7 +566,6 @@ def format_summary_lines(
         f"    Guard, adversarial:        {adv_rate_str}",
         f"    Guard, anti-hallucination: {ah_rate_str}",
         f"    Capability rate:           {c_rate_str}",
-        *_format_refusal_rate_line(refusal_result),
         *console_lines(panel_metrics),
         "",
         *_format_battery_counts_lines(summary),
@@ -606,7 +579,6 @@ def format_summary_lines(
 def format_summary_markdown(
     summary: EvalSummary,
     *,
-    refusal_result: RefusalRateResult | None = None,
     panel_metrics: PanelMetrics | None = None,
     null_baseline: dict[str, dict] | None = None,
     scorer_kappas: Sequence[ScorerKappa] = (),
@@ -615,8 +587,6 @@ def format_summary_markdown(
 
     Args:
         summary: The EvalSummary to render.
-        refusal_result: Optional over-refusal rate; when supplied, adds a row to
-            the rate table. See format_summary_lines for why this is optional.
         panel_metrics: Optional panel agreement statistics; when supplied, adds rows.
             See format_summary_lines for why this is optional.
         scorer_kappas: Calibration kappas gating each battery's rate through
@@ -639,7 +609,6 @@ def format_summary_markdown(
         f"| Guard - anti-hallucination (ah_demo_*) | "
         f"{summary.anti_hallucination_passes}/{summary.anti_hallucination_turns} | {ah_rate_str} |",
         f"| Capability (case_pos_*) | {summary.capability_passes}/{summary.capability_turns} | {c_rate_str} |",
-        *_format_refusal_rate_row(refusal_result),
         *markdown_rows(panel_metrics),
         "",
         f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "

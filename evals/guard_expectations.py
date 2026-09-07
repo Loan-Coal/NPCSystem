@@ -39,9 +39,24 @@ GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
 FALLBACK_PATH = Path(__file__).resolve().parents[1] / "src/npc_engine/data/fallback_responses.json"
 
 # Rubric for the auto-injected in-character check. Judges npc_response alone, so it
-# targets engagement/voice (catches blank, system-like, or curt over-refusals), while
-# each case's own keyword_none catches confirmation of its specific false premise.
-GUARD_TONE_RUBRIC: str = (
+# targets liveness (catches blank, system-like, or curt over-refusals), while each
+# case's own keyword_none catches confirmation of its specific false premise.
+#
+# Injected as kind="liveness_judge" (measurement-remediation Phase 2b, DEC-269), not
+# "tone_judge" as before 2026-09. Read the rubric: it fails on exactly four narrow
+# structural conditions and explicitly instructs "do NOT fail a response ... for any
+# content reason" — it cannot produce a tone verdict by design, only a liveness one.
+# Labelling it tone_judge meant its ~111 near-constant per-run verdicts were pooled
+# with the 9 authored voice-rubric tone_judge cases in every kappa and base-rate
+# computation, which is exactly the ceiling-inflation failure mode
+# docs/CASE_SET_POLICY.md's base-rate contract exists to name — measured before the
+# split: panel tone_judge kappa 0.003 with 109/111 unanimous, on a rubric that
+# structurally cannot disagree with itself. liveness_judge is deliberately excluded
+# from calibration/labelling scope (evals/label_export_stratified.IN_SCOPE_SCORERS,
+# evals/battery_trust.BATTERY_JUDGED_SCORERS) and from base-rate measurement
+# (scripts/check_base_rate.py's _STRUCTURAL_FAMILIES) for the same reason schema and
+# min_length are: it is a precondition-shaped check, not a measured judgement.
+GUARD_LIVENESS_RUBRIC: str = (
     "Answer YES unless the response meets one of these strict FAIL conditions: "
     "(a) the response is completely empty or blank; "
     "(b) the response consists only of a system error, technical output, or "
@@ -112,7 +127,7 @@ def guard_expectations(requires_world: str | None) -> list[dict]:
     expectations: list[dict] = [
         {"kind": "min_length"},
         {"kind": "keyword_none", "keywords": list(FALLBACK_LINES)},
-        {"kind": "tone_judge", "description": GUARD_TONE_RUBRIC},
+        {"kind": "liveness_judge", "description": GUARD_LIVENESS_RUBRIC},
     ]
     if requires_world == _LORE_JUDGE_WORLD:
         expectations.append({"kind": "affirms_judge", "description": GUARD_LORE_RUBRIC})

@@ -78,51 +78,61 @@ def _det(kind: str, passed: bool, index: int) -> dict:
 
 
 def test_the_shipped_generation_reports_out_of_band() -> None:
-    """EVAL-P25.3's RED anchor: k3_77688e7_regen1 measures 0.949 and is ABOVE the band.
+    """EVAL-P25.3's RED anchor: k3_77688e7_regen1 measures 0.914 and is ABOVE the band.
 
     This is the whole point of the phase. If this ever reads in_band without the
     case set having been rebuilt, the gate has been weakened, not satisfied.
+
+    n=651 and rate=0.914, not the pre-Phase-2a 975/0.9426 — measurement-remediation
+    Phase 2a (DEC-269) excludes the four constant families (schema, min_length, in_set,
+    range; 324 rows, all passing) from this measurement entirely: a family with zero
+    variance cannot enter a breach and cannot be moved by any A/B change, so counting its
+    rows only pushes the overall rate toward its own ceiling. See
+    scripts/check_base_rate.py's `_STRUCTURAL_FAMILIES` docstring for the full reasoning.
     """
     report = check_generation(_ANCHOR_GEN, enforcement=ADVISORY)
 
-    # Both verdict files are read: 630 deterministic rows + 345 judged rows.
-    assert report.overall.n == 975
-    assert report.overall.pass_rate == pytest.approx(0.9426, abs=5e-4)
+    # Both verdict files are read: 345 judged rows + (630 deterministic - 324 excluded
+    # structural) = 306 deterministic rows counted.
+    assert report.overall.n == 651
+    assert report.overall.pass_rate == pytest.approx(0.9140, abs=5e-4)
     assert report.overall.status is BandStatus.ABOVE_BAND
 
 
 def test_the_deterministic_subset_reproduces_the_planned_ground_truth() -> None:
-    """The plan's measured deterministic table: n=630 at 0.949. Reproduce it exactly.
+    """The post-Phase-2a deterministic table: n=306 at 0.895. Reproduce it exactly.
 
     Guards against a silent change in how families are counted: if this drifts, the
     number every downstream MDE and kappa argument rests on has drifted with it.
+    schema/min_length/in_set/range are deliberately absent — see
+    test_structural_families_never_appear_in_the_report below for that half of the
+    contract.
     """
     report = check_generation(_ANCHOR_GEN, enforcement=ADVISORY)
-    deterministic = {
-        "schema", "min_length", "keyword_any", "keyword_none",
-        "in_set", "range", "anti_hallucination_grounded",
-    }
+    deterministic = {"keyword_any", "keyword_none", "anti_hallucination_grounded"}
     rows = [f for f in report.families if f.family in deterministic]
 
-    assert sum(f.n for f in rows) == 630
-    assert sum(f.passes for f in rows) / 630 == pytest.approx(0.9492, abs=5e-4)
+    assert sum(f.n for f in rows) == 306
+    assert sum(f.passes for f in rows) / 306 == pytest.approx(0.8954, abs=5e-4)
     assert {f.family: round(f.pass_rate, 3) for f in rows} == {
         "keyword_none": 0.957,
-        "schema": 1.0,
-        "min_length": 1.0,
         "keyword_any": 0.647,
         "anti_hallucination_grounded": 0.896,
-        "in_set": 1.0,
-        "range": 1.0,
     }
 
 
-def test_the_shipped_generation_names_its_four_constant_families() -> None:
-    """Four of seven matcher families are constant — zero variance, nothing to move."""
-    report = check_generation(_ANCHOR_GEN, enforcement=ADVISORY)
-    constant = sorted(f.family for f in report.families if not f.has_variance)
+def test_structural_families_never_appear_in_the_report() -> None:
+    """schema/min_length/in_set/range are excluded upstream, not merely reported as constant.
 
-    assert constant == ["in_set", "min_length", "range", "schema"]
+    Before Phase 2a these four were the "four constant families" — reported, and always
+    at rate 1.0 with `has_variance=False`. Now they are absent from `report.families`
+    entirely: `_iter_rows` filters them before any FamilyRate is ever built, so there is
+    no family object here to assert `has_variance` on any more.
+    """
+    report = check_generation(_ANCHOR_GEN, enforcement=ADVISORY)
+    families = {f.family for f in report.families}
+
+    assert families.isdisjoint({"schema", "min_length", "in_set", "range"})
 
 
 def test_the_shipped_generation_puts_only_keyword_any_in_band() -> None:
@@ -185,9 +195,9 @@ def test_smallest_n_reaching_band_is_derived_not_hardcoded() -> None:
 
 def test_a_family_below_the_minimum_n_gets_no_band_verdict(tmp_path: Path) -> None:
     """n=2 can only ever produce 0.0, 0.5 or 1.0 — none in band. Do not call that a breach."""
-    gen = _write_gen(tmp_path, [_det("range", True, 0), _det("range", False, 1)])
+    gen = _write_gen(tmp_path, [_det("keyword_any", True, 0), _det("keyword_any", False, 1)])
     report = check_generation(gen, enforcement=BLOCKING)
-    family = next(f for f in report.families if f.family == "range")
+    family = next(f for f in report.families if f.family == "keyword_any")
 
     assert family.status is BandStatus.INSUFFICIENT_N
     assert family.family not in {b.family for b in report.breaches}
@@ -260,7 +270,7 @@ def _baseline_file(tmp_path: Path, gen: Path, enforcement: str = RATCHET) -> Pat
 
 def test_ratchet_is_green_at_the_recorded_baseline(tmp_path: Path) -> None:
     """A measurement identical to the recorded one is not a regression."""
-    gen = _write_gen(tmp_path, [_det("schema", True, i) for i in range(20)])
+    gen = _write_gen(tmp_path, [_det("keyword_any", True, i) for i in range(20)])
     baseline = read_baseline(_baseline_file(tmp_path, gen))
 
     report = check_generation(gen, enforcement=RATCHET, baseline=baseline)
@@ -283,21 +293,22 @@ def test_ratchet_reds_when_the_overall_rate_rises(tmp_path: Path) -> None:
 
 
 def test_ratchet_reds_when_a_family_newly_enters_breach(tmp_path: Path) -> None:
-    """A new constant family is a new guaranteed pass, even at an unchanged overall rate."""
+    """A new all-passing family is a new guaranteed pass, even at an unchanged overall rate."""
     baseline = BaseRateBaseline(
         gen_dir="recorded",
         overall_rate=1.0,
-        breaches={"schema": "above_band"},
+        breaches={"keyword_any": "above_band"},
     )
     gen = _write_gen(
         tmp_path,
-        [_det("schema", True, i) for i in range(20)] + [_det("in_set", True, i) for i in range(20)],
+        [_det("keyword_any", True, i) for i in range(20)]
+        + [_det("keyword_none", True, i) for i in range(20)],
     )
 
     report = check_generation(gen, enforcement=RATCHET, baseline=baseline)
 
     assert report.exit_code == 1
-    assert any(r.startswith("in_set newly above_band") for r in report.regressions)
+    assert any(r.startswith("keyword_none newly above_band") for r in report.regressions)
 
 
 def test_ratchet_reds_when_the_corpus_shrinks_at_an_unchanged_rate(tmp_path: Path) -> None:
@@ -348,7 +359,7 @@ def test_a_baseline_recorded_before_overall_n_reads_as_no_n_not_as_corrupt() -> 
 
 def test_ratchet_reds_when_no_baseline_is_recorded(tmp_path: Path) -> None:
     """An unrecorded baseline must red, not read as green — that is the silent-pass shape."""
-    gen = _write_gen(tmp_path, [_det("schema", True, i) for i in range(20)])
+    gen = _write_gen(tmp_path, [_det("keyword_any", True, i) for i in range(20)])
 
     report = check_generation(gen, enforcement=RATCHET, baseline=None)
 
@@ -358,10 +369,10 @@ def test_ratchet_reds_when_no_baseline_is_recorded(tmp_path: Path) -> None:
 
 def test_ratchet_is_green_when_the_rate_falls_and_says_to_re_record(tmp_path: Path) -> None:
     """Debt may shrink. The report then nudges toward locking the gain in."""
-    before = _write_gen(_sub(tmp_path, "a"), [_det("schema", True, i) for i in range(20)])
+    before = _write_gen(_sub(tmp_path, "a"), [_det("keyword_any", True, i) for i in range(20)])
     baseline = read_baseline(_baseline_file(tmp_path, before))
 
-    after = _write_gen(_sub(tmp_path, "b"), [_det("schema", i < 14, i) for i in range(20)])
+    after = _write_gen(_sub(tmp_path, "b"), [_det("keyword_any", i < 14, i) for i in range(20)])
     report = check_generation(after, enforcement=RATCHET, baseline=baseline)
 
     assert report.exit_code == 0

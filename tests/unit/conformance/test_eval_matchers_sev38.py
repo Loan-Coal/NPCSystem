@@ -199,7 +199,7 @@ class TestAffirmsJudgePolarity:
             result = evaluate(exp, response)
         assert isinstance(result, JudgeResult)
         assert result.score is False
-        assert "affirmed false claim" in result.error
+        assert "affirmed as fact" in result.error
 
     def test_infra_failure_returns_score_none(self) -> None:
         """Infra failure stays inconclusive (score=None), not a passing guard turn."""
@@ -280,40 +280,47 @@ class TestMockLLMAdapterRaiseOnGenerate:
 
 
 # ---------------------------------------------------------------------------
-# judge_refusal — LLM-judge refusal classifier (EVAL-B3.1)
+# judge_affirms — LLM-judge affirmation classifier (EVAL-B3.1; folded the retired
+# judge_refusal's axis into this shared function in measurement-remediation Phase
+# 2c, DEC-269 — see matchers.judge_affirms's own docstring). Polarity is the
+# mirror of the old judge_refusal: a raw NO (not affirmed) is what makes a
+# refusal/hedge score True here, since the criteria string decides which way
+# YES/NO points, not the function.
 # ---------------------------------------------------------------------------
 
 
 class TestJudgeRefusal:
-    def test_yes_verdict_returns_score_true(self) -> None:
-        """judge_refusal: YES verdict (valid refusal) → JudgeResult(score=True)."""
-        with patch("matchers.httpx.post", return_value=_fake_ollama_response("YES - the NPC expressed uncertainty")):
-            result = matchers.judge_refusal("I don't have any information about that.")
+    def test_not_affirmed_verdict_returns_score_true(self) -> None:
+        """judge_affirms: raw NO (not affirmed — a valid refusal/hedge) → score=True."""
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("NO - the NPC expressed uncertainty")):
+            result = matchers.judge_affirms("I don't have any information about that.", "criteria")
         assert isinstance(result, matchers.JudgeResult)
         assert result.score is True
 
-    def test_no_verdict_returns_score_false(self) -> None:
-        """judge_refusal: NO verdict (NPC asserting) → JudgeResult(score=False)."""
-        with patch("matchers.httpx.post", return_value=_fake_ollama_response("NO - the NPC asserted confidently")):
-            result = matchers.judge_refusal("The army marched east last Tuesday.")
+    def test_affirmed_verdict_returns_score_false(self) -> None:
+        """judge_affirms: raw YES (affirmed as fact) → score=False."""
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("YES - the NPC asserted confidently")):
+            result = matchers.judge_affirms("The army marched east last Tuesday.", "criteria")
         assert isinstance(result, matchers.JudgeResult)
         assert result.score is False
 
     def test_infra_failure_returns_score_none(self) -> None:
-        """judge_refusal: infra failure → JudgeResult(score=None, error='infra_failure')."""
+        """judge_affirms: infra failure → JudgeResult(score=None, error='infra_failure')."""
         with patch("matchers.httpx.post", side_effect=RuntimeError("Ollama down")):
-            result = matchers.judge_refusal("Something happened.")
+            result = matchers.judge_affirms("Something happened.", "criteria")
         assert isinstance(result, matchers.JudgeResult)
         assert result.score is None
         assert result.error == "infra_failure"
 
-    def test_refusal_prompt_loaded_from_yaml(self) -> None:
-        """_REFUSAL_YAML_PATH exists and _REFUSAL_CRITERIA is a non-empty string."""
-        assert matchers._REFUSAL_YAML_PATH.exists(), (
-            f"refusal_judge.yaml not found at {matchers._REFUSAL_YAML_PATH}"
-        )
-        assert isinstance(matchers._REFUSAL_CRITERIA, str)
-        assert len(matchers._REFUSAL_CRITERIA.strip()) > 0
+    def test_ah_refusal_rubric_is_a_non_empty_inline_string(self) -> None:
+        """The AH refusal rubric moved inline (no more refusal_judge.yaml on disk,
+        Phase 2c) — anti_hallucination_runner._AH_REFUSAL_RUBRIC is what judge_affirms
+        is called with for AH refusal-category cases; confirm it still exists and
+        is non-empty."""
+        from anti_hallucination_runner import _AH_REFUSAL_RUBRIC
+
+        assert isinstance(_AH_REFUSAL_RUBRIC, str)
+        assert len(_AH_REFUSAL_RUBRIC.strip()) > 0
 
 
 # ---------------------------------------------------------------------------

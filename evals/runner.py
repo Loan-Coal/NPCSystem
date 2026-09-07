@@ -29,7 +29,7 @@ from guard_expectations import (
     FALLBACK_LINES,
     GUARD_LORE_RUBRIC,
     GUARD_PREFIXES,
-    GUARD_TONE_RUBRIC,
+    GUARD_LIVENESS_RUBRIC,
     expected_with_guards,
     guard_expectations,
     is_guard_case,
@@ -47,7 +47,7 @@ _DEFAULT_PLAYER_ID = "player_eval"
 # are re-exports kept for the existing importers (generation_records, the unit tests
 # that pin the prefix scopes); the definitions are in that module.
 _GUARD_PREFIXES: tuple[str, ...] = GUARD_PREFIXES
-_GUARD_TONE_RUBRIC: str = GUARD_TONE_RUBRIC
+_GUARD_LIVENESS_RUBRIC: str = GUARD_LIVENESS_RUBRIC
 _GUARD_LORE_RUBRIC: str = GUARD_LORE_RUBRIC
 _FALLBACK_LINES: list[str] = FALLBACK_LINES
 _is_guard_case = is_guard_case

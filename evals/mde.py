@@ -136,6 +136,11 @@ RECORDED_KAPPAS: tuple[tuple[str, float], ...] = (
 )
 """Per-criterion kappa from CALIBRATION against human labels — the authoritative family.
 
+refusal_judge is retired (measurement-remediation Phase 2c, DEC-269 — folded into
+affirms_judge). Kept here as a historical measurement, not a live scorer: its 75
+labels stay in evals/calibration/labels_v1.jsonl and its 0.247 kappa is real, but
+no future generation will produce new refusal_judge rows to recompute it against.
+
 ISSUE-244: three rival kappa families circulated for the same scorers.
   * calibration vs human labels: 0.849 / 0.530 / 0.247  <- these, and the reason below
   * inter-panel Fleiss (judge vs judge): 1.000 / 0.282 / 0.225  <- what this held before

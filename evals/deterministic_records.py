@@ -112,9 +112,11 @@ def build_ah_grounded_record(
     """Build a deterministic grounded-check record for an AH fixture case.
 
     Mirrors the inverse of generate_runner._build_ah_record: returns None for
-    refusal cases (those get a refusal_judge record instead), and a record for
-    grounded cases — closing the EVAL-P6.1 gap where grounded AH cases were
-    silently dropped from the transcript.
+    refusal cases (those get an affirms_judge record instead, via
+    generation_records.build_ah_refusal_record — refusal_judge was retired and
+    folded into affirms_judge in measurement-remediation Phase 2c, DEC-269), and a
+    record for grounded cases — closing the EVAL-P6.1 gap where grounded AH cases
+    were silently dropped from the transcript.
 
     Args:
         case: Anti-hallucination fixture case dict.

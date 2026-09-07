@@ -137,7 +137,16 @@ class GenerationRecord(BaseModel):
     player_message: str
     npc_response: str
     criteria: str
-    judge_kind: Literal["tone_judge", "affirms_judge", "refusal_judge", "commits_judge"] | None
+    # "refusal_judge" is retired (measurement-remediation Phase 2c, DEC-269 — folded
+    # into affirms_judge via matchers.judge_affirms) and no longer produced by any
+    # writer, but stays a valid Literal member so the 150 refusal_judge rows already
+    # committed in evals/generations/{k3_73e6c36,k3_77688e7_regen1}/judged.jsonl stay
+    # parseable through this model if anything ever re-validates them, rather than
+    # only by coincidence of every current reader using raw json.loads instead.
+    judge_kind: (
+        Literal["tone_judge", "liveness_judge", "affirms_judge", "commits_judge", "refusal_judge"]
+        | None
+    )
     matcher_kind: DeterministicMatcherKind | None = None
     expected_polarity: Literal["pass_on_yes", "pass_on_no"]
     active_conditions: tuple[str, ...] = ()

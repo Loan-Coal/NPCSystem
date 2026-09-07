@@ -81,8 +81,8 @@ def load_criteria_text(path: Path) -> str:
     """Load a criteria string from a judge-criteria YAML file.
 
     Args:
-        path: Path to a YAML file with a top-level `criteria` key (the same
-            shape as prompts/eval/refusal_judge.yaml).
+        path: Path to a YAML file with a top-level `criteria` key holding the
+            judge criteria string.
     Returns:
         The criteria string.
     Raises:

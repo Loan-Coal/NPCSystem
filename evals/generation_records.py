@@ -2,7 +2,8 @@
 Module: generation_records
 Layer: evals (eval harness — not part of src/)
 Purpose: Build GenerationRecords for one case's expectations — judge records
-         (tone_judge/affirms_judge) and, via deterministic_records, every other
+         (tone_judge/liveness_judge/affirms_judge/commits_judge) and, via
+         deterministic_records, every other
          covered matcher kind (EVAL-P6.1). Split out of generate_runner.py to keep
          that module under the 300-line cap: generate_runner owns the HTTP collection
          loop and CLI; this module owns "given a case + response, build its records".
@@ -19,14 +20,17 @@ from typing import Any
 
 import deterministic_records
 from eval_records import GenerationRecord
-from matchers import _AFFIRMATION_CRITERIA_TMPL, _REFUSAL_CRITERIA
+from anti_hallucination_runner import _AH_REFUSAL_RUBRIC
+from matchers import _AFFIRMATION_CRITERIA_TMPL
 from runner import _expected_with_guards
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-LLM_JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge", "commits_judge"})
+LLM_JUDGE_KINDS: frozenset[str] = frozenset(
+    {"tone_judge", "liveness_judge", "affirms_judge", "commits_judge"}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -62,16 +66,17 @@ def build_judge_record(
     index: int,
     exp: dict,
 ) -> GenerationRecord:
-    """Build one LLM-judge GenerationRecord (tone_judge, affirms_judge or commits_judge).
+    """Build one LLM-judge GenerationRecord (tone_judge, liveness_judge, affirms_judge
+    or commits_judge).
 
-    commits_judge shares tone_judge's criteria shape and polarity (pass_on_yes); only
-    affirms_judge inverts (pass_on_no). See DEC-256 for why the guard battery's positive
-    half could not be an affirms_judge criterion.
+    commits_judge and liveness_judge share tone_judge's criteria shape and polarity
+    (pass_on_yes); only affirms_judge inverts (pass_on_no). See DEC-256 for why the
+    guard battery's positive half could not be an affirms_judge criterion.
     """
     if kind == "affirms_judge":
         criteria = _criteria_for_affirms(exp)
         polarity = "pass_on_no"
-    else:  # tone_judge, commits_judge
+    else:  # tone_judge, liveness_judge, commits_judge
         criteria = _criteria_for_tone(exp)
         polarity = "pass_on_yes"
 
@@ -96,8 +101,8 @@ def build_yaml_case_records(
 ) -> list[GenerationRecord]:
     """Build one GenerationRecord per expectation in a YAML case.
 
-    LLM-judge expectations (tone_judge, affirms_judge) get a judge record; every
-    other covered matcher kind (schema, min_length, keyword_*, in_set, range,
+    LLM-judge expectations (tone_judge, liveness_judge, affirms_judge, commits_judge)
+    get a judge record; every other covered matcher kind (schema, min_length, keyword_*, in_set, range,
     substring, regex, context_block_expected) gets a deterministic record via
     deterministic_records.build_record (EVAL-P6.1). Unrecognized kinds are not
     recorded — matchers.evaluate() itself reports "unknown expectation kind" for
@@ -131,10 +136,19 @@ def build_yaml_case_records(
 
 
 def build_ah_refusal_record(case: dict, npc_response: str, *, player_id: str) -> GenerationRecord | None:
-    """Build a refusal_judge GenerationRecord for an AH fixture case.
+    """Build an affirms_judge GenerationRecord for an AH fixture refusal-category case.
 
     Returns None for grounded cases (expected_verdict != 'refusal') — those get a
     deterministic record via deterministic_records.build_ah_grounded_record instead.
+
+    Was a refusal_judge record before measurement-remediation Phase 2c (DEC-269):
+    refusal_judge is retired, folded into affirms_judge via matchers.judge_affirms.
+    `_AH_REFUSAL_RUBRIC` is the same criteria refusal_judge used, phrased in
+    affirms_judge's own polarity (YES = asserted as fact = fail), which is why
+    `expected_polarity` is now "pass_on_no" rather than the old "pass_on_yes" —
+    judged_persistence.apply_polarity treats a raw NO verdict (a refusal/hedge) as
+    the pass under "pass_on_no", matching what a YES verdict under refusal_judge's
+    own polarity used to mean.
 
     Args:
         case: Anti-hallucination fixture case dict.
@@ -146,13 +160,13 @@ def build_ah_refusal_record(case: dict, npc_response: str, *, player_id: str) ->
     if case.get("expected_verdict") != "refusal":
         return None
     return GenerationRecord(
-        record_id=f"{case['id']}:refusal_judge:0",
+        record_id=f"{case['id']}:affirms_judge:0",
         source="anti_hallucination",
         npc_id=case["npc_id"],
         player_id=player_id,
         player_message=case["question"],
         npc_response=npc_response,
-        criteria=_REFUSAL_CRITERIA,
-        judge_kind="refusal_judge",
-        expected_polarity="pass_on_yes",
+        criteria=_AH_REFUSAL_RUBRIC,
+        judge_kind="affirms_judge",
+        expected_polarity="pass_on_no",
     )

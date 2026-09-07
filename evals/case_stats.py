@@ -47,8 +47,10 @@ _INSTABILITY_ORDER: dict[Classification, int] = {
 # They are named separately because a rate over their union is not a quantity: averaging
 # two grading contracts produces a number with no referent. `case_adv_`/`case_neg_` are
 # scored on the YAML battery's tone_judge / affirms_judge / schema / keyword_none /
-# min_length; `ah_demo_` is scored on refusal_judge / anti_hallucination_grounded, which
-# are purpose-built anti-hallucination expectations. Measured on k3_77688e7_regen1 the two
+# min_length; `ah_demo_` is scored on affirms_judge / anti_hallucination_grounded
+# (refusal_judge before measurement-remediation Phase 2c, DEC-269 — retired and folded
+# into affirms_judge), which are purpose-built anti-hallucination expectations.
+# Measured on k3_77688e7_regen1 (pre-Phase-2c corpus) the two
 # sit 6.4 pp apart (0.8468 over n=111 vs 0.9106 over n=123), so the union was not a
 # harmless convenience: the easier battery is more than half the denominator and lifted the
 # published figure ~3.4 pp above the adversarial battery alone.

@@ -33,11 +33,14 @@ from label_export_strata import CASE_STRATA_FILE, load_expected_negative_cases
 from label_export_yield import ProjectedYield, format_projection_table, project_all
 from label_survival import simulate_survival
 
-# Judges this exporter oversamples for. refusal_judge is deliberately excluded:
-# it is out of scope for this task (ISSUE-276) and the candidate transcript this
-# tool targets (case_neg/case_adv regenerations) carries no refusal_judge
-# records at all — the anti-hallucination fixture that drives it is a separate,
-# unrelated case family.
+# Judges this exporter oversamples for — the 3 surviving calibrated scorers after
+# measurement-remediation Phase 2 (DEC-269). refusal_judge is retired (its axis
+# folded into affirms_judge, ISSUE-276 closed) rather than merely excluded, and
+# liveness_judge (formerly the tone_judge-labelled guard liveness check, Phase 2b)
+# is deliberately absent too: a precondition-shaped check, not a calibration target,
+# same reasoning as schema/min_length. Neither ever had case_neg/case_adv coverage
+# to oversample from anyway — the candidate transcript this tool targets carries no
+# refusal_judge records at all, and liveness_judge is structurally near-constant.
 IN_SCOPE_SCORERS: tuple[str, ...] = ("commits_judge", "tone_judge", "affirms_judge")
 
 # Fixed and logged so the same transcript + labels always yield the same batch

@@ -43,9 +43,13 @@ BATTERY_JUDGED_SCORERS: dict[str, tuple[str, ...]] = {
 Read off the `kind:` fields in evals/cases/case_adv_*.yaml, case_neg_*.yaml and
 case_pos_*.yaml (measured 2026-09-05). Purely mechanical matchers — schema,
 keyword_none, keyword_any, in_set, range — are deliberately excluded: they carry
-no Cohen's kappa, so check_publication has nothing to gate on them. refusal_judge
-is absent from `capability` on purpose: no current case_pos_* case exercises it
-(M3.2/refusal_judge stays halted, ISSUE-276).
+no Cohen's kappa, so check_publication has nothing to gate on them.
+liveness_judge (guard_expectations.GUARD_LIVENESS_RUBRIC) is excluded for the same
+reason — a precondition-shaped liveness check, not a measured judgement
+(measurement-remediation Phase 2b, DEC-269). refusal_judge is retired outright
+(Phase 2c, DEC-269, closing ISSUE-276): its axis is folded into affirms_judge via
+matchers.judge_affirms, so there is no separate refusal_judge scorer left to name
+here at all.
 """
 
 
