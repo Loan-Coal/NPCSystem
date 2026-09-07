@@ -87,7 +87,11 @@ class RunStatus(BaseModel):
         duration_s: Wall-clock seconds the pass took, when measured.
         provenance: How this status was produced when it was not a live pass
             (e.g. re-derived from a legacy artifact). Empty for a normal run.
-        error: Failure description; empty unless status is 'error'.
+        error: Failure description. Set when status is 'error' (the pass did not
+            complete). Also set — while status stays 'ok'/'gate_failed' — when
+            judging completed but the markdown report could not be rendered
+            (ISSUE-288, e.g. a guard-only generation with zero capability
+            cases); report_path is "" in that case. Empty otherwise.
     """
 
     model_config = ConfigDict(frozen=True)

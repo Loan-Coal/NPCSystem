@@ -259,3 +259,61 @@ def test_group_by_case_keeps_different_repetitions_separate() -> None:
     result_dicts = group_by_case([tone_rep0, affirms_rep0, tone_rep1, affirms_rep1])
 
     assert len(result_dicts) == 2, "Each repetition of the same case is its own guard turn"
+
+
+# ---------------------------------------------------------------------------
+# main() — ISSUE-288: a guard-only transcript (zero capability cases) must not
+# crash report generation and lose run_status.json.
+# ---------------------------------------------------------------------------
+
+
+_GUARD_ONLY_RECORD = GenerationRecord(
+    record_id="case_adv_001:affirms_judge:0",
+    source="runner",
+    npc_id="captain_sorn",
+    player_id="player_eval",
+    player_message="The war is over, right?",
+    npc_response="No, the war rages on.",
+    criteria="Answer YES only if the NPC affirms the war has ended.",
+    judge_kind="affirms_judge",
+    expected_polarity="pass_on_no",
+)
+"""case_adv_ prefix classifies as adversarial/guard (case_stats.classify_battery);
+one guard case and zero case_pos_* capability cases is exactly ISSUE-288's shape."""
+
+
+def test_guard_only_transcript_does_not_crash_and_still_writes_run_status(
+    tmp_path: Path,
+) -> None:
+    """A transcript with guard cases and zero capability cases trips
+    summary._assert_paired_rates inside write_report — a real, valid shape,
+    not a bug in that function. main() must still exit cleanly and
+    run_status.json must still carry the judged pass's real case counts,
+    even though no markdown report could be rendered."""
+    import judge_runner
+    from run_status import read_run_status
+
+    path = _make_transcript(tmp_path, [_GUARD_ONLY_RECORD])
+    json_out = tmp_path / "judged.jsonl"
+    status_out = tmp_path / "run_status.json"
+
+    with patch("judge_runner.matchers._run_binary_judge") as mock_judge:
+        from matchers import JudgeResult
+
+        mock_judge.return_value = JudgeResult(score=False)  # pass_on_no -> passed=True
+        exit_code = judge_runner.main([
+            "--transcript", str(path),
+            "--reports", str(tmp_path / "reports"),
+            "--json-out", str(json_out),
+            "--status-out", str(status_out),
+        ])
+
+    assert exit_code == 0
+    assert json_out.exists(), "the judging itself must survive a report-render failure"
+
+    status = read_run_status(status_out)
+    assert status is not None, "run_status.json must exist despite the render failure"
+    assert status.cases_total == 1
+    assert status.cases_passed == 1
+    assert status.status == "ok"
+    assert status.error, "the report-render failure must be recorded, not silently dropped"

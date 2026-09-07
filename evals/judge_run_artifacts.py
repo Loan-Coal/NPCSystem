@@ -116,7 +116,7 @@ def build_status(
     panel_metrics: PanelMetrics | None,
     panel_models: tuple[str, ...],
     judge_model: str,
-    report_path: Path,
+    report_path: Path | None,
     json_out: Path | None,
 ) -> RunStatus:
     """Assemble the RunStatus for a completed pass.
@@ -129,7 +129,9 @@ def build_status(
             present, every agreement field is filled in by with_panel_metrics.
         panel_models: Panel roster, empty for a single-judge pass.
         judge_model: Single-judge model name, empty for a panel pass.
-        report_path: Markdown report this pass wrote.
+        report_path: Markdown report this pass wrote; None when report
+            rendering failed (ISSUE-288) — the judge pass still completed, so
+            this is recorded as an empty path rather than refused.
         json_out: The --json-out path, used to locate the votes file.
     Returns:
         A RunStatus ready to write.
@@ -141,7 +143,7 @@ def build_status(
             cases_total=total,
             judge_panel=panel_models,
             judge_model=judge_model,
-            report_path=str(report_path),
+            report_path=str(report_path) if report_path is not None else "",
             votes_path=str(panel_votes_path(json_out)) if (panel_models and json_out) else "",
         ),
         panel_metrics,

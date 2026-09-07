@@ -209,6 +209,42 @@ def _run_judging(
     return judged_records, compute_panel_metrics(scored), models, ""
 
 
+def _render_report(
+    result_dicts: list[dict],
+    reports_dir: Path,
+    panel_metrics: PanelMetrics | None,
+) -> tuple[Path | None, str]:
+    """Write the markdown report and print the console summary.
+
+    A generation with guard cases and zero capability cases (or vice versa)
+    trips summary._assert_paired_rates — a real, valid shape, not a bug in
+    that function (ISSUE-288). Judging has already completed by the time this
+    runs, so a render failure here must not be allowed to lose the pass's
+    results: it is caught, not raised, and the caller still gets a
+    run_status.json written with real case counts (and panel kappa, if any),
+    just without a markdown report.
+
+    Args:
+        result_dicts: Grouped per-case results (judge_case_grouping.group_by_case).
+        reports_dir: Directory write_report writes its timestamped .md file into.
+        panel_metrics: Panel agreement statistics, or None for a single-judge pass.
+    Returns:
+        (report_path, report_error). On success, report_path is set and
+        report_error is "". On failure, report_path is None and report_error
+        names what went wrong.
+    """
+    try:
+        report_path = write_report(results=result_dicts, output_dir=reports_dir)
+        summary_lines = format_summary_lines(summarize(result_dicts), panel_metrics=panel_metrics)
+        for line in summary_lines:
+            print(line)
+        return report_path, ""
+    except Exception as exc:  # quality-ok: boundary — render failure must not lose run_status.json
+        message = f"Report generation failed: {exc}"
+        print(message, file=sys.stderr)
+        return None, message
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse args, run the judge pass, write a report and a run_status.json.
 
@@ -217,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     expectations, 2 means the pass could not complete. Only 2 invalidates the
     measurement. Ops scripts should read run_status.json rather than reasoning
     about these codes — reading 1 as a crash is what halted Phase 2 on 2026-08-17.
+    A report-render failure (ISSUE-288) does not change this: the judging still
+    completed, so exit_code stays 0/1 — see _render_report and run_status.error.
 
     Args:
         argv: CLI argument list (defaults to sys.argv[1:]).
@@ -234,26 +272,23 @@ def main(argv: list[str] | None = None) -> int:
         return int(record_error(args, f"Judge pass failed: {exc}"))
 
     result_dicts = group_by_case(judged_records)
-    report_path = write_report(results=result_dicts, output_dir=args.reports)
-
-    run_summary = summarize(result_dicts)
-    for line in format_summary_lines(run_summary, panel_metrics=panel_metrics):
-        print(line)
+    report_path, report_error = _render_report(result_dicts, args.reports, panel_metrics)
 
     passed = sum(1 for r in result_dicts if r["passed"])
     total = len(result_dicts)
-    print(f"\n{passed}/{total} judged cases passed. Report: {report_path}")
+    report_note = f"Report: {report_path}" if report_path else "(no report written; see stderr)"
+    print(f"\n{passed}/{total} judged cases passed. {report_note}")
 
     exit_code = 0 if passed == total else 1
     status_path = status_path_for(args)
     if status_path is not None:
-        write_run_status(
-            build_status(
-                exit_code, passed, total, panel_metrics, panel_models, judge_model,
-                report_path, args.json_out,
-            ),
-            status_path,
+        status = build_status(
+            exit_code, passed, total, panel_metrics, panel_models, judge_model,
+            report_path, args.json_out,
         )
+        if report_error:
+            status = status.model_copy(update={"error": report_error})
+        write_run_status(status, status_path)
         print(f"Run status: {status_path}")
 
     return exit_code
