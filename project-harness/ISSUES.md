@@ -59,33 +59,51 @@ the pooled figure — `CriterionKappa` carries no CI today (see its docstring), 
 need to be added first.
 
 ## ISSUE-289: `mypy.ini`'s `mypy_path = src` silently Any-types every intra-`evals/` import
-**Found:** 2026-09-05, wiring `battery_trust.trust_gate` into `evals/summary.py`
+**Found:** 2026-09-05, wiring `battery_trust.trust_gate` into `evals/summary.py`. Investigated
+further 2026-09-07 (eval/metrics remediation) — the originally-proposed fix does not work;
+see the correction below.
 **Severity:** P2 (annoying — `make type-evals` still catches real errors when they
 happen to surface as a mismatched *return*, which is how this was found; it silently
 misses everything else)
 **Where:** `mypy.ini:3` (`mypy_path = src`); affects every module under `evals/`
-**Description:** `evals/` has no `__init__.py` and `mypy_path` never lists it, so when
-mypy analyzes an `evals/*.py` file as a root (exactly what `mypy evals/` — the real
-`scripts/mypy_evals_ratchet.py` invocation — does), a sibling import like
-`from battery_trust import trust_gate` resolves to `Any` rather than the real
+**Description:** When mypy analyzes an `evals/*.py` file as a root (exactly what
+`mypy evals/` — the real `scripts/mypy_evals_ratchet.py` invocation — does), a sibling
+import like `from battery_trust import trust_gate` resolves to `Any` rather than the real
 `(battery: str, current_str: str, scorer_kappas: Sequence[ScorerKappa]) -> str`
-signature (confirmed via `reveal_type`; `ignore_missing_imports = True` swallows the
-"cannot find module" error that would otherwise surface this). This is not new to
-`battery_trust.py` — `evals/summary.py` already imported `headline_refusal.
-refusal_for_battery`, `battery_rates`, `panel_metrics` etc. the identical way; none of
-those calls happened to be a bare `return <call>` from a function with a concrete return
-annotation, which is the one shape `[no-any-return]` catches, so the gap was invisible
-until now.
-**Why deferred:** out of scope for the M metrics-bring-online task; fixing `mypy_path`
-properly (adding `evals` alongside `src`, or giving `evals/` an `__init__.py`) would very
-likely surface a batch of newly-real `[no-any-return]`/`[no-untyped-def]` errors across
-every sibling import in the package — a remediation pass this task has no budget for, and
-`type-evals`'s 0-baseline ratchet does not distinguish "genuinely 0 errors" from "0 because
-most of the package type-checks as Any".
-**To fix:** add `evals` to `mypy_path` (or convert it to a real package), run
-`make type-evals`, and baseline whatever newly-real error count results with
-`make type-evals-update` plus a DECISIONS.md entry — do not silently raise the baseline
-without recording why.
+signature (confirmed via `reveal_type`, both on 2026-09-05 and re-confirmed 2026-09-07;
+`ignore_missing_imports = True` swallows the "cannot find module" error that would
+otherwise surface this). This is not new to `battery_trust.py` — `evals/summary.py`
+already imported `headline_refusal.refusal_for_battery`, `battery_rates`, `panel_metrics`
+etc. the identical way; none of those calls happened to be a bare `return <call>` from a
+function with a concrete return annotation, which is the one shape `[no-any-return]`
+catches, so the gap was invisible until now.
+**Why deferred:** **2026-09-07 correction** — the original "To fix" premise below
+("`evals/` has no `__init__.py`") is REFUTED: `evals/__init__.py` exists and has since
+`e018da01` (EVAL-P0.2), well before this issue was filed. Adding `evals` to `mypy_path`
+(the prescribed fix) was attempted and does not simply surface "a batch of newly-real
+errors to rebaseline" as assumed — it makes mypy **abort entirely**. `evals/` mixes two
+import conventions throughout: bare sibling imports (`from battery_trust import
+trust_gate`, the overwhelming majority) and `evals.<module>`-style absolute imports (at
+least `evals/dashboard/app.py`, `evals/retrieval_join.py`, `evals/retrieval_runner.py`,
+plus 8+ test files including `tests/unit/evals/test_cli_dispatch.py`,
+`test_dashboard_runs.py`, `test_dashboard_detail.py`, `test_dashboard_case.py`,
+`test_retrieval_join.py`, `test_context_keys.py`, `test_src_free.py`). With `evals` in
+`mypy_path`, mypy discovers the same file two ways and refuses to proceed — first
+`"Duplicate module named __main__"` (evals/__main__.py, worked around by excluding it),
+then immediately `"Source file found twice under different module names: 'dashboard.detail'
+and 'evals.dashboard.detail'"` (evals/dashboard/detail.py) — and there is no way to know
+how many more such collisions remain without fixing each one and re-running, since mypy
+stops at the first. This is a pre-existing structural inconsistency in how the package is
+imported, not a config one-liner; out of scope for this remediation session, which is why
+this issue stays open rather than fixed.
+**To fix:** either (a) standardize every `evals.<module>`-style absolute import in the
+~11 files above to the bare-sibling-import convention the rest of the package uses (a
+real, moderate-size refactor with its own review — not a `mypy.ini` change), then add
+`evals` to `mypy_path`; or (b) accept per-collision `exclude` entries one at a time as
+mypy surfaces each one, tracking how large that list grows before deciding it has stopped
+being "minimal." Either way: run `make type-evals`, baseline whatever newly-real error
+count results with `make type-evals-update`, plus a `DECISIONS.md` entry — do not silently
+raise the baseline without recording why.
 
 ## ISSUE-288: `make eval-judge` crashes uncaught on a guard-only generation (no capability cases)
 **Found:** 2026-09-05, running `make eval-judge` against `k3_61b01dad_negadv` (the
