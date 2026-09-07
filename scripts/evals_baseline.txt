@@ -4,6 +4,7 @@
 R001|evals/calibration.py:875
 R002|evals/__main__.py
 R002|evals/adjudicate.py
+R002|evals/adjudication_yield.py
 R002|evals/anti_hallucination_runner.py
 R002|evals/arm_probe.py
 R002|evals/arm_probe_report.py
@@ -19,6 +20,8 @@ R002|evals/judge_run_artifacts.py
 R002|evals/judge_runner.py
 R002|evals/label_export_stratified.py
 R002|evals/label_import.py
+R002|evals/prelabel_runner.py
+R002|evals/probe_runner.py
 R002|evals/retrieval_runner.py
 R002|evals/runner.py
 R002|evals/sequence_rates.py

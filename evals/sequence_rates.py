@@ -70,19 +70,34 @@ def pooled_order_effect(results: Sequence[SequenceResult]) -> OrderEffectResult:
 # ---------------------------------------------------------------------------
 
 
+def _format_metrics_summary(metrics_summary: dict[str, float]) -> str:
+    """Render a SequenceStat's metrics_summary suffix, or '' when it is empty.
+
+    Empty for every promoted scenario today (measurement-remediation Phase 3 is
+    the first producer, via evals/probe_runner.py) — this returns '' for them,
+    so existing report output is unchanged.
+    """
+    if not metrics_summary:
+        return ""
+    parts = ", ".join(f"{key}={value:.3f}" for key, value in sorted(metrics_summary.items()))
+    return f" | metrics: {parts}"
+
+
 def _format_stat_line(stat: SequenceStat) -> str:
     """Render one scenario's fidelity-gated rate line.
 
     FULL prints the Wilson interval; PARTIAL withholds it and names what survived
-    instead — the interval is never computed here, only rendered if present.
+    instead — the interval is never computed here, only rendered if present. Any
+    metrics_summary is appended regardless of fidelity — see _format_metrics_summary.
     """
     header = f"{stat.scenario_id} reaches {stat.passes}/{stat.k} (k={stat.k}, {stat.fidelity}"
+    metrics_suffix = _format_metrics_summary(stat.metrics_summary)
     if stat.fidelity == "FULL":
         assert stat.interval is not None
         lo, hi = stat.interval
-        return f"{header}) [{lo:.3f}, {hi:.3f}]"
+        return f"{header}) [{lo:.3f}, {hi:.3f}]{metrics_suffix}"
     surviving = ", ".join(stat.surviving) or "(none named)"
-    return f"{header} — CI withheld, repetitions not independent: {surviving})"
+    return f"{header} — CI withheld, repetitions not independent: {surviving}){metrics_suffix}"
 
 
 def _format_order_effect(order_effect: OrderEffectResult) -> str:

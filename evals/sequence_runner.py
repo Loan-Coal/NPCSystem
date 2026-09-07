@@ -5,6 +5,14 @@ Purpose: Run one promoted scenario k times with world reset before each repetiti
          recording per-repetition outcome, wall-clock duration, and the reset's
          ResetReceipt. Aggregates into a fidelity-gated SequenceStat so a PARTIAL
          reset can never surface a Wilson interval (ISSUE-143).
+         RepetitionRecord also carries an optional per-repetition `metrics` dict
+         (measurement-remediation Phase 3) — empty for every ScenarioFn-based run
+         here, populated by evals/probe_runner.py's own repetition loop, which
+         constructs RepetitionRecord directly rather than through this module's
+         scenario_fn/_run_one path (an EngineProbe's setup/drive/measure shape
+         does not fit ScenarioFn's `() -> bool`). run_sequence forwards whatever
+         metrics its records carry into sequence_stat so the field is never
+         silently dropped, even though no ScenarioFn populates it today.
 Dependencies: time (stdlib), typing, pydantic, sequence_fidelity, sequence_records (evals/)
 Used by: evals/sequence_rates.py (EVAL-P12.4)
 Does NOT: import from src/npc_engine/, call the NPC engine directly.
@@ -15,7 +23,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from sequence_fidelity import SequenceStat, sequence_stat
 from sequence_records import ResetReceipt
@@ -50,6 +58,10 @@ class RepetitionRecord(BaseModel):
         reset_receipt: Evidence of what the reset preceding this repetition
             actually cleared and what survived it.
         error: Exception message if the scenario raised; None on clean completion.
+        metrics: Numeric metrics reported for this repetition (measurement-
+            remediation Phase 3). Empty for every ScenarioFn-based run — no
+            promoted scenario populates it today; evals/probe_runner.py's
+            EngineProbe.measure() is the first producer.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -59,6 +71,7 @@ class RepetitionRecord(BaseModel):
     duration_ms: int
     reset_receipt: ResetReceipt
     error: str | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)
 
 
 class SequenceResult(BaseModel):
@@ -154,7 +167,12 @@ def run_sequence(
         records.append(record)
 
     passes = sum(1 for r in records if r.passed)
-    stat = sequence_stat(scenario_id, passes, tuple(r.reset_receipt for r in records))
+    stat = sequence_stat(
+        scenario_id,
+        passes,
+        tuple(r.reset_receipt for r in records),
+        tuple(r.metrics for r in records),
+    )
     return SequenceResult(
         scenario_id=scenario_id,
         k=k,

@@ -247,3 +247,41 @@ needs it, or once its contract needs to be documented for consumers outside its 
 **Applied in:** `evals/deterministic_records.py` → `anti_hallucination_runner._is_grounded`
 (EVAL-P6.1); `evals/label_export_yield.py` → `evals/label_adequacy.py`'s floor constants and
 `_minority_count`/`_clean_adjudicated` (DEC-262).
+
+---
+
+## Pattern: per-file `*_FACTORIES` dict, merged at one composition point via `**`-spread
+
+**When to use:** A registry (scenario adapters, engine probes, scorers, …) that must grow by
+adding a new file, never by editing a shared file's body. One module owns the composition
+point; every implementation module exports its own small `dict[str, Factory]` constant under
+a name ending `_FACTORIES`, and the composition point merges them with `**` spreads.
+**Why:** Satisfies OCP (CLAUDE.md: "new backends … arrive as new files") without a plugin/
+auto-discovery mechanism — the composition point stays one plain dict literal, readable in
+full, and a new module's entry is a one-line addition there, never a change to an existing
+module's body. Keeps DIP's constructor-injection discipline: nothing is registered by import
+side effect (which would make load order matter); every dict is an explicit, inspectable
+value, and the merge order can never mask a duplicate key. A key collision aborts import
+loudly at the merge point rather than one factory silently shadowing another.
+**Example:**
+```python
+# probe_gossip.py
+GOSSIP_PROBE_FACTORIES: dict[str, GossipProbeFactory] = {"gossip": _make_gossip_probe}
+
+# probe_events.py
+EVENTS_PROBE_FACTORIES: dict[str, EventsProbeFactory] = {"events": _make_events_probe}
+
+# probe_runner.py — the one composition point:
+from probe_events import EVENTS_PROBE_FACTORIES
+from probe_gossip import GOSSIP_PROBE_FACTORIES
+
+PROBE_FACTORIES: dict[str, ProbeFactory] = {
+    **GOSSIP_PROBE_FACTORIES,
+    **EVENTS_PROBE_FACTORIES,
+}
+```
+**First applied in:** `evals/scenario_adapters.py` merging
+`scenario_adapters_extra.EXTRA_SCENARIO_ADAPTER_FACTORIES` into
+`SCENARIO_ADAPTER_FACTORIES` (EVAL-P12.4). **Applied again in:** `evals/probe_runner.py`
+merging all 6 `probe_<engine>.py` modules' `*_PROBE_FACTORIES` dicts into `PROBE_FACTORIES`
+(measurement-remediation Phase 4, DEC-271).

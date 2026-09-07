@@ -25,15 +25,18 @@ make eval-deterministic-verdicts TRANSCRIPT=$GEN/outputs.jsonl GEN_ID=<gen_id>
 #    verb that skipped this check was retired.
 make label-export-stratified TRANSCRIPT=$GEN/outputs.jsonl OUT_DIR=evals/calibration/batches
 
-# 3. label. Filter to '{'-leading lines: the model occasionally prepends prose or a
-#    ```jsonl fence despite the prompt, and label-import rejects any non-JSON line.
-#    -Encoding utf8 is required; PowerShell's default codepage corrupts the file.
-foreach ($b in Get-ChildItem evals/calibration/batches/batch_*.json) {
-  $prompt = (Get-Content evals/calibration/LABEL_PROMPT.md -Raw) + "`n`n<BATCH>`n" + (Get-Content $b.FullName -Raw) + "`n</BATCH>"
-  claude -p $prompt --model opus |
-    Where-Object { $_ -match '^\s*\{' } |
-    Add-Content evals/calibration/raw_labels.jsonl -Encoding utf8
-}
+# 3. label (measurement-remediation Phase 5, DEC-272). Resumable: a batch whose rows are
+#    already in OUT is skipped, so rerun the same command after any interruption.
+#    Add DRY_RUN=1 first to see exactly which batches would be sent.
+make prelabel BATCH_DIR=evals/calibration/batches OUT=evals/calibration/raw_labels.jsonl GEN_ID=<gen_id>
+
+#    This replaced a hand-run PowerShell loop that passed prompt+batch on the command
+#    line. Do not go back to that: the largest exported batch (37,420 chars) plus the
+#    Opus prompt (15,565) is 52,985 chars, past Windows' 32,767-char command-line limit,
+#    so the biggest batches could not be labelled that way at all. `make prelabel` sends
+#    the prompt on the CLI's stdin, which has no such limit, drops non-JSON lines,
+#    validates every row against the importer's own schema before writing, and appends a
+#    provenance line (prompt sha256, model, gen_id) to <OUT>.log.
 
 # 4. join into the real artifact (pass BOTH judged files)
 #    label-import REFUSES to overwrite a labels file holding human verdicts.
@@ -44,7 +47,13 @@ foreach ($b in Get-ChildItem evals/calibration/batches/batch_*.json) {
 make label-import RAW=evals/calibration/raw_labels.jsonl TRANSCRIPT=$GEN/outputs.jsonl \
                   JUDGED="$GEN/judged.jsonl $GEN/deterministic_judged.jsonl" MERGE=1
 
-# 5. adjudicate (4-6 h, resumable) then report
+# 5. BEFORE adjudicating, check the push is worth it (DEC-272). This reports, per scorer,
+#    what adjudicating the pending pre-labels would yield against DEC-260's floor —
+#    including which scorers a keep/flip pass cannot lift at all, because their pending
+#    pre-labels are all on one side and the case set contains no failures to find.
+make adjudication-yield
+
+# 6. adjudicate (4-6 h, resumable) then report
 make eval-adjudicate
 make eval-calibrate
 ```

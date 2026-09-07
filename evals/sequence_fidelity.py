@@ -7,6 +7,11 @@ Purpose: Derive a SequenceRun's reset-fidelity tier from its repetitions' ResetR
          interval is withheld here, at the point the tier is known, so a PARTIAL run
          cannot re-acquire a confidence interval through a later formatting change —
          the formatter only ever sees what this module decided to compute.
+         SequenceStat also carries `metrics_summary` (measurement-remediation Phase 3):
+         the mean of each RepetitionRecord.metrics key across the repetitions that
+         reported it. Unlike `interval`, this is never fidelity-gated — a mean is
+         descriptive regardless of whether repetitions were independent; only the
+         Wilson interval assumes i.i.d. Bernoulli trials.
 Dependencies: pydantic, case_stats (evals/), rate_stats (evals/), reset_fidelity_record
               (evals/), sequence_records (evals/)
 Used by: evals/sequence_runner.py (EVAL-P12.4), evals/sequence_rates.py
@@ -16,7 +21,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from case_stats import Classification, classify
 from rate_stats import pass_rate, wilson_interval
@@ -79,6 +84,10 @@ class SequenceStat(BaseModel):
         surviving: State items observed surviving across the run's receipts (union,
             sorted). Descriptive only — never used to derive `interval`; that
             decision is already made by the time this field is populated.
+        metrics_summary: Mean of each RepetitionRecord.metrics key across the
+            repetitions that reported it (measurement-remediation Phase 3). Empty
+            for every run whose repetitions carried no metrics — every promoted
+            scenario today.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -91,12 +100,37 @@ class SequenceStat(BaseModel):
     interval: tuple[float, float] | None
     classification: Classification
     surviving: tuple[str, ...]
+    metrics_summary: dict[str, float] = Field(default_factory=dict)
+
+
+def _mean_metrics(metrics: Sequence[dict[str, float]]) -> dict[str, float]:
+    """Average each metric key across the repetitions that reported it.
+
+    A key missing from some repetitions' dicts is averaged only over the
+    repetitions that reported it — a probe metric that only applies under some
+    post-drive state (e.g. a rate computed only when its denominator is nonzero)
+    does not get silently zero-padded into a misleading mean.
+
+    Args:
+        metrics: One metrics dict per repetition, in execution order. Repetitions
+            that reported no metrics contribute an empty dict.
+    Returns:
+        Mapping from metric key to its mean across the repetitions that reported it.
+    """
+    sums: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for rep_metrics in metrics:
+        for key, value in rep_metrics.items():
+            sums[key] = sums.get(key, 0.0) + value
+            counts[key] = counts.get(key, 0) + 1
+    return {key: total / counts[key] for key, total in sums.items()}
 
 
 def sequence_stat(
     scenario_id: str,
     passes: int,
     receipts: Sequence[ResetReceipt],
+    metrics: Sequence[dict[str, float]] = (),
 ) -> SequenceStat:
     """Build the fidelity-gated SequenceStat for one scenario's completed run.
 
@@ -105,8 +139,11 @@ def sequence_stat(
         passes: Count of repetitions that returned True (0 <= passes <= len(receipts)).
         receipts: One ResetReceipt per repetition, in execution order. `k` is
             derived as `len(receipts)`.
+        metrics: One metrics dict per repetition, aligned by index with `receipts`.
+            Defaults to empty — every promoted scenario reports none.
     Returns:
-        SequenceStat with `interval` populated only when every receipt was FULL.
+        SequenceStat with `interval` populated only when every receipt was FULL,
+        and `metrics_summary` holding the per-key mean across `metrics`.
     Raises:
         ValueError: When receipts is empty.
     """
@@ -125,4 +162,5 @@ def sequence_stat(
         interval=interval,
         classification=classify(passes, k),
         surviving=surviving,
+        metrics_summary=_mean_metrics(metrics),
     )

@@ -22,7 +22,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
@@ -672,6 +672,18 @@ eval-sequence:
 		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
 		--k $(or $(K),3)
 
+# eval-probe: run every registered per-engine probe k times and print the free
+# engine_status liveness/timing snapshot for all tick-registered engines, whether
+# or not a probe exists for them (measurement-remediation Phase 3). Requires the
+# stack up and CLOCK_MODE=game_driven (docker-compose.eval.yml). No probes are
+# registered yet — Phase 4 populates evals/probe_runner.py's PROBE_FACTORIES.
+# Usage: make eval-probe [K=3] [TICKS=1]
+eval-probe:
+	@echo "Running registered per-engine probes against $(BASE_URL) (k=$(or $(K),3), ticks=$(or $(TICKS),1)) ..."
+	$(PYTHON) -m evals probe \
+		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
+		--k $(or $(K),3) --ticks $(or $(TICKS),1)
+
 # label-export-stratified: stratified label-export oversampling expected-negative
 # cases (case_neg/case_adv) until each in-scope judge's projected best-case
 # ceiling clears DEC-260's adequacy floor; prints the per-judge projection table
@@ -682,6 +694,31 @@ label-export-stratified:
 	$(PYTHON) -m evals label-export-stratified --transcript $(TRANSCRIPT) --out-dir $(OUT_DIR) \
 		$(if $(VOCABULARY),--vocabulary $(VOCABULARY),) \
 		$(if $(SEED),--seed $(SEED),)
+
+# prelabel: drive the Opus pre-labelling pass over exported batches into raw label rows
+# (measurement-remediation Phase 5, DEC-272). Resumable — a batch whose rows are already
+# in OUT is skipped, so an interrupted pass is restarted by rerunning the same command.
+# The prompt goes to the CLI on stdin, not argv: prompt+batch reaches ~53k chars, past
+# Windows' 32,767-char command-line limit, which is why the old PowerShell loop could not
+# label the largest batches at all. Costs real tokens; DRY_RUN=1 plans without invoking.
+# LIMIT caps the batches CONSIDERED (skips included), not the batches labelled.
+# Usage: make prelabel BATCH_DIR=evals/calibration/stratified_batches OUT=evals/calibration/raw_labels.jsonl [GEN_ID=<id>] [LIMIT=n] [DRY_RUN=1]
+prelabel:
+	$(PYTHON) -m evals prelabel --batch-dir $(BATCH_DIR) --out $(OUT) \
+		$(if $(PROMPT),--prompt $(PROMPT),) \
+		$(if $(MODEL),--model $(MODEL),) \
+		$(if $(GEN_ID),--gen-id $(GEN_ID),) \
+		$(if $(LIMIT),--limit $(LIMIT),) \
+		$(if $(DRY_RUN),--dry-run,)
+
+# adjudication-yield: report what adjudicating the pending pre-labels would yield against
+# DEC-260's floor, per scorer (measurement-remediation Phase 5, DEC-272). Run it BEFORE a
+# keep/flip push: it names which scorers the push can lift to a computable kappa and which
+# it cannot lift at all, so hours are not spent on a scorer whose case set has no failures.
+# A report, not a gate — the gate is `make check-label-adequacy`. Always exits 0.
+# Usage: make adjudication-yield [FILE=evals/calibration/labels_v1.jsonl]
+adjudication-yield:
+	$(PYTHON) -m evals adjudication-yield $(if $(FILE),--file $(FILE),)
 
 # label-import: import a CLI labelling session into CalibrationLabel rows (EVAL-P5.6).
 # Usage: make label-import RAW=<path> TRANSCRIPT=<outputs.jsonl> JUDGED=<judged.jsonl> [MERGE=1]

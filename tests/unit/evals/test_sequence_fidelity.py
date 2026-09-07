@@ -103,3 +103,37 @@ def test_sequence_stat_empty_receipts_raises() -> None:
     """sequence_stat cannot compute k from zero receipts."""
     with pytest.raises(ValueError):
         sequence_stat("scenario_x", passes=0, receipts=())
+
+
+# ---------------------------------------------------------------------------
+# metrics_summary (measurement-remediation Phase 3)
+# ---------------------------------------------------------------------------
+
+
+def test_metrics_summary_defaults_to_empty_when_no_metrics_given() -> None:
+    """Every promoted scenario call omits `metrics` -- metrics_summary must stay {}."""
+    stat = sequence_stat("scenario_x", passes=1, receipts=(_FULL_RECEIPT,))
+    assert stat.metrics_summary == {}
+
+
+def test_metrics_summary_averages_each_key_across_repetitions() -> None:
+    """A key present in every repetition's dict averages across all of them."""
+    receipts = (_FULL_RECEIPT, _FULL_RECEIPT, _FULL_RECEIPT)
+    metrics = ({"hops": 2.0}, {"hops": 4.0}, {"hops": 6.0})
+    stat = sequence_stat("scenario_gossip_chain", passes=3, receipts=receipts, metrics=metrics)
+    assert stat.metrics_summary == {"hops": 4.0}
+
+
+def test_metrics_summary_averages_only_over_repetitions_that_reported_the_key() -> None:
+    """A key missing from some repetitions is averaged only over the ones that have it."""
+    receipts = (_FULL_RECEIPT, _FULL_RECEIPT)
+    metrics = ({"reach": 1.0}, {})  # second repetition reported nothing
+    stat = sequence_stat("scenario_x", passes=2, receipts=receipts, metrics=metrics)
+    assert stat.metrics_summary == {"reach": 1.0}
+
+
+def test_metrics_summary_empty_dicts_yield_empty_summary() -> None:
+    """Every repetition reporting an empty metrics dict yields an empty summary."""
+    receipts = (_FULL_RECEIPT, _FULL_RECEIPT)
+    stat = sequence_stat("scenario_x", passes=2, receipts=receipts, metrics=({}, {}))
+    assert stat.metrics_summary == {}

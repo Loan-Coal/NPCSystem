@@ -229,3 +229,31 @@ def test_k_negative_raises_value_error() -> None:
     """k<0 is invalid and raises ValueError."""
     with pytest.raises(ValueError):
         run_sequence("scenario_x", lambda: True, _reset_fn(), k=-1)
+
+
+# ---------------------------------------------------------------------------
+# metrics field (measurement-remediation Phase 3) — additive, empty by default
+# ---------------------------------------------------------------------------
+
+
+def test_repetition_record_metrics_defaults_to_empty_dict() -> None:
+    """RepetitionRecord.metrics defaults to {} when not supplied (backward compatible)."""
+    receipt = ResetReceipt(cleared=("world_state.epoch",), surviving=(), duration_ms=1)
+    record = RepetitionRecord(repetition=0, passed=True, duration_ms=1, reset_receipt=receipt)
+    assert record.metrics == {}
+
+
+def test_repetition_record_accepts_explicit_metrics() -> None:
+    """RepetitionRecord carries whatever metrics dict a caller supplies."""
+    receipt = ResetReceipt(cleared=("world_state.epoch",), surviving=(), duration_ms=1)
+    record = RepetitionRecord(
+        repetition=0, passed=True, duration_ms=1, reset_receipt=receipt,
+        metrics={"hops": 3.0},
+    )
+    assert record.metrics == {"hops": 3.0}
+
+
+def test_run_sequence_scenario_fn_metrics_default_to_empty_summary() -> None:
+    """No ScenarioFn today reports metrics -- run_sequence's stat.metrics_summary stays {}."""
+    result = run_sequence("scenario_x", lambda: True, _reset_fn(), k=3)
+    assert result.stat.metrics_summary == {}

@@ -24,13 +24,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from context_receipt_record import ContextReceiptRecord, parse_context_receipt
+from context_receipt_record import ContextReceiptRecord, DroppedItemRecord, parse_context_receipt
 from transcript_models import GenerationRecord
 
 _RECEIPT_PAYLOAD = {
     "retrieval_profile": "aggressive",
     "item_keys": ["character:npc_1", "world_state"],
     "dropped_keys": ["rag:r1"],
+    "dropped": [{"key": "rag:r1", "tier": "tierC", "reason": "prompt_budget"}],
     "tier_spend": [
         {"tier": "tier0", "items": 1, "tokens": 12},
         {"tier": "tierA", "items": 1, "tokens": 30},
@@ -58,6 +59,26 @@ def test_parses_a_full_engine_receipt() -> None:
     assert receipt.budget_trimmed is True
     assert receipt.total_tokens == 42
     assert tuple(row.tier for row in receipt.tier_spend) == ("tier0", "tierA", "tierB", "tierC")
+
+
+def test_parses_dropped_items_with_their_attributed_reason() -> None:
+    """DEC-271: `dropped` carries per-item drop reason, additive to `dropped_keys`."""
+    receipt = parse_context_receipt(_RECEIPT_PAYLOAD)
+
+    assert receipt is not None
+    assert receipt.dropped == (DroppedItemRecord(key="rag:r1", tier="tierC", reason="prompt_budget"),)
+
+
+def test_a_payload_with_only_dropped_keys_still_parses_dropped_as_empty() -> None:
+    """A payload predating this field (only the flat dropped_keys list) must still parse."""
+    payload = dict(_RECEIPT_PAYLOAD)
+    del payload["dropped"]
+
+    receipt = parse_context_receipt(payload)
+
+    assert receipt is not None
+    assert receipt.dropped == ()
+    assert receipt.dropped_keys == ("rag:r1",)
 
 
 def test_an_absent_receipt_parses_to_none_rather_than_an_empty_receipt() -> None:

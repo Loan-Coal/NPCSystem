@@ -16,7 +16,7 @@ import pytest
 
 from sequence_fidelity import SequenceStat
 from sequence_order_effect import order_effect_check
-from sequence_rates import pooled_order_effect, render_report
+from sequence_rates import _format_metrics_summary, _format_stat_line, pooled_order_effect, render_report
 from sequence_records import ResetReceipt
 from sequence_runner import RepetitionRecord, SequenceResult
 
@@ -121,3 +121,43 @@ def test_all_full_run_renders_without_order_effect_block() -> None:
     result = _result("scenario_x", (True, True, True), _FULL_RECEIPT)
     report = render_report([result], order_effect=None)
     assert "ORDER EFFECT CHECK" not in report
+
+
+# ---------------------------------------------------------------------------
+# metrics_summary rendering (measurement-remediation Phase 3)
+# ---------------------------------------------------------------------------
+
+
+def test_format_metrics_summary_empty_returns_empty_string() -> None:
+    """No metrics_summary -> no suffix, so existing scenario report lines are untouched."""
+    assert _format_metrics_summary({}) == ""
+
+
+def test_format_metrics_summary_renders_sorted_keys() -> None:
+    """Multiple keys render sorted by name, three-decimal formatted."""
+    rendered = _format_metrics_summary({"reach": 0.5, "hops": 2.0})
+    assert rendered == " | metrics: hops=2.000, reach=0.500"
+
+
+def test_format_stat_line_appends_metrics_at_full_fidelity() -> None:
+    """A FULL-fidelity stat with metrics_summary prints both the interval and the metrics."""
+    stat = SequenceStat(
+        scenario_id="gossip", k=3, passes=3, pass_rate=1.0, fidelity="FULL",
+        interval=(0.29, 1.0), classification="stable_pass", surviving=(),
+        metrics_summary={"hops": 2.0},
+    )
+    line = _format_stat_line(stat)
+    assert "[0.290, 1.000]" in line
+    assert "metrics: hops=2.000" in line
+
+
+def test_format_stat_line_appends_metrics_at_partial_fidelity() -> None:
+    """A PARTIAL-fidelity stat still appends metrics_summary after the withheld-CI text."""
+    stat = SequenceStat(
+        scenario_id="gossip", k=3, passes=2, pass_rate=2 / 3, fidelity="PARTIAL",
+        interval=None, classification="flaky", surviving=("emotion_store",),
+        metrics_summary={"hops": 1.5},
+    )
+    line = _format_stat_line(stat)
+    assert "CI withheld" in line
+    assert "metrics: hops=1.500" in line
