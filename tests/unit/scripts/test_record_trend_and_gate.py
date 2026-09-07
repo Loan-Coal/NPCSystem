@@ -56,19 +56,18 @@ def test_build_trend_row_against_real_k3_artifact() -> None:
 
     scorer_kappas is empty here — not because there are no labels, but because
     label_adequacy.check_label_adequacy (DEC-260) refuses every scorer on this
-    corpus: measured 2026-09-05 (after the negadv batch merged 354 more rows in),
-    every scorer's minority-class count is still under the 25-item floor. That
-    refusal is the point of this batch — before it, this row silently carried
-    tone_judge at kappa 0.849 with a 95% CI of [-0.010, 1.000], which is the row
-    test_kappas_match_calibration.py still reads its RECORDED_KAPPAS comparison
-    from (a committed artifact, not this call).
+    corpus: measured 2026-09-05, every scorer's minority-class count is under
+    the 25-item floor. That refusal is the point of this batch — before it,
+    this row silently carried tone_judge at kappa 0.849 with a 95% CI of
+    [-0.010, 1.000], which is the row test_kappas_match_calibration.py still
+    reads its RECORDED_KAPPAS comparison from (a committed artifact, not this
+    call).
 
-    labels_gen_id is None (not "k3_73e6c36") because the shared labels_v1.jsonl now
-    names two generations — k3_73e6c36's original 393 rows plus k3_61b01dad_negadv's
-    354 — so the file is no longer attributable to one run; see the "Labels
-    attribution" tests below, which use an isolated single-generation file instead
-    of this ever-growing shared one so that invariant stays testable regardless of
-    how many more batches get merged in."""
+    labels_gen_id is "k3_73e6c36" and labels_n is 393 even though the shared
+    labels_v1.jsonl also carries 354 un-adjudicated k3_61b01dad_negadv rows
+    (human_verdict=None): _labels_provenance attributes and counts only
+    adjudicated rows, so a pending pre-label batch merged into the same file
+    cannot make this row's provenance unattributable or its count wrong."""
     _require_real_artifact()
     row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=_LABELS_PATH,
                            recorded_at="2026-08-17T00:00:00+00:00")
@@ -78,8 +77,8 @@ def test_build_trend_row_against_real_k3_artifact() -> None:
     assert row.capability is not None
     assert row.inconclusive_rate is not None
     assert row.scorer_kappas == ()  # every scorer refused by label_adequacy (DEC-260)
-    assert row.labels_gen_id is None  # unattributable: labels_v1.jsonl now spans 2 generations
-    assert row.labels_n == 747
+    assert row.labels_gen_id == "k3_73e6c36"
+    assert row.labels_n == 393
 
 
 def test_build_trend_row_records_latency_from_the_real_artifact() -> None:
@@ -118,54 +117,30 @@ def test_build_trend_row_with_no_labels_file_yields_empty_kappas(tmp_path: Path)
 # Labels attribution — the kappas must belong to the generation the row names
 # ---------------------------------------------------------------------------
 #
-# These three tests use an isolated, filtered-down labels file (one generation
-# only) rather than the shared evals/calibration/labels_v1.jsonl: that file is
-# meant to keep growing as more batches are merged in (747 rows and two
-# generations as of 2026-09-05, up from 393/one), so pinning a mismatch test to
-# its exact current gen_id mix would break on every future label-import — the
-# same fragility that broke these three tests when the negadv batch landed.
+# These use the real, shared evals/calibration/labels_v1.jsonl directly: since
+# _labels_provenance attributes/counts only adjudicated (human_verdict is not
+# None) rows, a pending pre-label batch for a different generation merged into
+# the same file (as k3_61b01dad_negadv's 354 un-adjudicated rows are) does not
+# change what this file names or how many rows count — no isolated copy needed.
 
 
-def _single_gen_labels(tmp_path: Path, gen_id: str) -> Path:
-    """Filter the real committed labels file down to one generation's rows.
-
-    Args:
-        tmp_path: Pytest tmp dir to write the filtered file into.
-        gen_id: The only gen_id the returned file's rows may carry.
-    Returns:
-        Path to a labels file naming exactly one generation — deterministic
-        input for the attribution tests, independent of how many other
-        generations' labels have since been merged into the shared artifact.
-    """
-    all_rows = (
-        json.loads(line) for line in _LABELS_PATH.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    )
-    rows = [row for row in all_rows if row.get("gen_id") == gen_id]
-    out = tmp_path / "single_gen_labels.jsonl"
-    out.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
-    return out
-
-
-def test_a_row_whose_labels_name_another_generation_is_refused(tmp_path: Path) -> None:
-    """RED anchor. The committed trend row is `k3_77688e7_regen1`; the isolated
-    labels file carries only `k3_73e6c36`. Before this, build_trend_row returned a
-    row whose scorer_kappas were silently attributed to the wrong run — the
+def test_a_row_whose_labels_name_another_generation_is_refused() -> None:
+    """RED anchor. The committed trend row is `k3_77688e7_regen1`; all 393
+    adjudicated labels carry `k3_73e6c36`. Before this, build_trend_row returned
+    a row whose scorer_kappas were silently attributed to the wrong run — the
     per-scorer label counts 135/135/48/75 equal the recorded row's n values
     exactly, which is only possible if no join ever ran."""
     _require_real_artifact()
-    labels_path = _single_gen_labels(tmp_path, "k3_73e6c36")
     with pytest.raises(LabelsGenerationMismatchError):
-        build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=labels_path,
+        build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=_LABELS_PATH,
                         recorded_at="2026-08-17T00:00:00+00:00")
 
 
-def test_the_override_is_the_only_way_to_record_foreign_labels(tmp_path: Path) -> None:
+def test_the_override_is_the_only_way_to_record_foreign_labels() -> None:
     """The refusal is a gate, not a wall: an operator who knows the labels are
     borrowed says so explicitly, and the row then names whose labels they are."""
     _require_real_artifact()
-    labels_path = _single_gen_labels(tmp_path, "k3_73e6c36")
-    row = build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=labels_path,
+    row = build_trend_row("k3_77688e7_regen1", _GEN_DIR, labels_path=_LABELS_PATH,
                           recorded_at="2026-08-17T00:00:00+00:00",
                           allow_foreign_labels=True)
     assert row.gen_id == "k3_77688e7_regen1"
@@ -173,11 +148,10 @@ def test_the_override_is_the_only_way_to_record_foreign_labels(tmp_path: Path) -
     assert row.labels_n == 393
 
 
-def test_matching_labels_are_recorded_without_an_override(tmp_path: Path) -> None:
+def test_matching_labels_are_recorded_without_an_override() -> None:
     """The happy path stays plain: labels that name this run need no flag."""
     _require_real_artifact()
-    labels_path = _single_gen_labels(tmp_path, "k3_73e6c36")
-    row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=labels_path,
+    row = build_trend_row("k3_73e6c36", _GEN_DIR, labels_path=_LABELS_PATH,
                           recorded_at="2026-08-17T00:00:00+00:00")
     assert row.labels_gen_id == "k3_73e6c36"
     assert row.labels_n == 393

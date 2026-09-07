@@ -144,21 +144,31 @@ def _scorer_kappas(labels: list[CalibrationLabel]) -> tuple[ScorerKappa, ...]:
 
 
 def _labels_provenance(labels: list[CalibrationLabel]) -> tuple[str | None, int | None]:
-    """Return (labels_gen_id, labels_n) — which generation the labels name, and how many.
+    """Return (labels_gen_id, labels_n) — which generation the ADJUDICATED labels
+    name, and how many of them there are.
+
+    Filtered to human_verdict is not None: a pending pre-label batch merged
+    into the shared labels file for a different generation (human_verdict=None
+    until someone runs `make eval-adjudicate` over it) must not make an
+    already-adjudicated generation's labels read as unattributable, or inflate
+    its count with rows that cannot contribute to any kappa (label_adequacy
+    and calibration.py already restrict every real computation the same way).
 
     Args:
         labels: Calibration labels already read from disk (see _read_labels).
     Returns:
-        (None, None) when there are no labels. (None, n) when the labels carry no gen_id
-        (legacy rows, CalibrationLabel.gen_id defaults to "") or name more than one —
-        either way the generation is not attributable, which is a fact worth keeping
-        distinct from "there are no labels at all". Otherwise the single gen_id every
-        row names, and the row count.
+        (None, None) when there are no adjudicated labels. (None, n) when the
+        adjudicated labels carry no gen_id (legacy rows, CalibrationLabel.gen_id
+        defaults to "") or name more than one — either way the generation is
+        not attributable, which is a fact worth keeping distinct from "there
+        are no labels at all". Otherwise the single gen_id every adjudicated
+        row names, and the adjudicated row count.
     """
-    if not labels:
+    adjudicated = [label for label in labels if label.human_verdict is not None]
+    if not adjudicated:
         return None, None
-    gen_ids = {label.gen_id for label in labels if label.gen_id}
-    return (gen_ids.pop() if len(gen_ids) == 1 else None), len(labels)
+    gen_ids = {label.gen_id for label in adjudicated if label.gen_id}
+    return (gen_ids.pop() if len(gen_ids) == 1 else None), len(adjudicated)
 
 
 def _battery_rates(eval_summary: EvalSummary) -> tuple[RateWithCI, RateWithCI, RateWithCI]:
