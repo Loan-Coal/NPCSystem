@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 
-from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
+from npc_engine.engines.dialogue.dialogue_models import DialogueGeneration
 from pydantic import ValidationError
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.retrieval.context import estimate_tokens
@@ -81,12 +81,15 @@ class DialogueLLMClient:
             system: Optional system prompt passed to the LLM backend's system channel.
 
         Returns:
-            Dict conforming to the DialogueResponse schema, validated by Pydantic.
+            Dict conforming to the DialogueGeneration schema, validated by Pydantic.
             Returns a deterministic fallback dict[str, Any] on LLMTimeoutError, LLMRequestError,
             or when both validation attempts fail.
         """
 
-        schema = DialogueResponse.model_json_schema()
+        # The generation grammar, not the response contract: DialogueResponse carries seven
+        # further fields the handler overwrites after generation, so constraining the model
+        # to them only buys discarded tokens. See DialogueGeneration.
+        schema = DialogueGeneration.model_json_schema()
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
@@ -122,7 +125,7 @@ class DialogueLLMClient:
 
         Args:
             prompt: Full dialogue prompt string.
-            schema: JSON schema dict[str, Any] for the DialogueResponse model.
+            schema: JSON schema dict[str, Any] for the DialogueGeneration model.
             system: Optional system prompt.
             labels: Metric labels for observability.
 
@@ -141,7 +144,7 @@ class DialogueLLMClient:
                     system=system,
                     seed=attempt_seed,
                 )
-                normalized_response = DialogueResponse.model_validate(raw).model_dump(mode="python")
+                normalized_response = DialogueGeneration.model_validate(raw).model_dump(mode="python")
                 self._emit_tokens_out(
                     text=json.dumps(normalized_response, sort_keys=True, ensure_ascii=True),
                     labels=labels,

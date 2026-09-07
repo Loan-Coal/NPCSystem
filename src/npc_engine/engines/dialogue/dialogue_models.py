@@ -101,6 +101,38 @@ class FacialExpressionModel(FrozenDialogueModel):
     intensity: int = Field(default=0, ge=0, le=100)
 
 
+class DialogueGeneration(FrozenDialogueModel):
+    """The fields the LLM actually authors, and the grammar it is constrained by.
+
+    Deliberately NOT a base class of, or subset derived from, DialogueResponse. That model
+    is re-exported as the published HTTP schema (api/schemas.py) and pinned field-by-field
+    by scripts/api_contract_baseline.json, and inheritance would reorder its properties.
+    The duplication here is the price of leaving the public contract untouched.
+
+    The seven fields this omits -- emotion, memories_recalled, session_id, cached,
+    degradation_level, audio_bytes, context_receipt -- are all written by DialogueHandler
+    after generation via model_copy, so any token the model spent on them was discarded.
+    Dropping them also keeps ContextReceipt, DroppedItem and TierSpend out of the grammar.
+    """
+
+    npc_response: str
+
+    @field_validator("npc_response", mode="before")
+    @classmethod
+    def _strip_echo_prefix(cls, v: object) -> object:
+        """Strip transcript-style 'player: .../npc: ' echo the LLM sometimes prepends."""
+        if isinstance(v, str):
+            stripped = _ECHO_PREFIX_RE.sub("", v).strip()
+            if stripped:
+                return stripped
+        return v
+    relation_deltas: RelationDeltas = Field(default_factory=RelationDeltas)
+    mood_update: str | None = None
+    action: ActionModel = Field(default_factory=ActionModel)
+    facial_expression: FacialExpressionModel = Field(default_factory=FacialExpressionModel)
+    learned_facts: tuple[str, ...] = Field(default=())
+
+
 class DialogueResponse(FrozenDialogueModel):
     """Final dialogue response contract for REST and WebSocket completion."""
 
