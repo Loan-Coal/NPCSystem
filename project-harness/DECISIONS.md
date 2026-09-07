@@ -8781,3 +8781,59 @@ chance-corrected kappa means almost every seat is voting the same way regardless
 not that the seats are truly agreeing. Case-turn pass rate 17/111 (15.3%) — corroborates the
 single-judge run's 9.9% adversarial rate (both judge instruments agree the battery is mostly
 failing, not a single-judge artifact).
+
+**2026-09-07 correction (DEC-266):** this entry's own "strong inter-judge agreement" reading
+of κ=0.831 is exactly the pooling-inflation artifact DEC-266 fixes reporting for — left
+uncorrected here as an honest record of what was believed at the time; see DEC-266 for the
+current understanding.
+
+## DEC-266: several small calls made while fixing ISSUE-288, the labels-provenance counting
+bug, and the pooled-panel-kappa reporting gap (eval/metrics remediation, 2026-09-07)
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `evals/judge_runner.py`,
+`evals/judge_run_artifacts.py`, `evals/run_status.py`, `evals/trend_row_builder.py`,
+`evals/panel_metrics_format.py`
+
+**ISSUE-288 fix keeps the existing 0/1/2 exit-code contract.** A report-render failure
+(guard-only generation, `_assert_paired_rates`) is caught in `judge_runner._render_report`
+and recorded on `RunStatus.error`, but `main()`'s exit code still comes from
+`passed == total` (0/1) per DEC-189, not a new code — the judging itself completed; only
+the report render degraded, and that is a different fact than "the pass could not
+complete" (exit 2). Ops scripts that branch on exit code are unaffected; scripts that want
+to notice a degraded report must read `run_status.json`'s `error` field, which is now
+non-empty in this case even though `status` stays `'ok'`/`'gate_failed'`.
+
+**`labels_gen_id`/`labels_n` fix is a counting bug, not a data-placement problem — no file
+split.** Investigated and rejected splitting `evals/calibration/labels_v1.jsonl`'s 354
+un-adjudicated `k3_61b01dad_negadv` pre-labels into a separate file: every real
+calibration computation (`label_adequacy.py`, `calibration.py`) already filters to
+`human_verdict is not None`, so the merge never touched a real statistic. The one bug was
+`trend_row_builder._labels_provenance` computing `gen_ids`/count over unfiltered rows;
+fixed by filtering there instead. Smaller diff, same effect, and it also correctly
+restores `_check_labels_attribution`'s foreign-labels refusal, which the same unfiltered
+computation had been silently bypassing for any row recorded against the shared file.
+
+**`k3_61b01dad_negadv`'s trend row is corrected via `allow_foreign_labels=True`, not left
+at `(None, None)`.** Once `_labels_provenance` is fixed, building this row against the
+shared `labels_v1.jsonl` correctly raises `LabelsGenerationMismatchError` (its own
+adjudicated labels are still pending, so the only adjudicated labels in the file — 393,
+`k3_73e6c36` — genuinely are a foreign generation's). Recorded with the explicit override
+(`labels_gen_id="k3_73e6c36"`, `labels_n=393`) rather than pointing at an empty labels file
+to get `(None, None)`: the override is the documented, honest way to say "these are
+borrowed," and it is what a real `record_trend_and_gate` invocation would need today
+regardless — this just does it once, in place, rather than leaving the bug's output
+standing. `scorer_kappas` is unaffected either way (`()`, every scorer refused by
+`label_adequacy`).
+
+**Pooled-panel-kappa caveat reuses `scorer_trust_policy.HIDDEN_THRESHOLD` (0.40), not a new
+constant**, and fires on a narrow, exact condition (pooled kappa clears the threshold while
+every `by_criterion` entry sits below it) rather than a general "pooled vs. per-criterion
+disagree" heuristic — narrower means fewer false positives on runs where pooling and
+per-criterion genuinely agree, at the cost of not catching a partial mismatch (e.g. two of
+three criteria below floor). Acceptable: the per-criterion breakdown is always printed
+regardless, so a partial mismatch is still visible, just not specially flagged.
+
+**ISSUE-289 (mypy_path) attempted and reverted, not fixed.** See ISSUE-289's own
+2026-09-07 correction for the full finding: `evals/` mixes bare-sibling-import and
+`evals.<module>`-absolute-import conventions across 11+ files, so adding `evals` to
+`mypy_path` makes mypy abort on module-resolution collisions rather than surface a
+countable batch of newly-real errors. `mypy.ini` is unchanged from before this session.
