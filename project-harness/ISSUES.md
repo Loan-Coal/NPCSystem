@@ -16,6 +16,48 @@ Rules:
 
 ## Open
 
+## ISSUE-291: tone_judge fate is decided (author failing cases) but not implemented
+**Found:** 2026-09-07, eval/metrics remediation
+**Severity:** P2 (annoying — the battery stays HIDDEN under scorer_trust_policy in the
+meantime, so nothing is silently trusted; this is a backlog item, not a live risk)
+**Where:** `evals/cases/` (case authoring), tone_judge's criteria in the judge prompts
+**Description:** tone_judge has near-zero minority-class labels across three independent
+raters — my original 128 PASS/7 FAIL, Opus's 354-row pre-label pass at 111 PASS/0 FAIL, and
+the 3-model panel's 109/111 unanimous at kappa 0.003 — so no kappa is computable and
+label_adequacy refuses it (minority count 7, floor 25). Decided (2026-09-07): the case set
+never probes a tone failure, not that the judge is miscalibrated — author new cases
+designed to fail tone (e.g. `case_tone_fail_*`) rather than re-authoring the judge's
+criteria or retiring the capability battery.
+**Why deferred:** eval-case authoring is its own task with its own review, out of scope for
+this remediation session (which fixed ISSUE-288/289 and the labels/panel-kappa reporting
+bugs only).
+**To fix:** author N `case_tone_fail_*` cases that a working tone_judge should fail, run
+them through the panel, re-check label_adequacy's minority count, and calibrate.
+
+## ISSUE-290: instrument_gate.py compares only pooled panel_kappa, never per-criterion
+**Found:** 2026-09-07, fixing the pooled-panel-kappa reporting gap (panel_metrics_format.py)
+**Severity:** P3 (nice-to-fix — no live run has hit this yet; it is a gap in what the gate
+can detect, not a wrong result it has produced)
+**Where:** `evals/instrument_gate.py:101` `check_instrument`
+**Description:** The trend gate's "did the measuring instrument degrade" check (exit code
+3) compares only `TrendRow.panel_kappa` — the pooled Fleiss kappa across every judge_kind —
+against the baseline run's pooled value. It has no per-criterion form. A single criterion's
+agreement could collapse between two runs while the others compensate in the pool, and
+`check_instrument` would report "INSTRUMENT STABLE" even though one judge's reliability
+genuinely fell. This is the same pooling-hides-a-real-problem shape
+panel_metrics_format.py's new caveat (this task) flags for the *reporting* side; this issue
+is the *gating* side of the same gap.
+**Why deferred:** not one of this remediation's four stated priorities (ISSUE-288,
+labels_gen_id/labels_n, pooled-panel-kappa reporting, ISSUE-289); adding a per-criterion
+form to `check_instrument` is a design decision (which criteria matter enough to gate on
+individually? does a single criterion's regression alone justify exit code 3?) that needs
+its own proposal.
+**To fix:** extend `check_instrument` (or add a sibling check) to compare
+`TrendRow.kappa_by_criterion` entries by `judge_kind` between candidate and baseline, using
+the same one-sided-CI-below-baseline-point-estimate rule `check_instrument` already uses for
+the pooled figure — `CriterionKappa` carries no CI today (see its docstring), so that would
+need to be added first.
+
 ## ISSUE-289: `mypy.ini`'s `mypy_path = src` silently Any-types every intra-`evals/` import
 **Found:** 2026-09-05, wiring `battery_trust.trust_gate` into `evals/summary.py`
 **Severity:** P2 (annoying — `make type-evals` still catches real errors when they

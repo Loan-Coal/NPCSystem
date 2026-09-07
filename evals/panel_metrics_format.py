@@ -4,7 +4,8 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Render PanelMetrics as console lines and markdown table rows. Kept out
          of summary.py, which is already over the 300-line cap and whose job is
          the run summary, not panel statistics.
-Dependencies: typing; panel_metrics (PanelMetrics, KappaResult, ...)
+Dependencies: typing; panel_metrics (PanelMetrics, KappaResult, ...),
+         scorer_trust_policy (HIDDEN_THRESHOLD — the pooled-kappa-inflation caveat)
 Used by: summary.py (format_summary_lines / format_summary_markdown)
 Does NOT: compute statistics — panel_metrics owns that.
 """
@@ -12,6 +13,7 @@ Does NOT: compute statistics — panel_metrics owns that.
 from __future__ import annotations
 
 from panel_metrics import KappaResult, PanelMetrics
+from scorer_trust_policy import HIDDEN_THRESHOLD
 
 # Landis & Koch (1977) descriptive bands, printed beside kappa so the number is
 # not read as if it were a percentage. Ordered high to low; first match wins.
@@ -41,6 +43,43 @@ def _fmt_kappa(result: KappaResult) -> str:
     if result.ci_low is not None and result.ci_high is not None:
         ci = f" 95% CI [{result.ci_low:.3f}-{result.ci_high:.3f}]"
     return f"{result.kappa:.3f} ({kappa_band(result.kappa)}){ci}  n={result.n_items}"
+
+
+_POOLING_CAVEAT: str = (
+    f"pooled kappa may be inflated: every criterion above sits below the "
+    f"{HIDDEN_THRESHOLD:.2f} trust floor — pooling raw votes across criteria "
+    "with different prevalence balances the marginal and can raise kappa "
+    "without the judges actually agreeing more (see this module's own note "
+    "on polarity pooling)."
+)
+
+
+def _pooled_kappa_may_be_inflated(metrics: PanelMetrics) -> bool:
+    """True when the pooled figure and the per-criterion breakdown disagree.
+
+    Specifically: the pooled Fleiss kappa clears HIDDEN_THRESHOLD (so it would
+    read as at least "moderate" agreement) while every individual criterion
+    sits below that same floor — exactly what k3_61b01dad_negadv's trend row
+    did (pooled 0.831 vs. 0.254/0.308/0.003 per criterion). Reuses
+    scorer_trust_policy.HIDDEN_THRESHOLD rather than a new constant, so the
+    "is this number trustworthy" bar matches the one calibration kappas are
+    already held to.
+
+    Args:
+        metrics: PanelMetrics from panel_metrics.compute_panel_metrics.
+    Returns:
+        False when there is no per-criterion breakdown to disagree with, or
+        the pooled kappa is undefined or already below the floor itself.
+    """
+    kappa = metrics.kappa.kappa
+    if kappa is None or kappa < HIDDEN_THRESHOLD:
+        return False
+    if not metrics.by_criterion:
+        return False
+    return all(
+        criterion.kappa is not None and criterion.kappa < HIDDEN_THRESHOLD
+        for criterion in metrics.by_criterion
+    )
 
 
 def _fmt_raw(metrics: PanelMetrics) -> str:
@@ -82,6 +121,8 @@ def console_lines(metrics: PanelMetrics | None) -> list[str]:
                 f"        {criterion.judge_kind:<16} "
                 f"unanimous {criterion.unanimous}/{criterion.n_items}  {kappa}"
             )
+        if _pooled_kappa_may_be_inflated(metrics):
+            lines.append(f"      ! {_POOLING_CAVEAT}")
 
     flips = metrics.repeat_flips
     if flips.n_records:
@@ -110,6 +151,8 @@ def markdown_rows(metrics: PanelMetrics | None) -> list[str]:
             f"| — {criterion.judge_kind} | unanimous {criterion.unanimous}/{criterion.n_items}, "
             f"kappa {kappa} |"
         )
+    if metrics.by_criterion and _pooled_kappa_may_be_inflated(metrics):
+        rows.append(f"| ⚠ | {_POOLING_CAVEAT} |")
     flips = metrics.repeat_flips
     if flips.n_records:
         rows.append(
