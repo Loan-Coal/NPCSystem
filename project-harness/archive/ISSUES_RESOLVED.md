@@ -3852,3 +3852,45 @@ See DEC-262 for the full correction and the label-export tooling this measuremen
 Reachable is not the same as met: whether real human labelling actually reaches 25 for either
 scorer is still unmeasured, and remains open work if it does not — but that is a labelling
 outcome, not this issue's (wrong) premise that the corpus could not possibly produce one.
+
+## [FIXED] ISSUE-288: `make eval-judge` crashes uncaught on a guard-only generation (no capability cases)
+**Found:** 2026-09-05, running `make eval-judge` against `k3_61b01dad_negadv` (the
+case_neg/case_adv-only generation from `docs/EVAL_NEXT_GENERATION_CASE_SET.md` — no
+case_pos_*, no AH fixture, per that doc's decision).
+**Severity:** P2 (annoying — the judge pass itself completes and judged.jsonl is written
+correctly before the crash; only report generation fails)
+**Where:** `evals/report.py:51` -> `evals/summary.py:598` `format_summary_markdown` ->
+`evals/summary.py:469` `_assert_paired_rates`, raised from `evals/judge_runner.py:237`
+`write_report(...)`, which is called OUTSIDE the `try/except` in `judge_runner.main`
+(`evals/judge_runner.py:230-232` only wraps `_run_judging`).
+**Description:** `_assert_paired_rates` requires the guard rates and the capability rate
+to be either both present or both absent (`_UNPAIRED_GUARD_ONLY` / `_UNPAIRED_CAPABILITY_ONLY`).
+A generation with guard cases and zero capability cases — a real, deliberately-authored
+shape, not a malformed transcript — trips `_UNPAIRED_CAPABILITY_ONLY` and raises. Because
+`judge_runner.main`'s `try/except` ends before `write_report` is called, the exception is
+never caught by `record_error`; it propagates as a raw traceback and the process exits 1
+(not the documented 3-way 0/1/2 contract). `--json-out judged.jsonl` is written before this
+point, so the actual judging work survives — only the console/markdown report is lost.
+**Why deferred:** out of scope for the M metrics-bring-online task in progress; fixing the
+pairing invariant or `judge_runner`'s exception boundary is a design decision (does a
+guard-only generation get an exemption from `_assert_paired_rates`, or does `write_report`
+get its own try/except with a graceful degrade?) that this task did not ask for.
+**To fix:** either (a) extend `write_report`'s call to `format_summary_markdown` with a
+guard clause that skips `_assert_paired_rates` when the caller declares the generation
+guard-only (a new explicit flag, not silent), or (b) move `write_report` inside
+`judge_runner.main`'s `try/except` so this degrades to exit 2 with a recorded error
+instead of an uncaught crash. Either way, add a regression test that runs `judge_runner.main`
+against a guard-only transcript and asserts the process does not crash.
+**Fixed:** 2026-09-07, eval/metrics remediation (commit `999fe0de`) — took option (b).
+`judge_runner._render_report` now wraps `write_report` + `format_summary_lines`, catching
+the render failure instead of raising: `main()` still computes `passed`/`total` from the
+judged results directly and always writes `run_status.json`, with the render failure
+recorded on `RunStatus.error` (`build_status`'s `report_path` became `Path | None`). Exit
+code stays 0/1 per DEC-189 (see DEC-266) — the judging did complete, only the report
+render degraded. Verified two ways: a regression test drives `judge_runner.main()` against
+a guard-only transcript end to end, and a live smoke run (real Ollama generation + judging
+against a deliberately guard-only 2-case set, `docs/EVAL_NEXT_GENERATION_CASE_SET.md`'s
+exact shape) reproduced the original crash message verbatim
+("Report generation failed: capability rate is required...") while `run_status.json` was
+written with real `cases_passed`/`cases_total` and `status: "gate_failed"` rather than an
+uncaught traceback.

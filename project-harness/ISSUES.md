@@ -105,35 +105,6 @@ being "minimal." Either way: run `make type-evals`, baseline whatever newly-real
 count results with `make type-evals-update`, plus a `DECISIONS.md` entry — do not silently
 raise the baseline without recording why.
 
-## ISSUE-288: `make eval-judge` crashes uncaught on a guard-only generation (no capability cases)
-**Found:** 2026-09-05, running `make eval-judge` against `k3_61b01dad_negadv` (the
-case_neg/case_adv-only generation from `docs/EVAL_NEXT_GENERATION_CASE_SET.md` — no
-case_pos_*, no AH fixture, per that doc's decision).
-**Severity:** P2 (annoying — the judge pass itself completes and judged.jsonl is written
-correctly before the crash; only report generation fails)
-**Where:** `evals/report.py:51` -> `evals/summary.py:598` `format_summary_markdown` ->
-`evals/summary.py:469` `_assert_paired_rates`, raised from `evals/judge_runner.py:237`
-`write_report(...)`, which is called OUTSIDE the `try/except` in `judge_runner.main`
-(`evals/judge_runner.py:230-232` only wraps `_run_judging`).
-**Description:** `_assert_paired_rates` requires the guard rates and the capability rate
-to be either both present or both absent (`_UNPAIRED_GUARD_ONLY` / `_UNPAIRED_CAPABILITY_ONLY`).
-A generation with guard cases and zero capability cases — a real, deliberately-authored
-shape, not a malformed transcript — trips `_UNPAIRED_CAPABILITY_ONLY` and raises. Because
-`judge_runner.main`'s `try/except` ends before `write_report` is called, the exception is
-never caught by `record_error`; it propagates as a raw traceback and the process exits 1
-(not the documented 3-way 0/1/2 contract). `--json-out judged.jsonl` is written before this
-point, so the actual judging work survives — only the console/markdown report is lost.
-**Why deferred:** out of scope for the M metrics-bring-online task in progress; fixing the
-pairing invariant or `judge_runner`'s exception boundary is a design decision (does a
-guard-only generation get an exemption from `_assert_paired_rates`, or does `write_report`
-get its own try/except with a graceful degrade?) that this task did not ask for.
-**To fix:** either (a) extend `write_report`'s call to `format_summary_markdown` with a
-guard clause that skips `_assert_paired_rates` when the caller declares the generation
-guard-only (a new explicit flag, not silent), or (b) move `write_report` inside
-`judge_runner.main`'s `try/except` so this degrades to exit 2 with a recorded error
-instead of an uncaught crash. Either way, add a regression test that runs `judge_runner.main`
-against a guard-only transcript and asserts the process does not crash.
-
 ## ISSUE-287: `make eval-generate`'s own recipe never populates a generation's corpus fingerprint
 **Found:** 2026-09-04, during the fresh eval generation run (`k3_61b01dad_negadv`)
 **Severity:** P3 (nice-to-fix)
