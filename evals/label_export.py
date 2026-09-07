@@ -1,29 +1,33 @@
 """
 Module: label_export
 Layer: evals (eval harness — not part of src/)
-Purpose: Export transcript records as batches of at most 25 items for the CLI
-         labelling pass (EVAL-P5.6, replacing EVAL-P5.2's httpx runner).
-         Each item carries record_id, scorer, npc_id, player_message, criteria,
-         output_text, and — for graph scorer records — a vocabulary snapshot.
-         scorer_verdict and all judge verdicts are NEVER emitted: the artifact
-         is void if the labeller can see the answer being measured.
+Purpose: Library primitives for exporting transcript records as batches of at
+         most 25 items for the CLI labelling pass (EVAL-P5.6, replacing
+         EVAL-P5.2's httpx runner). Each item carries record_id, scorer,
+         npc_id, player_message, criteria, output_text, and — for graph
+         scorer records — a vocabulary snapshot. scorer_verdict and all judge
+         verdicts are NEVER emitted: the artifact is void if the labeller can
+         see the answer being measured.
          ExportItem and the GenerationRecord derivation logic live in
          export_item.py (shared with transcript_index.py's label_import join);
          this module re-exports them for backward compatibility and owns only
-         filtering, batch writing, and the CLI.
-Dependencies: argparse, json, pathlib, sys, export_item, eval_records
-Used by: python -m evals label-export; make label-export (EVAL-P5.6)
+         filtering and batch writing.
+         Has no CLI of its own (measurement-remediation trim, 2026-09):
+         the only user-facing verb is `label-export-stratified`, which applies
+         DEC-260's adequacy floor before writing anything. The unguarded
+         `label-export` verb let a labelling pass skip that floor and was
+         retired; `write_export_batches` remains the primitive
+         `label_export_stratified.py` composes.
+Dependencies: json, pathlib, export_item
+Used by: label_export_stratified (the label-export-stratified verb)
 """
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
-from eval_records import read_transcript
 from export_item import (
     GRAPH_SCORER_KINDS,
     ExportItem,
@@ -42,7 +46,6 @@ __all__ = [
     "MAX_BATCH_SIZE",
     "filter_by_scorer",
     "write_export_batches",
-    "main",
 ]
 
 # ---------------------------------------------------------------------------
@@ -134,89 +137,3 @@ def write_export_batches(
         paths.append(path)
 
     return paths
-
-
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for the label-export verb."""
-    p = argparse.ArgumentParser(
-        prog="python -m evals label-export",
-        description=(
-            "Export transcript records as batches for the Claude-CLI labelling pass. "
-            "Each batch file contains at most 25 items as JSON. "
-            "scorer_verdict and judge verdicts are NEVER included."
-        ),
-    )
-    p.add_argument(
-        "--transcript",
-        type=Path,
-        required=True,
-        metavar="PATH",
-        help="Path to the generation transcript JSON (TranscriptFile format).",
-    )
-    p.add_argument(
-        "--out-dir",
-        type=Path,
-        required=True,
-        metavar="DIR",
-        help="Directory to write batch_001.json … batch_NNN.json files into.",
-    )
-    p.add_argument(
-        "--vocabulary",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="Optional path to a vocabulary.json snapshot for graph scorer records.",
-    )
-    p.add_argument(
-        "--batch-size",
-        type=int,
-        default=MAX_BATCH_SIZE,
-        metavar="N",
-        help=f"Items per batch file (default: {MAX_BATCH_SIZE}).",
-    )
-    p.add_argument(
-        "--scorer",
-        action="append",
-        default=None,
-        metavar="NAME",
-        help=(
-            "Export only this scorer; repeatable. Omit to export every scorer. "
-            "Use to skip scorers whose verdict never varies (no kappa signal)."
-        ),
-    )
-    return p
-
-
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for the label-export verb.
-
-    Args:
-        argv: Argument list; defaults to sys.argv[1:].
-    Returns:
-        0 on success, 1 on error.
-    """
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
-    transcript = read_transcript(args.transcript)
-    records = list(transcript.records)
-
-    vocab_dict: dict[str, Any] | None = None
-    if args.vocabulary is not None and args.vocabulary.exists():
-        vocab_dict = json.loads(args.vocabulary.read_text(encoding="utf-8"))
-
-    items = build_export_items(records, vocab_dict)
-    items = filter_by_scorer(items, set(args.scorer) if args.scorer else None)
-    paths = write_export_batches(items, args.out_dir, args.batch_size)
-
-    scope = f" for {sorted(set(args.scorer))}" if args.scorer else ""
-    print(
-        f"Exported {len(items)} item(s){scope} across {len(paths)} batch file(s) → {args.out_dir}",
-        file=sys.stderr,
-    )
-    return 0

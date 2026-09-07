@@ -102,9 +102,6 @@ VERBS: dict[str, VerbTarget] = {
         "main",
         "Replay deterministic matchers to judged-format JSONL (no LLM).",
     ),
-    "label-export": VerbTarget(
-        "label_export", "main", "Export transcript records as JSON batches for CLI labelling."
-    ),
     "label-export-stratified": VerbTarget(
         "label_export_stratified",
         "main",

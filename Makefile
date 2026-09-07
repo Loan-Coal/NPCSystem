@@ -22,7 +22,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-export-stratified label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
@@ -621,32 +621,6 @@ eval-deterministic-verdicts:
 		--transcript $(TRANSCRIPT) \
 		--json-out evals/generations/$(GEN_ID)/deterministic_judged.jsonl
 
-# mock-calibrate: exercise export -> import -> adjudicate -> calibrate with RANDOM labels.
-# Spends no Claude credits and produces a MEANINGLESS report — for pipeline testing only.
-# Usage: make mock-calibrate GEN_ID=<id>
-mock-calibrate:
-	@echo "MOCK calibration dry run for $(GEN_ID) — results are random and meaningless."
-	$(PYTHON) -m evals label-export \
-		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
-		--out-dir evals/calibration/batches
-	$(PYTHON) -m evals deterministic-verdicts \
-		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
-		--json-out evals/generations/$(GEN_ID)/deterministic_judged.jsonl
-	$(PYTHON) scripts/mock_labeller.py \
-		--batches evals/calibration/batches \
-		--out evals/calibration/mock_raw_labels.jsonl
-	$(PYTHON) -m evals label-import \
-		--raw evals/calibration/mock_raw_labels.jsonl \
-		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
-		--judged evals/generations/$(GEN_ID)/judged.jsonl \
-		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
-		--model mock-random-v1 \
-		--out evals/calibration/mock_labels.jsonl
-	$(PYTHON) scripts/mock_adjudicate.py \
-		--labels evals/calibration/mock_labels.jsonl \
-		--out evals/calibration/mock_labels_adjudicated.jsonl
-	$(PYTHON) -m evals calibrate --file evals/calibration/mock_labels_adjudicated.jsonl
-
 # measure-reset-fidelity: measure what preconditions.reset_world actually clears (EVAL-P12.1).
 # Requires the stack up and all three worlds seeded. Writes docs/RESET_FIDELITY.md and
 # evals/reset_fidelity.json. The tier is derived from the evidence, never chosen: a report
@@ -667,53 +641,6 @@ eval-sequence:
 	$(PYTHON) -m evals sequence \
 		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
 		--k $(or $(K),3)
-
-# mock-calibrate-oracle: exercise export -> import -> adjudicate -> calibrate with
-# RULE-BASED labels whose confusion matrix is known BEFORE the run (EVAL-P15.1).
-# Unlike mock-calibrate (random labels, kappa meaningless by construction), the
-# numbers this prints are predictable in closed form, so any arithmetic error
-# anywhere in the chain surfaces as a number mismatch rather than a silent pass.
-#
-# Defaults reproduce refusal_judge tp=60 fp=8 fn=4 tn=3 (n=75), which saturates
-# that scorer's rows exactly: 68 scorer_verdict=True and 7 scorer_verdict=False.
-# Expected kappa = 296/1196 = 0.247 to 3 dp — see tests/unit/evals/test_oracle_labeller.py.
-# The naive tp=40 fp=5 fn=3 tn=12 needs 15 negatives and is unsatisfiable for
-# EVERY scorer; the labeller raises UnsatisfiableMatrixError naming the caps.
-#
-# Never writes to the real labels file: --out is always under evals/calibration/oracle/,
-# and evals/synthetic_label_guard.py refuses an oracle-* model aimed at labels_v1.jsonl.
-# Usage: make mock-calibrate-oracle GEN_ID=<id> [SCORER=.. TP=.. FP=.. FN=.. TN=..] [MERGE=1]
-mock-calibrate-oracle:
-	@echo "ORACLE calibration for $(GEN_ID) — labels are synthetic; this measures the pipeline, not a scorer."
-	$(PYTHON) -m evals label-export \
-		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
-		--out-dir evals/calibration/oracle_batches
-	$(PYTHON) scripts/oracle_labeller.py \
-		--batches evals/calibration/oracle_batches \
-		--judged evals/generations/$(GEN_ID)/judged.jsonl \
-		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
-		--scorer $(or $(SCORER),refusal_judge) \
-		--tp $(or $(TP),60) --fp $(or $(FP),8) --fn $(or $(FN),4) --tn $(or $(TN),3) \
-		--out evals/calibration/oracle/raw_labels_oracle.jsonl
-	$(PYTHON) -m evals label-import \
-		--raw evals/calibration/oracle/raw_labels_oracle.jsonl \
-		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
-		--judged evals/generations/$(GEN_ID)/judged.jsonl \
-		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
-		--model oracle-matrix-v1 \
-		--out evals/calibration/oracle/labels_oracle.jsonl \
-		$(if $(MERGE),--merge,)
-	$(PYTHON) scripts/oracle_adjudicate.py \
-		--labels evals/calibration/oracle/labels_oracle.jsonl \
-		--out evals/calibration/oracle/labels_oracle_adjudicated.jsonl
-	$(PYTHON) -m evals calibrate --file evals/calibration/oracle/labels_oracle_adjudicated.jsonl
-
-# label-export: export transcript records as JSON batches for the CLI labelling pass (EVAL-P5.6).
-# Usage: make label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/export
-label-export:
-	$(PYTHON) -m evals label-export --transcript $(TRANSCRIPT) --out-dir $(OUT_DIR) \
-		$(if $(VOCABULARY),--vocabulary $(VOCABULARY),) \
-		$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),)
 
 # label-export-stratified: stratified label-export oversampling expected-negative
 # cases (case_neg/case_adv) until each in-scope judge's projected best-case

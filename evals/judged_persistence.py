@@ -7,7 +7,7 @@ Purpose: The single owner of the judged.jsonl row schema, for BOTH the
          here, so the two paths cannot drift apart.
 Dependencies: json, pathlib, typing; eval_records (GenerationRecord, JudgedRecord),
          judge_case_grouping (case_id_from_record_id), judge_panel (PanelScoredRecord)
-Used by: judge_runner (single-judge + panel wiring), scripts/migrate_panel_judged.py
+Used by: judge_runner (single-judge + panel wiring)
 Does NOT: call /v1/dialogue, modify graph state, import from src/npc_engine/
 
 WHY THIS MODULE EXISTS (DEC-187)

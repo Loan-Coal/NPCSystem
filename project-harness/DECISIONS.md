@@ -8837,3 +8837,91 @@ regardless, so a partial mismatch is still visible, just not specially flagged.
 `evals.<module>`-absolute-import conventions across 11+ files, so adding `evals` to
 `mypy_path` makes mypy abort on module-resolution collisions rather than surface a
 countable batch of newly-real errors. `mypy.ini` is unchanged from before this session.
+
+## DEC-267: measurement-remediation Phase 0 — trim the eval harness's dead code and
+scratch data before building per-engine probes
+**Date:** 2026-09-07 · **Status:** ✅ ACCEPTED · **Drives:** `evals/`, `scripts/`,
+`tests/unit/evals/`, `tests/unit/scripts/`, `Makefile`, `evals/calibration/`
+
+**Context.** Planning per-engine measurement (dialogue, gossip, quests, memory, context)
+surfaced that the eval harness had accumulated genuinely dead code alongside its live
+surface: 22,021 lines across 120 `evals/` modules, much of it never reached by any Makefile
+target or `python -m evals` verb. Deletion candidates were validated against `make check`'s
+actual 23 prerequisites (not the stale 17/19/20 the Makefile's own comment claimed) by a
+read-only agent pass before anything was touched, per CLAUDE.md's "make no assumptions" rule.
+
+**Deleted, each confirmed to have zero production importer (only its own test):**
+`evals/case_adversary.py` + `case_adversary_contract.py` (its docstring's claimed consumer,
+`make review-cases`, never existed as a target), `evals/variance_scorer.py` (same:
+`make variance-score` never existed), `evals/retrieval_join.py` (never wired into
+`evals/report.py` despite its docstring's "planned" claim — see ISSUE-195's 2026-09-07
+update), `evals/context_keys.py`. ~925 lines of module + ~849 of test, deleted together in
+the same commit throughout — module-and-test-together is the rule this trim follows
+everywhere, because the coverage floor can break from either direction (an orphaned test
+lowers the denominator; an orphaned module lowers the numerator).
+
+**Deleted as completed one-shot work:** `scripts/migrate_docstrings.py` (ran once, 2026-06-04,
+per DEC-063's canonical docstring format), `scripts/migrate_panel_judged.py`, `evals/label_sampling.py` +
+`scripts/build_label_order.py` (EVAL-P22.1's cost-driven rescope left this branch used only
+by the overnight-combined pipeline, itself retired below), and the mock/oracle calibration
+pipeline (`scripts/mock_labeller.py`, `mock_adjudicate.py`, `oracle_labeller.py`,
+`oracle_adjudicate.py`, `oracle_matrix.py`, `tests/unit/evals/test_oracle_labeller.py`, the
+`mock-calibrate` / `mock-calibrate-oracle` Makefile targets, and all batch/fixture scratch
+under `evals/calibration/` — `batches/`, `batches_handlabel/`, `oracle/`, `oracle_batches/`,
+`mock_labels*.jsonl`). These validated the export→import→adjudicate→calibrate pipeline's
+plumbing with synthetic data; the plumbing is now exercised directly by real labelling runs,
+and the synthetic-data proof was one-time, not ongoing.
+
+**`evals/synthetic_label_guard.py` was NOT deleted, correcting the original trim proposal.**
+It is called unconditionally by `evals/label_import.py:249` on every `label-import`
+invocation — a real safety check refusing any `mock-`/`oracle-`-prefixed `--model` aimed at
+the real labels file, independent of whether the generator scripts that produce such labels
+still exist. Deleting it would have removed production defence-in-depth to tidy up scratch.
+
+**`project-harness/Run-OvernightCombined.ps1` and `Run-OvernightPhase1.ps1` deleted**, per
+explicit instruction: the `expand_loop.sh`-driven overnight loop stays, these two
+single-purpose overnight-run drivers do not. `tests/unit/scripts/test_run_overnight_combined.py`
+(the only test pinning `Run-OvernightCombined.ps1`'s preconditions) deleted with it —
+missed on the first coverage pass and caught by a second `test-cov-evals` run, corrected in
+the same commit.
+
+**`scripts/migrations/*` (7 files) kept, correcting the original trim proposal.** Verified
+before deciding: `src/npc_engine/graph/infra/schema_bootstrap.py` is the fresh-database
+schema source; `scripts/migrations/` evolves an *existing* database's schema forward, with
+its own applied-state ledger (`graph/infra/migration_state_writer.py`). The demo-world
+seeder is not a substitute — it seeds data, not schema. `make check-migrations` is inside
+`make check` (a required gate) and fails when a node type gains a required field no
+migration declares; emptying the directory would have reproduced exactly the failure the
+gate exists to catch. `scripts/launcher.py` (the PyInstaller entry point,
+`packaging/npc_engine.spec:27`) was likewise kept and confirmed gate-enforced —
+`tests/unit/scripts/test_packaging_spec.py` asserts the entry script resolves on disk.
+
+**Retired the unguarded `label-export` verb, kept the module as a library.** Two verbs did
+the same job: `label-export` wrote batches with no adequacy check, `label-export-stratified`
+applies DEC-260's 25-minority/10-cluster floor before writing anything. The unguarded path
+let a labelling pass silently skip that floor. `evals/label_export.py` keeps
+`write_export_batches`/`filter_by_scorer` as the primitive `label_export_stratified.py`
+already composes; its `main`/`_build_parser` CLI plumbing is deleted along with its
+`VerbTarget` entry in `evals/__main__.py`. `evals/calibration/README.md`'s pipeline
+instructions updated to the stratified verb.
+
+**Coverage floor verified before deleting, not after.** `evals/`'s committed `.coverage`
+showed 84.85% (5483/6462 statements) against the 75% `--cov-fail-under` floor in
+`test-cov-evals`; the five-module test-only cluster was 100% self-covered, so deleting
+module+test together cost only 0.62pp. Live re-run after every deletion in this phase:
+1253 passed, 80.62% (comfortably above the floor). `check-evals-rules` (the `R006` entry
+naming the deleted `retrieval_join.py::compute_crosstab`) nagged as resolved rather than
+failing, exactly as the (set-based, not count-based) rule design predicts; ratcheted down
+with `make check-evals-rules-update` in the same commit (67 → 64 grandfathered violations).
+`mypy_evals_ratchet` stayed at 0 (no update needed — nothing left a dangling import).
+
+**Data kept, not deleted.** `evals/calibration/labels_v1.jsonl` (747 rows, retired-scorer
+rows filtered at read time in a later phase) and all 3 committed `evals/generations/*`
+directories are the only human-verified evidence this harness has and are not cheaply
+regenerable (~2h per run); only reproducible scratch (batch JSON, oracle/mock fixtures) was
+removed.
+
+**Not done here, staying open:** the scorer restructure (splitting `tone_judge`'s liveness
+half into a precondition, retiring `refusal_judge` into `affirms_judge`) is Phase 2 of the
+measurement-remediation plan, not this commit — Phase 0 is trim-only, deliberately kept
+separate so a behavioural change and a dead-code removal are never in the same diff.

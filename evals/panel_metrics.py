@@ -8,7 +8,7 @@ Purpose: Assemble every agreement statistic the judge panel publishes — Fleiss
 Dependencies: collections, dataclasses, typing; judge_panel (PanelScoredRecord,
          AgreementResult, pairwise_agreement), judged_persistence (apply_polarity),
          kappa_stats (KappaResult, fleiss_kappa, bootstrap_kappa_ci, rateable)
-Used by: judge_runner (--panel), panel_metrics_format, scripts/migrate_panel_judged.py
+Used by: judge_runner (--panel), panel_metrics_format
 Does NOT: call /v1/dialogue, read files, import from src/npc_engine/
 
 WHY POLARITY IS APPLIED BEFORE ANY STATISTIC

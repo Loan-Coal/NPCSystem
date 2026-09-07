@@ -23,7 +23,7 @@ to close that gap, checked in *before* that run happens.
 | `tone_judge` | 7 | 45 | 25 / 10 | REFUSED (minority count) |
 | `affirms_judge` | 8 | 37 | 25 / 10 | REFUSED (minority count) |
 | `refusal_judge` | 11 | 25 | 25 / 10 | REFUSED (minority count) — **out of scope, ISSUE-276** |
-| `anti_hallucination_grounded` (deterministic scorer, not in `case_adversary_contract.JUDGE_KINDS`) | 8 | 16 | 25 / 10 | REFUSED (minority count) |
+| `anti_hallucination_grounded` (deterministic substring scorer, not an LLM judge) | 8 | 16 | 25 / 10 | REFUSED (minority count) |
 | `commits_judge` | 0 — **zero labels of any kind** | 0 | 25 / 10 | REFUSED (no data at all) |
 
 `commits_judge` has never produced a single generated record: it was added to

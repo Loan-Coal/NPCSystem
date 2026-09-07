@@ -155,8 +155,10 @@ produces substantively different answers.
   is checkable with no judge at all.
 
 **Relationship to the variance scorer.** `evals/variance_scorer.py` (EVAL-P25.4, Track A)
-computes pairwise dissimilarity across responses to one stimulus. This dimension supplies
-the stimuli it needs and asserts per-NPC groundedness; it does not duplicate the metric.
+computed pairwise dissimilarity across responses to one stimulus; it was deleted in the
+measurement-remediation trim for having no production caller (see
+`docs/CASE_SET_POLICY.md`'s retraction note). This dimension does not depend on it — it
+supplies its own stimuli and asserts per-NPC groundedness directly via `keyword_any`.
 
 **Coverage rule:** at least one declared variance set per world.
 

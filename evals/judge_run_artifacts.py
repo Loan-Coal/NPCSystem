@@ -8,9 +8,7 @@ Purpose: Decide where a judge pass's side artifacts go and assemble the RunStatu
 Dependencies: argparse, pathlib; panel_metrics (PanelMetrics),
          panel_metric_records (CriterionKappa, RepeatFlips), run_status
          (RunStatus, default_status_path, status_for, write_run_status)
-Used by: judge_runner (main and _run_judging), scripts/migrate_panel_judged.py
-         (with_panel_metrics — so a re-derived status records the same agreement
-         fields a live pass does)
+Used by: judge_runner (main and _run_judging)
 Does NOT: score records, read transcripts, import from src/npc_engine/
 """
 

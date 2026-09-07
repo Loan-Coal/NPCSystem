@@ -186,8 +186,16 @@ rejected an option specifically for introducing an uncalibrated free parameter.
 
 ## Contextual variance is measured, not judged (EVAL-P25.4)
 
+> **RETRACTED (measurement-remediation trim): `evals/variance_scorer.py` deleted.** It had
+> zero production callers — imported only by its own test — and its docstring's claimed
+> consumers (`make review-cases`, `make variance-score`) never existed as Makefile targets.
+> The design principle below (deterministic, kappa = 1.0 by construction) is kept as the
+> rationale for D4 (`case_pos_var_*`, `docs/REASONING_DIMENSIONS.md`), which supplies this
+> dimension's actual measurement today via `keyword_any` cross-contamination checks. Re-wire
+> a pairwise-dissimilarity scorer here only if a real caller needs one.
+
 The `contextual variance` dimension — "the same question to different NPCs, or the same NPC
-in different states, produces substantively different answers" — is scored by
+in different states, produces substantively different answers" — was scored by
 `evals/variance_scorer.py`, a deterministic pure function over response strings.
 
 It is deterministic on purpose. A deterministic scorer has **kappa = 1.0 by construction**,

@@ -540,29 +540,31 @@ failure). One-paragraph edit, no behaviour change.
 ## ISSUE-195: `retrieved_context` consumers not yet migrated to `context_receipt`
 **Found:** 2026-08-21, during the B/C3/C2 landing (DEC-195)
 **Severity:** P3 (nice-to-fix)
-**Where:** `evals/retrieval_join.py:93-103` (`node_id_from_key` over `record.retrieved_context`);
-`evals/dashboard/` case pane (renders `retrieved_context` item keys);
+**Where:** `evals/dashboard/` case pane (renders `retrieved_context` item keys);
 `evals/sequence_records.py:63` (`Turn.retrieved_context`)
 **Description:** `GenerationRecord.context_receipt` now carries what ACTUALLY reached the
 model. `retrieved_context` still carries the older approximation — a second call to
 `GET /v1/admin/debug/retrieval` with `session_turns=[]`, describing a different assembly than
 the one that produced `npc_response`. Both fields are populated on every new record, and the
-three consumers above still read the deprecated one, so `recall@k` and the dashboard's context
-pane are still reporting over what the retriever RANKED rather than over what SURVIVED the
-prompt budget. Those are different numbers, and the gap is the thing the receipt was built to
-expose.
+two consumers above still read the deprecated one, so the dashboard's context pane is still
+reporting over what the retriever RANKED rather than over what SURVIVED the prompt budget.
+Those are different numbers, and the gap is the thing the receipt was built to expose.
 **Why deferred:** Deleting or repointing them in the same change would have silently altered
 what `recall@k` measures at the same moment as the field landed, with no released corpus
 carrying `context_receipt` to compare against. The deprecation is marked in
 `evals/retrieved_item.py` and in `GenerationRecord`'s docstring, and both fields are written,
 so the migration can be measured rather than assumed. Committed corpora
 (`evals/generations/k3_73e6c36/`) have no `context_receipt` at all and would read as empty.
-**To fix:** After regeneration #1 has produced at least one corpus carrying `context_receipt`,
-repoint `retrieval_join` at `context_receipt.item_keys`, compare the two recall@k numbers on
-the same corpus and record the delta (it is a finding, not a migration detail), move the
-dashboard pane over, then drop `retrieved_context` and `evals/context_capture.py` along with
-the second debug-endpoint call per turn — which also removes roughly half of the generation
-pass's HTTP requests.
+**Update (measurement-remediation trim):** `evals/retrieval_join.py` — the third named
+consumer above — is deleted; it had zero production callers (imported only by its own test)
+and was never wired into `evals/report.py` despite its docstring's "planned" claim. The
+recall@k comparison this issue originally asked `retrieval_join` to perform is folded into
+the Phase-3/4 per-engine probe framework instead (see the measurement-remediation plan),
+which reads `context_receipt` directly rather than resurrecting the deprecated join.
+**To fix:** Move the dashboard case pane and `evals/sequence_records.py:63` over to
+`context_receipt.item_keys`, then drop `retrieved_context`, `evals/retrieved_item.py` and
+`evals/context_capture.py` along with the second debug-endpoint call per turn — which also
+removes roughly half of the generation pass's HTTP requests.
 
 ## ISSUE-196: generation artifacts are written with platform line endings
 **Found:** 2026-08-21, during the B/C3/C2 landing (DEC-195)

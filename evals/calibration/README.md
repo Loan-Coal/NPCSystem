@@ -19,8 +19,11 @@ GEN=evals/generations/<gen_id>
 make eval-judge TRANSCRIPT=$GEN/outputs.jsonl GEN_ID=<gen_id>
 make eval-deterministic-verdicts TRANSCRIPT=$GEN/outputs.jsonl GEN_ID=<gen_id>
 
-# 2. export labelling batches (25 items per batch)
-make label-export TRANSCRIPT=$GEN/outputs.jsonl OUT_DIR=evals/calibration/batches
+# 2. export labelling batches (25 items per batch), stratified so the
+#    export refuses (no batch, exit 1) any judge whose best-case ceiling
+#    cannot clear DEC-260's adequacy floor — the unguarded `label-export`
+#    verb that skipped this check was retired.
+make label-export-stratified TRANSCRIPT=$GEN/outputs.jsonl OUT_DIR=evals/calibration/batches
 
 # 3. label. Filter to '{'-leading lines: the model occasionally prepends prose or a
 #    ```jsonl fence despite the prompt, and label-import rejects any non-JSON line.
@@ -46,22 +49,9 @@ make eval-adjudicate
 make eval-calibrate
 ```
 
-## Dry run first (no Claude credits)
-
-Exercises every stage with random labels. Use it after any change to the pipeline — it is how the
-Windows encoding crash in `calibrate` and the repetition-collapse join bug were both caught.
-
-```bash
-make mock-calibrate GEN_ID=<gen_id>
-```
-
-Mock artifacts are stamped `mock-random-v1` / `adjudicated_at="MOCK"` and written to
-`mock_*.jsonl`, so they can never be confused with a real pass. **The kappa it prints is
-meaningless** — it only proves the plumbing moves data of the right shape.
-
 ## Record identity
 
 Transcript `record_id` (`<case>:<kind>:<index>`) omits `repetition`, so a k-repeat run emits k
-records sharing one id with *different* response text. Everything downstream of `label-export`
+records sharing one id with *different* response text. Everything downstream of `label-export-stratified`
 therefore keys on the composite `<record_id>#r<n>` (see `evals/record_identity.py`). Joining on the
 bare `record_id` silently keeps only the last repetition and attaches labels to the wrong output.
