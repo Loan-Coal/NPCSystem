@@ -6,8 +6,8 @@ Purpose: Shape the options and request-body dicts for one Ollama /api/generate c
          of hand-building it three times.
 Does NOT: perform I/O, read Settings, choose a temperature, or decide a residency policy —
           every value is resolved by the caller and passed in.
-Dependencies: typing (stdlib) only.
-Used by: npc_engine.engines.llm.ollama_adapter.
+Dependencies injected: none — every value is passed per call, nothing is read from Settings.
+Used by: the Ollama HTTP adapter (engines.llm).
 """
 
 from __future__ import annotations

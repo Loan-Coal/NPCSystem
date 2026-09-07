@@ -3,9 +3,9 @@ ollama_adapter.py - HTTP adapter for Ollama-compatible backend.
 Layer: engines
 Purpose: HTTP adapter for Ollama-compatible backend.
 
-Does NOT: choose backend implementations.
+Does NOT: choose backend implementations, or shape the request body (see ollama_payload).
 
-Dependencies injected: base_url, model_name, timeout_seconds.
+Dependencies injected: base_url, model_name, timeout_seconds, keep_alive.
 """
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ import json
 
 import httpx
 
-from npc_engine.config import get_settings
+from npc_engine.config import DEFAULT_OLLAMA_KEEP_ALIVE, get_settings
+from npc_engine.engines.llm.ollama_payload import build_ollama_options, build_ollama_payload
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm.prompt_eval_log import log_prompt_eval
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
@@ -23,17 +24,27 @@ from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 class OllamaAdapter(LLMClientProtocol):
     """Adapter for Ollama generation endpoints."""
 
-    def __init__(self, base_url: str, model_name: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model_name: str,
+        timeout_seconds: float,
+        keep_alive: str = DEFAULT_OLLAMA_KEEP_ALIVE,
+    ) -> None:
         """Initialise the adapter with Ollama endpoint configuration.
 
         Args:
             base_url: Root URL of the Ollama server (trailing slash stripped).
             model_name: Ollama model tag to use in all requests.
             timeout_seconds: Per-request timeout in seconds.
+            keep_alive: How long Ollama keeps the model resident after a request.
+                Ollama's own default is 5m, which evicts the model between play
+                sessions and costs a measured 10.3s reload on the next turn.
         """
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
+        self._keep_alive = keep_alive
         self._client = httpx.AsyncClient(timeout=timeout_seconds)
 
     async def close(self) -> None:
@@ -79,25 +90,21 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, invalid JSON, or a backend error field.
         """
-        options: dict[str, Any] = {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-            "num_ctx": get_settings().OLLAMA_CONTEXT_LENGTH,
-        }
-        if top_p is not None:
-            options["top_p"] = top_p
-        if stop_sequences is not None:
-            options["stop"] = stop_sequences
-        if seed is not None:
-            options["seed"] = seed
-        payload: dict[str, Any] = {
-            "model": self._model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": options,
-        }
-        if system is not None:
-            payload["system"] = system
+        options = build_ollama_options(
+            max_tokens=max_tokens,
+            temperature=temperature,
+            num_ctx=get_settings().OLLAMA_CONTEXT_LENGTH,
+            top_p=top_p,
+            stop_sequences=stop_sequences,
+            seed=seed,
+        )
+        payload = build_ollama_payload(
+            model=self._model_name,
+            prompt=prompt,
+            options=options,
+            keep_alive=self._keep_alive,
+            system=system,
+        )
         try:
             response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
             response.raise_for_status()
@@ -146,26 +153,22 @@ class OllamaAdapter(LLMClientProtocol):
             LLMRequestError: If the backend returns an HTTP error, backend error field, or non-dict JSON.
         """
         settings = get_settings()
-        options: dict[str, Any] = {
-            "num_predict": max_tokens,
-            "temperature": settings.STRUCTURED_OUTPUT_TEMPERATURE,
-            "num_ctx": settings.OLLAMA_CONTEXT_LENGTH,
-        }
-        if top_p is not None:
-            options["top_p"] = top_p
-        if stop_sequences is not None:
-            options["stop"] = stop_sequences
-        if seed is not None:
-            options["seed"] = seed
-        payload: dict[str, Any] = {
-            "model": self._model_name,
-            "prompt": prompt,
-            "stream": False,
-            "format": schema,
-            "options": options,
-        }
-        if system is not None:
-            payload["system"] = system
+        options = build_ollama_options(
+            max_tokens=max_tokens,
+            temperature=settings.STRUCTURED_OUTPUT_TEMPERATURE,
+            num_ctx=settings.OLLAMA_CONTEXT_LENGTH,
+            top_p=top_p,
+            stop_sequences=stop_sequences,
+            seed=seed,
+        )
+        payload = build_ollama_payload(
+            model=self._model_name,
+            prompt=prompt,
+            options=options,
+            keep_alive=self._keep_alive,
+            schema=schema,
+            system=system,
+        )
         try:
             response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
             response.raise_for_status()
@@ -216,25 +219,22 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the stream connection times out.
             LLMRequestError: If the backend returns an HTTP stream error or a backend error field.
         """
-        options: dict[str, Any] = {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-            "num_ctx": get_settings().OLLAMA_CONTEXT_LENGTH,
-        }
-        if top_p is not None:
-            options["top_p"] = top_p
-        if stop_sequences is not None:
-            options["stop"] = stop_sequences
-        if seed is not None:
-            options["seed"] = seed
-        payload: dict[str, Any] = {
-            "model": self._model_name,
-            "prompt": prompt,
-            "stream": True,
-            "options": options,
-        }
-        if system is not None:
-            payload["system"] = system
+        options = build_ollama_options(
+            max_tokens=max_tokens,
+            temperature=temperature,
+            num_ctx=get_settings().OLLAMA_CONTEXT_LENGTH,
+            top_p=top_p,
+            stop_sequences=stop_sequences,
+            seed=seed,
+        )
+        payload = build_ollama_payload(
+            model=self._model_name,
+            prompt=prompt,
+            options=options,
+            keep_alive=self._keep_alive,
+            stream=True,
+            system=system,
+        )
         try:
             async with self._client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
                 response.raise_for_status()

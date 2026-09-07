@@ -120,3 +120,19 @@ def test_factory_raises_for_unknown_backend() -> None:
         assert False, "Expected ValueError for unsupported backend"
     except ValueError as error:
         assert "unsupported" in str(error).lower() or "unknown_backend" in str(error)
+
+
+def test_factory_forwards_the_ollama_keep_alive_setting(monkeypatch) -> None:
+    """The shipped residency window must actually reach the adapter it configures."""
+    captured: dict = {}
+
+    def _capturing_adapter(**kwargs):
+        captured.update(kwargs)
+        return MockLLMAdapter()
+
+    monkeypatch.setattr("npc_engine.engines.llm.factory.OllamaAdapter", _capturing_adapter)
+    settings = Settings(**{**_base_settings(), "OLLAMA_KEEP_ALIVE": "45m"})
+
+    create_llm_client_for_engine(_make_engine_config("ollama"), settings)
+
+    assert captured["keep_alive"] == "45m"

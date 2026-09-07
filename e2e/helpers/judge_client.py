@@ -21,6 +21,13 @@ import judge_config
 _REACHABLE_TIMEOUT_S = 2.0
 _DEFAULT_JUDGE_TIMEOUT_S = 60.0
 
+# Ollama's own default, pinned here so the engine fleet's OLLAMA_KEEP_ALIVE (30m) does not
+# reach the judge. The judge model does not fit alongside the generation model on a 12 GB
+# card -- measured 2026-09-07, qwen2.5:14b evicts qwen2.5:7b at a 5.47s reload -- so a 30m
+# judge pin would starve interactive dialogue for half an hour after every eval run. Holding
+# today's behaviour also keeps eval timing baselines from shifting as a side effect.
+_JUDGE_KEEP_ALIVE = "5m"
+
 
 def make_judge(*, model: str | None = None, base_url: str | None = None, timeout_s: float = _DEFAULT_JUDGE_TIMEOUT_S):
     """Create an OllamaAdapter for the LLM judge with the separation invariant applied.
@@ -42,6 +49,7 @@ def make_judge(*, model: str | None = None, base_url: str | None = None, timeout
         base_url=resolved_url,
         model_name=resolved_model,
         timeout_seconds=timeout_s,
+        keep_alive=_JUDGE_KEEP_ALIVE,
     )
 
 
