@@ -19,6 +19,7 @@ from npc_engine.config_validators import (
     check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
+    check_ollama_keep_alive,
     check_positive_idempotency_value,
     check_redis_connect_timeout,
     check_redis_url,
@@ -342,3 +343,32 @@ def test_check_idempotency_enforced_rejects_disabled_in_prod() -> None:
 
     with pytest.raises(ValueError, match="IDEMPOTENCY_ENFORCE_HEADER"):
         check_idempotency_enforced(False, "prod")
+
+
+# ── check_ollama_keep_alive ──────────────────────────────────────────────────
+
+
+def test_check_ollama_keep_alive_accepts_a_go_duration() -> None:
+    """A well-formed duration is returned stripped."""
+
+    assert check_ollama_keep_alive(" 30m ") == "30m"
+
+
+def test_check_ollama_keep_alive_accepts_a_negative_duration() -> None:
+    """Ollama reads a negative duration as 'never unload'."""
+
+    assert check_ollama_keep_alive("-1m") == "-1m"
+
+
+def test_check_ollama_keep_alive_rejects_a_unitless_value() -> None:
+    """A bare number is not a Go duration; the backend would drop the field."""
+
+    with pytest.raises(ValueError, match="OLLAMA_KEEP_ALIVE"):
+        check_ollama_keep_alive("30")
+
+
+def test_check_ollama_keep_alive_rejects_a_day_unit() -> None:
+    """Go's time.ParseDuration has no day unit, so '30d' would fail to parse."""
+
+    with pytest.raises(ValueError, match="OLLAMA_KEEP_ALIVE"):
+        check_ollama_keep_alive("30d")

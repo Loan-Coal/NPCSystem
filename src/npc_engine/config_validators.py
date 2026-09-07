@@ -10,7 +10,12 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+# Go's time.ParseDuration grammar, which is what Ollama uses to read keep_alive.
+# Deliberately has no day unit: "30d" is a parse error in Go, not 30 days.
+_GO_DURATION_PATTERN = re.compile(r"-?\d+(?:\.\d+)?(?:ns|us|ms|s|m|h)")
 
 
 # The secret shipped in the example/dev .env. Allowed in dev so the local stack
@@ -293,3 +298,30 @@ def check_neo4j_password(value: str, env: str) -> str:
             "Set a strong, unique password via the NEO4J_PASSWORD environment variable."
         )
     return value
+
+
+def check_ollama_keep_alive(value: str) -> str:
+    """Reject keep_alive values Ollama's Go duration parser would not accept.
+
+    Ollama parses this field with time.ParseDuration, so "30", "30 minutes" and
+    "30d" are not durations -- Go has no day unit. Each of those is dropped or
+    rejected by the backend, and the model silently reverts to the 5-minute
+    default eviction this setting exists to prevent, with nothing in the logs to
+    say so. A NEGATIVE duration ("-1m") pins the model in memory indefinitely.
+
+    Args:
+        value: Raw OLLAMA_KEEP_ALIVE value from the environment.
+
+    Returns:
+        The stripped, validated duration string.
+
+    Raises:
+        ValueError: if the value is not a Go duration with a ns/us/ms/s/m/h unit.
+    """
+    stripped = value.strip()
+    if _GO_DURATION_PATTERN.fullmatch(stripped) is None:
+        raise ValueError(
+            "OLLAMA_KEEP_ALIVE must be a Go duration such as '30m', '90s', '1h' or "
+            f"'-1m' (never unload); got {value!r}. Go has no day unit."
+        )
+    return stripped

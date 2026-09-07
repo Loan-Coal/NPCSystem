@@ -31,6 +31,7 @@ from npc_engine.config_validators import (
     check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
+    check_ollama_keep_alive,
     check_neo4j_password,
     check_package_data_path,
     check_positive_idempotency_value,
@@ -70,6 +71,12 @@ MIN_PROMPT_TOKEN_BUDGET = 512
 Only reachable on a deliberately narrow window, which _validate_prompt_window refuses
 outside dev. It exists so dev still boots with a usable (if starved) budget rather than
 a negative one.
+"""
+
+DEFAULT_OLLAMA_KEEP_ALIVE = "30m"
+"""Shipped model-residency window, and the OllamaAdapter constructor default.
+
+Named here rather than repeated as a literal in the adapter so the two cannot drift.
 """
 
 
@@ -140,6 +147,25 @@ class Settings(BaseSettings):
     # This is the number that SHIPS: .env is untracked, so a fresh checkout runs this
     # default and nothing else.
     OLLAMA_CONTEXT_LENGTH: int = 12288
+
+    # How long Ollama keeps the model resident after a request, sent as a TOP-LEVEL
+    # keep_alive field on every /api/generate call. Inside `options` it is accepted and
+    # silently ignored, which is why ollama_payload.build_ollama_payload owns its placement.
+    #
+    # Measured 2026-09-07 on qwen2.5:7b / 12 GB: a cold load costs 10.3s against a
+    # 3.49-4.18s warm structured dialogue turn, so an eviction roughly triples the turn a
+    # player actually waits on. Nothing sent keep_alive before this setting existed, so
+    # Ollama's own 5-minute default evicted the model on every pause longer than that.
+    # 30m spans a play session without holding VRAM overnight.
+    #
+    # This extends the idle timer; it does NOT reserve memory. Co-residency was measured
+    # the same day: qwen2.5:14b (10.24 GB) still evicts qwen2.5:7b (5.38 GB) on a 12 GB
+    # card, and the reload costs 5.47s. Watch llm_backend_load_latency_seconds to see
+    # whether eviction is still happening despite this value.
+    #
+    # Format: a Go duration ("30m", "90s", "1h"); a negative duration ("-1m") never
+    # unloads. Go has no day unit -- see check_ollama_keep_alive.
+    OLLAMA_KEEP_ALIVE: str = DEFAULT_OLLAMA_KEEP_ALIVE
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
@@ -404,6 +430,12 @@ class Settings(BaseSettings):
     def validate_llm_config_path(cls, value: str) -> str:
         """Delegate to check_llm_config_path."""
         return check_llm_config_path(value, _PROJECT_ROOT)
+
+    @field_validator("OLLAMA_KEEP_ALIVE")
+    @classmethod
+    def validate_ollama_keep_alive(cls, value: str) -> str:
+        """Delegate to check_ollama_keep_alive."""
+        return check_ollama_keep_alive(value)
 
     @field_validator("IDEMPOTENCY_HEADER_NAME")
     @classmethod
