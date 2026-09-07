@@ -9,12 +9,18 @@ Dependencies injected: base_url, model_name, timeout_seconds, keep_alive.
 """
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, AsyncIterator
 import json
 
 import httpx
 
 from npc_engine.config import DEFAULT_OLLAMA_KEEP_ALIVE, get_settings
+from npc_engine.engines.llm.llm_metrics import (
+    OLLAMA_BACKEND_LABEL,
+    LlmCallMode,
+    record_llm_backend_metrics,
+)
 from npc_engine.engines.llm.ollama_payload import build_ollama_options, build_ollama_payload
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm.prompt_eval_log import log_prompt_eval
@@ -30,6 +36,7 @@ class OllamaAdapter(LLMClientProtocol):
         model_name: str,
         timeout_seconds: float,
         keep_alive: str = DEFAULT_OLLAMA_KEEP_ALIVE,
+        engine_name: str = "unknown",
     ) -> None:
         """Initialise the adapter with Ollama endpoint configuration.
 
@@ -40,12 +47,30 @@ class OllamaAdapter(LLMClientProtocol):
             keep_alive: How long Ollama keeps the model resident after a request.
                 Ollama's own default is 5m, which evicts the model between play
                 sessions and costs a measured 10.3s reload on the next turn.
+            engine_name: Engine this adapter was built for, used only as a metric
+                label. Every engine shares one backend and one model, so without it
+                all five collapse into a single unattributable bucket.
         """
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
         self._keep_alive = keep_alive
+        self._engine_name = engine_name
         self._client = httpx.AsyncClient(timeout=timeout_seconds)
+
+    def _record_reply(
+        self, *, reply: dict[str, Any], payload: dict[str, Any], started_at: float, mode: LlmCallMode
+    ) -> None:
+        """Emit the log record and the metrics for one completed backend call."""
+        log_prompt_eval(reply=reply, payload=payload, started_at=started_at)
+        record_llm_backend_metrics(
+            backend=OLLAMA_BACKEND_LABEL,
+            engine=self._engine_name,
+            model=self.model_name(),
+            mode=mode,
+            started_at=started_at,
+            load_duration_ns=reply.get("load_duration"),
+        )
 
     async def close(self) -> None:
         """Release the shared HTTP client. Call at application shutdown."""
@@ -105,6 +130,7 @@ class OllamaAdapter(LLMClientProtocol):
             keep_alive=self._keep_alive,
             system=system,
         )
+        started_at = perf_counter()
         try:
             response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
             response.raise_for_status()
@@ -122,7 +148,7 @@ class OllamaAdapter(LLMClientProtocol):
             raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
         if "error" in data:
             raise LLMRequestError(model=self.model_name(), detail=f"backend_error:{data['error']}")
-        log_prompt_eval(reply=data, options=options, model=self.model_name(), prompt=prompt, system=system)
+        self._record_reply(reply=data, payload=payload, started_at=started_at, mode="generate")
         return str(data.get("response", ""))
 
     async def generate_structured(
@@ -169,6 +195,7 @@ class OllamaAdapter(LLMClientProtocol):
             schema=schema,
             system=system,
         )
+        started_at = perf_counter()
         try:
             response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
             response.raise_for_status()
@@ -184,7 +211,7 @@ class OllamaAdapter(LLMClientProtocol):
                 raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
             if "error" in data:
                 raise LLMRequestError(model=self.model_name(), detail=f"backend_error:{data['error']}")
-            log_prompt_eval(reply=data, options=options, model=self.model_name(), prompt=prompt, system=system)
+            self._record_reply(reply=data, payload=payload, started_at=started_at, mode="structured")
             parsed = json.loads(str(data.get("response", "")))
         except ValueError as error:
             raise LLMRequestError(model=self.model_name(), detail="invalid_json") from error
@@ -235,6 +262,7 @@ class OllamaAdapter(LLMClientProtocol):
             stream=True,
             system=system,
         )
+        started_at = perf_counter()
         try:
             async with self._client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
                 response.raise_for_status()
@@ -250,7 +278,9 @@ class OllamaAdapter(LLMClientProtocol):
                     if "error" in chunk:
                         raise LLMRequestError(model=self.model_name(), detail=f"stream_backend_error:{chunk['error']}")
                     if chunk.get("done") is True:
-                        log_prompt_eval(reply=chunk, options=options, model=self.model_name(), prompt=prompt, system=system)
+                        self._record_reply(
+                            reply=chunk, payload=payload, started_at=started_at, mode="stream"
+                        )
                     token = str(chunk.get("response", ""))
                     if token != "":
                         yield token

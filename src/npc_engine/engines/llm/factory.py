@@ -87,6 +87,7 @@ def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMCl
         model_name=engine_config.llm.model,
         timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
         keep_alive=settings.OLLAMA_KEEP_ALIVE,
+        engine_name=engine_config.engine,
     )
 
 
