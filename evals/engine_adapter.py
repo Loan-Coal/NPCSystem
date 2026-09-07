@@ -284,3 +284,21 @@ def fetch_corpus_fingerprint(base_url: str, api_key: str) -> dict[str, Any] | No
     except Exception as exc:
         _logger.warning("fetch_corpus_fingerprint url=%s error=%r", base_url, exc)
         return None
+
+
+def structured_output_temperature() -> float:
+    """Return the temperature the engine actually uses on structured generation calls.
+
+    LLMStructuredProtocol.generate_structured carries no temperature argument, so the
+    adapters substitute Settings.STRUCTURED_OUTPUT_TEMPERATURE for whatever an engine's
+    llm_config.yaml declares. Any run recording the YAML value as its provenance is
+    recording a number the model never ran at.
+
+    Returns:
+        The shipped STRUCTURED_OUTPUT_TEMPERATURE value.
+    """
+    # See build_retrieval_stack for why get_settings needs the attr-defined suppression.
+    from npc_engine.config import get_settings  # type: ignore[attr-defined]
+
+    os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
+    return float(get_settings().STRUCTURED_OUTPUT_TEMPERATURE)

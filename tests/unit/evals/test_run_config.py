@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from engine_adapter import structured_output_temperature
 from run_config import (
     GoldenSetVersionError,
     ModelDigestUnavailableError,
@@ -150,10 +151,24 @@ def test_run_config_fields_from_minimal_yaml(tmp_llm_config: Path) -> None:
     """resolve_run_config() correctly maps all llm YAML fields to RunConfig attributes."""
     config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
     assert config.generation_model == "test-model:7b"
-    assert config.temperature == 0.5
     assert config.max_tokens == 256
     assert config.top_p == 0.9
     assert config.prompt_version == "42"
+
+
+def test_recorded_temperature_is_the_one_that_ran_not_the_one_declared(
+    tmp_llm_config: Path,
+) -> None:
+    """The fixture declares 0.5; the structured path the engine actually uses ignores it.
+
+    generate_structured takes no temperature argument, so the adapter substitutes
+    STRUCTURED_OUTPUT_TEMPERATURE. Recording the declared value would describe a run that
+    did not happen, which is the provenance bug DEC-273 corrects.
+    """
+    config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
+
+    assert config.temperature == structured_output_temperature()
+    assert config.temperature != 0.5
 
 
 # ---------------------------------------------------------------------------

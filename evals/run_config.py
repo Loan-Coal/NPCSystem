@@ -71,6 +71,26 @@ __all__ = [
 ]
 
 
+def effective_generation_temperature(*, configured: float) -> float:
+    """Return the temperature a dialogue generation actually runs at.
+
+    ``configured`` is what llm_config.yaml declares. It is not what runs: dialogue reaches
+    the backend only through ``generate_structured``, which carries no temperature argument
+    in LLMStructuredProtocol, so the adapter substitutes STRUCTURED_OUTPUT_TEMPERATURE.
+    Recording the declared value describes a run that did not happen.
+
+    Args:
+        configured: The temperature declared in the engine's llm_config.yaml.
+    Returns:
+        The temperature the structured path actually used.
+    """
+    import engine_adapter as _engine_adapter
+
+    del configured  # Recorded separately; kept in the signature to document the difference.
+    # float() is not redundant: ISSUE-289 leaves intra-evals imports Any-typed to mypy.
+    return float(_engine_adapter.structured_output_temperature())
+
+
 class ModelDigestUnavailableError(RuntimeError):
     """Raised when Ollama could not be probed for a model's content digest.
 
@@ -132,7 +152,11 @@ class RunConfig(BaseModel):
         generation_model: LLM model tag used for generation (e.g. 'qwen2.5:7b').
         generation_model_digest: Ollama content digest for generation_model (from
             /api/show). None when Ollama is unreachable at config resolution time.
-        temperature: Sampling temperature from llm_config.yaml.
+        temperature: Sampling temperature the generation actually ran at. NOT the value in
+            llm_config.yaml: dialogue reaches the backend only through generate_structured,
+            which takes no temperature argument, so the adapter substitutes
+            STRUCTURED_OUTPUT_TEMPERATURE. Runs recorded before this was corrected carry the
+            declared 0.15 rather than the 0.1 that ran — see DEC-273.
         top_p: Top-p nucleus sampling parameter from llm_config.yaml.
         max_tokens: Maximum token budget per generation from llm_config.yaml.
         seed: Deterministic sampling seed from llm_config.yaml, forwarded by the dialogue
@@ -337,7 +361,7 @@ def resolve_run_config(
         prompt_version=str(prompt[_VERSION_KEY]),
         generation_model=generation_model,
         generation_model_digest=generation_model_digest,
-        temperature=float(llm[_TEMPERATURE_KEY]),
+        temperature=effective_generation_temperature(configured=float(llm[_TEMPERATURE_KEY])),
         top_p=float(llm[_TOP_P_KEY]),
         max_tokens=int(llm[_MAX_TOKENS_KEY]),
         seed=llm.get(_SEED_KEY),
