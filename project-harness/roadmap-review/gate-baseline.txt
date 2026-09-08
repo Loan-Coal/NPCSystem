@@ -1,0 +1,969 @@
+.venv/Scripts/python.exe scripts/check_harness_honesty.py
+check-harness: OK - 153 open ticket(s); debt is tracked, docs consistent.
+.venv/Scripts/python.exe scripts/check_ledger_ids.py
+check-ledger-ids:
+  DEC: 4 reused id(s), 0 undocumented
+  ISSUE: 2 reused id(s), 0 undocumented
+  OK - every reused id is documented and every citation resolves.
+.venv/Scripts/python.exe scripts/check_cited_reports.py
+check-cited-reports:
+  OK - all 1 cited report(s) are tracked.
+.venv/Scripts/python.exe scripts/check_ceiling_baseline.py
+check-ceiling-baseline:
+  OK - 1151 tokens on mira_innkeeper (arm=default, corpus=2b19e47a, measured 2026-08-27); shipped budget 5158 clears it.
+.venv/Scripts/python.exe -m ruff check src/ evals/
+All checks passed!
+.venv/Scripts/python.exe scripts/check_rules.py
+  [R001-SOFT] demo_game/game_controller.py:556 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/game_end_checker.py:505 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/runners/run.py:627 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/runners/run_scenes.py:654 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/seeds/seed_npc_data.py:470 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/ui/layout/left_panel.py:517 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/ui/layout/right_panel.py:618 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] demo_game/ui/widgets/widgets.py:487 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] scripts/check_base_rate.py:424 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] scripts/check_rules.py:434 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/config.py:536 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/engines/dialogue/dialogue_handler.py:470 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/engines/gossip/gossip_handler.py:404 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/retrieval/context/context_budget_enforcer.py:577 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/scheduler/tick_scheduler.py:635 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] src/npc_engine/utils/errors.py:403 � exceeds 400 lines (advisory; no gate)
+check-rules: 1 baselined violation(s) resolved - run the update target to ratchet down.
+check-rules: OK - no new violations (115 grandfathered).
+.venv/Scripts/python.exe scripts/check_rules.py --evals
+  [R001-SOFT] evals/anti_hallucination_runner.py:469 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] evals/compare.py:559 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] evals/matchers.py:544 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] evals/prelabel_runner.py:415 � exceeds 400 lines (advisory; no gate)
+  [R001-SOFT] evals/summary.py:622 � exceeds 400 lines (advisory; no gate)
+check-evals-rules: OK - no new violations (66 grandfathered).
+.venv/Scripts/python.exe scripts/check_layers.py
+check-layers: OK � no layer violations found.
+.venv/Scripts/python.exe scripts/docstring_audit.py
+All docstrings OK.
+[]
+.venv/Scripts/python.exe -m mypy src/
+Success: no issues found in 637 source files
+.venv/Scripts/python.exe scripts/mypy_evals_ratchet.py
+mypy-evals-ratchet: OK - 0 type errors (== baseline).
+.venv/Scripts/python.exe scripts/check_human_gates.py --verify
+HUMAN GATES OK (0 gates)
+.venv/Scripts/python.exe scripts/check_test_quality.py
+check-test-quality: 0 issues found.
+
+.venv/Scripts/python.exe -m pytest tests/ -q --cov=npc_engine --cov=matchers --cov=summary --cov=runner --cov-report=term-missing --cov-fail-under=80
+............ss...ssssssssssssssssss..ssssssssssssssssssss............... [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+.............FF......................................................... [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 81%]
+..................................................s..................... [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+....                                                                     [100%]
+================================== FAILURES ===================================
+_________________ test_real_roadmap_parses_and_verifies_clean _________________
+
+    def test_real_roadmap_parses_and_verifies_clean() -> None:
+        """Structural invariant � holds no matter where the fence is placed.
+    
+        Deliberately does NOT pin the fence width: DEC-153 �3 makes moving the
+        ``end`` marker a planned, recurring operation (narrow it so the loop cannot
+        outrun a live measurement task, widen it once that task is ticked). A test
+        that froze the width would fail on every intentional move and train whoever
+        hits it to edit the number without reading why.
+        """
+        phases, lines = _real_roadmap_phases()
+        assert verify(phases, lines) == []
+        assert phases, "queue fence parsed to zero phases"
+        ids = [p.id for p in phases]
+>       assert ids == _EXPECTED_PHASE_IDS, (
+            f"queue phases changed: expected {_EXPECTED_PHASE_IDS}, got {ids}. "
+            "Update the constant deliberately � see the tripwire docstring below."
+        )
+E       AssertionError: queue phases changed: expected ['M1', 'M2'], got ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12', 'T13', 'T14', 'T15', 'T16']. Update the constant deliberately � see the tripwire docstring below.
+E       assert ['T1', 'T2', ...5', 'T6', ...] == ['M1', 'M2']
+E         
+E         At index 0 diff: 'T1' != 'M1'
+E         Left contains 14 more items, first extra item: 'T3'
+E         Use -v to get more diff
+
+tests\unit\harness\test_roadmap_cursor.py:217: AssertionError
+___________________ test_real_roadmap_fence_state_tripwire ____________________
+
+    def test_real_roadmap_fence_state_tripwire() -> None:
+        """Snapshot of the *current* fence, so a move is a conscious act.
+    
+        UPDATE DELIBERATELY when the fence moves, and only alongside the ROADMAP
+        reopen condition.
+    
+        History. 2026-08-02 (DEC-153 �3) narrowed the fence to EVAL-P0 because
+        ``compute_next`` skips flagged tasks without blocking, so a wider fence let the
+        loop drain EVAL-P1..P7 while EVAL-P0.3 (ask-gate) and EVAL-P0.4 (the live
+        measured baseline every later estimate depends on) sat unchecked forever �
+        finishing the program having measured nothing. That narrowing worked: the
+        baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
+    
+        State 2026-08-10 (DEC-163): the fence was narrowed to **EVAL-P0..EVAL-P19**. The end
+        marker moved from below EVAL-P24.3 to immediately above "### Phase EVAL-P20", on the
+        same principle as the DEC-153 �3 narrowing described above: EVAL-P15..P19 recompute
+        and repair over the artifact already on disk and can be validated against it, while
+        EVAL-P20..P24 assume a post-regeneration artifact that does not exist, so the loop
+        could only build them against fixtures. That is not hypothetical � it is how
+        EVAL-P8.2's ``compare`` shipped green and then printed "Intersection: 0 cases /
+        NO_DETECTABLE_CHANGE / p=1.0000" with exit 0 against the two real generation dirs.
+    
+        Current state (2026-08-15, DEC-178): the fence spans **EVAL-P0..EVAL-P24** again �
+        reopened by **explicit human override**, not because DEC-163's three reopen
+        conditions were met. They were not: ``EVAL-P17.6``'s live ``make check-conservation``
+        still exits non-zero, and ``EVAL-P20.0`` measured 62.5% reproduction against the
+        required \u226595% (DEC-176). ``EVAL-P20.0`` is ticked in ROADMAP.md as the record of that
+        override, not as a claim its gate passed. This override does **not** fabricate
+        completion of any other task � every phase's own ``HUMAN GATE`` blocks (H4, H6, H7,
+        H8, H9, H10, H12) still gate their tasks on real, unticked-until-genuinely-done work,
+        so ``compute_next`` below still returns real pending tasks, not free passes. Reopen
+        conditions and the override record are at the marker in ROADMAP.md; the ordered
+        human-side sequence is in project-harness/HUMAN_TASKS.md.
+    
+        Prior state (2026-08-09, DEC-160): the fence spanned EVAL-P0..EVAL-P24 � Program 1
+        (P0..P8, precision), Program 2 (P9..P14, validity + the portfolio artifact, released
+        2026-08-07), and Program 3 (P15..P24, the measurement apparatus, released 2026-08-09
+        once `loop_gates.FROZEN_PATH_PREFIXES` covered `evals/calibration/` and
+        `evals/generations/` so no unattended session can write the 393 human labels). The
+        2026-08-15 reopening lands at the same span for a different reason (override, not
+        conditions met) � see DEC-178, not DEC-160, for why.
+    
+        That release is why this test was red on the nights of 2026-08-09: DEC-160 moved the
+        marker and verified the *cursor* (`roadmap-verify` OK, 25 phases) but not the tests
+        that snapshot it, so the phase gate halted after EVAL-P11 and again after EVAL-P12 on
+        a stale literal rather than a regression. The span assertion below is the snapshot;
+        updating it is the deliberate act the docstring asks for.
+    
+        **What this pins, and why it no longer pins the pending list.** Earlier revisions
+        asserted ``pending == 13``, then ``== 11``, then an exact id list, and were red every
+        time (ISSUE-136). That is structural, not carelessness: *pending shrinks by one every
+        time the loop succeeds*, so pinning it means the gate turns red on the first completed
+        task of every night and stays red, which is exactly what happened across EVAL-P2..P5 �
+        four phases committed under "pre-existing red gate" where a genuine regression would
+        have looked identical. A tripwire that fires on success is not a tripwire.
+    
+        So this now pins the two things that should only change by deliberate human edit:
+    
+        * **the phase span** � a fence move is a conscious act, and P0..P24 must stay
+          contiguous or ``compute_next`` silently skips a programme;
+        * **the flagged set** � the loop refuses flagged tasks, so an accidental flag hides
+          work forever and an accidental unflag hands a human decision to a 3am session.
+    
+        Pending is asserted only structurally (non-empty, and every id belongs to a phase in
+        the fence), which catches a corrupted queue without firing on progress.
+    
+        **The flagged set is asserted by containment, not equality (ISSUE-136).** Equality had
+        the same defect the pending list had, one step removed: a flagged task is skipped by
+        the loop but still *ticked by a human session*, and the moment it is, it leaves the
+        pending set and the literal dict is stale � EVAL-P6.4 did exactly that and is why this
+        dict no longer names it. Both failure directions are still caught, without firing on
+        progress:
+    
+        * an **accidental flag** (ISSUE-134: EVAL-P1.2's body said "Not an ask-gate" and the
+          skip-regex matched the literal token through the negation) fails the subset check,
+          because the new id is not in ``EXPECTED_FLAGS``;
+        * an **accidental unflag** fails the second check, because a task still listed in
+          ``EXPECTED_FLAGS`` and still pending must still carry exactly its recorded flags.
+    
+        Ticking a flagged task drops it from ``pending`` and is silently fine, which is the
+        only behaviour equality got wrong.
+    
+        EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
+        "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
+        of the negation around it, so the loop skipped the task for a reason that stated the
+        opposite of what was meant (ISSUE-134). That is precisely the failure the flagged-set
+        assertion below exists to catch.
+        """
+        phases, _ = _real_roadmap_phases()
+        # 2026-08-15 (DEC-178): widened 20 -> 25 again. The fence end marker moved back below
+        # EVAL-P24.3 by explicit human override � not because DEC-163's reopen conditions were
+        # met (they were not; see the docstring above and DEC-178). This assertion firing on
+        # that move is the tripwire working as designed.
+>       assert [p.id for p in phases] == _EXPECTED_PHASE_IDS
+E       AssertionError: assert ['T1', 'T2', ...5', 'T6', ...] == ['M1', 'M2']
+E         
+E         At index 0 diff: 'T1' != 'M1'
+E         Left contains 14 more items, first extra item: 'T3'
+E         Use -v to get more diff
+
+tests\unit\harness\test_roadmap_cursor.py:316: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\neo4j\_meta.py:213: 30 warnings
+  C:\Users\lohan\Documents\hackathons\NPCSystem\.venv\Lib\site-packages\neo4j\_meta.py:213: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if asyncio.iscoroutinefunction(f):
+
+.venv\Lib\site-packages\fastapi\routing.py:234: 303 warnings
+tests/unit/api/test_auth_idempotency_middleware_v14.py: 60 warnings
+tests/unit/api/test_auth_observability_middleware_v14.py: 9 warnings
+tests/unit/api/test_chapters_route.py: 2 warnings
+tests/unit/api/test_dashboard_routes.py: 12 warnings
+tests/unit/api/test_dialogue_pending_route.py: 12 warnings
+tests/unit/api/test_dialogue_retrieval_profile.py: 6 warnings
+tests/unit/api/test_director_beats_route.py: 9 warnings
+tests/unit/api/test_graph_outage_503.py: 3 warnings
+tests/unit/api/test_graph_v13_routes.py: 148 warnings
+tests/unit/api/test_graph_warning_pipeline.py: 24 warnings
+tests/unit/api/test_investigations_route.py: 3 warnings
+tests/unit/api/test_location_graph_route.py: 56 warnings
+tests/unit/api/test_player_events_route.py: 2 warnings
+tests/unit/api/test_player_model_route.py: 2 warnings
+tests/unit/api/test_quest_routes_v14.py: 14 warnings
+tests/unit/api/test_rate_limit_middleware.py: 9 warnings
+tests/unit/api/test_relationship_route_phase.py: 3 warnings
+tests/unit/api/test_route_clock_tick.py: 2 warnings
+tests/unit/api/test_route_error_redaction.py: 18 warnings
+tests/unit/api/test_schemes_route.py: 2 warnings
+tests/unit/api/test_setup_routes.py: 27 warnings
+tests/unit/api/test_system_registry_route.py: 3 warnings
+tests/unit/conformance/test_boot_smoke.py: 296 warnings
+tests/unit/conformance/test_error_envelope_sev33.py: 7 warnings
+tests/unit/conformance/test_route_response_model_contract.py: 444 warnings
+tests/unit/conformance/test_typed_payload_contract.py: 148 warnings
+tests/unit/conformance/test_v1_route_versioning.py: 592 warnings
+tests/unit/engines/test_input_moderation.py: 1 warning
+tests/unit/engines/test_quest_draft_review.py: 20 warnings
+tests/unit/evals/test_dashboard_case.py: 12 warnings
+tests/unit/evals/test_dashboard_detail.py: 18 warnings
+tests/unit/evals/test_dashboard_runs.py: 6 warnings
+tests/unit/graph/test_action_currency_routing_v14.py: 2 warnings
+tests/unit/graph/test_first_contact_missing_node.py: 3 warnings
+tests/unit/scripts/test_api_contract_extractor.py: 1036 warnings
+  C:\Users\lohan\Documents\hackathons\NPCSystem\.venv\Lib\site-packages\fastapi\routing.py:234: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.14.2-final-0 _______________
+
+Name                                                                         Stmts   Miss  Cover   Missing
+----------------------------------------------------------------------------------------------------------
+evals\matchers.py                                                              192      4    98%   253, 284, 344, 346
+evals\runner.py                                                                155     28    82%   146-154, 157-166, 170-180, 198-200, 244-250, 292, 307-309, 311-315, 318, 326-327, 352
+evals\summary.py                                                               184      1    99%   473
+src\npc_engine\api\__init__.py                                                   1      0   100%
+src\npc_engine\api\dashboard\__init__.py                                         4      0   100%
+src\npc_engine\api\dashboard\dashboard_models.py                                23      0   100%
+src\npc_engine\api\dashboard\dashboard_static.py                                15      2    87%   40-41
+src\npc_engine\api\dependencies.py                                              67     12    82%   96, 106, 116, 145, 161, 187, 226, 248, 260, 272, 284, 296
+src\npc_engine\api\dependencies_advanced\__init__.py                             5      0   100%
+src\npc_engine\api\dependencies_advanced\politics.py                            33      0   100%
+src\npc_engine\api\dependencies_advanced\progression.py                         37      3    92%   87-92
+src\npc_engine\api\dependencies_advanced\social.py                              28      2    93%   90-92
+src\npc_engine\api\dependencies_engines\__init__.py                             36      0   100%
+src\npc_engine\api\dependencies_engines\core.py                                 75      3    96%   140-143
+src\npc_engine\api\dependencies_engines\engine_slots.py                         33      0   100%
+src\npc_engine\api\dependencies_engines\quest.py                                76     19    75%   44-49, 60-64, 81-83, 93-97, 112-116
+src\npc_engine\api\dependencies_engines\tick_slots.py                           98      0   100%
+src\npc_engine\api\dependencies_infra.py                                        64      3    95%   71, 103, 108
+src\npc_engine\api\dependencies_stores.py                                       65      9    86%   93, 109-119, 182-183, 193
+src\npc_engine\api\dependency_singletons.py                                      6      0   100%
+src\npc_engine\api\errors\__init__.py                                            4      0   100%
+src\npc_engine\api\errors\error_envelope.py                                     11      0   100%
+src\npc_engine\api\errors\exception_handlers.py                                 28      1    96%   104
+src\npc_engine\api\helpers\__init__.py                                           7      0   100%
+src\npc_engine\api\helpers\action_helpers.py                                    24      1    96%   75
+src\npc_engine\api\helpers\clock_helpers.py                                      6      0   100%
+src\npc_engine\api\helpers\graph_warning_helpers.py                             19      1    95%   63
+src\npc_engine\api\helpers\quest_helpers.py                                     32      4    88%   39, 41, 43, 45
+src\npc_engine\api\helpers\route_helpers.py                                     49      5    90%   102, 124, 138, 160-161
+src\npc_engine\api\pagination.py                                                19      0   100%
+src\npc_engine\api\rate_limit.py                                                54      1    98%   144
+src\npc_engine\api\response_models\__init__.py                                   3      0   100%
+src\npc_engine\api\response_models\npc_state.py                                 15      0   100%
+src\npc_engine\api\router_registry.py                                           69      0   100%
+src\npc_engine\api\routes\__init__.py                                            1      0   100%
+src\npc_engine\api\routes\admin\__init__.py                                     12      0   100%
+src\npc_engine\api\routes\admin\batch.py                                        31      6    81%   57-63, 75-77
+src\npc_engine\api\routes\admin\debug_retrieval.py                              25      0   100%
+src\npc_engine\api\routes\admin\debug_retrieval_models.py                       32      4    88%   89, 92-93, 95
+src\npc_engine\api\routes\admin\graph.py                                        82     31    62%   54-58, 75-80, 104-105, 121-128, 139-140, 164, 182-191, 202-203
+src\npc_engine\api\routes\admin\graph_admin.py                                  76     32    58%   63-67, 73-77, 83-87, 96-106, 115-125, 135-136, 142-145, 152
+src\npc_engine\api\routes\admin\investigations.py                               24      0   100%
+src\npc_engine\api\routes\admin\system.py                                       66     12    82%   69-76, 82, 88, 156-157
+src\npc_engine\api\routes\admin\vector_store.py                                 29      9    69%   42, 63-82, 91, 127-136
+src\npc_engine\api\routes\dialogue\__init__.py                                   7      0   100%
+src\npc_engine\api\routes\dialogue\action.py                                    37      9    76%   49, 78-87, 102-103
+src\npc_engine\api\routes\dialogue\dialogue.py                                  46      0   100%
+src\npc_engine\api\routes\dialogue\dialogue_ws.py                               95     40    58%   74, 127-130, 189-202, 213-241
+src\npc_engine\api\routes\dialogue\interaction.py                               79     38    52%   98-103, 144-247, 272-279
+src\npc_engine\api\routes\dialogue\npc_state.py                                 20      7    65%   34-38, 49-50
+src\npc_engine\api\routes\economy\__init__.py                                    7      0   100%
+src\npc_engine\api\routes\economy\economy.py                                    55     11    80%   93-108, 141, 153-158
+src\npc_engine\api\routes\economy\groups.py                                     52      9    83%   85-94, 112-115, 131-132, 168, 186-187
+src\npc_engine\api\routes\economy\items.py                                      47     12    74%   101-120, 136-137, 157-171, 187-188
+src\npc_engine\api\routes\economy\skills.py                                     43     11    74%   77-84, 100-101, 119, 140-147, 167-173, 191-192
+src\npc_engine\api\routes\economy\traits.py                                     26      6    77%   60-67, 83-84, 102-103
+src\npc_engine\api\routes\faction_politics\__init__.py                           6      0   100%
+src\npc_engine\api\routes\faction_politics\factions.py                         102     37    64%   120-131, 140-141, 150-151, 161-170, 179-180, 190-194, 205-209, 218-219, 229-233, 243-247
+src\npc_engine\api\routes\faction_politics\pledges.py                           42      6    86%   102-113, 131-132, 151-158
+src\npc_engine\api\routes\faction_politics\schemes.py                           17      0   100%
+src\npc_engine\api\routes\faction_politics\treaties.py                          46      8    83%   105-114, 130-131, 150-151, 170-176
+src\npc_engine\api\routes\knowledge\__init__.py                                 12      0   100%
+src\npc_engine\api\routes\knowledge\beliefs.py                                  40     10    75%   100-115, 133-134, 152-153, 169-170
+src\npc_engine\api\routes\knowledge\causality.py                                16      4    75%   43-46, 64-65
+src\npc_engine\api\routes\knowledge\debts.py                                    41      9    78%   92, 108-109, 129-139
+src\npc_engine\api\routes\knowledge\goals.py                                    41     10    76%   101-117, 137-140, 158-159, 175-176
+src\npc_engine\api\routes\knowledge\gossip_spread.py                            30      0   100%
+src\npc_engine\api\routes\knowledge\memories.py                                 72     20    72%   146-147, 164-177, 195-208, 213, 236-237, 253-254, 275-287
+src\npc_engine\api\routes\knowledge\rumor_trace.py                              34      6    82%   78-79, 102-108
+src\npc_engine\api\routes\knowledge\rumors.py                                   45     10    78%   81-89, 108-116, 134-137, 153-154, 170-171
+src\npc_engine\api\routes\knowledge\secrets.py                                  30      8    73%   74-89, 107-108, 124-125
+src\npc_engine\api\routes\knowledge\witnessed.py                                20      6    70%   42-43, 61-62, 82-88
+src\npc_engine\api\routes\quest\__init__.py                                      4      0   100%
+src\npc_engine\api\routes\quest\quest.py                                        68     30    56%   68-91, 123-124, 143, 150, 161-177, 188-202, 213-227, 251-256
+src\npc_engine\api\routes\quest\quest_generation.py                             55      5    91%   109, 177-180
+src\npc_engine\api\routes\setup\__init__.py                                      3      0   100%
+src\npc_engine\api\routes\setup\setup.py                                        29      0   100%
+src\npc_engine\api\routes\social\__init__.py                                     6      0   100%
+src\npc_engine\api\routes\social\player_model.py                                23      0   100%
+src\npc_engine\api\routes\social\relationship.py                                28      1    96%   50
+src\npc_engine\api\routes\social\reputation.py                                  51     16    69%   91-92, 102-103, 121-129, 148-165
+src\npc_engine\api\routes\world\__init__.py                                     10      0   100%
+src\npc_engine\api\routes\world\chapters.py                                     22      0   100%
+src\npc_engine\api\routes\world\clock.py                                        55     20    64%   63, 71, 79, 94-105, 107, 128-132
+src\npc_engine\api\routes\world\location_graph.py                               36      0   100%
+src\npc_engine\api\routes\world\location_history.py                             20      6    70%   44-47, 67-73, 91-94
+src\npc_engine\api\routes\world\locations.py                                    38      7    82%   97, 117-118, 139-140, 156-157
+src\npc_engine\api\routes\world\player_events.py                                28      0   100%
+src\npc_engine\api\routes\world\schedules.py                                    56     21    62%   67-74, 83-87, 97-101, 110-111, 120-121, 131-132, 142-143
+src\npc_engine\api\schemas.py                                                   76      0   100%
+src\npc_engine\auth\__init__.py                                                  1      0   100%
+src\npc_engine\auth\api_key.py                                                  23      6    74%   49-51, 70, 73, 78
+src\npc_engine\auth\middleware.py                                               96      4    96%   77-79, 92
+src\npc_engine\auth\middleware_helpers.py                                       89      6    93%   114, 118, 145, 220, 223, 230
+src\npc_engine\auth\permissions.py                                               6      0   100%
+src\npc_engine\auth\request_observability.py                                    30      1    97%   43
+src\npc_engine\cache\__init__.py                                                 1      0   100%
+src\npc_engine\cache\redis_runtime.py                                           29     18    38%   31-33, 38-53, 58-62, 68
+src\npc_engine\common\__init__.py                                                1      0   100%
+src\npc_engine\common\intent_models.py                                          12      0   100%
+src\npc_engine\common\json_utils.py                                             27      0   100%
+src\npc_engine\common\knowledge_types.py                                         5      0   100%
+src\npc_engine\common\yaml_utils.py                                             10      0   100%
+src\npc_engine\config.py                                                       236      2    99%   506, 523
+src\npc_engine\config_logging_validators.py                                      9      0   100%
+src\npc_engine\config_prompt_window.py                                          47      0   100%
+src\npc_engine\config_validators.py                                             87      3    97%   145, 268, 271
+src\npc_engine\data\__init__.py                                                  1      0   100%
+src\npc_engine\data\api_seeder.py                                              160     16    90%   131-132, 152, 161, 169, 183, 209, 307-319, 323-326
+src\npc_engine\data\seed_data.py                                                50      0   100%
+src\npc_engine\data\seed_http.py                                                64     20    69%   44-46, 51-52, 73-88, 93-94
+src\npc_engine\engines\__init__.py                                               1      0   100%
+src\npc_engine\engines\agenda\__init__.py                                        5      0   100%
+src\npc_engine\engines\agenda\agenda_engine.py                                  28      1    96%   66
+src\npc_engine\engines\agenda\conversation_intent_service.py                    48      0   100%
+src\npc_engine\engines\agenda\intent_formation_engine.py                        33      0   100%
+src\npc_engine\engines\base_engine.py                                            6      0   100%
+src\npc_engine\engines\chapter\__init__.py                                       3      0   100%
+src\npc_engine\engines\chapter\chapter_engine.py                                87      5    94%   202-207, 265, 318-319
+src\npc_engine\engines\chapter\chapter_labeler.py                                9      0   100%
+src\npc_engine\engines\clique\__init__.py                                        1      0   100%
+src\npc_engine\engines\clique\clique_formation_engine.py                        46      0   100%
+src\npc_engine\engines\contracts\__init__.py                                     1      0   100%
+src\npc_engine\engines\contracts\contract_loader.py                             31      6    81%   30, 34-37, 54
+src\npc_engine\engines\contracts\contract_models.py                             18      0   100%
+src\npc_engine\engines\deception\__init__.py                                     3      0   100%
+src\npc_engine\engines\deception\deception_engine.py                            17      0   100%
+src\npc_engine\engines\dialogue\__init__.py                                      1      0   100%
+src\npc_engine\engines\dialogue\action_resolver.py                              18      0   100%
+src\npc_engine\engines\dialogue\context_relevance_engine.py                      3      0   100%
+src\npc_engine\engines\dialogue\degradation.py                                  47      1    98%   86
+src\npc_engine\engines\dialogue\dialogue_handler.py                            167      9    95%   194-195, 235, 268, 283, 313-314, 469-470
+src\npc_engine\engines\dialogue\dialogue_models.py                              83      2    98%   128, 149
+src\npc_engine\engines\dialogue\llm_client.py                                   85     10    88%   99, 106-107, 153, 232, 249-253
+src\npc_engine\engines\dialogue\negotiation_context.py                          21      0   100%
+src\npc_engine\engines\dialogue\prompt_builder.py                              112      8    93%   34, 141-142, 147, 150, 236, 254-255
+src\npc_engine\engines\dialogue\prompt_builder_standing.py                      18      0   100%
+src\npc_engine\engines\dialogue\relation_mutator.py                             10      0   100%
+src\npc_engine\engines\dialogue\response_parser.py                               5      0   100%
+src\npc_engine\engines\dialogue\session_store.py                                69      3    96%   70-71, 129
+src\npc_engine\engines\dialogue\system_state_context.py                         21      0   100%
+src\npc_engine\engines\director\__init__.py                                      4      0   100%
+src\npc_engine\engines\director\director_beat_log.py                            23      0   100%
+src\npc_engine\engines\director\director_engine.py                              26      0   100%
+src\npc_engine\engines\director\director_tick.py                                59      0   100%
+src\npc_engine\engines\economy\__init__.py                                       6      0   100%
+src\npc_engine\engines\economy\pricing_engine.py                                19      0   100%
+src\npc_engine\engines\economy\pricing_rules_loader.py                          34      2    94%   85, 87
+src\npc_engine\engines\economy\trade_engine.py                                  29      2    93%   95-96
+src\npc_engine\engines\economy\trade_models.py                                   8      0   100%
+src\npc_engine\engines\embedding_invalidation.py                                10      0   100%
+src\npc_engine\engines\embedding_refresh.py                                     21      0   100%
+src\npc_engine\engines\emotion\__init__.py                                       1      0   100%
+src\npc_engine\engines\emotion\emotion_bootstrap.py                             21      1    95%   57
+src\npc_engine\engines\emotion\emotion_model_factory.py                         18      1    94%   81
+src\npc_engine\engines\emotion\emotion_model_protocol.py                         8      0   100%
+src\npc_engine\engines\emotion\emotion_state.py                                 20      0   100%
+src\npc_engine\engines\emotion\emotion_store.py                                 13      0   100%
+src\npc_engine\engines\emotion\emotion_updater.py                               41      1    98%   102
+src\npc_engine\engines\emotion\trait_modulated_model.py                         45      2    96%   140, 164
+src\npc_engine\engines\emotion\vad_emotion_model.py                             33      0   100%
+src\npc_engine\engines\events\__init__.py                                        1      0   100%
+src\npc_engine\engines\events\disruption_loader.py                              24      1    96%   47
+src\npc_engine\engines\events\event_handler.py                                 101      6    94%   53, 84, 123, 201, 225, 248
+src\npc_engine\engines\events\event_pool.py                                     20      1    95%   51
+src\npc_engine\engines\faction_politics\__init__.py                              1      0   100%
+src\npc_engine\engines\faction_politics\faction_politics_engine.py              68      2    97%   89, 155
+src\npc_engine\engines\faction_politics\rules_loader.py                         36      3    92%   62, 70, 77
+src\npc_engine\engines\gossip\__init__.py                                        1      0   100%
+src\npc_engine\engines\gossip\distortion_strategy.py                            12      0   100%
+src\npc_engine\engines\gossip\gossip_config.py                                  21      1    95%   52
+src\npc_engine\engines\gossip\gossip_distort.py                                 61      0   100%
+src\npc_engine\engines\gossip\gossip_handler.py                                111      4    96%   143-144, 397-398
+src\npc_engine\engines\gossip\pair_selector.py                                  50     14    72%   43, 85, 88-100
+src\npc_engine\engines\gossip\pair_weighting.py                                  9      0   100%
+src\npc_engine\engines\gossip\secret_share_policy.py                            10      0   100%
+src\npc_engine\engines\gossip\strategies\__init__.py                             1      0   100%
+src\npc_engine\engines\gossip\strategies\exaggeration.py                         7      0   100%
+src\npc_engine\engines\gossip\strategies\omission.py                             6      0   100%
+src\npc_engine\engines\gossip\strategies\prefix_loader.py                       16      0   100%
+src\npc_engine\engines\gossip\strategies\role_swap.py                            7      0   100%
+src\npc_engine\engines\gossip\strategies\timeline_shift.py                       7      0   100%
+src\npc_engine\engines\idempotency\__init__.py                                   1      0   100%
+src\npc_engine\engines\idempotency\cleanup_scheduler.py                         20      4    80%   48-51
+src\npc_engine\engines\idempotency\models.py                                    12      0   100%
+src\npc_engine\engines\idempotency\service.py                                   39      4    90%   84, 127-132
+src\npc_engine\engines\idempotency\service_helpers.py                           40      1    98%   120
+src\npc_engine\engines\idempotency\store_protocol.py                            11      0   100%
+src\npc_engine\engines\interaction\__init__.py                                   5      0   100%
+src\npc_engine\engines\interaction\dispatch.py                                  21      0   100%
+src\npc_engine\engines\interaction\models.py                                    28      1    96%   52
+src\npc_engine\engines\interaction\negotiation_store.py                         40      0   100%
+src\npc_engine\engines\interaction\quest_handler.py                             83      8    90%   132, 158-159, 175, 206, 214-215, 223
+src\npc_engine\engines\interaction\quest_verifier.py                            47      2    96%   205-206
+src\npc_engine\engines\interaction\trade_handler.py                             60      4    93%   111-119
+src\npc_engine\engines\interaction\trade_handler_sync.py                        30      0   100%
+src\npc_engine\engines\investigation\__init__.py                                 3      0   100%
+src\npc_engine\engines\investigation\investigation_engine.py                    32      1    97%   129
+src\npc_engine\engines\investigation\scheme_detection_tick.py                   22      0   100%
+src\npc_engine\engines\knowledge_learning\__init__.py                            4      0   100%
+src\npc_engine\engines\knowledge_learning\knowledge_extraction_engine.py        35      0   100%
+src\npc_engine\engines\knowledge_learning\models.py                             10      0   100%
+src\npc_engine\engines\llm\__init__.py                                           2      0   100%
+src\npc_engine\engines\llm\factory.py                                           33      0   100%
+src\npc_engine\engines\llm\llm_metrics.py                                       16      0   100%
+src\npc_engine\engines\llm\mock_adapter.py                                      54      2    96%   122, 157
+src\npc_engine\engines\llm\ollama_adapter.py                                   110     21    81%   87, 137-142, 145-146, 202-207, 211, 213, 219, 271, 289, 291
+src\npc_engine\engines\llm\ollama_payload.py                                    18      0   100%
+src\npc_engine\engines\llm\openai_adapter.py                                   124     24    81%   62, 75-76, 128-135, 138-139, 154, 157, 217, 252-256, 277-278, 280, 283, 286
+src\npc_engine\engines\llm\prompt_eval_log.py                                   19      0   100%
+src\npc_engine\engines\llm\protocols.py                                         15      0   100%
+src\npc_engine\engines\llm_config_models.py                                     43      0   100%
+src\npc_engine\engines\llm_runtime_config.py                                    34      0   100%
+src\npc_engine\engines\memory\__init__.py                                        3      0   100%
+src\npc_engine\engines\memory\memory_decay_tick.py                              15      0   100%
+src\npc_engine\engines\memory\memory_engine.py                                  45      0   100%
+src\npc_engine\engines\memory_consolidation\__init__.py                          3      0   100%
+src\npc_engine\engines\memory_consolidation\memory_consolidation_engine.py      65      4    94%   149-152
+src\npc_engine\engines\military\__init__.py                                      3      0   100%
+src\npc_engine\engines\military\military_battle_service.py                      70      2    97%   94, 183
+src\npc_engine\engines\military\military_engine.py                              15      0   100%
+src\npc_engine\engines\military\military_resource_service.py                    40      0   100%
+src\npc_engine\engines\mood\__init__.py                                          3      0   100%
+src\npc_engine\engines\mood\mood_contagion_engine.py                            50      0   100%
+src\npc_engine\engines\need\__init__.py                                          3      0   100%
+src\npc_engine\engines\need\need_decay_engine.py                                29      0   100%
+src\npc_engine\engines\oath\__init__.py                                          1      0   100%
+src\npc_engine\engines\oath\oath_engine.py                                      19      1    95%   52
+src\npc_engine\engines\planning\__init__.py                                      1      0   100%
+src\npc_engine\engines\planning\action_priority.py                              15      0   100%
+src\npc_engine\engines\planning\action_selector.py                              28      2    93%   62-63
+src\npc_engine\engines\planning\goal_former.py                                  31      0   100%
+src\npc_engine\engines\planning\goal_former_adapter.py                          29      0   100%
+src\npc_engine\engines\player_model\__init__.py                                  3      0   100%
+src\npc_engine\engines\player_model\player_model_engine.py                      35      1    97%   106
+src\npc_engine\engines\player_model\player_model_tick.py                        34      0   100%
+src\npc_engine\engines\ports\__init__.py                                        32      0   100%
+src\npc_engine\engines\ports\chapter_port.py                                    12      0   100%
+src\npc_engine\engines\ports\character_read_port.py                              4      0   100%
+src\npc_engine\engines\ports\clock_port.py                                       5      0   100%
+src\npc_engine\engines\ports\dialogue_context_port.py                            4      0   100%
+src\npc_engine\engines\ports\dialogue_graph_port.py                              8      0   100%
+src\npc_engine\engines\ports\economy_port.py                                     9      0   100%
+src\npc_engine\engines\ports\emotion_bootstrap_port.py                           4      0   100%
+src\npc_engine\engines\ports\emotion_port.py                                     4      0   100%
+src\npc_engine\engines\ports\event_port.py                                      10      0   100%
+src\npc_engine\engines\ports\faction_politics_port.py                            7      0   100%
+src\npc_engine\engines\ports\gossip_port.py                                     13      0   100%
+src\npc_engine\engines\ports\group_port.py                                       9      0   100%
+src\npc_engine\engines\ports\intent_port.py                                     10      0   100%
+src\npc_engine\engines\ports\interaction_port.py                                10      0   100%
+src\npc_engine\engines\ports\investigation_port.py                               9      0   100%
+src\npc_engine\engines\ports\knowledge_port.py                                   5      0   100%
+src\npc_engine\engines\ports\memory_consolidation_port.py                        7      0   100%
+src\npc_engine\engines\ports\memory_port.py                                      7      0   100%
+src\npc_engine\engines\ports\military_port.py                                   12      0   100%
+src\npc_engine\engines\ports\mood_port.py                                        6      0   100%
+src\npc_engine\engines\ports\need_port.py                                        5      0   100%
+src\npc_engine\engines\ports\planning_port.py                                    9      0   100%
+src\npc_engine\engines\ports\player_location_read_port.py                        5      0   100%
+src\npc_engine\engines\ports\player_model_port.py                                4      0   100%
+src\npc_engine\engines\ports\pledge_port.py                                      7      0   100%
+src\npc_engine\engines\ports\political_port.py                                   9      0   100%
+src\npc_engine\engines\ports\proactive_memory_read_port.py                       4      0   100%
+src\npc_engine\engines\ports\quest_generation_port.py                           21      0   100%
+src\npc_engine\engines\ports\quest_port.py                                      23      0   100%
+src\npc_engine\engines\ports\relation_phase_write_port.py                        4      0   100%
+src\npc_engine\engines\ports\relation_read_port.py                               6      0   100%
+src\npc_engine\engines\ports\reputation_port.py                                  4      0   100%
+src\npc_engine\engines\ports\routine_port.py                                     7      0   100%
+src\npc_engine\engines\ports\scheming_port.py                                   12      0   100%
+src\npc_engine\engines\ports\skill_port.py                                       5      0   100%
+src\npc_engine\engines\ports\story_pacing_port.py                                5      0   100%
+src\npc_engine\engines\ports\treaty_port.py                                      7      0   100%
+src\npc_engine\engines\ports\world_state_port.py                                 6      0   100%
+src\npc_engine\engines\proactive_dialogue\__init__.py                            4      0   100%
+src\npc_engine\engines\proactive_dialogue\models.py                             19      0   100%
+src\npc_engine\engines\proactive_dialogue\proactive_engine.py                   45      0   100%
+src\npc_engine\engines\proactive_dialogue\proactive_queue.py                    18      1    94%   79
+src\npc_engine\engines\proactive_dialogue\proactive_tick_adapter.py             80      0   100%
+src\npc_engine\engines\proactive_dialogue\trigger_router.py                     21      0   100%
+src\npc_engine\engines\quest\__init__.py                                         1      0   100%
+src\npc_engine\engines\quest\models.py                                          44      0   100%
+src\npc_engine\engines\quest\quest_chain_offer_adapter.py                       23      0   100%
+src\npc_engine\engines\quest\quest_chain_resolver.py                            25      0   100%
+src\npc_engine\engines\quest\quest_engine_helpers.py                            18      4    78%   47-50
+src\npc_engine\engines\quest\quest_lifecycle_engine.py                          98     14    86%   76, 78, 80, 105-111, 138-147, 197-204, 206, 255, 260, 306
+src\npc_engine\engines\quest\quest_offer_service.py                             42      4    90%   68, 70, 72, 162
+src\npc_engine\engines\quest\quest_reward_router.py                             47     11    77%   65, 67, 69, 77, 111-114, 122-126, 159-168
+src\npc_engine\engines\quest_generation\__init__.py                              1      0   100%
+src\npc_engine\engines\quest_generation\event_quest_trigger.py                  43      0   100%
+src\npc_engine\engines\quest_generation\need_quest_trigger.py                   41      0   100%
+src\npc_engine\engines\quest_generation\quest_generation_engine.py             135     17    87%   99, 135, 167, 201, 284-289, 327-329, 341, 361-367
+src\npc_engine\engines\quest_generation\slot_models.py                          27      0   100%
+src\npc_engine\engines\quest_generation\slot_validator.py                       39     15    62%   51-53, 87-105
+src\npc_engine\engines\quest_generation\template_loader.py                      31      4    87%   42, 51, 61, 68
+src\npc_engine\engines\quest_generation\world_state_quest_trigger.py            51      2    96%   197-201
+src\npc_engine\engines\relationship\__init__.py                                  3      0   100%
+src\npc_engine\engines\relationship\affinity_engine.py                          40      0   100%
+src\npc_engine\engines\relationship\phase_transition_applier.py                 15      0   100%
+src\npc_engine\engines\relationship\standing.py                                 28      0   100%
+src\npc_engine\engines\reputation\__init__.py                                    1      0   100%
+src\npc_engine\engines\reputation\propagation_config.py                         14      0   100%
+src\npc_engine\engines\reputation\reputation_engine.py                          53      3    94%   154-155, 159
+src\npc_engine\engines\reputation\reputation_tick_adapter.py                    20      0   100%
+src\npc_engine\engines\routine\__init__.py                                       1      0   100%
+src\npc_engine\engines\routine\routine_engine.py                                56      0   100%
+src\npc_engine\engines\routine\routine_queries.py                                2      0   100%
+src\npc_engine\engines\scheming\__init__.py                                      3      0   100%
+src\npc_engine\engines\scheming\covert_event_factory.py                         22      0   100%
+src\npc_engine\engines\scheming\scheme_advance_tick.py                          44      0   100%
+src\npc_engine\engines\scheming\scheming_engine.py                              47      1    98%   167
+src\npc_engine\engines\skill\__init__.py                                         1      0   100%
+src\npc_engine\engines\skill\skill_progression_engine.py                        20      0   100%
+src\npc_engine\engines\story_pacing\__init__.py                                  1      0   100%
+src\npc_engine\engines\story_pacing\pacing_rules_loader.py                      21      2    90%   62, 65
+src\npc_engine\engines\story_pacing\story_pacing_engine.py                      36      0   100%
+src\npc_engine\engines\succession\__init__.py                                    3      0   100%
+src\npc_engine\engines\succession\succession_engine.py                          32      1    97%   76
+src\npc_engine\engines\treaty\__init__.py                                        1      0   100%
+src\npc_engine\engines\treaty\treaty_engine.py                                  23      1    96%   61
+src\npc_engine\engines\tts\__init__.py                                           1      0   100%
+src\npc_engine\engines\tts\factory.py                                           23      1    96%   81
+src\npc_engine\engines\tts\mock_adapter.py                                      10      0   100%
+src\npc_engine\engines\tts\piper_adapter.py                                     48      3    94%   45, 74-75
+src\npc_engine\engines\tts\protocols.py                                          8      0   100%
+src\npc_engine\engines\tts\voice_modulator.py                                   23      0   100%
+src\npc_engine\engines\tts\voice_params.py                                       7      0   100%
+src\npc_engine\graph\__init__.py                                                 1      0   100%
+src\npc_engine\graph\character\__init__.py                                       1      0   100%
+src\npc_engine\graph\character\character_reader.py                               9      0   100%
+src\npc_engine\graph\character\player_model_writer.py                           25      0   100%
+src\npc_engine\graph\character\skill_queries.py                                 25      6    76%   102-103, 122-127, 176-177
+src\npc_engine\graph\character\skill_service.py                                 18      0   100%
+src\npc_engine\graph\character\trait_queries.py                                  9      2    78%   62-63
+src\npc_engine\graph\character\trait_service.py                                 10      0   100%
+src\npc_engine\graph\economy\__init__.py                                         1      0   100%
+src\npc_engine\graph\economy\currency_queries.py                                 6      0   100%
+src\npc_engine\graph\economy\currency_writer.py                                 79     24    70%   59-75, 100-109, 122-126, 161-163, 222, 224, 232, 242
+src\npc_engine\graph\economy\item_queries.py                                    27      5    81%   96-105
+src\npc_engine\graph\economy\item_service.py                                    27      2    93%   120, 130
+src\npc_engine\graph\economy\item_writer.py                                     43      1    98%   158
+src\npc_engine\graph\economy\owes_queries.py                                    15      0   100%
+src\npc_engine\graph\economy\owes_service.py                                    21      0   100%
+src\npc_engine\graph\economy\pricing_queries.py                                 30     19    37%   49-54, 70-75, 91-99, 112-117
+src\npc_engine\graph\emotion\__init__.py                                         1      0   100%
+src\npc_engine\graph\emotion\emotion_reader.py                                  15     10    33%   37-47
+src\npc_engine\graph\emotion\emotion_writer.py                                   7      0   100%
+src\npc_engine\graph\emotion\mood_queries.py                                    23     10    57%   63-67, 83-87, 104, 123-124
+src\npc_engine\graph\event\__init__.py                                           1      0   100%
+src\npc_engine\graph\event\event_emission_service.py                            47      8    83%   107-110, 124-129
+src\npc_engine\graph\event\event_feed_queries.py                                12      0   100%
+src\npc_engine\graph\event\event_queries.py                                     25     11    56%   85-86, 105, 121-122, 127, 164-168
+src\npc_engine\graph\event\event_trigger_queries.py                             21     12    43%   56-63, 81-88, 104-110
+src\npc_engine\graph\event\event_writer.py                                      34      5    85%   46-48, 87, 105-106
+src\npc_engine\graph\faction\__init__.py                                         1      0   100%
+src\npc_engine\graph\faction\faction_history_queries.py                         12      4    67%   81-87, 108-114
+src\npc_engine\graph\faction\faction_history_service.py                         27      0   100%
+src\npc_engine\graph\faction\faction_politics_queries.py                        16      6    62%   62-63, 86-87, 101-102
+src\npc_engine\graph\faction\faction_queries.py                                 45      3    93%   108, 227-228
+src\npc_engine\graph\faction\faction_service.py                                 48     26    46%   50, 62-65, 86-89, 101-104, 117-120, 132-135, 147-150, 165, 176, 187, 198, 210, 221, 232
+src\npc_engine\graph\faction\faction_writer.py                                  37      2    95%   115, 200
+src\npc_engine\graph\generic\__init__.py                                         1      0   100%
+src\npc_engine\graph\generic\generic_edge_service.py                            59     26    56%   35-49, 75-95, 179-182
+src\npc_engine\graph\generic\generic_graph_base.py                              10      0   100%
+src\npc_engine\graph\generic\generic_graph_service.py                            5      0   100%
+src\npc_engine\graph\generic\generic_graph_utils.py                             69     12    83%   49, 67, 69, 95, 98-99, 153, 171, 178-181
+src\npc_engine\graph\generic\generic_node_service.py                            73     43    41%   41-62, 74-83, 96-106, 156-180, 187, 190-191
+src\npc_engine\graph\gossip\__init__.py                                          1      0   100%
+src\npc_engine\graph\gossip\gossip_batch_queries.py                             30     16    47%   88-92, 113-119, 138-141
+src\npc_engine\graph\gossip\gossip_queries.py                                   29     13    55%   102-104, 120-124, 137-139, 151-152, 165-166
+src\npc_engine\graph\gossip\gossip_spread_service.py                            11      0   100%
+src\npc_engine\graph\gossip\gossip_write_queries.py                             20      8    60%   88, 119, 142-144, 171-180
+src\npc_engine\graph\gossip\rumor_queries.py                                    22      8    64%   117-122, 139-140, 157-158, 175-176
+src\npc_engine\graph\gossip\rumor_service.py                                    25      1    96%   189
+src\npc_engine\graph\gossip\rumor_trace_service.py                              19      0   100%
+src\npc_engine\graph\graph_admin_service.py                                     41     22    46%   19, 44, 64, 79, 94, 113-127, 154-183
+src\npc_engine\graph\graph_rag_queries.py                                       14      3    79%   102-104
+src\npc_engine\graph\graph_reader.py                                            91     63    31%   76-91, 109-113, 128-133, 150-155, 169-176, 191-196, 202-217, 264-269
+src\npc_engine\graph\graph_writer.py                                            56      3    95%   280-282
+src\npc_engine\graph\group\__init__.py                                           1      0   100%
+src\npc_engine\graph\group\group_queries.py                                     36     15    58%   138-143, 160-161, 178-179, 196-197, 214-215, 234-240, 257-258
+src\npc_engine\graph\group\group_service.py                                     23      2    91%   185, 202
+src\npc_engine\graph\idempotency\__init__.py                                     1      0   100%
+src\npc_engine\graph\idempotency\idempotency_models.py                          17      0   100%
+src\npc_engine\graph\idempotency\idempotency_queries.py                          7      0   100%
+src\npc_engine\graph\idempotency\idempotency_writer.py                          58     12    79%   37-38, 148, 178, 217, 257-272, 287
+src\npc_engine\graph\infra\__init__.py                                           1      0   100%
+src\npc_engine\graph\infra\db.py                                                36      5    86%   39, 52-54, 87
+src\npc_engine\graph\infra\delta_log_writer.py                                   8      2    75%   40-41
+src\npc_engine\graph\infra\embedding_load_queries.py                            22     13    41%   92-110, 127-130
+src\npc_engine\graph\infra\embedding_sync_queries.py                            18      1    94%   101
+src\npc_engine\graph\infra\json_fields.py                                        8      0   100%
+src\npc_engine\graph\infra\labels.py                                             9      0   100%
+src\npc_engine\graph\infra\migration_state_models.py                            13      0   100%
+src\npc_engine\graph\infra\migration_state_writer.py                            17      0   100%
+src\npc_engine\graph\infra\relationships.py                                      9      0   100%
+src\npc_engine\graph\infra\replay_helpers.py                                    12      0   100%
+src\npc_engine\graph\infra\schema_bootstrap.py                                  18      0   100%
+src\npc_engine\graph\infra\session_persistence.py                               40      3    92%   56, 63, 117
+src\npc_engine\graph\infra\transaction_coordinator.py                           11      0   100%
+src\npc_engine\graph\infra\transfer_validators.py                               42      0   100%
+src\npc_engine\graph\infra\write_metrics.py                                     10      0   100%
+src\npc_engine\graph\intent\__init__.py                                          1      0   100%
+src\npc_engine\graph\intent\intent_queries.py                                   78     51    35%   128-133, 146-151, 164-169, 185-190, 203-208, 226-231, 244-249, 259-260, 281-287, 303-310, 320-321, 334-339
+src\npc_engine\graph\intent\intent_queue_reader.py                              14      0   100%
+src\npc_engine\graph\intent\intent_queue_writer.py                              27      0   100%
+src\npc_engine\graph\intent\interaction_queries.py                              10      3    70%   60-61, 85
+src\npc_engine\graph\intrigue\__init__.py                                        1      0   100%
+src\npc_engine\graph\intrigue\investigation_queries.py                          32     14    56%   53-54, 70-71, 105-106, 141-142, 184-190, 231-232, 269-270
+src\npc_engine\graph\intrigue\investigation_service.py                          28      0   100%
+src\npc_engine\graph\intrigue\scheme_reader.py                                  59      0   100%
+src\npc_engine\graph\intrigue\scheme_writer.py                                  33      2    94%   145, 147
+src\npc_engine\graph\intrigue\secret_queries.py                                  8      0   100%
+src\npc_engine\graph\intrigue\secret_service.py                                 20      1    95%   107
+src\npc_engine\graph\knowledge\__init__.py                                       1      0   100%
+src\npc_engine\graph\knowledge\belief_queries.py                                18      5    72%   119-128
+src\npc_engine\graph\knowledge\belief_service.py                                24      1    96%   131
+src\npc_engine\graph\knowledge\causality_queries.py                             12      4    67%   74-79, 98-99
+src\npc_engine\graph\knowledge\causality_service.py                             10      0   100%
+src\npc_engine\graph\knowledge\knowledge_writer.py                              12      0   100%
+src\npc_engine\graph\knowledge\witnessed_queries.py                             23     12    48%   95-99, 118-124, 141-145
+src\npc_engine\graph\knowledge\witnessed_service.py                             14      0   100%
+src\npc_engine\graph\location\__init__.py                                        1      0   100%
+src\npc_engine\graph\location\location_graph_queries.py                         40      0   100%
+src\npc_engine\graph\location\location_history_queries.py                       13      4    69%   84-89, 110-116
+src\npc_engine\graph\location\location_history_service.py                       15      0   100%
+src\npc_engine\graph\location\location_writer.py                                12      0   100%
+src\npc_engine\graph\location\player_location_reader.py                         20     13    35%   67-81, 95-103
+src\npc_engine\graph\memory\__init__.py                                          1      0   100%
+src\npc_engine\graph\memory\memory_queries.py                                   18      8    56%   120-132, 152-163
+src\npc_engine\graph\memory\memory_service.py                                   37      8    78%   169-179, 193-197
+src\npc_engine\graph\memory\proactive_memory_reader.py                          11      0   100%
+src\npc_engine\graph\military\__init__.py                                        1      0   100%
+src\npc_engine\graph\military\military_control_writer.py                        14      4    71%   56, 78, 98, 118
+src\npc_engine\graph\military\military_queries.py                               21     12    43%   31-41, 57-67, 83-93, 109-118, 135-145, 159-169
+src\npc_engine\graph\military\military_writer.py                                34     12    65%   87-107, 128-143, 159, 185, 213, 235, 269
+src\npc_engine\graph\narrative\__init__.py                                       1      0   100%
+src\npc_engine\graph\narrative\chapter_queries.py                               34     17    50%   76-80, 102-103, 128-132, 150-153, 178-181, 207-209
+src\npc_engine\graph\narrative\chapter_writer.py                                20      8    60%   74-83, 99-104, 127-134, 154
+src\npc_engine\graph\narrative\story_pacing_queries.py                          12      0   100%
+src\npc_engine\graph\needs_goals\__init__.py                                     1      0   100%
+src\npc_engine\graph\needs_goals\goal_queries.py                                 9      0   100%
+src\npc_engine\graph\needs_goals\goal_service.py                                23      1    96%   140
+src\npc_engine\graph\needs_goals\goal_targets_writer.py                          5      1    80%   49
+src\npc_engine\graph\needs_goals\need_queries.py                                21     13    38%   31-42, 59-71, 93-107, 123-135, 154-163
+src\npc_engine\graph\needs_goals\need_writer.py                                 12      6    50%   39-58, 74-75, 99
+src\npc_engine\graph\political\__init__.py                                       1      0   100%
+src\npc_engine\graph\political\pledge_queries.py                                46     18    61%   104-109, 126-130, 214-225, 246-257
+src\npc_engine\graph\political\pledge_service.py                                29      1    97%   146
+src\npc_engine\graph\political\pledge_violation_service.py                      36      4    89%   159-165
+src\npc_engine\graph\political\political_agenda_writer.py                       16      6    62%   65-74, 90, 110-111
+src\npc_engine\graph\political\political_queries.py                             45     24    47%   58-62, 78-79, 91-92, 119-120, 164-165, 181-182, 199-203, 243-244, 267-268
+src\npc_engine\graph\political\political_title_writer.py                        16      6    62%   66-75, 96-97, 124
+src\npc_engine\graph\political\treaty_queries.py                                43     21    51%   99-100, 117-118, 135-139, 169-170, 183-187, 206-210
+src\npc_engine\graph\political\treaty_service.py                                60      2    97%   215-216
+src\npc_engine\graph\quest\__init__.py                                           1      0   100%
+src\npc_engine\graph\quest\need_quest_queries.py                                 8      4    50%   42-45
+src\npc_engine\graph\quest\quest_generation_queries.py                          29     13    55%   63-68, 108-112, 128-129
+src\npc_engine\graph\quest\quest_node_queries.py                                 5      0   100%
+src\npc_engine\graph\quest\quest_node_service.py                                25      8    68%   41-60, 120-122
+src\npc_engine\graph\quest\quest_queries.py                                     15      4    73%   64-73
+src\npc_engine\graph\quest\quest_verification_queries.py                        27     15    44%   51-53, 67-69, 83-85, 98-100, 114-116
+src\npc_engine\graph\quest\quest_writer.py                                      43     17    60%   90-95, 168-169, 184-189, 210-218
+src\npc_engine\graph\relations\__init__.py                                       1      0   100%
+src\npc_engine\graph\relations\relation_delta_writer.py                         47      3    94%   55-57
+src\npc_engine\graph\relations\relation_phase_reader.py                         20      0   100%
+src\npc_engine\graph\relations\relation_phase_writer.py                          8      0   100%
+src\npc_engine\graph\relations\relation_reader.py                               14      5    64%   33, 51-54, 66
+src\npc_engine\graph\relations\relation_writer.py                               16      9    44%   47-51, 72-82
+src\npc_engine\graph\relations\trust_queries.py                                 20      0   100%
+src\npc_engine\graph\repositories\__init__.py                                   32      0   100%
+src\npc_engine\graph\repositories\chapter_repository.py                         45      6    87%   59-61, 65-67
+src\npc_engine\graph\repositories\character_read_repository.py                  10      0   100%
+src\npc_engine\graph\repositories\dialogue_repository.py                        48      0   100%
+src\npc_engine\graph\repositories\economy_repository.py                         32      0   100%
+src\npc_engine\graph\repositories\emotion_bootstrap_repository.py               11      3    73%   41-43
+src\npc_engine\graph\repositories\emotion_repository.py                         11      0   100%
+src\npc_engine\graph\repositories\event_repository.py                           31      0   100%
+src\npc_engine\graph\repositories\faction_politics_repository.py                30      1    97%   77
+src\npc_engine\graph\repositories\gossip_repository.py                          69      0   100%
+src\npc_engine\graph\repositories\group_repository.py                           32      9    72%   47-49, 55-57, 90-92
+src\npc_engine\graph\repositories\idempotency_repository.py                     36     21    42%   33-35, 52-54, 83-85, 118-120, 152-154, 187-189, 209-211
+src\npc_engine\graph\repositories\intent_repository.py                          36      9    75%   52-54, 58-60, 72-74
+src\npc_engine\graph\repositories\interaction_repository.py                     37      3    92%   66-68
+src\npc_engine\graph\repositories\investigation_repository.py                   31      6    81%   47-49, 53-55
+src\npc_engine\graph\repositories\knowledge_repository.py                       16      0   100%
+src\npc_engine\graph\repositories\memory_consolidation_repository.py            26      0   100%
+src\npc_engine\graph\repositories\memory_repository.py                          19      0   100%
+src\npc_engine\graph\repositories\military_repository.py                        45      0   100%
+src\npc_engine\graph\repositories\mood_repository.py                            19      0   100%
+src\npc_engine\graph\repositories\need_repository.py                            16      0   100%
+src\npc_engine\graph\repositories\planning_repository.py                        31      0   100%
+src\npc_engine\graph\repositories\player_location_read_repository.py            15      0   100%
+src\npc_engine\graph\repositories\player_model_repository.py                    10      0   100%
+src\npc_engine\graph\repositories\pledge_repository.py                          24      3    88%   59-61
+src\npc_engine\graph\repositories\political_repository.py                       33      9    73%   59-61, 65-67, 71-73
+src\npc_engine\graph\repositories\proactive_memory_read_repository.py           12      0   100%
+src\npc_engine\graph\repositories\quest_generation_repository.py                99     57    42%   58-61, 65-68, 72-74, 78-87, 99-101, 105-107, 120-122, 134-136, 140-142, 148-150, 170-172, 178-180, 184-186, 190-192, 208-210, 214-216
+src\npc_engine\graph\repositories\relation_phase_write_repository.py            10      0   100%
+src\npc_engine\graph\repositories\relation_read_repository.py                   15      0   100%
+src\npc_engine\graph\repositories\reputation_repository.py                      10      0   100%
+src\npc_engine\graph\repositories\routine_repository.py                         24      3    88%   59-61
+src\npc_engine\graph\repositories\scheming_repository.py                        48      9    81%   80-82, 147-149, 160-162
+src\npc_engine\graph\repositories\skill_repository.py                           16      0   100%
+src\npc_engine\graph\repositories\story_pacing_repository.py                    15      0   100%
+src\npc_engine\graph\repositories\treaty_repository.py                          23      3    87%   49-51
+src\npc_engine\graph\repositories\world_state_repository.py                     16      0   100%
+src\npc_engine\graph\reputation\__init__.py                                      1      0   100%
+src\npc_engine\graph\reputation\reputation_event_seeder.py                      20      0   100%
+src\npc_engine\graph\reputation\reputation_nudge.py                             29     16    45%   46-53, 74-89, 94
+src\npc_engine\graph\reputation\reputation_queries.py                           38      1    97%   87
+src\npc_engine\graph\reputation\reputation_service.py                           35     19    46%   46, 63-66, 82-85, 118-138, 153-158, 174, 185, 200
+src\npc_engine\graph\reputation\reputation_writer.py                            27      2    93%   120, 144
+src\npc_engine\graph\scheduling\__init__.py                                      1      0   100%
+src\npc_engine\graph\scheduling\routine_queries.py                              18      4    78%   77-78, 99, 114
+src\npc_engine\graph\scheduling\schedule_queries.py                             49      0   100%
+src\npc_engine\graph\scheduling\schedule_service.py                             47      0   100%
+src\npc_engine\graph\scheduling\schedule_writer.py                              19      9    53%   59-62, 84-91, 105
+src\npc_engine\graph\scheduling\tick_lease_queries.py                           23     11    52%   72, 98-108, 130-138, 159, 186-193
+src\npc_engine\graph\scheduling\tick_scheduler_queries.py                       10      0   100%
+src\npc_engine\graph\world_state\__init__.py                                     1      0   100%
+src\npc_engine\graph\world_state\world_state_reader.py                          29      2    93%   34, 40
+src\npc_engine\graph\world_state\world_state_writer.py                          23      6    74%   159, 173-177
+src\npc_engine\main.py                                                         144      7    95%   138, 143, 190-196, 250-251
+src\npc_engine\mutation\__init__.py                                              1      0   100%
+src\npc_engine\mutation\delta_log_manager.py                                    16      0   100%
+src\npc_engine\mutation\modifier_bounds_validator.py                            29      0   100%
+src\npc_engine\retrieval\__init__.py                                             1      0   100%
+src\npc_engine\retrieval\context\__init__.py                                    16      0   100%
+src\npc_engine\retrieval\context\context_budget_enforcer.py                    148      5    97%   151, 223, 254, 348-349
+src\npc_engine\retrieval\context\context_builder.py                            111      4    96%   219, 294, 315, 347
+src\npc_engine\retrieval\context\context_builder_helpers.py                     51      9    82%   33, 41-44, 87-88, 170-171
+src\npc_engine\retrieval\context\context_cache_state.py                         55      9    84%   41-51, 95-96
+src\npc_engine\retrieval\context\context_compression.py                         67      1    99%   164
+src\npc_engine\retrieval\context\context_graph_readers.py                       83      1    99%   127
+src\npc_engine\retrieval\context\context_merger.py                              22      0   100%
+src\npc_engine\retrieval\context\context_metrics.py                             39      1    97%   122
+src\npc_engine\retrieval\context\context_need_models.py                          8      0   100%
+src\npc_engine\retrieval\context\context_profile_policy.py                      28      0   100%
+src\npc_engine\retrieval\context\context_profile_resolver.py                    10      0   100%
+src\npc_engine\retrieval\context\context_protocols.py                            5      0   100%
+src\npc_engine\retrieval\context\context_receipt.py                             45      0   100%
+src\npc_engine\retrieval\context\context_relevance_engine.py                    33      1    97%   120
+src\npc_engine\retrieval\context\context_score_extractors.py                   102      3    97%   104-105, 117
+src\npc_engine\retrieval\context\context_scoring.py                             16      0   100%
+src\npc_engine\retrieval\context\context_serializer.py                          48      0   100%
+src\npc_engine\retrieval\context\context_slots.py                               32      0   100%
+src\npc_engine\retrieval\context\context_tier_builders.py                       74      4    95%   48, 139-141
+src\npc_engine\retrieval\context\context_utils.py                               32      0   100%
+src\npc_engine\retrieval\dialogue_context\__init__.py                            4      0   100%
+src\npc_engine\retrieval\dialogue_context\dialogue_context_adapter.py           35     22    37%   46-58, 85-88, 125-145
+src\npc_engine\retrieval\dialogue_context\dialogue_context_cache.py             57      3    95%   50, 130-131
+src\npc_engine\retrieval\embedding\__init__.py                                  14      0   100%
+src\npc_engine\retrieval\embedding\corpus.py                                    69      8    88%   131-132, 266-271
+src\npc_engine\retrieval\embedding\corpus_refresher.py                          12      2    83%   60-61
+src\npc_engine\retrieval\embedding\cross_encoder_reranker.py                    16      2    88%   28-29
+src\npc_engine\retrieval\embedding\embedding_index.py                           37      6    84%   28-30, 70, 89, 98
+src\npc_engine\retrieval\embedding\embedding_reconciler.py                      55     16    71%   92, 94, 117-118, 137-156
+src\npc_engine\retrieval\embedding\sentence_encoder.py                          23     12    48%   33-47
+src\npc_engine\retrieval\embedding\topic_classifier.py                           7      0   100%
+src\npc_engine\retrieval\embedding\vector_store_factory.py                      34      4    88%   109, 128-130
+src\npc_engine\retrieval\embedding\vector_store_protocol.py                     11      0   100%
+src\npc_engine\retrieval\graph_rag\__init__.py                                   6      0   100%
+src\npc_engine\retrieval\graph_rag\graph_rag.py                                 70      9    87%   123-130, 158
+src\npc_engine\retrieval\graph_rag\memory_temporal.py                           31      2    94%   32, 36
+src\npc_engine\retrieval\graph_rag\reindex_job_service.py                       33      7    79%   37-46, 58-59, 72
+src\npc_engine\retrieval\graph_rag\subgraph_retriever.py                        60      1    98%   68
+src\npc_engine\scheduler\__init__.py                                             1      0   100%
+src\npc_engine\scheduler\engine_status_store.py                                 24      0   100%
+src\npc_engine\scheduler\engine_tick_timer.py                                   30      0   100%
+src\npc_engine\scheduler\game_clock.py                                          30      0   100%
+src\npc_engine\scheduler\tick_autopilot.py                                      38      0   100%
+src\npc_engine\scheduler\tick_budget_guard.py                                   23      0   100%
+src\npc_engine\scheduler\tick_lease.py                                          23      7    70%   58, 72-74, 95, 114, 130
+src\npc_engine\scheduler\tick_scheduler.py                                     187     11    94%   304, 454, 464-466, 476, 598, 608-609, 619-620
+src\npc_engine\schema\__init__.py                                                4      0   100%
+src\npc_engine\schema\arm_exposure_models.py                                    48      3    94%   111, 116, 130
+src\npc_engine\schema\context_config_models.py                                  58      1    98%   130
+src\npc_engine\schema\context_field_resolver.py                                  5      0   100%
+src\npc_engine\schema\context_slot_models.py                                    38      4    89%   106, 108, 110, 112
+src\npc_engine\schema\corpus_models.py                                          16      0   100%
+src\npc_engine\schema\enum_validator.py                                         13      0   100%
+src\npc_engine\schema\gossip_weight_resolver.py                                  5      0   100%
+src\npc_engine\schema\llm_schema_loader.py                                      21      0   100%
+src\npc_engine\schema\model_factory.py                                          19      0   100%
+src\npc_engine\schema\npc_profile_data_models.py                                15      0   100%
+src\npc_engine\schema\retrieval_profile_models.py                               49      2    96%   126, 134
+src\npc_engine\schema\schema_loader.py                                          25      0   100%
+src\npc_engine\schema\schema_models.py                                          47      0   100%
+src\npc_engine\schema\semantic_field_resolver.py                                11      0   100%
+src\npc_engine\scripts\__init__.py                                               1      0   100%
+src\npc_engine\scripts\check_contracts.py                                       49      8    84%   40-41, 71-73, 93-94, 98
+src\npc_engine\scripts\guard_contract_test_sync.py                             115     21    82%   77, 137, 145-146, 229-230, 258-262, 268-276, 282-286, 290
+src\npc_engine\scripts\simulate_world_flow.py                                   55      1    98%   130
+src\npc_engine\services\__init__.py                                              1      0   100%
+src\npc_engine\services\content_rating_resolver.py                               7      0   100%
+src\npc_engine\services\input_moderation.py                                     21      0   100%
+src\npc_engine\services\output_moderation.py                                    16      0   100%
+src\npc_engine\setup\__init__.py                                                 1      0   100%
+src\npc_engine\setup\first_run_flow.py                                          56      7    88%   101, 125-126, 135-136, 156-157
+src\npc_engine\setup\model_tiers.py                                             13      0   100%
+src\npc_engine\setup\neo4j_manager.py                                           30      0   100%
+src\npc_engine\setup\ollama_manager.py                                          59     16    73%   120, 147-156, 169-179
+src\npc_engine\setup\path_validator.py                                          81      3    96%   126, 140-141
+src\npc_engine\setup\stack_launcher.py                                          89     16    82%   91-92, 162, 185-190, 198-203, 233
+src\npc_engine\setup\vram_detector.py                                           19      0   100%
+src\npc_engine\setup\wizard_config.py                                           31      0   100%
+src\npc_engine\type_registry\__init__.py                                         5      0   100%
+src\npc_engine\type_registry\base_contract_loader.py                            82     11    87%   50, 77, 91, 107-108, 147-148, 154-157
+src\npc_engine\type_registry\base_contract_models.py                            31      0   100%
+src\npc_engine\type_registry\contracts.py                                       44      0   100%
+src\npc_engine\type_registry\extension_loader.py                                56      9    84%   55, 68-71, 75, 86, 92-93
+src\npc_engine\type_registry\field_validators.py                                60      6    90%   104, 110, 123, 129, 135, 140
+src\npc_engine\type_registry\merge_field_builders.py                            37      4    89%   39-45, 86
+src\npc_engine\type_registry\merge_rules.py                                     59     12    80%   105-109, 117-126, 143-144, 152-158
+src\npc_engine\type_registry\node_validator.py                                   8      1    88%   36
+src\npc_engine\type_registry\registry.py                                        14      0   100%
+src\npc_engine\type_registry\runtime_models.py                                  83      2    98%   87, 138
+src\npc_engine\type_registry\serializer.py                                      34      4    88%   48-50, 61
+src\npc_engine\type_registry\validation.py                                      84     12    86%   51, 91, 95, 141-143, 153-157, 169-170
+src\npc_engine\utils\__init__.py                                                 1      0   100%
+src\npc_engine\utils\errors.py                                                 168      1    99%   390
+src\npc_engine\utils\logging.py                                                 32      0   100%
+src\npc_engine\utils\metrics.py                                                 82      1    99%   45
+src\npc_engine\world\__init__.py                                                 1      0   100%
+src\npc_engine\world\time_utils.py                                              29      0   100%
+src\npc_engine\world\world_state.py                                             22      0   100%
+src\npc_engine\world\world_time_service.py                                      38      0   100%
+----------------------------------------------------------------------------------------------------------
+TOTAL                                                                        18583   2205    88%
+Required test coverage of 80% reached. Total coverage: 88.13%
+=========================== short test summary info ===========================
+FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_parses_and_verifies_clean
+FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire
+2 failed, 4569 passed, 41 skipped, 3344 warnings in 150.05s (0:02:30)
+make: *** [Makefile:142: test-cov] Error 1
+
+=== MAKE CHECK EXIT CODE: 2 (FAILED) ===
+Recorded by lens R1, 2026-09-08, branch remediation-2026-08, HEAD c7c55f9a
+(working tree carries the uncommitted ledger work noted in the review spec).
+
+WHAT FAILED
+  make: *** [Makefile:142: test-cov] Error 1
+  FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_parses_and_verifies_clean
+  FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire
+  Root cause: tests/unit/harness/test_roadmap_cursor.py:201 pins
+    _EXPECTED_PHASE_IDS = ["M1", "M2"]   (the RETIRED M programme)
+  while the fence now parses T1..T16. verify(phases, lines) returns [] -- the roadmap
+  itself is well-formed; only the pinned constant is stale.
+
+WHAT NEVER RAN (make check aborts at target 14 of 21)
+  test-cov-evals, test-cov-v13, test-cov-full-report, check-migrations,
+  check-api-stability, check-api-contract, check-engine-logs, check-base-rate,
+  check-dead-keywords
+  => the 11m58s figure in the review spec is the GREEN end-to-end duration; this
+     aborted run reached only 150.05s of pytest before dying.
+
+WHAT PASSED (targets 1-13)
+  check-harness (153 open tickets), check-ledger-ids, check-cited-reports,
+  check-ceiling-baseline, lint (ruff clean), check-rules (OK, 115 grandfathered,
+  but note: "1 baselined violation(s) resolved - run the update target to ratchet
+  down" == ISSUE-320, live), check-evals-rules (66 grandfathered), check-layers,
+  check-docstrings, mypy src/ (0 issues, 637 files), mypy-evals-ratchet (0 == baseline),
+  check-human-gates (0 gates), check-test-quality (0 issues)
+  pytest: 2 failed, 4569 passed, 41 skipped in 150.05s; coverage 88.13% (floor 80) OK
+
