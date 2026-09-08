@@ -87,7 +87,10 @@ These bind every task below. They exist because the review found each one violat
 *Cheap context for the next session. Add a line when a task creates something downstream work
 needs; delete it once consumed. Keep <= 10 lines.*
 
-- Nothing yet — this programme has not started.
+- **Sprint 0 is not done. Do not start the overnight loop until it is** — the loop currently
+  stages the whole working tree (ISSUE-139) and swallows concurrent edits into its commits.
+- 5 tasks in the fence are flagged for an interactive session and the loop will silently pass over
+  them: T6.3, T13.1, T13.2, T15.2, T16.1. `make roadmap-audit` reports them once T0B.2 lands.
 - The app image is **not** bind-mounted: rebuild before any before/after measurement.
 - Integration tests write to the **live** Neo4j (ISSUE-277) — never run the integration suite
   casually, and never between a corpus freeze and its generation.
@@ -111,7 +114,14 @@ needs; delete it once consumed. Keep <= 10 lines.*
 
 Read this once before your first task. It is the contract.
 
+0. **Sprint 0 first.** The loop is not safe to run until Sprint 0 lands — see its header. T0.1
+   adds a preflight refusing to start outside a dedicated worktree, which is the mechanical block
+   that enforces this.
 1. **One task per session.** Working on X, you do not also do Y. Notice Y, log Y, continue X.
+   Every task carries five lines and they are the whole specification: **`Files:`** (what you may
+   touch), **`Spec:`** (the problem, with file:line evidence so you never re-derive it),
+   **`RED anchor:`** (the check that must fail first), **`Validation:`** (the exact commands), and
+   **`Done when:`** (the finish line). Implement to those, not to your own idea of the task.
 2. **RED first.** Every task carries a **RED anchor** — a check that fails *today* and passes
    after. Run it, watch it fail, and confirm it fails *for the stated reason*. A task whose
    anchor was never seen red must not be ticked.
@@ -124,6 +134,169 @@ Read this once before your first task. It is the contract.
 5. **Report the LOC delta** in the completion note. Use the command in T0 below.
 6. A task marked with the pause glyph needs a running stack or a human judgement; the overnight
    loop skips it and it must be done in an interactive session.
+
+---
+
+# SPRINT 0 — Make the overnight loop trustworthy (DO THIS FIRST, WITH THE LOOP STOPPED)
+
+**This sprint is deliberately OUTSIDE the `LOOP:QUEUE` fence and must be done by hand.**
+
+These tasks edit `scripts/expand_loop.sh`, `scripts/loop_gates.py`, `scripts/loop.config.sh` and
+`.claude/commands/expand-linear-next.md` — the driver and the skill that execute the queue. A loop
+rewriting its own driver mid-run produces a night that cannot be diagnosed. Run these with the loop
+**stopped**, verify each by hand, then start Sprint 1.
+
+**Provenance.** T0.1-T0.3 are the R6 programme from the retired M roadmap, reinstated verbatim in
+substance. R6 was archived on 2026-09-08 as part of clearing the roadmap while all three of its
+tasks were still unticked — that was an error, and this sprint corrects it. T0.4 and T0.5 are new,
+found on 2026-09-08 while checking whether the loop was ready to run the T programme.
+
+**Why this blocks everything.** The T programme is deletion-heavy and runs for weeks. Every defect
+below either corrupts the record of what happened (T0.1), ends nights early (T0.2, T0.3), makes the
+agent fight rules that do not exist (T0.4), or lets needed work vanish silently (T0.5). Running the
+programme before fixing them means discovering the damage months later, which is precisely the
+failure mode the 2026-09-07 review was written about.
+
+### Phase T0 — the driver
+
+- [ ] **T0.1** Run the loop in a dedicated git worktree · ISSUE-139 · was R6.3
+Files: `scripts/expand_loop.sh`, `project-harness/OVERNIGHT_LOOP.md`
+Spec: the loop stages the **whole working tree**, so a concurrent interactive session's edits are
+absorbed into whatever roadmap commit the loop happens to be writing. Observed in the wild: an
+interactive fix to `evals/eval_records.py` and its tests landed inside
+`24f6a01 feat(evals): capability_rate as first-class metric` and was tagged
+`[UNVERIFIED: regression]` by a loop that never gated it.
+A worktree is strictly better than teaching the commit step to stage explicit paths: it is a
+launch-time change rather than a change to the commit transaction, it makes collision structurally
+impossible rather than filtered, and the repo already works this way (`/fix-parallel`, `NPCSystem-r5`).
+Add a preflight that **refuses to start in the primary checkout**, with the error naming how to
+create the worktree.
+RED anchor: dirty an unrelated file, run one task, and confirm the unrelated change lands inside the
+loop's commit today.
+Validation: after the fix, repeat the same experiment and confirm the loop refuses to start in the
+primary checkout; then run one task from a worktree and confirm the commit contains only that task's
+files plus the roadmap tick.
+Done when: the preflight exists, the experiment is clean, and `OVERNIGHT_LOOP.md` documents the
+worktree launch. Closes ISSUE-139.
+
+- [ ] **T0.2** Document stale-lock recovery · ISSUE-126 (remaining half) · was R6.1
+Files: `scripts/expand_loop.sh` (usage header), `project-harness/OVERNIGHT_LOOP.md`
+Spec: **the no-progress guard already exists (DEC-235) — do not delete it and do not write a second
+one.** `expand_loop.sh:648` compares each iteration's task id against `LAST_TASK_ID` and halts once
+`SAME_TASK_REPEATS` reaches `MAX_SAME_TASK_REPEATS` (default 2, set at `:103`). Measured 2026-09-03:
+an unbounded `--dry-run` terminated on its own after 6.5 minutes with exit 0, logging
+`HALT: M1.1 repeated 2 times without advancing the cursor`.
+What remains undone is the other half ISSUE-126 asks for: killing a loop leaves the `mkdir`-based
+lock directory `project-harness/.loop-state/loop.lock/` behind, so the next run aborts with
+`FATAL: another loop holds …`. Recovery is `rm -rf project-harness/.loop-state/loop.lock` and it is
+documented **nowhere** — not in the script's usage block, not in `OVERNIGHT_LOOP.md`.
+Note the guard makes the stale lock *more* likely to be met, not less: a halt is now the normal end
+of a stalled night, so the next operator meets the lock rather than the spin. Consider also printing
+the recovery command in the `FATAL` message itself, which is where someone actually reads it.
+RED anchor: `grep -rn "loop-state/loop.lock" scripts/expand_loop.sh project-harness/OVERNIGHT_LOOP.md`
+surfaces no recovery instruction today.
+Validation: create the lock dir by hand, run the loop, and confirm the failure message now tells you
+how to recover. Then recover using only what the message says.
+Done when: the recovery appears in the FATAL message, the usage header and `OVERNIGHT_LOOP.md`.
+Closes ISSUE-126.
+
+- [ ] **T0.3** Route harness self-test failures to skip-and-log, not HALT · was R6.2
+Files: `scripts/loop_gates.py`, `scripts/classify_gate_failure.py`
+Spec: `loop_gates.py` already splits HALT-class (behaviour) from AUTOFIX-class (form) and re-runs a
+failing gate's constituents individually to decide. Extend that existing classification with a third
+bucket — **harness self-test failure** — routed to skip-and-log rather than halting the night. One
+more branch in a structure that already exists; no new mechanism.
+The motivating fact, recorded in the R6 spec: *every HALT to date was the harness tripping over its
+own self-tests.* This matters more under the T programme than it did under M, because Sprints 2, 5
+and 6 add five new gate scripts (`check_engine_census.py`, `check_dip_threshold.py`,
+`check_dead_surface.py`, `check_loc_ratchet.py`, and the test-quality extension), each with its own
+tests under `tests/unit/scripts/`. The T programme actively enlarges the surface this task protects.
+Define "harness self-test" narrowly and explicitly — tests under `tests/unit/scripts/` and
+`tests/unit/harness/` — rather than by heuristic, so the bucket cannot silently swallow a product
+failure. A skipped harness failure must still be written to the morning report; skip-and-log is not
+skip-and-forget.
+RED anchor: force a failure in `tests/unit/scripts/` and confirm the loop HALTs the night today.
+Validation: after the change, the same forced failure skips the phase, logs the reason, and the
+night continues; then force a failure in a *product* test and confirm it still HALTs.
+Done when: both halves of that validation hold.
+
+### Phase T0B — the skill and the deferred-work hole
+
+- [ ] **T0B.1** Correct the loop skill's stale facts
+Files: `.claude/commands/expand-linear-next.md`, `scripts/loop.config.sh`
+Spec: the skill and the config state three things that are no longer true, and each one costs
+something.
+(1) **File limit.** The skill tells the agent "300-line file limit". `project-harness/CLAUDE.md`
+says **400 advisory, 800 hard and unwaivable** (DEC-226). An agent following the skill will split
+files that do not need splitting, adding modules to a programme whose entire purpose is removing
+them.
+(2) **Gate duration.** The skill says `make check` takes "about 144 seconds" and repeats the figure;
+`loop.config.sh` carries the same claim plus "2618 passed / 29 skipped / 87.10 % cov". Measured
+2026-09-07: **11m58s**, 4,571 passed. The stale number is dangerous rather than merely wrong — the
+skill's single most load-bearing instruction is "never background the gate, wait for it", and an
+agent told to expect 144s that sees nothing at 144s is exactly the one that concludes it hung. That
+is scar 6.1, the night-losing one. Update both, and state the figure as approximate with the date it
+was measured.
+(3) **Task grammar.** The skill names `Files:`, `RED anchor:` and `Validation:` as the three lines
+that constitute a task's specification. The T programme's tasks also carry `Spec:` and `Done when:`.
+Add both to the skill's list so the agent is told to read them — `Spec:` in particular carries the
+file:line evidence that keeps a cheap model from having to re-derive the problem.
+Do not change the loop's behaviour in this task; it is documentation accuracy only.
+RED anchor: `grep -n "300-line\|144" .claude/commands/expand-linear-next.md scripts/loop.config.sh`
+returns the stale claims today.
+Validation: re-read the skill end to end and confirm every factual claim matches the tree; then run
+one task through the loop and confirm the agent's own summary does not cite a 300-line limit.
+Done when: all three corrections are in and the grep is clean.
+
+- [ ] **T0B.2** Make deferred work visible instead of silently skipped
+Files: `scripts/roadmap_cursor.py`, `scripts/_roadmap_cursor_core.py`, `Makefile`,
+`scripts/expand_loop.sh`, new `tests/unit/scripts/test_roadmap_audit.py`
+Spec: this is the defect that would have quietly cost the most. `compute_next` documents its own
+behaviour: *"Flagged tasks (ask-gate, live, deferred) are never returned."* That is correct — an
+unattended session must not guess at a human decision — but nothing anywhere reports that a flagged
+task was passed over. The loop skips it, ticks everything after it, and the roadmap reads nearly
+complete while the skipped work never happened. Under the T programme that would mean the demo
+census, the portfolio liveness check and the DEC-273 re-measurement silently never occur.
+Add `--audit-deferred` to `roadmap_cursor.py`, exposed as `make roadmap-audit`: print every task
+inside the fence that is **flagged and not done**, with its phase, its flags, and its one-line title.
+Exit non-zero if any exist, so it can be read by a script.
+Then wire it into `expand_loop.sh` at **both ends** of a run: once at startup (so the operator sees
+the standing debt before the night begins) and once at the end, written into the morning report
+alongside the other run artifacts. Do not make it fail the night — it is a report, not a gate.
+Also add a short **Deferred backlog** section to `ROADMAP.md` listing the flagged tasks by id, so the
+debt is visible when reading the file rather than only when running a command.
+RED anchor: the new test asserts `--audit-deferred` lists exactly the flagged-and-unticked tasks for
+a fixture roadmap and exits non-zero, and exits zero when none remain. Run `make roadmap-audit`
+against the real roadmap first: it must list T6.3, T13.1, T13.2, T15.2 and T16.1 today.
+Validation: `pytest tests/unit/scripts/test_roadmap_audit.py -v`, then `make roadmap-audit`, then
+`make check`.
+Done when: the command exists, the loop reports it at both ends of a run, and the roadmap carries the
+backlog section.
+
+---
+
+## Deferred backlog — the loop will NOT do these
+
+`compute_next` never returns a flagged task: *"an unattended session must not guess at a human
+decision, and skipping costs nothing where attempting costs a whole session."* That is correct, but
+it means these tasks are passed over in silence — the loop ticks everything around them and the
+roadmap reads nearly complete while they never happened. **They are needed, not optional.**
+
+`make roadmap-audit` prints this list from the file itself once T0B.2 lands; until then this table is
+the only record. Keep it in sync when a flagged task is ticked or added.
+
+| Task | Why it cannot be automated | Blocks |
+|---|---|---|
+| **T6.3** | Reads `engine_status` off a running stack to prove `routine` and `need_decay` revived | Sprint 3's entire purpose. If this never runs, the seed edits in T5 are unverified and the world may still be dead. |
+| **T13.1** | `coverage run` over a live demo process — the census cannot be derived statically | T13.2, and therefore all of Sprint 7 |
+| **T13.2** | Needs T13.1's artifact plus a live demo run to prove nothing load-bearing was cut | Sprint 7's LOC win, the largest available after tests |
+| **T15.2** | Asserts the whole surviving portfolio does work against a running stack | The permanent version of the census that found this programme's biggest cluster |
+| **T16.1** | Re-measures latency live; the numbers are the deliverable | DEC-273 stays wrong in the ledger until this runs |
+
+**Two of these were mis-flagged in the first draft and have been fixed:** the seed edits for
+`:Schedule` and `HAS_NEED` (T5.1, T5.2) are pure `seed.py` changes with unit tests and are now loop
+work. Only their live confirmation (T6.3) is deferred. If you find yourself deferring a whole task
+for a live tail again, split it the same way.
 
 <!-- LOOP:QUEUE start -->
 <!-- Everything between these markers is the overnight loop's work queue.
@@ -161,7 +334,7 @@ literal. Keep `_release_ws_slot` in the `finally`; the fix is making the loop *r
 RED anchor: the new test opens `MAX_WS_CONNECTIONS_PER_KEY + 1` sockets **sequentially**, fully
 closing each before opening the next, and asserts the last is accepted. It fails today — the 6th
 is rejected. The sequential-close case is exactly what the existing helper-level guard misses.
-Verify: `pytest tests/unit/api/test_ws_connection_slot_release.py -v`, then `make check`.
+Validation: `pytest tests/unit/api/test_ws_connection_slot_release.py -v`, then `make check`.
 Done when: the new test passes, `make check` is green, and no other WS test regressed.
 Blocks: T1.2, T2.3, and every demo verification in this programme. SEV-01, finding L9-01.
 
@@ -189,7 +362,7 @@ is wrong on both counts and dies with the engine (ISSUE-334).
 RED anchor: a new test `tests/unit/demo/test_seed_has_no_tick_zero_defeat.py` asserting that in the
 seeded world no faction controls `DEMO_LOSE_LOCATION_ID` at tick 0 **and** that no two opposing
 armies share a location at tick 0. Write it before deleting; it must fail today.
-Verify: `pytest tests/unit/demo/test_seed_has_no_tick_zero_defeat.py -v`, then `make check`, then
+Validation: `pytest tests/unit/demo/test_seed_has_no_tick_zero_defeat.py -v`, then `make check`, then
 `make test-demo` (baseline 1,116 passed — any delta must be explained).
 Done when: `make check` green, `grep -rn "MilitaryEngine\|military_engine" src/ tests/` returns
 nothing, and the LOC delta is reported (expect about -1,373).
@@ -215,7 +388,7 @@ continue; warm-up failure must never block boot.
 RED anchor: the new test asserts that with the setting true, startup issues exactly one generation
 against a mock adapter, and zero when false, and that an adapter raising during warm-up does not
 prevent startup. All three fail today — there is no warm-up at all.
-Verify: `pytest tests/unit/setup/test_llm_warmup_on_startup.py -v`, then `make check`.
+Validation: `pytest tests/unit/setup/test_llm_warmup_on_startup.py -v`, then `make check`.
 Done when: tests pass and `make check` is green. Finding L9-04, SEV-05.
 
 - [ ] **T2.2** Cap the reply length — `max_tokens: 512` against a "1-3 sentences" instruction
@@ -234,7 +407,7 @@ truncated at the cap without producing invalid JSON.
 RED anchor: the new test asserts `DialogueResponse` rejects an over-long `npc_response`, accepts one
 at the cap, and that the configured `max_tokens` is consistent with the schema cap. The first and
 third fail today.
-Verify: `pytest tests/unit/engines/test_dialogue_response_length_cap.py -v`, then `make check`.
+Validation: `pytest tests/unit/engines/test_dialogue_response_length_cap.py -v`, then `make check`.
 **Also prove the hash did not move** — capture `dialogue_prompt_hash` before and after; if it
 changed you edited a prompt file, and you must revert that part.
 Done when: tests pass, `make check` green, hash unchanged. Finding L12-12, SEV-06.
@@ -257,7 +430,7 @@ RED anchor: the new test drives more turns per interval than the limit on a sing
 asserts the socket closes with the expected code; asserts a conforming rate is unaffected; asserts
 the limit is per key, not global. All fail today — turns are unlimited.
 Sequencing: **must land after T1.1**, which edits the same handler. Do not parallelise them.
-Verify: `pytest tests/unit/api/test_ws_dialogue_rate_limit.py -v`, then `make check`.
+Validation: `pytest tests/unit/api/test_ws_dialogue_rate_limit.py -v`, then `make check`.
 Done when: tests pass, `make check` green, and the limit is above the scripted demo's turn cadence
 so the demo still completes. Finding L1-01, SEV-09.
 
@@ -297,7 +470,7 @@ RED anchor: `python scripts/check_layers.py` and `make check` must be green afte
 `grep -rn "AgendaEngine\|SuccessionEngine\|OathEngine\|PoliticalGraphPort\|PledgeGraphPort" src/
 tests/` must return nothing. Before deleting, run that grep and record the hit count — that count
 going to zero is the anchor.
-Verify: `make check`, then `make test-demo`. The demo must still read pledges.
+Validation: `make check`, then `make test-demo`. The demo must still read pledges.
 Done when: green, grep clean, LOC delta reported (expect about -835).
 Findings L10-03, DEC-279.
 
@@ -318,7 +491,7 @@ is not visible in a five-minute demo, but it must be written down rather than di
 RED anchor: as T3.1 — record the pre-deletion hit count of
 `grep -rn "TreatyEngine\|FactionPoliticsEngine\|TreatyGraphPort\|FactionPoliticsGraphPort" src/
 tests/` and drive it to zero with `make check` staying green.
-Verify: `make check`, then `make test-demo`, then confirm `GET /v1/admin/factions/` still returns
+Validation: `make check`, then `make test-demo`, then confirm `GET /v1/admin/factions/` still returns
 standings — the service survived.
 Done when: green, grep clean, LOC delta reported (expect about -1,540).
 Findings L10-03, DEC-279.
@@ -353,7 +526,7 @@ has no active importers — delete the file, keep the `story_pacing` engine.
 RED anchor: record the pre-deletion hit count of
 `grep -rn "MoodContagionEngine\|CliqueFormationEngine\|SkillProgressionEngine\|DeceptionEngine\|SchemingEngine\|pacing_queries" src/ tests/`
 and drive it to zero with `make check` green.
-Verify: `make check`, then `make test-demo`.
+Validation: `make check`, then `make test-demo`.
 Done when: green, grep clean, LOC delta reported (expect about -2,443).
 Findings L10-01, L10-02, DEC-279.
 
@@ -375,7 +548,7 @@ RED anchor: run the new script against the tree **before** T3 and T4 land, using
 `git stash`/`git worktree` on the pre-sprint commit — it must report the engines this sprint
 deleted. On the current tree it must report zero. If it reports zero on the old tree too, the
 script is not actually checking anything and must be fixed.
-Verify: `python scripts/check_engine_census.py`, then `make check`.
+Validation: `python scripts/check_engine_census.py`, then `make check`.
 Done when: the gate is in `make check`, green on this tree, and demonstrably red on the pre-sprint
 tree. Findings L10-03, rules 3 and 7.
 
@@ -384,34 +557,38 @@ tree. Findings L10-03, rules 3 and 7.
 **Self-contained goal:** NPCs follow daily schedules and have needs, so co-location is real and
 gossip pair-selection means something. Two engines go from provably dead to provably working.
 
+**Split note:** the seed edits are mechanical and are loop work. Only the confirmation that the
+revived engines actually move NPCs needs a running stack, and that is T6.3 alone. An earlier draft
+deferred the whole of T5, which would have meant the loop skipped this sprint's entire purpose.
+
 ### Phase T5
 
-The seed defects. Both are graph-shape bugs that no observable can currently express.
+The seed defects. Both are graph-shape bugs that no observable can currently express, and both are
+pure edits to `demo_game/seeds/seed.py` plus a unit test — no services required.
 
-- [ ] **T5.1** Seed `:Schedule` nodes and `FOLLOWS_SCHEDULE` edges so `routine` can move NPCs ⏸️
+- [ ] **T5.1** Seed `:Schedule` nodes and `FOLLOWS_SCHEDULE` edges so `routine` can move NPCs
 Files: `demo_game/seeds/seed.py`, new test `demo_game/tests/test_seed_schedules.py`
 Spec: `routine_engine` moves active characters to their scheduled locations each tick. Measured on
 a running stack it returns `{'moved': 0, 'skipped': 0}` — `skipped` is 0 too, meaning its query
-matched **nothing**. A live label census confirms no `Schedule` label exists and
+matched **nothing**. A label census confirms no `Schedule` label exists, and
 `grep -n "Schedule\|FOLLOWS_SCHEDULE" demo_game/seeds/seed.py` returns no matches: the seed never
-writes them. Four more engines starve behind this — `mood` and `clique` are already deleted, but
-`proactive_dialogue`, `player_model` and gossip pair-selection all key off co-location.
-Add a `:Schedule` node per seeded NPC with time-of-day slots referencing locations that exist in
-the seed, and a `FOLLOWS_SCHEDULE` edge from each `:Character`. Keep it small: the three demo
-MetaHumans plus the NPCs on the gossip path are enough. NPC ids in the seed are stable and must not
-be renamed. Check `src/npc_engine/type_registry/` for the declared `Schedule` node shape and
-conform to it — do not invent properties.
-This task needs a running stack to confirm `routine` actually moves someone, so it is an
-interactive session, not an overnight one.
+writes them. Two more live engines starve behind this — `proactive_dialogue` and `player_model` —
+along with gossip pair-selection, all of which key off NPCs being in the same place.
+Add a `:Schedule` node per seeded NPC with time-of-day slots referencing locations that already
+exist in the seed, and a `FOLLOWS_SCHEDULE` edge from each `:Character`. Keep it small: the three
+demo MetaHumans plus the NPCs on the gossip path are enough. **NPC ids in the seed are stable — do
+not rename them.** Read `src/npc_engine/type_registry/` for the declared `Schedule` node shape and
+conform to it; do not invent properties. If the registry declares no `Schedule` type, that is a
+blocking prerequisite — halt and say so rather than inventing a schema.
+This task is complete when the seed writes the data. Proving the engine then moves someone is T6.3.
 RED anchor: the new test asserts that after seeding, every seeded `:Character` has a
-`FOLLOWS_SCHEDULE` edge to a `:Schedule` whose slots reference existing location ids. It fails
-today with zero schedules found.
-Verify: `pytest demo_game/tests/test_seed_schedules.py -v`, then `make check`, then bring a stack
-up, advance the clock several ticks, and confirm `routine` reports a non-zero `moved` count via
-`GET /v1/admin/system/engines`.
-Done when: the test passes and `routine` demonstrably moves at least one NPC. Finding L13-01.
+`FOLLOWS_SCHEDULE` edge to a `:Schedule` whose slots reference existing location ids. It fails today
+with zero schedules found.
+Validation: `pytest demo_game/tests/test_seed_schedules.py -v`, then `make check`, then
+`make test-demo`.
+Done when: the test passes and `make check` is green. Finding L13-01.
 
-- [ ] **T5.2** Add `HAS_NEED` edges so `need_decay` stops being dead ⏸️
+- [ ] **T5.2** Add `HAS_NEED` edges so `need_decay` stops being dead
 Files: `demo_game/seeds/seed.py`, new test `demo_game/tests/test_seed_needs.py`,
 `project-harness/ISSUES.md`
 Spec: the seed writes 28 `:Need` nodes carrying a `character_id` **property**, but never the
@@ -419,23 +596,23 @@ Spec: the seed writes 28 `:Need` nodes carrying a `character_id` **property**, b
 (`(:Character)-[:HAS_NEED]->(:Need)`). A complete live relationship census — 13 types — contains no
 `HAS_NEED`. `need_decay` and `need_quest_trigger` are therefore both dead and both report 0.
 This is partially logged as ISSUE-210/213 but scoped there as a cosmetic empty prompt field
-(`npc.top_need`). It is not cosmetic: it is two dead engines. **Re-scope ISSUE-210** in the same
+(`npc.top_need`). It is not cosmetic: it is two dead engines. **Re-scope ISSUE-210** in this same
 task — correct its severity and description to say so.
 Fix: write the `HAS_NEED` edge alongside each `:Need` node. Also add `SATISFIES_NEED` edges from
-locations if the registry declares them, since `need_decay` adds magnitude back at satisfying
-locations and without them the decay is one-directional.
+locations if the registry declares that edge type, since `need_decay` adds magnitude back at
+satisfying locations and without them the decay is one-directional. If the registry does not declare
+it, log an issue and leave it.
 Sequencing: this revives `need_quest_trigger`, which **increases** the quest-generation LLM
-amplification that Sprint 4 exists to bound. That is acceptable here because Sprint 4 follows
-immediately, but do not reorder the two sprints.
+amplification that Sprint 4 exists to bound. That is acceptable because Sprint 4 follows
+immediately; do not reorder the two sprints.
 RED anchor: the new test asserts every seeded `:Need` is reachable from its `:Character` via
-`HAS_NEED`. It fails today with zero edges found.
-Verify: `pytest demo_game/tests/test_seed_needs.py -v`, `make check`, then against a running stack
-confirm `need_decay` reports a non-zero worked count and `npc.top_need` is populated.
-Done when: the test passes, the engine does work, and ISSUE-210 is re-scoped. Finding L13-02.
+`HAS_NEED`. It fails today with zero such edges found.
+Validation: `pytest demo_game/tests/test_seed_needs.py -v`, then `make check`, then `make test-demo`.
+Done when: the test passes, `make check` is green, and ISSUE-210 is re-scoped. Finding L13-02.
 
 ### Phase T6
 
-Prove the revival, and fix the bug that would silently undo it.
+Fix the bug that would silently undo Sprint 3, pin the order, then prove the revival on a stack.
 
 - [ ] **T6.1** Re-read world state inside the tick loop — batched advances see a frozen clock
 Files: `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/config.py`,
@@ -443,14 +620,14 @@ Files: `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/config.py`,
 `tests/unit/scheduler/test_advance_rereads_world_state.py`, new
 `tests/unit/api/test_clock_advance_delta_bound.py`
 Spec: two defects in one call path. (1) `tick_scheduler.py:568-582` reads
-`world_state = await get_world_state(...)` **once, before** the `for tick_id in range(...)` loop
-and passes the same object into every iteration. So `routine.run_tick(time_of_day=...)` at `:461`
-sees a frozen time-of-day for all N ticks, and `_maybe_consolidate_memory` at `:538-543` builds its
+`world_state = await get_world_state(...)` **once, before** the `for tick_id in range(...)` loop and
+passes the same object into every iteration. So `routine.run_tick(time_of_day=...)` at `:461` sees a
+frozen time-of-day for all N ticks, and `_maybe_consolidate_memory` at `:538-543` builds its
 `TimePoint` from the same stale snapshot. **This directly undoes T5.1**: a batched advance would
 move every NPC into the same slot N times. (2) `config.py:52` sets `MAX_DELTA_TICKS = 1000` and
-`api/routes/world/clock.py:37` accepts `delta_ticks` up to it, all inside
-`async with self._lock` on one session — at the measured 433-570ms deterministic floor that is
-about 8 minutes of held lock with no LLM work at all.
+`api/routes/world/clock.py:37` accepts `delta_ticks` up to it, all inside `async with self._lock` on
+one session — at the measured 433-570ms deterministic floor that is about 8 minutes of held lock
+with no LLM work at all.
 Fix (1) by re-reading world state per tick, or at minimum recomputing `time_of_day` and the
 consolidation `TimePoint`. Fix (2) by lowering `MAX_DELTA_TICKS` to single digits. Before lowering
 it, `grep -rn "delta_ticks" demo_game/ evals/ e2e/` and confirm no caller relies on a large batch.
@@ -459,10 +636,10 @@ question proposing a background job instead, and move on.
 RED anchor: the first test advances N>1 ticks across a time-of-day boundary and asserts engines
 observe **changing** time-of-day. It fails today. The second asserts a `delta_ticks` above the new
 cap is rejected with 422 and the boundary value is accepted.
-Verify: `pytest tests/unit/scheduler/ tests/unit/api/test_clock_advance_delta_bound.py -v`, then
-`make check`. Measure the added per-tick graph read against the 433-570ms baseline and confirm it
-is noise.
-Done when: both tests pass, `make check` green. Finding L13-09, SEV-08.
+Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_clock_advance_delta_bound.py -v`, then
+`make check`. Measure the added per-tick graph read against the 433-570ms baseline and confirm it is
+noise, not a new regression.
+Done when: both tests pass and `make check` is green. Finding L13-09, SEV-08.
 
 - [ ] **T6.2** Pin the tick execution order
 Files: new `tests/unit/scheduler/test_tick_order.py`, `docs/ENGINES.md`
@@ -478,14 +655,35 @@ source it checks, or it asserts nothing; (b) targeted tests for each read-after-
 L13.md section A.2, asserting the writer's index is lower than the reader's. The pairwise tests
 survive a legitimate reorder; the full-sequence test intentionally does not.
 Make (a)'s failure message print expected vs actual and point at `ENGINES.md`, so the next person
-can tell an intentional reorder from an accident. Cross-check `ENGINES.md` against the real order
-and correct the doc if they disagree — **report the discrepancy rather than silently conforming
-the doc to the code.**
+can tell an intentional reorder from an accident. Cross-check `ENGINES.md` against the real order and
+correct the doc if they disagree — **report the discrepancy rather than silently conforming the doc
+to the code.**
 Note the order changed in Sprints 1-2 as engines were deleted; pin the order as it is *now*.
 RED anchor: swap two adjacent engines in `_ordered_tick_engines()`, run the test, confirm it goes
 red, restore. A test that does not go red here is not finished.
-Verify: `pytest tests/unit/scheduler/test_tick_order.py -v`, then `make check`.
+Validation: `pytest tests/unit/scheduler/test_tick_order.py -v`, then `make check`.
 Done when: both kinds of test pass and the swap experiment was observed red. Finding L13-10, SEV-15.
+
+- [ ] **T6.3** Confirm on a running stack that `routine` and `need_decay` now do work ⏸️
+Files: new `tests/integration/test_revived_engines_do_work.py`, `project-harness/ROADMAP.md`
+(carry-forward note)
+Spec: this is the live tail of T5.1 and T5.2, split out so the loop can grind the seed edits
+unattended and only this needs a stack. Bring a stack up, advance the clock several ticks against
+the seeded world, then read `GET /v1/admin/system/engines` and assert `routine` reports a non-zero
+`moved` count and `need_decay` reports a non-zero worked count. Also confirm `npc.top_need` is
+populated for at least one NPC, which is the user-visible half of ISSUE-210.
+If either is still zero after T5.1 and T5.2 landed, do not tick this task — the seed edit did not
+achieve its purpose and the defect is upstream. Say which one, and log it.
+Do NOT run the whole integration suite to do this: it writes to the live Neo4j and there is no
+separate test database (ISSUE-277). Bring up the isolated stack via `make eval-stack-up`, and
+rebuild first — the app image is not bind-mounted, so without a rebuild you are measuring the old
+seed.
+RED anchor: run this against the tree as it stood before T5.1 — both engines report zero, and the
+test fails. That failure is the evidence the sprint was needed.
+Validation: run against the isolated stack, then `make check`, then tear the stack down.
+Done when: both engines demonstrably do work, and the carry-forward note recording the co-location
+revival is added for downstream sprints. Findings L13-01, L13-02.
+
 
 # SPRINT 4 — Stop the tick from starving the player
 
@@ -525,7 +723,7 @@ and 3 change a public config contract, so record them in `DECISIONS.md`.
 RED anchor: `test_skip_llm_engines_covers_quest_triggers` asserts that with the flag true the three
 quest trigger engines make **zero** LLM calls through a mock adapter. It must fail on the current
 tree; that failure is the bug. The other two tests likewise fail today.
-Verify: `pytest tests/unit/scheduler/ tests/unit/api/test_advance_clock_passes_skip_llm.py -v`,
+Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_advance_clock_passes_skip_llm.py -v`,
 then `make check`.
 Done when: all three pass, `make check` green, DECISIONS entry written. Finding L13-05.
 
@@ -551,7 +749,7 @@ repaired. It is logged for Sprint 9.
 RED anchor: the new test constructs a tick where all three triggers fire with maximum candidates,
 counts calls through a mock adapter, and asserts the total is at or below the shared cap. It should
 count 40+ and fail today.
-Verify: `pytest tests/unit/engines/test_quest_trigger_shared_budget.py -v`, then `make check`.
+Validation: `pytest tests/unit/engines/test_quest_trigger_shared_budget.py -v`, then `make check`.
 Done when: the test passes and `make check` is green. Finding L11-03.
 
 ### Phase T8
@@ -582,7 +780,7 @@ RED anchor: the new test asserts that with N background calls in flight an inter
 acquires within a bounded wait (assert on a fake clock, never wall time), that with an interactive
 call active a background call is **shed** rather than queued, and that the new metric is observed
 for both classes. All fail today.
-Verify: `pytest tests/unit/llm/ -v`, then `make check`.
+Validation: `pytest tests/unit/llm/ -v`, then `make check`.
 Done when: tests pass and `make check` is green. Finding L13-06, SEV-04.
 
 - [ ] **T8.2** Wire the per-engine timeouts that four of five engines declare and nobody reads
@@ -609,7 +807,7 @@ Sequencing: after T8.1 — longer background timeouts are only safe once backgro
 RED anchor: the new test asserts an engine declaring `timeouts_ms.full: 30000` produces an adapter
 whose effective timeout is 30s, not 10s; and that no `llm_config.yaml` declares a field no code
 reads. Both fail today.
-Verify: `pytest tests/unit/llm/ tests/unit/engines/ -v`, then `make check`.
+Validation: `pytest tests/unit/llm/ tests/unit/engines/ -v`, then `make check`.
 Done when: tests pass, `make check` green. Related to ISSUE-298 (the temperature version of the
 same defect). Finding L11-02, SEV-10.
 
@@ -651,7 +849,7 @@ Work in batches of about five ports per commit so a regression is bisectable.
 RED anchor: a new `scripts/check_dip_threshold.py` (built in T10.1, so write it first if you prefer,
 or write a throwaway counting script here) reporting every below-threshold protocol. Record the
 count before, drive it to zero, and keep `make check` green throughout.
-Verify: `make check` after each batch, then `make test-demo`.
+Validation: `make check` after each batch, then `make test-demo`.
 Done when: every remaining protocol meets the threshold, `make check` green, LOC delta reported.
 Findings L2-01, L2-02, L2-03, L7-05, DEC-275, rule 4.
 
@@ -682,7 +880,7 @@ with structural typing letting the copies drift silently. Extract a shared base 
 siblings collapse under T9.1, this resolves itself.
 RED anchor: `grep -n "from npc_engine.graph" src/npc_engine/engines/ports/*.py` — record the hit
 count, drive it to zero for private (underscore-prefixed) types, keep `make check` green.
-Verify: `make check`, then `make test-demo`.
+Validation: `make check`, then `make test-demo`.
 Done when: no surviving port imports a private graph type, no god-port remains, LOC delta reported.
 Findings L2-03, L2-04, L2-05.
 
@@ -706,7 +904,7 @@ report how many waivers are in use so the number is visible.
 Wire into `make check`.
 RED anchor: run it on the pre-Sprint-5 commit via `git worktree` — it must report the ports T9.1
 deleted. On the current tree it must report zero. If it reports zero on both, the counting is wrong.
-Verify: `python scripts/check_dip_threshold.py`, then `make check`.
+Validation: `python scripts/check_dip_threshold.py`, then `make check`.
 Done when: the gate is in `make check`, green here, demonstrably red before T9.1. Rule 4.
 
 - [ ] **T10.2** Gate dead surface and install the reverse LOC ratchet
@@ -735,7 +933,7 @@ design principle.
 RED anchor: `check_dead_surface.py` must report the 9 settings and 2 prompts **before** you delete
 them; that report going to zero is the anchor. For the ratchet, add a throwaway 50-line module,
 confirm the gate reds, delete it.
-Verify: `python scripts/check_dead_surface.py`, `python scripts/check_loc_ratchet.py`, `make check`.
+Validation: `python scripts/check_dead_surface.py`, `python scripts/check_loc_ratchet.py`, `make check`.
 Done when: both gates in `make check` and green, the 11 dead items deleted, CLAUDE.md updated.
 Findings L10 dead-surface sweep, L12-15, ISSUE-332, rules 1, 3, 6.
 
@@ -768,7 +966,7 @@ RED anchor: this is a deletion task, so the anchor is inverted — record the te
 `make test` pass count before, and after. `make check` must stay green, and the pass count must drop
 by exactly the number of tests deleted. A larger drop means you deleted something load-bearing;
 investigate before continuing.
-Verify: `make test`, then `make check`.
+Validation: `make test`, then `make check`.
 Done when: the three categories are empty, ISSUE-234 closed, LOC delta reported.
 Findings L4-06, ISSUE-234, ISSUE-310, rule 5.
 
@@ -791,7 +989,7 @@ Sequencing: T12.2 verifies the CI job that runs these; if that verification show
 do not gate merge, this task's value drops sharply and you should say so in the completion note.
 RED anchor: re-run the counterfactual on a sample — gut five repository methods, confirm the suite
 goes red for all five. Before this task it goes red for about three of five.
-Verify: `make check`, then `make test`.
+Validation: `make check`, then `make test`.
 Done when: the sample counterfactual catches all five, LOC delta reported.
 Findings L4-05, CR-L14-02, ISSUE-309.
 
@@ -821,7 +1019,7 @@ table**, not a hardcoded list, or you recreate the same gap one level up. Keep i
 whatever `create_app()` needs rather than starting services.
 RED anchor: comment out the middleware registration in `main.py`, run the new test, confirm it goes
 **red**, restore. That step is the entire point; a test that cannot fail proves nothing.
-Verify: `pytest tests/unit/api/test_create_app_auth_wiring.py -v`, then `make check`.
+Validation: `pytest tests/unit/api/test_create_app_auth_wiring.py -v`, then `make check`.
 Done when: the gate is in `make check`, the auth test passes, and the comment-out experiment was
 observed red. Findings L4-02, L4-06, SEV-11, rule 5.
 
@@ -849,7 +1047,7 @@ reality **after** the prune, and state the old and new numbers explicitly — a 
 is how a gate stops meaning anything.
 RED anchor: for (1), per-module coverage for the three `arm_probe` modules, before and after. Report
 both; do not quote the aggregate as if it were the point.
-Verify: `pytest tests/unit/evals/ -v`, `make test-cov-evals`, `make check`.
+Validation: `pytest tests/unit/evals/ -v`, `make test-cov-evals`, `make check`.
 Done when: the three modules are covered, the CI question is answered in `DECISIONS.md`, and the new
 baseline file exists. Findings L4-01, L4-03, L9-09, SEV-14.
 
@@ -880,7 +1078,7 @@ Mark this file temporary at the top per CLAUDE.md's temporary-file rule and log 
 with a deletion deadline of the end of Sprint 7.
 RED anchor: none — this is a measurement task. Its output gates T13.2, which must not start without
 it.
-Verify: the census table exists and covers every module under `demo_game/`.
+Validation: the census table exists and covers every module under `demo_game/`.
 Done when: the table is complete and every row has a verdict.
 
 - [ ] **T13.2** Delete what the census marked dead ⏸️
@@ -901,7 +1099,7 @@ the record — do not leave a third state.
 RED anchor: `make test-demo` before and after — baseline 1,116 passed. The count must drop by
 exactly the tests belonging to deleted modules; any other delta means something load-bearing went.
 Then run the scripted demo end to end and confirm all 12 acts still complete.
-Verify: `make test-demo`, `make check`, scripted demo to completion.
+Validation: `make test-demo`, `make check`, scripted demo to completion.
 Done when: the demo runs, the census's delete rows are gone, LOC delta reported.
 Findings L6-03, ISSUE-204, ISSUE-311, CR-L07-03.
 
@@ -921,7 +1119,7 @@ count cannot be driven to zero in one session, add a `.mypy_baseline`-style ratc
 moves is just a permanent exclusion with extra steps, so record a target date in `ISSUES.md`.
 RED anchor: `python -m mypy demo_game` — record the error count before (256 at the 2026-08-28
 baseline, expected lower after T13.2) and drive it to zero, or to a recorded ratchet floor.
-Verify: `python -m mypy demo_game`, then `make check`.
+Validation: `python -m mypy demo_game`, then `make check`.
 Done when: `demo_game` is type-checked in `make check`. Baseline finding from
 `review-2026-08/BASELINE_2026-08-28.md`.
 
@@ -941,7 +1139,7 @@ ratchets it down — a baseline that cannot shrink is not a ratchet.
 RED anchor: `python scripts/check_rules.py` with `demo_game` in scope must report `game_window.py`
 over the hard limit. Today it does not, because the file is not scanned. Getting it to report is
 half the task.
-Verify: `python scripts/check_rules.py`, `make check`, `make test-demo`.
+Validation: `python scripts/check_rules.py`, `make check`, `make test-demo`.
 Done when: no `demo_game` module exceeds 800 lines, the scan set is verified, the waiver is honest,
 ISSUE-320 closed. Findings CR-L07-03, CR-L02-04, ISSUE-320.
 
@@ -982,7 +1180,7 @@ visible; T15.2 turns it into a check.
 RED anchor: the first test asserts an engine returning a zero-size working set is distinguishable
 from one that did work; the second asserts a non-null `last_error` produces a non-zero
 `engine_error_count` on the metrics endpoint. Both fail today.
-Verify: `pytest tests/unit/scheduler/ tests/unit/api/test_engine_status_metrics_exported.py -v`,
+Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_engine_status_metrics_exported.py -v`,
 then `make check`. Findings L13-04, SEV-12.
 
 - [ ] **T15.2** Assert the surviving portfolio actually works ⏸️
@@ -1000,7 +1198,7 @@ Update `docs/ENGINES.md` so its engine list matches the post-Sprint-2 reality �
 describe deleted engines.
 RED anchor: run it against the pre-Sprint-3 tree via `git worktree` — `routine` and `need_decay`
 must fail. On the current tree, after T5.1 and T5.2, they must pass.
-Verify: run against a stack, then `make check`.
+Validation: run against a stack, then `make check`.
 Done when: the check exists, passes on this tree, and demonstrably fails before Sprint 3.
 Finding L13, census section.
 
@@ -1033,7 +1231,7 @@ advances. Mark it `## [FIXED] ISSUE-273:`, add the `**Fixed:**` line, move it ve
 `archive/ISSUES_RESOLVED.md`.
 RED anchor: `make check-ledger-ids` must stay green through the ISSUE-273 move, and ISSUE-273 must
 appear in exactly one file afterwards.
-Verify: `make check-ledger-ids`, then `make check`.
+Validation: `make check-ledger-ids`, then `make check`.
 Done when: DEC-273 amended with fresh numbers and stated conditions, ISSUE-273 archived.
 Findings L9-03, L9-04, SEV-13.
 
@@ -1053,7 +1251,7 @@ Close ISSUE-318 and ISSUE-319 as part of this task.
 RED anchor: the new test asserts the latency metric exposes buckets spanning the budget, and that a
 call with a known system-prompt size increments `llm_tokens_in_total` by the full input including
 system. Both fail today.
-Verify: `pytest tests/unit/llm/test_llm_metrics_buckets.py -v`, then `make check`, then confirm
+Validation: `pytest tests/unit/llm/test_llm_metrics_buckets.py -v`, then `make check`, then confirm
 against a running stack that `GET /v1/admin/system/metrics` exposes the buckets.
 Done when: buckets exist, token counting is correct, both issues closed.
 Findings L9-05, L9-06, ISSUE-318, ISSUE-319.
