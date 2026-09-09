@@ -1,5 +1,11 @@
 # Remediation backlog — full review 2026-09-07
 
+> **SUPERSEDED 2026-09-08 by the T programme in `project-harness/ROADMAP.md`.** Do not work from
+> this file directly; it is history. Every Fix-now SEV here maps to a roadmap task — SEV-02 through
+> T7.1, SEV-03 through T7.2, and SEV-07 through T7.3, which was added on 2026-09-09 after an
+> adversarial review found it had been dropped in translation. `ROADMAP.md` is canonical for what to
+> work on next. See `project-harness/roadmap-review/FINDINGS.md` for the mapping.
+
 **Source:** `project-harness/REVIEW_FINDINGS.md` (68 findings; 5 CRITICAL, 17 HIGH, 27 MEDIUM, 16 LOW)
 **Branch:** `remediation-2026-08` · **Review HEAD:** `8d30a3e1` · **Tree was clean at review time**
 **Evidence:** `project-harness/review-fixes/evidence/L*.md`

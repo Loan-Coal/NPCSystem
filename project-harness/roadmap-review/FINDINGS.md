@@ -4,8 +4,50 @@
 **Run:** 2026-09-08. **Lenses:** R1 ground truth · R2 cascade coherence · R3 harness
 executability · R4 gate & metric conflict · R5 product regret · R6 backlog coherence.
 **Inputs:** `R1.md`, `R2.md`, `R3.md`, `R4.md`, `R5.md`, `R6.md`, `gate-baseline.txt`.
-**77 findings.** This file merges, ranks and turns them into a patch list. It does **not** edit
-`ROADMAP.md` — §5 is the deliverable and the owner chooses what to apply.
+**77 findings.** This file merges, ranks and turns them into a patch list.
+
+---
+
+## §0 Disposition — APPLIED 2026-09-09
+
+**All 39 patches in §5 have been applied to `ROADMAP.md`**, plus banners on
+`review-fixes/INDEX.md` and `review-2026-08/TRIAGE.md`. The 15 owner decisions in §6 were put to the
+owner and answered; §5 and §6 below are the *pre-decision* record and are left unedited so the
+reasoning stays auditable. Where an answer differed from the review's recommendation, the roadmap
+follows **the owner**, not this file.
+
+**Owner answers that diverged from the recommendation:**
+
+| # | Decision | Recommended | Chosen |
+|---|---|---|---|
+| OD-5 | Rules copied into `CLAUDE.md` | only the gated four | **all nine** — T10.2 must label rules 2, 7, 8, 9 as ungated |
+| OD-6 | 800-line "hard and unwaivable" vs the 925 baseline | amend the wording | **leave it**; T14.2 resolves the only instance |
+| OD-7 | Political-engine recoverability estimate | correct it now | **leave it**, re-measure if a studio asks |
+| OD-10 | The two live 2026-08 CRITICALs | fold one, file one | **fold both** — now T5.3 and T16.6 |
+| OD-15 | DIP waiver cap / date-as-gate / rule 8 script | adopt them | **none** — recorded in the preamble as deliberately unenforced |
+
+**Two decisions the review did not put in §5 and should have**, both raised and answered separately:
+DEC-280(a)'s `demo-run-live` nightly gate (**adopted**, now **T2.4**), and the general
+"read path outlived its writer" detector (**declined**; T3.2's completion note is the control).
+
+**One owner instruction overrode a review patch outright.** Patch 2 proposed narrowing T3.1's delete
+target to `agenda_engine.py`. The owner instead removed `agenda` from the delete set entirely on
+2026-09-09. T3.1 is now "Delete `succession` and `oath`", and the consequence the review had not
+traced was verified before applying: `PoliticalGraphPort` and `Neo4jPoliticalRepository` are shared
+by `agenda_engine.py:18,36` and `succession_engine.py:18,35`, so **both survive**, and
+`api/dependencies_advanced/politics.py` survives carrying `get_agenda_engine` alone. Deleting either,
+as the original T3.1 instructed, would have broken the engine the owner chose to keep.
+
+**Verification after applying:** `make roadmap-verify` → `ROADMAP OK (16 phases)`; the loop's own
+parser returns `verify() == []` with **46 in-fence tasks, 40 loop-runnable, exactly 6 flagged**
+(T6.3, T13.1, T13.2, T15.2, T16.1, T16.4) and **no accidental flags** — all four in-file mentions of
+`ask-gate` sit outside the fence. `pytest tests/unit/harness/ tests/unit/scripts/` → 448 passed,
+**the same 2 pre-existing failures and no new ones**. Those two are the CRITICAL this review found,
+and they are now scheduled as **T0.0**; applying the patch list does not fix them, because fixing
+them is a code change in a frozen path that must be done by hand.
+
+**Task count moved 37 → 46.** Nine tasks added: T0.0, T2.4, T4.3, T5.3, T7.3, T15.3, T16.6, and
+T9.1 split into T9.1a–d.
 
 ---
 

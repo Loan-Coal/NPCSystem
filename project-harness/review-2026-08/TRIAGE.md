@@ -1,5 +1,15 @@
 # Adversarial Triage — 2026-08 Strategic Codebase Review
 
+> **Re-triaged 2026-09-08 against the current tree.** This file's CRITICALs were never
+> cross-referenced when the T programme was written, because they use a `CR-L*` id namespace that
+> roadmap does not. Result: **CR-L05-11** (compose bound `0.0.0.0`) and **CR-L08-03** (no 503
+> handler for `GraphUnavailableError`) are **fixed**; **CR-L03-01** refers to a
+> `hedge_responder_probe.py` that no longer exists and is presumed superseded by a refactor,
+> unverified; **CR-L01-01** (gossip distortion written then discarded on read) and **CR-L15-01**
+> (eval live-network digest defaults) were **still live** and are now scheduled as **T5.3** and
+> **T16.6** in `project-harness/ROADMAP.md`. Evidence:
+> `project-harness/roadmap-review/R6.md`.
+
 **Triaged:** 2026-08-28 · HEAD `619dab2` (tree unchanged since the review) · 145 findings in, 118 canonical out.
 **Method:** every verdict below rests on a command re-run at HEAD, a traced call chain, or a pasted
 file excerpt. This file supersedes `FINDINGS.md` **by reference only** — `FINDINGS.md`,
