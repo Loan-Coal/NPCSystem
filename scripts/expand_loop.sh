@@ -93,6 +93,8 @@ STOP_AT="$MORNING_STOP_HOUR_LOCAL"
 TASKS_DONE=0
 PHASES_DONE=0
 CONSECUTIVE_RED_GATES=0
+# Deliberately NEVER reset on success: a counter that resets measures a streak, not a
+# run, and alternating good/bad tasks were unbounded under MAX_RED_COMMITS. Per-run total.
 CONSECUTIVE_RED_COMMITS=0
 CONSECUTIVE_BLOCKED_PHASES=0
 # ISSUE-126 guard: the cursor is the only progress signal, and the session (not this
@@ -340,7 +342,9 @@ usage_restart_should_halt() {
   fi
 
   # Guard 4 — stash pile-up means restarts are not recovering.
-  stashes="$(git stash list 2>/dev/null | grep -c 'loop-auto-restart' || echo 0)"
+  # Both prefixes: run_one_task stashes a timed-out task's partial work as 'loop-timeout'
+  # and nothing ever pops either kind. Counting one let the other pile up unseen.
+  stashes="$(git stash list 2>/dev/null | grep -cE 'loop-auto-restart|loop-timeout' || echo 0)"
   if [ "$stashes" -ge "$MAX_LOOP_STASHES" ]; then
     log "usage-restart guard: $stashes unresolved auto-restart stashes"; return 0
   fi
@@ -466,9 +470,26 @@ violations from project-harness/CLAUDE.md). Be terse. Do NOT edit any file."
 seed_gate_baseline() {
   # Written at phase boundaries ONLY. Re-seeding mid-phase would let a task launder its
   # own regression into "pre-existing".
+  #
+  # The boundary itself still launders one task late: run_phase_gate tolerates a red gate
+  # (rc=1 falls through to here), and this re-seed then records those failures as the next
+  # phase's "pre-existing debt", where gate_attribution.py returns BASELINE_RED for them
+  # forever. Suppressing the re-seed is WORSE: a stale baseline makes phase N's failures
+  # reproduce as NEW for phase N+1's innocent tasks, and three CONFIRMED verdicts end the
+  # night. So the behaviour is deliberately unchanged and the growth is REPORTED instead.
+  local before after bfile="$LOOP_STATE_DIR/gate_baseline.json"
+  before="$(grep -c '::' "$bfile" 2>/dev/null)"; [ -n "$before" ] || before=0
   log "re-seeding the failing-test baseline for the next phase"
   $PY_RUN "$REPO_ROOT/scripts/gate_baseline.py" --write --note "after-phase-${1:-init}" \
     2>&1 | while read -r l; do log "  $l"; done
+  after="$(grep -c '::' "$bfile" 2>/dev/null)"; [ -n "$after" ] || after=0
+  log "baseline: $before -> $after already-failing tests"
+  if [ "$after" -gt "$before" ]; then
+    flag_for_human "gate baseline GREW at phase ${1:-init}" \
+      "$before -> $after already-failing tests. Everything newly in the baseline is treated
+as pre-existing debt from the next phase onward and is never charged to a task again.
+Review before the next run: python scripts/gate_baseline.py --show"
+  fi
 }
 
 push_branch() {
@@ -521,7 +542,6 @@ handle_task_result() {
   case "$token" in
     TASK_COMPLETE|TASK_COMPLETE_BASELINE_RED|DRY_RUN)
       TASKS_DONE=$((TASKS_DONE + 1))
-      CONSECUTIVE_RED_COMMITS=0
       CONSECUTIVE_BLOCKED_PHASES=0
       [ "$token" = "TASK_COMPLETE_BASELINE_RED" ] && \
         flag_for_human "task $task committed with a pre-existing red gate" \
@@ -530,7 +550,6 @@ handle_task_result() {
 
     PHASE_COMPLETE)
       TASKS_DONE=$((TASKS_DONE + 1))
-      CONSECUTIVE_RED_COMMITS=0
       CONSECUTIVE_BLOCKED_PHASES=0
       return 10 ;;   # caller runs the phase boundary
 
@@ -541,7 +560,7 @@ handle_task_result() {
       flag_for_human "task $task introduced a confirmed regression" \
         "Committed anyway as visible debt (scar 6.5). Run $CONSECUTIVE_RED_COMMITS of $MAX_RED_COMMITS."
       if [ "$CONSECUTIVE_RED_COMMITS" -ge "$MAX_RED_COMMITS" ]; then
-        log "HALT: $CONSECUTIVE_RED_COMMITS consecutive regressions"
+        log "HALT: $CONSECUTIVE_RED_COMMITS regressions committed this run"
         return 2
       fi
       return 0 ;;
@@ -702,6 +721,8 @@ be committed. Inspect the last task log before re-running."
   checkpoint_reports
   log "=== run finished | tasks=$TASKS_DONE phases=$PHASES_DONE skipped=[${SKIPPED_PHASES:-none}] ==="
   log "queue now: $(cursor --status | tail -1)"
+  # "UNVERIFIED (" is the cursor's marker template; "[UNVERIFIED:" in prose is not a tick.
+  log "UNVERIFIED ticks: $(grep -c 'UNVERIFIED (' "$ROADMAP_FILE" 2>/dev/null) (list them: grep 'UNVERIFIED (' $ROADMAP_FILE)"
   [ -s "$HUMAN_VERIFICATION_FILE" ] && log "REVIEW: $HUMAN_VERIFICATION_FILE"
   return 0
 }

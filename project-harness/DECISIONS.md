@@ -9899,3 +9899,165 @@ and `TraitModulatedEmotionModel`, and log the deferred feature as an issue inste
 silent dead code. Either is fine; the current state — a documented feature that cannot execute — is not.
 
 **Decision:** _pending_
+
+---
+
+## DEC-282: Overnight-loop pre-flight review before the T programme — four repairs, two accepts
+**Date:** 2026-09-09 · **Status:** ✅ ACCEPTED · **Drives:** `scripts/expand_loop.sh`
+
+**Context.** Before greenlighting the T programme's overnight run, the driver and the roadmap were
+reviewed for what decays over a multi-week programme rather than what fails tonight. Eleven candidate
+defects were raised; five were withdrawn on adversarial re-check and are recorded here so they are not
+re-raised. Net change: +24/-4 lines in one file, no new scripts, no new gates, no test churn.
+
+**Withdrawn, with the reason.** (1) *The human-gate mechanism is dead* — true (`check_human_gates.py`
+parses zero `#### HUMAN GATE` blocks from this roadmap, and its `TASK_ID_RE` still pins the retired
+`EVAL-P` namespace) but harmless: zero gates blocks nothing, and **T0B.2 already reports deferred
+tasks at both ends of every run**, which is the visibility that was actually missing. (2) *Flagged
+tasks count toward `PhaseEntry.is_done`* — true and by design; same T0B.2 coverage. (3) *"Twelve
+self-updating baselines"* — there are **eight** (`grep -oE '^[a-z-]+-update:' Makefile`), and they are
+the repo's designed ratchet under a documented rule, not a defect. (4) *`demo-run-live` should block
+`make check`* — that is an owner decision of 2026-09-08; relitigating it is out of order. (5) *Sprints
+9-10 will not happen on their own* — the roadmap states this itself, in its own block quote.
+
+**(a) The phase boundary launders a regression one task late — REPORT, do not change.**
+`run_phase_gate` tolerates a red gate (rc=1 falls through at `expand_loop.sh:484`) and
+`seed_gate_baseline` then re-seeds unconditionally, so phase N's unfixed failures become phase N+1's
+"pre-existing debt" and `gate_attribution.py` returns `BASELINE_RED` for them forever.
+**Suppressing the re-seed was considered and rejected as strictly worse:** a stale baseline makes
+phase N's failures reproduce as `NEW` for phase N+1's *innocent* tasks, `gate_confirm.py` re-runs them,
+they reproduce (they are real, just not that task's), and three `CONFIRMED` verdicts end the night on
+false blame. The behaviour is therefore unchanged; the boundary now logs `baseline: N -> M` and raises
+a `flag_for_human` when the baseline grows. Growth is a decision the operator makes with evidence
+rather than one the loop makes silently.
+
+**(b) `MAX_RED_COMMITS` becomes a per-run total.** The two `CONSECUTIVE_RED_COMMITS=0` resets on
+`TASK_COMPLETE` and `PHASE_COMPLETE` meant the cap measured a streak, not a run: verified against a
+simulated `REG OK REG OK REG OK REG` night, the old counter halts **never** and the new one halts at
+three. Alternating good and bad tasks were unbounded, which is the shape a long programme actually
+produces. The counter keeps its name and is now commented as a per-run total.
+
+**(c) `loop-timeout` stashes join the pile-up guard.** `run_one_task` stashes a timed-out task's
+partial work as `loop-timeout <task>` (`:593`) and nothing ever pops it; guard 4 (`:343`) counted only
+`loop-auto-restart`, so the other kind accumulated uncounted. One `grep -c` became `grep -cE` over both.
+
+**(d) `UNVERIFIED` ticks get one line in the end-of-run log.** `render_marked` sets `- [x]`
+unconditionally and the `UNVERIFIED` suffix is cosmetic — `is_done`, `--phase-done` and `--status`
+all count such a task as complete, and the only reader in the repo was a manual grep documented in
+`OVERNIGHT_LOOP.md:62`. The run now prints the count and the command. The pattern is `UNVERIFIED (`,
+matching the cursor's marker template, so the `[UNVERIFIED:` prose in T0.1's spec is not miscounted.
+
+**(e) ACCEPTED, no change: four in-fence tasks edit `scripts/loop_gates.py`.** T4.2, T10.1, T10.2 and
+T12.1 list it in `Files:`, which contradicts Sprint 0's header and T10.2's own "edit with the loop
+stopped". The blast radius is bounded: each script is re-invoked fresh, so a bad spec surfaces as a
+crashing gate, which reds, which halts at `MAX_CONSECUTIVE_RED_GATES=2` — recoverable and visible.
+The alternative (pause-glyph all four) would move four gate-building tasks into a deferred backlog
+that already has six items and one owner, which is the worse failure mode.
+
+**(f) ACCEPTED, no change: T12.2 may edit `.github/workflows/ci.yml` unattended.** The skill's halt
+table does not cover CI config — CI appears only in `project-harness/CLAUDE.md`'s ask-before list,
+which the skill tells the agent to *read*, not to key on — so the realistic outcome is an edit, not a
+halt. Accepted on the owner's call; the CI job's required-status question that T12.2 item (2) asks is
+worth more than the risk of the edit.
+
+**Verification.** `bash -n` clean; `make check-harness` green; no test in the repo references
+`expand_loop.sh`, so the diff adds no failure surface; `tests/unit/harness/test_roadmap_cursor.py`
+still fails exactly its two pre-existing T0.0 tests and no others. Each of (a)-(d) was exercised
+against real data before sign-off.
+
+## DEC-281: A/B readiness — the measurement unit, two provenance repairs, and the effect-size floor
+**Date:** 2026-09-08 · **Status:** ✅ ACCEPTED · **Drives:** `evals/_run_config_hashing.py`,
+`evals/run_config.py`, `evals/comparability.py`, `evals/trend_store.py`,
+`evals/trend_row_builder.py`, `evals/engine_adapter.py`, `evals/regression_gate.py`, `evals/mde.py`,
+`project-harness/ISSUES.md` (ISSUE-336..339)
+
+**Context.** Before committing to a first A/B run, the pipeline was audited end to end. `make check`
+is green and none of what follows is visible to it. Four things blocked a trustworthy A/B; all four
+are settled here. The plan this records is `~/.claude/plans/what-do-i-still-typed-platypus.md`, and
+it is a re-ordering of ROADMAP Sprints 9-10, **not** a new programme — net new code ≈ +15 lines.
+
+**(a) The measurement unit is the case battery. The per-engine probes are excluded.** The A/B
+statistic is exact McNemar over paired case outcomes: `paired_stats._binary_pass` reduces a
+`CaseStat` to one bit (`stat.passes * 2 > stat.k`), `TrendRow` carries no `dict[str, float]` field,
+and `regression_gate` reads only `RateWithCI`/`PairedResult`. A probe's `measure() -> dict[str,
+float]` therefore has no consumer at any of those three joints — `probe_runner.main()` prints to
+stdout and returns. Wiring probes in is new code in three places, not configuration. Separately, the
+probe path has never executed against a live server (every probe test mocks `httpx`) and three
+probes are structurally broken; logged as ISSUE-336..339 rather than repaired, per rule 2.
+
+**(b) Split `harness_version` into instrument and case-set versions.** It is currently a content hash
+over `evals/cases/**/*.yaml` + `prompts/eval/*.yaml` + `evals/matchers.py`
+(`_run_config_hashing.py:98-122`), and `ComparabilityKey = (harness_version, judge_identity)` demands
+exact equality. So editing one case file orphans every prior run. This is not theoretical: the two
+rows in `evals/trend/trend_v1.jsonl` carry `f22f61a5d877` and `014abac09947` — **the trend store has
+never held a comparable pair, and the regression gate has never had a baseline.**
+
+`harness_version` becomes the *instrument* (`matchers.py` + `prompts/eval/`); a new
+`case_set_version` becomes the *subject* (`evals/cases/`). Comparability keys on the instrument,
+because an instrument change is what genuinely invalidates a comparison — the reason EVAL-P18.1 added
+the hash in the first place. Case-set drift is already handled, by `compare.py`'s case-intersection
+refusal (`_comparability_error`, `:228-258`). Weakening the hash outright was rejected: it trades a
+false negative for a false positive.
+
+**This must land before ROADMAP T17.2.** T17.2 re-authors or retires scorers and T18.1 relabels; both
+edit `evals/cases/` and `matchers.py`. Done in the current order, Sprint 9 would change
+`harness_version` and orphan its own baseline, and T18.2's re-baseline would hide the break — so the
+sprint that costs the most human effort would be the one whose before/after cannot be measured.
+Existing recorded hashes will not reproduce under the narrower scope; that is the same migration cost
+T20.1 already accepts for `dialogue_prompt_hash`, paid once.
+
+**(c) Record the engine's build identity, not just the client's.** `RunConfig.git_sha` is
+`git rev-parse --short=7 HEAD` run locally (`run_config.py:265-271`). The engine's real identity is
+`Settings.BUILD_SHA`, served at `GET /health` as `data.version`
+(`api/routes/admin/system.py:54-63`) and already compared by `e2e/scripts/boot_check.py:66-76`.
+Nothing in `resolve_run_config` calls it. Because the app image is not bind-mounted, a recorded run
+can name a tree that never generated its text — the defect class `trend_row_builder.py:72-79`
+documents as having once let an arm "claim a SHA it never ran", where the fix was applied only to the
+token budget. `RunConfig` and `TrendRow` gain `engine_build_sha` alongside `git_sha`; the two
+differing is the signal.
+
+**(d) The detectable-effect floor is ~10pp, and Sprint 9 is sized for kappa only.** Computed with
+`evals/mde.py` (`implied_discordance_rate(mde=0.064, n_pairs=78)` → p_d = 0.0407), at n=78 adversarial
+pairs the battery detects a **true** effect of 12.1pp at the current kappa 0.530, 10.7pp at the 0.60
+publication bar, 7.5pp at 0.849. Detecting 5pp needs ~455 pairs.
+
+Sprint 9 does not close this on its own: `evals/label_adequacy.py:21` states the adequacy gate is
+"A count check, not a power analysis (DEC-260)" — floors are 25 minority labels and 10 case clusters
+— so every scorer can clear it with these numbers unchanged. Expanding the battery ~6x was rejected:
+T18.1 is already the programme's most expensive human step, and because base rates are 0.941/0.968,
+adding *easy* cases lowers kappa rather than raising it. Raising kappa is the cheaper lever (0.60 →
+0.849 buys what n 78 → 156 buys).
+
+**The accepted cost, recorded so it is not rediscovered: below ~10pp, `no_detectable_change` is
+ambiguous — it does not mean "no effect", and any completion note quoting that verdict must say so.**
+T18.2's completion note must state achieved kappa per scorer and the resulting MDE; if a scorer the
+A/B depends on lands under 0.60, this decision reopens before Sprint 10 spends a prompt revision
+against a blind instrument.
+
+**(e) No prompt arm is being built.** `_PROMPT_PATH` and `PROMPT_VERSION` are module-level constants
+resolved at import (`prompt_builder.py:32,37`), so one process serves one prompt and two prompt arms
+cannot be interleaved. A per-request `prompt_profile` would be net-positive LOC against rule 9 to
+serve a use case the 2026-09-08 owner decision already replaced with one batched revision. Sprint 10
+is therefore a single **sequential** before/after. Consequence to state in T20.2's completion note:
+`compare.py` computes McNemar on any two generation directories and cannot detect that they were not
+interleaved, so the pairing assumption rests on the image rebuild being the only change between them.
+
+**Found while auditing, fixed alongside:** `regression_gate` check 1 reads `candidate.guard`, retired
+by DEC-243, so `_rate_regressed` short-circuits on `None` (`:89-90`) and one of four regression checks
+has never fired. And `mde.RECORDED_KAPPAS` names `refusal_judge`, retired by DEC-269, while omitting
+`commits_judge` — so every MDE table `arm_probe_report.print_mde_section` prints is wrong in both
+directions. Both are corrections to existing code, not new surface.
+
+**Not decided here:** latency remains outside the A/B. Within a paired interleaved run, model
+contention affects both arms equally so *quality* comparisons survive it, but any latency delta stays
+confounded by tick load even after Sprint 4's admission control lands. Do not quote a latency A/B.
+
+**Addendum (same session, 2026-09-08).** A third provenance gap surfaced after this entry was
+written and is logged as **ISSUE-340** rather than folded in: `RunStatus.provenance` is declared
+(`run_status.py:114`) and never written by any code path, so the one re-derived status file in the
+tree (`k3_61b01dad_negadv`, DEC-265) is indistinguishable from a live pass. It is not on the critical
+path to a first A/B run. Related: `docs/REGRESSION_POLICY.md` documents the `harness_version`
+contract part (b) changes — its prose is current but its code sample at line 143 shows a
+`select_baseline(harness_version, ...)` signature that no longer matches
+`baseline_selection.py:109`. That doc is therefore inside part (b)'s blast radius and updating it is
+part of that change, not separate work.

@@ -16,6 +16,158 @@ Rules:
 
 ## Open
 
+## ISSUE-342: 494 untracked log files sit in `project-harness/` with no retention policy
+**Found:** 2026-09-09, during the pre-T tidy of `project-harness/`
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/.loop-logs/` (465 files), `overnight_logs/` (27), `logs/` (1)
+**Description:** Four directories of machine-local run output accumulate at the top level of
+`project-harness/`. All are gitignored (`.gitignore:2`, `:89`, and the global `*.log`) and zero of
+their files are tracked, so they are invisible in a fresh clone but dominate the folder on disk and
+in every `ls`. Nothing prunes them: `.loop-logs/` has grown to 465 files across every loop run since
+the harness was written, and each gate log is paired with a `.class` sidecar.
+**Why deferred:** Deleting run output is not an archiving task, and `overnight_logs/` is an active
+write target for `scripts/` — a retention rule needs to be agreed, not improvised, and belongs with
+the loop work the T programme already schedules against `OVERNIGHT_LOOP.md`.
+**To fix:** Decide a retention window (last N runs, or age-based), implement the prune in the loop's
+own teardown so it runs where the writes happen, and record the window in `OVERNIGHT_LOOP.md`.
+Consider relocating all four under one gitignored `project-harness/.run-artifacts/` so the top level
+shows one entry instead of four.
+
+## ISSUE-341: four comments cite `project-harness/Run-OvernightCombined.ps1` and `scripts/run_eval_k3.ps1`, neither of which exists
+**Found:** 2026-09-09, during the pre-T tidy of `project-harness/`
+**Severity:** P3 (nice-to-fix)
+**Where:** `Makefile:863`; `scripts/Run-EvalHarness.ps1:8`, `:143`, `:202`, `:205`
+**Description:** Five comments explain current behaviour by pointing at two scripts that are not in
+the tree. `Makefile:863` justifies stopping the app during a restore by saying it matches "what
+`project-harness/Run-OvernightCombined.ps1` already does"; `Run-EvalHarness.ps1` says it supersedes
+`project-harness/scripts/run_eval_k3.ps1` and three times defers to `Run-OvernightCombined.ps1` for
+how the API key travels and how dirtiness is handled. `project-harness/Run-OvernightCombined.ps1`
+and `project-harness/scripts/` do not exist, and `project-harness/scripts/run_eval_k3.ps1` was
+self-declared TEMPORARY. A reader following any of these to check the claim finds nothing, and the
+rationale for the app-stop in the restore path is left resting on a file that cannot be read.
+**Why deferred:** Found during a tidy scoped to `project-harness/`; fixing it edits `Makefile` and
+`scripts/`, both outside that scope, and the DEC-200 key-handling rationale in `Run-EvalHarness.ps1`
+needs to be restated from what is actually true today rather than re-pointed.
+**To fix:** Establish whether `Run-OvernightCombined.ps1` was deleted or renamed (check the history
+of `scripts/Run-EvalHarness.ps1`). Then either restore the reference to the surviving script or
+inline the behaviour each comment is deferring to — the app-stop rationale at `Makefile:863` and the
+`$env:API_KEY_SECRET` convention at `Run-EvalHarness.ps1:143` should stand on their own.
+
+## ISSUE-340: `RunStatus.provenance` is declared and never written, so a re-derived status is indistinguishable from a live one
+**Found:** 2026-09-08, during the A/B-readiness analysis (DEC-281)
+**Severity:** P2 (annoying — it does not corrupt a number, but it removes the one field that would
+let a reader tell how a number was produced)
+**Where:** `evals/run_status.py:114` (declaration), `evals/judge_run_artifacts.py:137-148`
+(`build_status`), `:97-107` (`with_panel_metrics`), `:164` (`record_error`)
+**Description:** `RunStatus.provenance: str = ""` is documented as "How this status was produced when
+it was not a live pass (e.g. re-derived from a legacy artifact). Empty for a normal run."
+(`run_status.py:88-90`). **No code anywhere sets it** — not `build_status`, not
+`with_panel_metrics`'s `model_copy` update dict, not `record_error`. A repo-wide grep finds only the
+declaration. It is dead config, which the T programme's rules 3 and 6 forbid.
+
+The one artifact in the tree that needed it proves the gap.
+`evals/generations/k3_61b01dad_negadv/run_status.json` carries `provenance: ""` while its sibling
+`RECOVERED_NOTE.md` states the file "was reconstructed from `judged_panel_votes.jsonl` +
+`outputs.jsonl` without re-running the panel" (DEC-265, after the ISSUE-288 `write_report` crash).
+Its `report_path` is that hand-written note rather than a rendered report.
+`trend_row_builder._panel_fields` consumes its kappas exactly as it would a live pass's.
+
+**Scope note, so this is not overstated:** the panel judging for that run *did* complete normally —
+`judged.jsonl` and `judged_panel_votes.jsonl` were written correctly and the recovered kappa
+(0.8314) is computed from genuine votes. Only the status file was re-derived. So no recorded number
+is wrong; what is missing is the ability to *know* that from the artifact alone.
+
+**Why this matters now:** ROADMAP Sprint 9's premise cites "panel kappa swung 0.58 to 0.83 between
+runs". Those two values are `k3_77688e7_regen1` (0.5807) and `k3_61b01dad_negadv` (0.8314) — runs
+with **different case populations**: capability n=16 / guard n=78 versus capability n=0 /
+guard_adversarial n=111. T17.1 ("diagnose why each scorer is refused") should treat that swing as a
+population difference first and instrument instability second, and `provenance` is one of the fields
+that would have made the distinction legible without this archaeology.
+
+**Why deferred:** DEC-281's scope is comparability and attributability of the *code state*; this is a
+third provenance gap found in the same audit and is not on the critical path to a first A/B run.
+**To fix:** either populate it — `build_status` takes it as a parameter, `record_error` sets a
+literal, and the recovery path in DEC-265 sets it explicitly — **or** delete the field and rely on a
+sibling note file, per rule 2. Deleting is cheaper and legitimate; if it is kept it must acquire a
+writer, because a field nobody writes is worse than no field. Whichever is chosen, backfill
+`k3_61b01dad_negadv`'s value or record in DEC-265 that it stays blank deliberately.
+
+## ISSUE-336: `probe_events` creates zero Events — `location_id: None` 422s every POST
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Severity:** P2 (annoying — the probe path is not on any gate and is not currently run)
+**Where:** `evals/probe_events.py:79-82`, against `src/npc_engine/type_registry/base_nodes/event.yaml`
+**Description:** `drive()` posts an Event with `"location_id": None`. `location_id` is
+`required: true`, and `type_registry/validation.py:184-190` raises `BASE_FIELD_NULL_FORBIDDEN` for an
+explicit `None` on a required base field, which `route_helpers.py:157-159` maps to **HTTP 422**. The
+return code is never checked, so every Event silently fails to exist. Downstream: each `KNOWS_ABOUT`
+POST 404s on the missing node, `_has_knower` is False for all, `orphan_rate` reads 1.0, and the
+`known_events_have_an_edge` invariant fails every repetition. Meanwhile `events_created_per_tick`
+(hardcoded 1.0) and `severity_mean` (computed from the probe's own local `_SEVERITIES` list, never
+read back from the server) stay green — so the probe reports success metrics for events that do not
+exist. Unit tests pass because they assert against hand-authored `MagicMock` responses.
+**Why deferred:** the A/B measurement unit is the case battery, not the probes (plan of 2026-09-08);
+the probe path is excluded from that work rather than repaired inside it.
+**To fix:** omit `location_id` or point it at a real Location; check `is_ok()` on every POST; derive
+`severity_mean` from the server rather than from local state.
+
+## ISSUE-337: `probe_gossip` cannot observe propagation, and reads a key that does not exist
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Severity:** P2 (annoying — but it makes the module's stated purpose, ISSUE-228 instrumentation, a no-op)
+**Where:** `evals/probe_gossip.py:56-81` and `:112`, against
+`src/npc_engine/graph/gossip/gossip_queries.py:62-67` and
+`src/npc_engine/graph/gossip/rumor_trace_service.py:21-28`
+**Description:** Two independent defects. (a) Gossip pair selection matches
+`(a:Character)-[:LOCATED_AT]->(loc:Location)<-[:LOCATED_AT]-(b:Character)`. `_seed_event_and_origin`
+creates a Location node and a Character but **never writes a `LOCATED_AT` edge** — `location_id` is set
+as a *property on the Event*, not an edge on the Character — so the origin NPC can never be selected as
+a sharer and the event can never propagate. `propagation_reach` is pinned at 1.0, and the
+`knowers_have_a_source` invariant filters out the origin's own edge and so passes on an empty set.
+The Location POST also 422s (same root cause as ISSUE-336: `description` is not a declared field, and
+`location_tag`/`descriptor` are required and absent). (b) `_distortion_deltas` reads
+`row.get("distortion_level")`, but `CYPHER_TRACE_RUMOR_CHAIN` returns exactly `npc_id`, `npc_name`,
+`knowledge_state`, `learned_at_tick`, `distorted_summary` — there is no `distortion_level`. So
+`distortion_delta_per_hop_mean` is never emitted. `tests/unit/evals/test_probe_gossip.py:59-62`
+hand-authors that key into a mock, which is why the test passes.
+**Why deferred:** as ISSUE-336.
+**To fix:** write a `LOCATED_AT` edge from the origin to a seeded Location that other NPCs occupy (the
+seed provides `loc_tavern` with 5 co-located NPCs); fix the Location POST fields; and either surface
+`distortion_level` from the trace query or compute the delta from `distorted_summary`.
+
+## ISSUE-338: `scenario_mood_contagion` passes vacuously — the two NPCs are never co-located
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Severity:** P2 (annoying — a promoted scenario that cannot fail)
+**Where:** `evals/scenario_adapters_extra.py:187-211`
+**Description:** The scenario posts a Location with `{id, name, description, last_graph_updated_at}`.
+`description` is not a declared field on `location.yaml` and `location_tag`/`descriptor` are required
+and missing, so the POST 422s; the return is unchecked. Both subsequent `LOCATED_AT` POSTs then 404 on
+the missing destination node, so the two NPCs are never co-located and mood contagion never runs on
+them. The assertion is only that both `current_mood` values are non-`None` — which is true from
+creation, since `_char(...)` sets `current_mood`. The scenario therefore passes without exercising the
+behaviour it names. The `RELATES_TO` POST at `:197-202` also omits `last_updated_at`, which is
+`required: true`, so it 422s as well.
+**Why deferred:** as ISSUE-336.
+**To fix:** correct the Location and `RELATES_TO` property sets, check every POST return, and assert a
+mood *change* rather than mood presence.
+
+## ISSUE-339: 10 of 11 probes request engine status under a name the scheduler never registers
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Severity:** P3 (nice-to-fix — the effect is a missing metric floor, not a wrong number)
+**Where:** `evals/probe_runner.py:204`, against `src/npc_engine/scheduler/tick_scheduler.py:346-369,452-545`
+**Description:** `_merge_status_metrics` looks up `read_engine_status(client).get(probe.engine_name)`
+and no-ops silently on `None`. The scheduler registers `story_pacing`, `gossip`, `event`, `routine`,
+`chapter`, `memory_consolidation` plus the 22 from `_ordered_tick_engines()`. Only `probe_gossip`
+(`"gossip"`) matches. `probe_events` declares `"events"` (scheduler key is singular `"event"`);
+`probe_memory` declares `"memory"` (keys are `memory_consolidation`/`memory_decay`); `probe_quest`
+declares `"quest"` (keys are `event_quest`/`need_quest`/`world_state_quest`); `probe_dialogue` declares
+`"dialogue"`, which is request-driven and never tick-registered; and all six legacy adapters are
+constructed with their *scenario id* as `engine_name`. So 10 of 11 probes silently get no
+`tick_count`/`error_count`/`duration_ms`. Related: `probe_runner.py:10-11` and
+`probe_protocol.py:44-46` both claim coverage of "all 46 engines" and cite `"quest_generation"` as a
+key; neither is accurate.
+**Why deferred:** as ISSUE-336.
+**To fix:** map each probe to a real registered key (or several), correct the two docstrings, and log a
+warning when a declared `engine_name` matches nothing rather than returning silently.
+
 ## ISSUE-291: tone_judge fate is decided (author failing cases) but not implemented
 **Found:** 2026-09-07, eval/metrics remediation
 **Severity:** P2 (annoying — the battery stays HIDDEN under scorer_trust_policy in the
