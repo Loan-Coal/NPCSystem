@@ -8,11 +8,35 @@ Windows port analysis: `OVERNIGHT_LOOP_PLAN.md`.
 
 ## Quick start
 
+**The loop runs only in a dedicated git worktree** (ISSUE-139). In the primary checkout it
+refuses to start: sessions commit with `git add -A`, so a concurrent interactive edit would be
+swept into a roadmap commit nobody gated. From the primary checkout, once:
+
 ```bash
-git checkout -b auto/roadmap-night        # the loop refuses to run on main
+# 1. a worktree on its own branch (the loop also refuses to run on main)
+git worktree add ../NPCSystem-loop -b auto/roadmap-night
+cd ../NPCSystem-loop
+
+# 2. a FRESH .venv — do not link the primary one: its editable install imports the
+#    primary checkout's src/, so the gate would test the wrong code
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -e ".[dev]"
+
+# 3. the .env (API_KEY for the Makefile, settings for the tests)
+cp ../NPCSystem/.env .env
+
+# 4. one hand-run green gate, so the first red the loop sees is not the environment
+make check                                # ~7-12 min, must be green
+
+# 5. start the loop — from the worktree
 git status --porcelain                    # must be empty
 bash scripts/expand_loop.sh --max-tasks 1 # watch one task, foreground
 ```
+
+The preflight refuses, with the command to fix it, when run in the primary checkout, when
+`.venv` is missing or cannot import `pytest`/`mypy`/`ruff`, or when `.env` is missing. Before
+a later night, bring the worktree's branch up to date (`git merge` or `git rebase` onto the
+work branch) and re-run `make check` there.
 
 Then widen: `--max-phases 1`, then a real night:
 

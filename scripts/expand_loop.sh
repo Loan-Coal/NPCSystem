@@ -174,12 +174,39 @@ gates()  { $PY_RUN "$REPO_ROOT/scripts/check_human_gates.py" "$@"; }
 # ======================================================================================
 # preflight
 # ======================================================================================
+preflight_worktree() {
+  # ISSUE-139 / T0.1. Sessions commit with `git add -A`, so in a shared checkout a concurrent
+  # interactive edit lands in a commit nobody gated. A worktree makes that impossible.
+  local git_dir common_dir
+  git_dir="$(cd "$(git rev-parse --git-dir)" && pwd -P)"
+  common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"
+  if [ "$git_dir" = "$common_dir" ]; then
+    fatal "refusing to run in the primary checkout — interactive edits here get swept into
+  the loop's commits (ISSUE-139). Run it from a dedicated worktree:
+    git worktree add ../NPCSystem-loop -b auto/roadmap-night
+  then provision it and start the loop there — see project-harness/OVERNIGHT_LOOP.md § Quick start."
+  fi
+
+  # A fresh worktree has no .venv/.env (gitignored); every gate would die on a missing tool.
+  # Do NOT link the primary .venv: its editable install imports the PRIMARY checkout's src/.
+  local py=""
+  [ -x "$REPO_ROOT/.venv/Scripts/python.exe" ] && py="$REPO_ROOT/.venv/Scripts/python.exe"
+  [ -z "$py" ] && [ -x "$REPO_ROOT/.venv/bin/python" ] && py="$REPO_ROOT/.venv/bin/python"
+  if [ -z "$py" ] || ! "$py" -c "import pytest, mypy, ruff" >/dev/null 2>&1; then
+    fatal "no working .venv in this worktree ($REPO_ROOT). Provision it:
+    python -m venv .venv && .venv/Scripts/python.exe -m pip install -e \".[dev]\""
+  fi
+  [ -f "$REPO_ROOT/.env" ] || fatal "no .env in this worktree ($REPO_ROOT). Copy it:
+    cp <primary-checkout>/.env \"$REPO_ROOT/.env\""
+}
+
 preflight() {
   compat_force_utf8
   export ROADMAP_FILE
   mkdir -p "$LOOP_LOG_DIR" "$LOOP_STATE_DIR"
   SESSION_LOG="$LOOP_LOG_DIR/loop-$(date '+%Y%m%d-%H%M%S').log"
   : > "$SESSION_LOG"
+  preflight_worktree
 
   if ! compat_lock_acquire "$LOCK_DIR"; then
     # ISSUE-126. compat_lock_acquire already reclaims a lock whose holder pid is dead, so
