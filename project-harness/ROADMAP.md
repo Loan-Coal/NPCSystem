@@ -524,7 +524,7 @@ can be verified against a running demo until this sprint lands.
 
 The two CRITICALs that make the demo unusable. Both were found only by running it.
 
-- [ ] **T1.1** Fix the WebSocket slot leak — the cap exhausts after 5 conversations
+- [x] **T1.1** Fix the WebSocket slot leak — the cap exhausts after 5 conversations
 Files: `src/npc_engine/api/routes/dialogue/dialogue_ws.py`, new test
 `tests/unit/api/test_ws_connection_slot_release.py`
 Spec: `MAX_WS_CONNECTIONS_PER_KEY = 5` at `dialogue_ws.py:50`. After `_run_first_turn` the
@@ -547,7 +547,7 @@ closing each before opening the next, and asserts the last is accepted. It fails
 is rejected. The sequential-close case is exactly what the existing helper-level guard misses.
 Validation: `pytest tests/unit/api/test_ws_connection_slot_release.py -v`, then `make check`.
 Done when: the new test passes, `make check` is green, and no other WS test regressed.
-Blocks: T1.2, T2.3, and every demo verification in this programme. SEV-01, finding L9-01.
+Blocks: T1.2, T2.3, and every demo verification in this programme. SEV-01, finding L9-01. ✅ AUTO (T1.1, 2026-09-16)
 
 - [ ] **T1.2** Delete the `military` engine — it conquers the barracks on tick 5 and ends the game
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279

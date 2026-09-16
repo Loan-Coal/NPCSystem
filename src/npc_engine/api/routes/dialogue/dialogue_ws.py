@@ -169,6 +169,30 @@ async def drain_proactive_lines(
     return len(lines)
 
 
+async def _poll_for_disconnect(websocket: WebSocket, timeout: float) -> bool:
+    """Wait up to *timeout* seconds for a message from the client.
+
+    Returns True when the client has sent a disconnect signal; False when the
+    poll window expired without any message.  Propagates WebSocketDisconnect
+    so the caller's outer exception handler can release the connection slot.
+
+    Args:
+        websocket: The open WebSocket connection to poll.
+        timeout: Maximum seconds to wait for a client message.
+
+    Returns:
+        True when a websocket.disconnect message was received; False on timeout.
+
+    Raises:
+        WebSocketDisconnect: When the client closes the connection.
+    """
+    try:
+        msg = await asyncio.wait_for(websocket.receive(), timeout=timeout)
+        return msg.get("type") == "websocket.disconnect"
+    except asyncio.TimeoutError:
+        return False
+
+
 async def _run_first_turn(websocket: WebSocket, settings: Any) -> str:
     """Execute the first-turn dialogue exchange and return the player_id.
 
@@ -230,7 +254,8 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         proactive_queue = get_proactive_queue()
         while True:
             await drain_proactive_lines(websocket, proactive_queue, player_id)
-            await asyncio.sleep(PROACTIVE_DRAIN_POLL_SECONDS)
+            if await _poll_for_disconnect(websocket, PROACTIVE_DRAIN_POLL_SECONDS):
+                raise WebSocketDisconnect()
     except WebSocketDisconnect:
         return
     except Exception as error:
