@@ -26,7 +26,8 @@ python -m venv .venv
 cp ../NPCSystem/.env .env
 
 # 4. one hand-run green gate, so the first red the loop sees is not the environment
-make check                                # ~7-12 min, must be green
+make check                                # must be green; the FIRST run on a fresh
+                                          # .venv is slow (cold caches, ~55 min measured)
 
 # 5. start the loop — from the worktree
 git status --porcelain                    # must be empty
@@ -74,7 +75,7 @@ The FATAL message and `bash scripts/expand_loop.sh --help` print the same recove
 | `scripts/gate_baseline.py` | Snapshots already-failing tests (phase boundaries only). |
 | `scripts/gate_attribution.py` | Is this red gate the task's fault, or pre-existing? |
 | `scripts/gate_confirm.py` | Re-runs a failure to rule out a flake. |
-| `scripts/classify_gate_failure.py` | Routes a red gate to AUTOFIX or HALT. |
+| `scripts/classify_gate_failure.py` | Routes a red gate to AUTOFIX, HALT, or HARNESS (skip-and-log, T0.3). |
 | `scripts/scan_fix_diff.py` | Scans a repair diff for gate-gaming. |
 | `.claude/commands/expand-linear-next.md` | The per-task skill. |
 | `.claude/commands/fix-make-failure.md` | The bounded repair skill. |

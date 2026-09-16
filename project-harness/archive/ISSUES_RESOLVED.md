@@ -4008,3 +4008,21 @@ sets it explicitly, (b) have the dry-run path simulate the mark so the queue adv
 as it would live, or (c) detect no-progress (same task id returned twice in a row) and abort with a clear
 message. **(c) is what shipped**, and it also protects the live path against a session that silently fails
 to tick.
+
+## [FIXED] ISSUE-139: Night-shift loop sweeps unrelated working-tree changes into its commits
+**Found:** 2026-08-08, during calibration pipeline repair
+**Fixed:** 2026-09-16, in roadmap task T0.1 — `expand_loop.sh` `preflight_worktree` refuses to run in the primary checkout or an unprovisioned worktree; recipe in `OVERNIGHT_LOOP.md` § Quick start. Validated: a concurrent primary-checkout edit stayed out of a worktree loop commit (`1cb2fa8d` on `loop-validate-2`).
+**Severity:** P2 (annoying)
+**Where:** `scripts/expand_loop.sh` / `/expand-linear-next` commit step
+**Description:** The unattended loop stages the whole working tree, so changes made by a concurrent
+interactive session are absorbed into whatever roadmap commit the loop is writing. Observed
+concretely: an interactive fix to `evals/eval_records.py` (`read_transcript` gen-dir support) plus
+its regression tests were committed under `24f6a01 feat(evals): capability_rate as first-class
+metric (EVAL-P9.4)`, a commit that has nothing to do with them. HEAD moved from 73e6c36 to 9fa5493
+mid-session. Consequences: misleading history, `[UNVERIFIED: regression]` tags applied to code the
+loop never gated, and a real risk of the loop committing half-finished interactive work.
+**Why deferred:** Not blocking; the calibration work was committed separately and intact. Fixing it
+means changing the loop's commit step, which is CI-adjacent and needs its own task.
+**To fix:** Have the loop stage explicit paths (or `git stash push --keep-index` around its commit),
+and refuse to commit when the tree contains modifications it did not make. Alternatively run the loop
+in a dedicated worktree so interactive sessions cannot collide with it.

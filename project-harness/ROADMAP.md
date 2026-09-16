@@ -106,8 +106,9 @@ them.
 *Cheap context for the next session. Add a line when a task creates something downstream work
 needs; delete it once consumed. Keep <= 10 lines.*
 
-- **Sprint 0 is not done. Do not start the overnight loop until it is** — the loop currently
-  stages the whole working tree (ISSUE-139) and swallows concurrent edits into its commits.
+- **Sprint 0 is done (2026-09-16).** The loop runs only from a provisioned worktree — a validated one
+  exists at `../NPCSystem-loop` (branch `loop-validate-2`); follow `OVERNIGHT_LOOP.md` § Quick start
+  and re-run `make check` there before a night. Open driver bug found on the way: ISSUE-343.
 - **6** tasks in the fence are flagged for an interactive session and the loop will silently pass
   over them: T6.3, T13.1, T13.2, T15.2, T16.1, **T16.4**. `make roadmap-audit` reports them,
   with the line that raised each flag. The fence holds **46** tasks in total, 40 of them loop-runnable (verified with the
@@ -253,7 +254,16 @@ Done when: `make check` is green and reaches `check-dead-keywords`; the completi
 true green duration and **which of the nine previously-unreached targets pass** — this is their first
 observation on the T tree.
 
-- [ ] **T0.1** Run the loop in a dedicated git worktree · ISSUE-139 · was R6.3
+- [x] **T0.1** Run the loop in a dedicated git worktree · ISSUE-139 · was R6.3
+  ✅ 2026-09-16 (code in `99e7906f`). `preflight_worktree` refuses in the primary checkout, without a
+  `.venv` that imports pytest/mypy/ruff, and without `.env` — each with the fix command; all three
+  refusals observed. RED observed first: live run #1 from the primary checkout swept a concurrent
+  `PATTERNS.md` probe into its T3.1 commit. Worktree `../NPCSystem-loop` provisioned with a fresh
+  `.venv` (`pip install -e ".[dev]"` suffices) and `.env`; **`make check` green inside it** (first run
+  3342 s wall on cold caches). Live run #2 from the worktree: T3.1 `TASK_COMPLETE` in 22 min, commit
+  `1cb2fa8d` holds only T3.1's files + tick, and the concurrent primary-checkout probe stayed out.
+  `OVERNIGHT_LOOP.md` Quick start carries the recipe. ISSUE-139 archived.
+  LOC delta: +27 non-test (`scripts/expand_loop.sh`; 799 lines).
 Files: `scripts/expand_loop.sh`, `project-harness/OVERNIGHT_LOOP.md`, `Makefile`
 Spec: the loop stages the **whole working tree**, so a concurrent interactive session's edits are
 absorbed into whatever roadmap commit the loop happens to be writing. Observed in the wild: an
