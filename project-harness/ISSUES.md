@@ -3289,3 +3289,24 @@ drive-by during a latency task.
 that needs it, or move `build_serialized_context_with_receipt` to a leaf module neither package
 imports at module scope. Add a test that imports `npc_engine.engines.dialogue.dialogue_models`
 in a fresh subprocess as the very first `npc_engine` import, so the cycle cannot silently return.
+
+---
+
+## ISSUE-343: a red-gate HALT at a scar-6.10 phase boundary is swallowed — the night keeps going
+**Found:** 2026-09-16, during T0.3 (RED-anchor rig: real `expand_loop.sh`, fake `claude`, forced failing test)
+**Severity:** P2 (annoying) — the night-ending guard `MAX_CONSECUTIVE_RED_GATES` silently does not fire on one of the two boundary paths
+**Where:** `scripts/expand_loop.sh:754` — `run_phase_boundary "$phase" || true`
+**Description:** A phase boundary is reached two ways. On a `PHASE_COMPLETE` token (`case 10)`) the loop checks
+`brc -eq 2` and breaks with "stopping: repeated red gates". On the scar-6.10 path — the session returns
+`TASK_COMPLETE` for the phase's last task and `phase_now_complete` detects it from the roadmap — the boundary is
+called as `run_phase_boundary "$phase" || true`, discarding return code 2. Observed: with `--max-red-gates 1` and
+a forced HALT-class failure, the log read `HALT: 1 consecutive red phase gates` and the loop then dispatched
+T4.1 anyway. `run_phase_boundary` also returns before `seed_gate_baseline` on rc 2, so the next phase runs
+against the previous phase's baseline. Scar 6.10 exists precisely because a red-committed final task
+suppresses the `PHASE_COMPLETE` token, so this is the path a red night is most likely to take.
+**Why deferred:** found while validating T0.3 (harness-bucket routing); fixing the boundary's return handling is a
+separate change to the driver and single-task focus applies. It does not block T0.3, which was validated on the
+token path.
+**To fix:** treat both boundary call sites the same: capture `brc` on the scar-6.10 path and `break` on 2. Add a
+rig/driver test in which the fake session returns `TASK_COMPLETE` on the phase's last task with a red gate and
+`--max-red-gates 1`, asserting "stopping: repeated red gates" and no further task dispatch.

@@ -316,7 +316,17 @@ how to recover. Then recover using only what the message says.
 Done when: the recovery appears in the FATAL message, the usage header and `OVERNIGHT_LOOP.md`.
 Closes ISSUE-126.
 
-- [ ] **T0.3** Route harness self-test failures to skip-and-log, not HALT · was R6.2
+- [x] **T0.3** Route harness self-test failures to skip-and-log, not HALT · was R6.2
+  ✅ 2026-09-16 (code in `b92a068e`). `HARNESS_TEST_PATH_PREFIXES` + `CLASSIFICATION=HARNESS` (exit 4) when
+  every failing node id is under `tests/unit/scripts/` or `tests/unit/harness/`; mixed, product and
+  node-less failures stay HALT. `run_phase_gate` flags it and returns **without** incrementing
+  `CONSECUTIVE_RED_GATES`. Validated on the real driver with a fake `claude` and `--max-red-gates 1`:
+  RED — forced `tests/unit/scripts/` failure → `HALT: 1 consecutive red phase gates`; after — the same
+  failure → HARNESS, streak 0, night continued to T4.1; a forced product failure → HALT and
+  "stopping: repeated red gates". **This changes the phase gate's routing only**: `gate_attribution.py`
+  is untouched, so a red harness self-test still makes each task report `BASELINE_RED`.
+  Found on the way, logged as ISSUE-343: the scar-6.10 boundary path swallows the red-gate HALT.
+  LOC delta: +36 non-test (`scripts/`); +79 test.
 Files: `scripts/loop_gates.py`, `scripts/classify_gate_failure.py`, `scripts/expand_loop.sh`
 Spec: `loop_gates.py` already splits HALT-class (behaviour) from AUTOFIX-class (form) and re-runs a
 failing gate's constituents individually to decide. Extend that existing classification with a third
