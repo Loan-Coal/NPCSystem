@@ -728,7 +728,7 @@ is why this sprint precedes the ports collapse and the test prune.
 The political cluster. `military` already went in T1.2; **four** remain — `agenda` was removed from
 the delete set by the owner on 2026-09-09 and survives intact.
 
-- [ ] **T3.1** Delete `succession` and `oath`
+- [x] **T3.1** Delete `succession` and `oath`
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279
 Files: delete `src/npc_engine/engines/succession/`, `src/npc_engine/engines/oath/`,
 `src/npc_engine/engines/ports/pledge_port.py`,
@@ -778,7 +778,7 @@ Validation: `make check`, then `make test-demo`. The demo must still read pledge
 Done when: green, grep clean, `AgendaEngine` still constructible via
 `dependencies_advanced/politics.py`, and LOC delta reported (expect about -600; the original -835
 assumed `agenda` went too).
-Findings L10-03, DEC-279.
+Findings L10-03, DEC-279. ✅ AUTO (T3.1, 2026-09-16)
 
 - [ ] **T3.2** Delete `treaty` and `faction_politics`
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279

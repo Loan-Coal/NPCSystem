@@ -50,12 +50,10 @@ class AdvancedEngineSlots(TypedDict):
 
     clique_formation_engine: TickEngine
     skill_progression_engine: TickEngine
-    oath_engine: TickEngine
     treaty_engine: TickEngine
     memory_consolidation_engine: ConsolidationTickEngine
     mood_contagion_engine: TickEngine
     chapter_engine: TickEngine
-    succession_engine: TickEngine
     agenda_engine: TickEngine
     need_decay_engine: TickEngine
     military_engine: TickEngine

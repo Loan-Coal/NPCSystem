@@ -57,7 +57,6 @@ from npc_engine.graph.repositories.planning_repository import Neo4jPlanningRepos
 from npc_engine.graph.repositories.player_model_repository import (
     Neo4jPlayerModelRepository,
 )
-from npc_engine.graph.repositories.pledge_repository import Neo4jPledgeRepository
 from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRepository
 from npc_engine.graph.repositories.proactive_memory_read_repository import (
     Neo4jProactiveMemoryReadRepository,
@@ -95,7 +94,6 @@ __all__ = [
     "Neo4jPlayerLocationReadRepository",
     "Neo4jPlanningRepository",
     "Neo4jPlayerModelRepository",
-    "Neo4jPledgeRepository",
     "Neo4jPoliticalRepository",
     "Neo4jProactiveMemoryReadRepository",
     "Neo4jRelationPhaseWriteRepository",

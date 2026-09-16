@@ -18,7 +18,7 @@ from npc_engine.api.dependencies_engines import (
     get_tick_scheduler,
 )
 
-EXPECTED_ENGINE_SLOT_COUNT = 28
+EXPECTED_ENGINE_SLOT_COUNT = 26
 
 
 def test_composition_root_wires_the_memory_consolidation_engine() -> None:
@@ -47,7 +47,7 @@ def test_the_slot_set_is_not_silently_empty() -> None:
 def test_composition_root_leaves_no_engine_slot_unwired() -> None:
     """The general form of the bug above: a None slot is a silent no-op.
 
-    TickScheduler types 26 of its 28 engine slots Optional so tests can wire a
+    TickScheduler types 24 of its 26 engine slots Optional so tests can wire a
     subset. That is right for the class and wrong for the composition root, which
     is responsible for filling every one of them.
     """

@@ -41,7 +41,6 @@ from npc_engine.engines.ports.player_location_read_port import PlayerLocationRea
 from npc_engine.engines.ports.planning_port import PlanningGraphPort
 from npc_engine.engines.ports.proactive_memory_read_port import ProactiveMemoryReadPort
 from npc_engine.engines.ports.player_model_port import PlayerModelGraphPort
-from npc_engine.engines.ports.pledge_port import PledgeGraphPort
 from npc_engine.engines.ports.political_port import PoliticalGraphPort
 from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
 from npc_engine.engines.ports.relation_read_port import RelationReadPort
@@ -72,7 +71,6 @@ __all__ = [
     "PlanningGraphPort",
     "PlayerLocationReadPort",
     "PlayerModelGraphPort",
-    "PledgeGraphPort",
     "PoliticalGraphPort",
     "ProactiveMemoryReadPort",
     "RelationPhaseWritePort",

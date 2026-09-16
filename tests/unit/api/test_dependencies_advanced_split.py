@@ -22,17 +22,13 @@ EXPECTED_FACTORIES = {
     "get_mood_contagion_engine",
     "get_need_decay_engine",
     "get_negotiation_store",
-    "get_oath_engine",
     "get_skill_progression_engine",
-    "get_succession_engine",
     "get_treaty_engine",
 }
 
 SUBMODULE_FACTORIES = {
     "npc_engine.api.dependencies_advanced.politics": {
         "get_treaty_engine",
-        "get_oath_engine",
-        "get_succession_engine",
         "get_agenda_engine",
         "get_military_engine",
     },

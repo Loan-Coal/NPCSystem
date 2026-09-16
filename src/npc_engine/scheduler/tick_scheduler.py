@@ -61,11 +61,9 @@ class TickScheduler:
         memory_consolidation_engine: ConsolidationTickEngine | None = None,
         clique_formation_engine: TickEngine | None = None,
         skill_progression_engine: TickEngine | None = None,
-        oath_engine: TickEngine | None = None,
         treaty_engine: TickEngine | None = None,
         mood_contagion_engine: TickEngine | None = None,
         chapter_engine: TickEngine | None = None,
-        succession_engine: TickEngine | None = None,
         agenda_engine: TickEngine | None = None,
         need_decay_engine: TickEngine | None = None,
         military_engine: TickEngine | None = None,
@@ -112,16 +110,12 @@ class TickScheduler:
                 called every tick; self-skips when the configured interval is not met.
             skill_progression_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; awards XP to characters for completed quests.
-            oath_engine: Optional engine exposing ``run_tick(tick_id)``
-                called every tick; expires pledges and runs stub violation checks.
             treaty_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; expires treaties and checks mechanical conditions.
             mood_contagion_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; blends mood states between co-located affectionate NPCs.
             chapter_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; detects chapter transitions and labels them via LLM.
-            succession_engine: Optional engine exposing ``run_tick(tick_id)``
-                called every tick; grants vacant inheritable titles to the first eligible heir.
             agenda_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; resolves open agendas whose deadline has passed.
             need_decay_engine: Optional engine exposing ``run_tick(tick_id)``
@@ -178,11 +172,9 @@ class TickScheduler:
         self._memory_consolidation_engine = memory_consolidation_engine
         self._clique_formation_engine = clique_formation_engine
         self._skill_progression_engine = skill_progression_engine
-        self._oath_engine = oath_engine
         self._treaty_engine = treaty_engine
         self._mood_contagion_engine = mood_contagion_engine
         self._chapter_engine = chapter_engine
-        self._succession_engine = succession_engine
         self._agenda_engine = agenda_engine
         self._need_decay_engine = need_decay_engine
         self._military_engine = military_engine
@@ -319,11 +311,9 @@ class TickScheduler:
             "consolidation": [],
             "clique": [],
             "skill_progression": [],
-            "oath": [],
             "treaty": [],
             "mood_contagion": [],
             "chapter": [],
-            "succession": [],
             "agenda": [],
             "need_decay": [],
             "military": [],
@@ -347,10 +337,8 @@ class TickScheduler:
             ("faction_politics", self._faction_politics_engine),
             ("clique", self._clique_formation_engine),
             ("skill_progression", self._skill_progression_engine),
-            ("oath", self._oath_engine),
             ("treaty", self._treaty_engine),
             ("mood_contagion", self._mood_contagion_engine),
-            ("succession", self._succession_engine),
             ("agenda", self._agenda_engine),
             ("need_decay", self._need_decay_engine),
             ("military", self._military_engine),
