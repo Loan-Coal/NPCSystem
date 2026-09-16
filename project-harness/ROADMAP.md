@@ -106,9 +106,6 @@ them.
 *Cheap context for the next session. Add a line when a task creates something downstream work
 needs; delete it once consumed. Keep <= 10 lines.*
 
-- **`make check` is RED at HEAD and T0.0 is the only thing that fixes it.** Until it lands, every
-  task commits `TASK_COMPLETE_BASELINE_RED` and the night halts after two phase boundaries. Do not
-  start the loop before T0.0.
 - **Sprint 0 is not done. Do not start the overnight loop until it is** — the loop currently
   stages the whole working tree (ISSUE-139) and swallows concurrent edits into its commits.
 - **6** tasks in the fence are flagged for an interactive session and the loop will silently pass
@@ -221,7 +218,13 @@ failure mode the 2026-09-07 review was written about.
 
 ### Phase T0 — the driver
 
-- [ ] **T0.0** Re-point the roadmap-cursor tripwire at the T programme — **do this first, by hand**
+- [x] **T0.0** Re-point the roadmap-cursor tripwire at the T programme — **do this first, by hand**
+  ✅ 2026-09-16. `_EXPECTED_PHASE_IDS` = T1..T16, `EXPECTED_FLAGS` = the six `deferred` tasks.
+  `make check` green end to end in **9m55s** (595s). All nine previously-unreached targets
+  pass on first observation: `test-cov-evals` (82.79%), `test-cov-v13` (88.33%),
+  `test-cov-full-report`, `check-migrations`, `check-api-stability`, `check-api-contract`
+  (149 ops), `check-engine-logs`, `check-base-rate` (0.9140, at baseline), `check-dead-keywords`.
+  LOC delta: 0 non-test; +19 test.
 Files: `tests/unit/harness/test_roadmap_cursor.py`
 Spec: **`make check` is RED at HEAD and has been since the commit that wrote this roadmap.** Two
 tests fail — `test_real_roadmap_parses_and_verifies_clean` and `test_real_roadmap_fence_state_tripwire`

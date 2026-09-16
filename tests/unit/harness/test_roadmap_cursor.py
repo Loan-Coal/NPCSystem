@@ -176,6 +176,18 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     # never sees it, rather than inside it behind a skip flag. An empty map still catches
     # a regression — any fence task that acquires a flag fails the `unexpected` check
     # below, which is exactly the ISSUE-134 trap of the skip-regex matching prose.
+    # 2026-09-08: no longer empty. The M programme was retired and the fence moved to the
+    # T programme (Sprints 1-8, T1..T16). Six fence tasks carry the pause glyph at their
+    # heading because they need a running stack or a live measurement, and the owner chose
+    # to keep them inside the fence — beside the work they verify — rather than outside it.
+    # Each is recorded in ROADMAP.md's Deferred backlog with an owner and a due date, and
+    # `make roadmap-audit` reports them, so skipping them is visible rather than silent.
+    "T6.3": ["deferred"],
+    "T13.1": ["deferred"],
+    "T13.2": ["deferred"],
+    "T15.2": ["deferred"],
+    "T16.1": ["deferred"],
+    "T16.4": ["deferred"],
 }
 
 
@@ -198,7 +210,13 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
 # half of the M program — M1 (graph integrity) and M2 (the four unmeasured dimensions).
 # M3, M4 and R6 sit outside it deliberately: M3 and M4 need human judgment and live model
 # runs, and R6 would still have the loop rewrite its own driver mid-run.
-_EXPECTED_PHASE_IDS: list[str] = ["M1", "M2"]
+# 2026-09-08: the M programme is retired and archived at
+# archive/ROADMAP_M-programme_2026-09-08.md, and the fence now spans Sprints 1-8 of the
+# T programme (Trim), phases T1..T16. Sprint 0 (T0, T0B) sits outside it deliberately — it
+# rewrites the loop's own driver and skill — as do Sprints 9 and 10, which need human
+# judgement and live model runs. This constant was left pinning M1/M2 by the commit that
+# wrote the T roadmap, so `make check` was red from then until this update (T0.0).
+_EXPECTED_PHASE_IDS: list[str] = [f"T{n}" for n in range(1, 17)]
 
 
 def test_real_roadmap_parses_and_verifies_clean() -> None:
