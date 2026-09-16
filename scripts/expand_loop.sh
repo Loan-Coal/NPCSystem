@@ -59,6 +59,11 @@
 #   bash scripts/expand_loop.sh --stop-at none           # run the queue out, any hour
 #   bash scripts/expand_loop.sh --dry-run                # no model calls at all
 #
+# Stale lock: a killed run can leave the lock dir behind. A dead holder is reclaimed
+# automatically; a holder pid that is still alive (a reused MSYS pid) is not, and the run
+# aborts with "FATAL: another loop holds ...". Confirm no loop is running, then:
+#   rm -rf project-harness/.loop-state/loop.lock
+#
 # --stop-at resolves ONCE at startup to the next occurrence of that time, so a run
 # started at 09:00 stops at 08:00 TOMORROW, and one started at 06:00 stops at 08:00
 # today. It only stops new work from STARTING; a running task is never interrupted.
@@ -176,7 +181,15 @@ preflight() {
   SESSION_LOG="$LOOP_LOG_DIR/loop-$(date '+%Y%m%d-%H%M%S').log"
   : > "$SESSION_LOG"
 
-  compat_lock_acquire "$LOCK_DIR" || fatal "another loop holds $LOCK_DIR"
+  if ! compat_lock_acquire "$LOCK_DIR"; then
+    # ISSUE-126. compat_lock_acquire already reclaims a lock whose holder pid is dead, so
+    # reaching here means the recorded pid is ALIVE: a real loop, or an MSYS pid reused by
+    # an unrelated process after a killed run. Tell the operator how to tell them apart.
+    fatal "another loop holds $LOCK_DIR (pid $(cat "$LOCK_DIR/pid" 2>/dev/null || echo unknown)).
+  If a loop IS running, stop it first. If none is (a stale lock left by a killed run whose
+  pid was reused), check with:  ps -p $(cat "$LOCK_DIR/pid" 2>/dev/null || echo PID)
+  then recover with:             rm -rf \"$LOCK_DIR\"   and relaunch."
+  fi
   trap 'compat_lock_release "$LOCK_DIR"' EXIT INT TERM
 
   command -v claude >/dev/null 2>&1 || fatal "claude CLI not on PATH"

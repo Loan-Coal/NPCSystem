@@ -20,6 +20,23 @@ Then widen: `--max-phases 1`, then a real night:
 bash scripts/expand_loop.sh --start-at 20:00 --stop-at 08:00
 ```
 
+## Stale lock recovery
+
+The loop takes a `mkdir` lock at `project-harness/.loop-state/loop.lock/` holding its pid.
+A killed run (Ctrl-C mid-teardown, power cut, `taskkill`) can leave it behind.
+
+- **Holder pid dead** — reclaimed automatically on the next launch; you never see it.
+- **Holder pid alive** — the launch aborts with
+  `FATAL: another loop holds …/loop.lock (pid N)`. Either a loop really is running, or the
+  stale pid has been reused by an unrelated process (common under MSYS). Check first:
+
+```bash
+ps -p "$(cat project-harness/.loop-state/loop.lock/pid)"   # is it a loop? (bash expand_loop.sh)
+rm -rf project-harness/.loop-state/loop.lock               # only if no loop is running
+```
+
+The FATAL message and `bash scripts/expand_loop.sh --help` print the same recovery.
+
 ## The pieces
 
 | File | Role |

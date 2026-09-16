@@ -286,7 +286,12 @@ refusal, `make check` has been observed green inside a worktree, and `OVERNIGHT_
 full launch recipe — `git worktree add`, then create or link `.venv`, then copy `.env`, then one
 hand-run green `make check`, then start the loop. Closes ISSUE-139.
 
-- [ ] **T0.2** Document stale-lock recovery · ISSUE-126 (remaining half) · was R6.1
+- [x] **T0.2** Document stale-lock recovery · ISSUE-126 (remaining half) · was R6.1
+  ✅ 2026-09-16. Recovery in the FATAL message (names the holder pid, `ps -p` check, `rm -rf`),
+  the usage header and `OVERNIGHT_LOOP.md` § Stale lock recovery. Validated: live-pid lock →
+  FATAL with recovery → recovered from the message alone → relaunch passed the lock. Note
+  `compat_lock_acquire` already reclaims dead-pid locks; the FATAL only fires on a live pid.
+  ISSUE-126 archived. LOC delta: +14 non-test (`scripts/expand_loop.sh`: recovery text and comments).
 Files: `scripts/expand_loop.sh` (usage header), `project-harness/OVERNIGHT_LOOP.md`
 Spec: **the no-progress guard already exists (DEC-235) — do not delete it and do not write a second
 one.** `expand_loop.sh:649` compares each iteration's task id against `LAST_TASK_ID` and halts once
