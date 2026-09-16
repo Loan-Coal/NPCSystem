@@ -20,8 +20,15 @@ A headless turn **ends the moment you stop calling tools.** If you background `m
 and say "I'll check the result shortly", this session dies right there and every edit you
 made is lost with it.
 
-`make check` takes about 144 seconds on this repo. **Wait for it.** Do not background it.
-Do not poll it. Do not say you will come back to it. Run it in the foreground and wait.
+`make check` takes **about 7 to 12 minutes** on this repo (measured 2026-09-16: 425–595 s,
+4,571 tests; 11m58s on 2026-09-07). **Wait for it.** Seeing no output for several minutes is
+normal — it has not hung. Do not background it. Do not poll it. Do not say you will come
+back to it. Run it in the foreground and wait.
+
+**Budget consequence:** at ~12 minutes a gate run is ~13% of your 90-minute session timeout
+(`CLAUDE_TIMEOUT`). Run the full gate **at most twice** — once when you believe you are
+green, once after a repair. Iterate with the task's targeted `pytest` path, never with
+`make check`.
 
 **Say it again: never background the gate. Run it in the foreground and wait for it.**
 
@@ -59,13 +66,20 @@ A token wrapped in backticks breaks the loop's parser and reads as a halt. Emit 
 python scripts/roadmap_cursor.py --slice <PHASE>     # ONLY this phase's body
 ```
 
-Never read the whole ROADMAP.md — it is 1183 lines and the slice is what keeps your
+Never read the whole ROADMAP.md — it is over 2,200 lines and the slice is what keeps your
 context small. Then read, in order:
 
-1. The **task block for `<TASK>`** inside that slice. It carries `Files:`, a **`RED
-   anchor:`** (the exact test that must fail first, and why) and a **`Validation:`** line.
-   Those three are your specification — implement to them, not to your own idea of the task.
-2. `project-harness/CLAUDE.md` — the hard rules. Load-bearing here: 300-line file limit,
+1. The **task block for `<TASK>`** inside that slice. It carries five lines, and together
+   they are your whole specification — implement to them, not to your own idea of the task:
+   - **`Files:`** — what you may touch;
+   - **`Spec:`** — the problem, with file:line evidence, so you do not re-derive it;
+   - **`RED anchor:`** — the exact check that must fail first, and why;
+   - **`Validation:`** — the exact commands;
+   - **`Done when:`** — the finish line.
+   A task may also carry a **`Pre-approved:`** line — see the halt table in step 2.
+2. `project-harness/CLAUDE.md` — the hard rules. Load-bearing here: file size **400 lines
+   advisory, 800 hard and unwaivable** (DEC-226; a grandfathered file may not grow) — do not
+   split a file that is under 800 lines,
    40-line function limit, 3-level nesting limit, no prompt strings outside
    `src/npc_engine/prompts/`, no raw `dict` across a module boundary (Pydantic v2 only),
    no magic numbers/strings, no layer violations, module + public-function docstrings.
@@ -78,14 +92,21 @@ Emit the halt token and stop (no edits, clean tree) if any of these holds:
 
 | Condition | Token |
 |---|---|
+| Task body carries a `Pre-approved:` line naming the exact class you are about to trip — one of `file-deletion`, `public-interface`, `graph-schema`, `new-dependency` | do NOT halt — the owner approved it; proceed, and name the approval in your commit body |
 | Task body carries `⚠️ ask-gate` | `AUTO_STATUS: HALT ask-gate <what needs deciding>` |
 | Task is tagged `(live` — needs Neo4j/Ollama/seeded worlds | `AUTO_STATUS: HALT live-task` |
 | Needs a 🔶 DECISIONS entry that is not ACCEPTED | `AUTO_STATUS: HALT needs-decision DEC-NNN` |
 | Needs something that does not exist yet | `AUTO_STATUS: HALT blocked-prerequisite <what>` |
 | Requires a layer violation, new dependency, graph schema change, or a public-interface change with callers outside the module | `AUTO_STATUS: HALT ask-gate <what>` |
 
-These four halt reasons make the loop **skip the phase and keep working**, so they cost
-nothing. Guessing at a human decision costs a lot. **When in doubt, halt.**
+**The approval must match the action.** A task pre-approved for `file-deletion` still halts
+on a graph-schema change; a `Pre-approved:` line covers exactly the classes it names, in
+exactly that task, and nothing else. Prose in `Spec:` such as "the owner decided to delete"
+is **not** an approval — only the `Pre-approved:` line is.
+
+A halt makes the loop **skip the whole phase** for the rest of the run — every later task
+in it goes unattempted. That is why a pre-approved class must not halt. For everything
+else, guessing at a human decision costs more than a skipped phase. **When in doubt, halt.**
 
 ## 3. Implement — strict TDD, one task only
 
@@ -103,7 +124,7 @@ nothing. Guessing at a human decision costs a lot. **When in doubt, halt.**
 ## 4. Gate — foreground, and wait
 
 ```bash
-make check                 # ~144s. FOREGROUND. WAIT FOR IT.
+make check                 # ~7-12 min. FOREGROUND. WAIT FOR IT. At most twice.
 make test-demo             # additionally, if you touched demo_game/
 ```
 

@@ -16,7 +16,9 @@ SOFT_REVIEW_FILE="${SOFT_REVIEW_FILE:-$REPO_ROOT/$HARNESS_DIR/soft_review.md}"
 
 # ── commands ──────────────────────────────────────────────────────────────────────────
 PY_RUN="${PY_RUN:-python}"
-# The full gate. Measured on this repo: 144 s, 2618 passed / 29 skipped / 87.10 % cov.
+# The full gate. Approximate, measured 2026-09-16: 425-595 s, 4571 passed / 41 skipped /
+# 88.13 % cov (11m58s on 2026-09-07). At ~12 min one run is ~13% of CLAUDE_TIMEOUT, so a
+# task session runs it at most twice.
 GATE_CHECK_CMD="${GATE_CHECK_CMD:-make check}"
 # Required whenever a task touches demo_game/ (project rule).
 GATE_DEMO_CMD="${GATE_DEMO_CMD:-make test-demo}"
