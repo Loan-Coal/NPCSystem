@@ -140,6 +140,34 @@ def _flags_for(lines: list[str], start: int, end: int) -> frozenset[str]:
     return frozenset(found)
 
 
+def flag_evidence(lines: list[str], task: TaskEntry) -> dict[str, tuple[str, ...]]:
+    """Map each flag on ``task`` to the stripped lines of its block that raised it.
+
+    Applies the same three matchers as ``_flags_for``, line by line, so the audit can
+    never report a flag the cursor did not raise. A flag can be raised by text that is
+    not the task's own (ISSUE-134: a level-1 ``# SPRINT`` heading does not end a block),
+    and naming the line is what makes that visible.
+
+    Args:
+        lines: Physical lines of the roadmap.
+        task: A parsed task whose ``[start, end)`` span is searched.
+    Returns:
+        Flag name to matching lines, in file order; flags with no hit are omitted.
+    """
+    block = lines[task.start : task.end]
+    matchers = (
+        (FLAG_ASK_GATE, lambda text: ASK_GATE_RE.search(text) is not None),
+        (FLAG_LIVE, lambda text: LIVE_RE.search(text) is not None),
+        (FLAG_DEFERRED, lambda text: DEFERRED_TOKEN in text),
+    )
+    evidence: dict[str, tuple[str, ...]] = {}
+    for flag, matches in matchers:
+        hits = tuple(line.strip() for line in block if matches(line))
+        if hits:
+            evidence[flag] = hits
+    return evidence
+
+
 def _parse_tasks(lines: list[str], phase_id: str, start: int, end: int) -> tuple[TaskEntry, ...]:
     """Parse every task bullet inside a phase's ``[start, end)`` span."""
     tasks: list[TaskEntry] = []

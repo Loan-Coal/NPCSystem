@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
-        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
+        check-layers check-docstrings roadmap-verify roadmap-audit check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         check-ledger-ids check-cited-reports check-ceiling-baseline \
@@ -286,6 +286,12 @@ check-layers:
 # parse back is invisible to the cursor, and its task gets implemented twice.
 roadmap-verify:
 	$(PYTHON) scripts/roadmap_cursor.py --verify
+
+# roadmap-audit: every flagged, unticked task in the queue fence, with the line that raised
+# each flag (T0B.2). The loop never dispatches these, so this is how skipped work stays
+# visible. A report, not a gate: exits 1 while deferred work exists, so NOT in `check`.
+roadmap-audit:
+	$(PYTHON) scripts/roadmap_cursor.py --audit-deferred
 
 # check-human-gates: audit the `#### HUMAN GATE` grammar in ROADMAP.md (DEC-164).
 # Grammar only — a closed gate is normal and exits 0. Red means a gate references a

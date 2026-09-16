@@ -234,6 +234,24 @@ preflight() {
 
   log "preflight OK | branch=$START_BRANCH model=$MODEL push=$PUSH_ENABLED services=$WITH_SERVICES"
   log "queue: $(cursor --status | tail -1)"
+  report_deferred start
+}
+
+# T0B.2: flagged tasks are never dispatched, so say out loud which ones wait on a human —
+# at startup (log only, so the tree stays clean) and at the end (into the morning report,
+# before checkpoint_reports commits it). A report, not a gate: never fails the run.
+report_deferred() {
+  local when="$1" out rc=0
+  out="$(cursor --audit-deferred 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then log "deferred work ($when): none"; return 0; fi
+  log "deferred work ($when): $(printf '%s\n' "$out" | tail -1) — the loop will NOT do these"
+  printf '%s\n' "$out" | grep -v '^    ' | grep -v '^DEFERRED_TOTAL=' \
+    | while IFS= read -r row; do log "  $row"; done
+  if [ "$when" = "end" ]; then
+    flag_for_human "deferred tasks the loop skipped (standing debt)" \
+      "$(printf '%s\n\n%s' 'Run `make roadmap-audit` to see the line that raised each flag.' "$out")"
+  fi
+  return 0
 }
 
 # ======================================================================================
@@ -731,6 +749,7 @@ be committed. Inspect the last task log before re-running."
     fi
   done
 
+  report_deferred end
   checkpoint_reports
   log "=== run finished | tasks=$TASKS_DONE phases=$PHASES_DONE skipped=[${SKIPPED_PHASES:-none}] ==="
   log "queue now: $(cursor --status | tail -1)"

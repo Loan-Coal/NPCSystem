@@ -2,7 +2,7 @@
 Module: roadmap_cursor
 Layer: harness
 Purpose: The ONLY reader and writer of the overnight loop's roadmap grammar — finds the
-    next actionable task, slices one phase's body, ticks a task, and audits the queue.
+    next actionable task, slices one phase's body, ticks a task, audits the queue, and reports deferred work.
 Dependencies: scripts/_roadmap_cursor_core (pure logic), stdlib argparse/pathlib/os.
 Used by: scripts/expand_loop.sh, .claude/commands/expand-linear-next.md, `make roadmap-verify`.
 
@@ -41,6 +41,7 @@ from _roadmap_cursor_core import (  # noqa: E402
     compute_next,
     fence_bounds,
     find_task,
+    flag_evidence,
     parse_roadmap,
     render_marked,
     slice_range,
@@ -115,6 +116,27 @@ def _cmd_flagged(lines: list[str]) -> str:
     return "\n".join(rows)
 
 
+def _cmd_audit_deferred(lines: list[str]) -> tuple[str, int]:
+    """Report every flagged, unticked task with the line that raised each flag (T0B.2).
+
+    ``compute_next`` never returns these, so without this report they are passed over in
+    silence. Exit 1 while any exist, so a script can tell; it is a report, not a gate.
+    """
+    rows: list[str] = []
+    for phase in parse_roadmap(lines):
+        for task in phase.tasks:
+            if task.done or not task.skippable:
+                continue
+            title = lines[task.start].split(f"**{task.id}**", 1)[1].strip()
+            flags = ",".join(sorted(task.flags))
+            rows.append(f"{task.id}\tphase={phase.id}\tflags={flags}\t{title}")
+            for flag, hits in flag_evidence(lines, task).items():
+                rows.extend(f"    {flag}: {hit}" for hit in hits)
+    count = sum(1 for row in rows if not row.startswith(" "))
+    rows.append(f"DEFERRED_TOTAL={count}")
+    return "\n".join(rows), 1 if count else 0
+
+
 def _cmd_phase_done(lines: list[str], phase_id: str) -> int:
     """Exit 0 iff every task in ``phase_id`` is done or flagged (roadmap state, not tokens)."""
     phases = parse_roadmap(lines)
@@ -136,6 +158,9 @@ def _build_parser() -> argparse.ArgumentParser:
     action.add_argument("--verify", action="store_true", help="audit the queue's grammar")
     action.add_argument("--status", action="store_true", help="per-phase queue summary")
     action.add_argument("--list-flagged", action="store_true", help="tasks the loop will skip")
+    action.add_argument(
+        "--audit-deferred", action="store_true", help="flagged tasks + the line raising each"
+    )
     action.add_argument("--phase-done", metavar="PHASE", help="exit 0 if PHASE is complete")
     parser.add_argument("--date", default="", help="ISO date for --mark")
     parser.add_argument("--unverified", default=None, help="mark as UNVERIFIED with this reason")
@@ -167,6 +192,10 @@ def _dispatch(args: argparse.Namespace, path: Path, lines: list[str]) -> int:
     if args.list_flagged:
         print(_cmd_flagged(lines))
         return 0
+    if args.audit_deferred:
+        report, code = _cmd_audit_deferred(lines)
+        print(report)
+        return code
     if args.phase_done:
         return _cmd_phase_done(lines, args.phase_done)
     findings = verify(parse_roadmap(lines), lines)

@@ -109,8 +109,8 @@ needs; delete it once consumed. Keep <= 10 lines.*
 - **Sprint 0 is not done. Do not start the overnight loop until it is** — the loop currently
   stages the whole working tree (ISSUE-139) and swallows concurrent edits into its commits.
 - **6** tasks in the fence are flagged for an interactive session and the loop will silently pass
-  over them: T6.3, T13.1, T13.2, T15.2, T16.1, **T16.4**. `make roadmap-audit` reports them once
-  T0B.2 lands. The fence holds **46** tasks in total, 40 of them loop-runnable (verified with the
+  over them: T6.3, T13.1, T13.2, T15.2, T16.1, **T16.4**. `make roadmap-audit` reports them,
+  with the line that raised each flag. The fence holds **46** tasks in total, 40 of them loop-runnable (verified with the
   loop's own parser, 2026-09-09).
 - The app image is **not** bind-mounted: rebuild before any before/after measurement.
 - Integration tests write to the **live** Neo4j (ISSUE-277) — never run the integration suite
@@ -398,7 +398,14 @@ one task through the loop and confirm the agent's own summary does not cite a 30
 Done when: all five items are in, the grep is clean, and **a dry run over T3.1 confirms the agent
 does not halt** on its `Pre-approved: file-deletion` line.
 
-- [ ] **T0B.2** Make deferred work visible instead of silently skipped
+- [x] **T0B.2** Make deferred work visible instead of silently skipped
+  ✅ 2026-09-16. `roadmap_cursor.py --audit-deferred` (+ pure `flag_evidence` in the core) and
+  `make roadmap-audit` list the six flagged tasks with each flag's matched line, exit 1 while any
+  exist. `expand_loop.sh` logs it at startup and writes it to the morning report before
+  `checkpoint_reports`. `test_roadmap_audit.py` covers the fixture cases, the ISSUE-134 sprint-heading
+  leak, and agreement of the real audit / backlog table / carry-forward count / `EXPECTED_FLAGS`.
+  No accidental flags on the real file: every one of the six is raised by its own heading's ⏸️. LOC delta: +83 non-test (`scripts/` +77, `Makefile` +6, a positive
+  delta the task itself calls for: a new report and its loop wiring); +135 test.
 Files: `scripts/roadmap_cursor.py`, `scripts/_roadmap_cursor_core.py`, `Makefile`,
 `scripts/expand_loop.sh`, new `tests/unit/scripts/test_roadmap_audit.py`
 Spec: this is the defect that would have quietly cost the most. `compute_next` documents its own
@@ -445,8 +452,10 @@ decision, and skipping costs nothing where attempting costs a whole session."* T
 it means these tasks are passed over in silence — the loop ticks everything around them and the
 roadmap reads nearly complete while they never happened. **They are needed, not optional.**
 
-`make roadmap-audit` prints this list from the file itself once T0B.2 lands; until then this table is
-the only record. Keep it in sync when a flagged task is ticked or added.
+`make roadmap-audit` prints this list from the file itself, with the line that raised each flag, and the
+loop logs it at startup and writes it to the morning report at the end of every run. Keep this table in
+sync when a flagged task is ticked or added — `tests/unit/scripts/test_roadmap_audit.py` fails when it,
+the carry-forward count and the audit disagree.
 
 **Every row carries an owner and a due date.** A report nobody is assigned to read is the same as no
 report, and this repo has already proved that once — see Sprint 0's Provenance note. Dates are
