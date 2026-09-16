@@ -57,6 +57,13 @@ HALT_CHECK_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("tests", (python_executable(), "-m", "pytest", "tests/", "-q", "--tb=no", "-rf")),
 )
 
+# Harness self-tests: the loop's own gate scripts and roadmap grammar (T0.3). A red phase
+# gate whose failing tests ALL live under these paths is routed to skip-and-log instead of
+# counting toward the night-ending MAX_CONSECUTIVE_RED_GATES — every HALT to date was the
+# harness tripping over its own self-tests. Matched on the failing test's PATH, never on
+# which task was running, so a deliberate test deletion cannot mis-route a product failure.
+HARNESS_TEST_PATH_PREFIXES: tuple[str, ...] = ("tests/unit/scripts/", "tests/unit/harness/")
+
 # Form checks. One bounded /fix-make-failure session is allowed per red gate.
 AUTOFIX_CHECK_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("lint", ("make", "lint")),

@@ -1,8 +1,8 @@
 """
 Module: classify_gate_failure
 Layer: harness
-Purpose: Route a red `make check` to a bounded repair session (AUTOFIX) or to a human
-    (HALT), by re-running the gate's constituents individually.
+Purpose: Route a red `make check` to a bounded repair session (AUTOFIX), to a human
+    (HALT), or to skip-and-log (HARNESS), by re-running the gate's constituents individually.
 Dependencies: scripts/loop_gates (specs), scripts/gate_baseline (runner + parsing).
 Used by: scripts/expand_loop.sh.
 
@@ -15,6 +15,9 @@ Exit codes:
     3  UNATTRIBUTED — every constituent is green though `make check` was red (in practice
                       the coverage floor). Treated as HALT-class: coverage is closed by
                       writing real tests, which is behaviour, not form.
+    4  HARNESS      — the tests are red, and EVERY failing test is a harness self-test
+                      (loop_gates.HARNESS_TEST_PATH_PREFIXES). Skip-and-log at the phase
+                      gate; a mixed or unparseable failure is HALT (T0.3).
 """
 
 from __future__ import annotations
@@ -26,11 +29,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from gate_baseline import failing_node_ids, run_check  # noqa: E402
-from loop_gates import AUTOFIX_CHECK_SPECS, HALT_CHECK_SPECS  # noqa: E402
+from loop_gates import (  # noqa: E402
+    AUTOFIX_CHECK_SPECS,
+    HALT_CHECK_SPECS,
+    HARNESS_TEST_PATH_PREFIXES,
+)
 
 EXIT_AUTOFIX = 0
 EXIT_HALT = 1
 EXIT_UNATTRIBUTED = 3
+EXIT_HARNESS = 4
 
 
 def first_red(specs: tuple[tuple[str, tuple[str, ...]], ...]) -> tuple[str, str] | None:
@@ -42,20 +50,31 @@ def first_red(specs: tuple[tuple[str, tuple[str, ...]], ...]) -> tuple[str, str]
     return None
 
 
+def is_harness_only(node_ids: frozenset[str]) -> bool:
+    """True iff there is at least one failure and every one is a harness self-test.
+
+    Non-empty is load-bearing: a crashed run (INTERNALERROR) names no node, and an empty set
+    would otherwise read as "all failures are harness" and skip a broken suite.
+    """
+    return bool(node_ids) and all(n.startswith(HARNESS_TEST_PATH_PREFIXES) for n in node_ids)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Classify the current red gate and print a one-line verdict plus evidence."""
-    parser = argparse.ArgumentParser(description="Route a red gate to AUTOFIX or HALT.")
+    parser = argparse.ArgumentParser(description="Route a red gate to AUTOFIX, HALT or HARNESS.")
     parser.add_argument("--quiet", action="store_true", help="suppress failing-test detail")
     args = parser.parse_args(argv)
 
     halt = first_red(HALT_CHECK_SPECS)
     if halt is not None:
         name, output = halt
-        print(f"CLASSIFICATION=HALT FAILED_CHECK={name}")
+        node_ids = failing_node_ids(output)
+        harness = is_harness_only(node_ids)
+        print(f"CLASSIFICATION={'HARNESS' if harness else 'HALT'} FAILED_CHECK={name}")
         if not args.quiet:
-            for node_id in sorted(failing_node_ids(output)):
+            for node_id in sorted(node_ids):
                 print(f"FAILING {node_id}")
-        return EXIT_HALT
+        return EXIT_HARNESS if harness else EXIT_HALT
 
     autofix = first_red(AUTOFIX_CHECK_SPECS)
     if autofix is not None:

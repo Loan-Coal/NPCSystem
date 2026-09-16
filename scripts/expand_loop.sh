@@ -462,6 +462,16 @@ run_phase_gate() {
   local failed;  failed="$(grep -aoE 'FAILED_CHECK=[^ ]+' "$gatelog.class" | head -1 | cut -d= -f2)"
   log "gate classification: ${verdict:-unknown} (${failed:-unknown})"
 
+  # T0.3: every failing test is a harness self-test (tests/unit/scripts/, tests/unit/harness/).
+  # Skip-and-log: flag it for the morning, but do NOT count it toward the night-ending
+  # MAX_CONSECUTIVE_RED_GATES. Phase-gate routing only — gate_attribution.py is untouched.
+  if [ "$cls" -eq 4 ]; then
+    flag_for_human "harness self-test red after $phase (skipped, night continues)" \
+      "$(tail -40 "$gatelog.class" 2>/dev/null; echo; tail -40 "$gatelog")"
+    log "harness self-test red at $phase — logged, not counted (red-gate streak: $CONSECUTIVE_RED_GATES)"
+    return 1
+  fi
+
   if [ "$cls" -eq 0 ] && [ "$AUTOFIX_ENABLED" = "1" ]; then
     if try_autofix "$failed"; then CONSECUTIVE_RED_GATES=0; return 0; fi
   fi
