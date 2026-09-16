@@ -261,21 +261,21 @@ SCENES: list[Scene] = [
     ),
 
     # -----------------------------------------------------------------------
-    # ACT 5 -- Military engine + WORLD feed (S6.5 + S6.0)
+    # ACT 5 -- Events engine military beat + WORLD feed (S6.5 + S6.0)
     # -----------------------------------------------------------------------
     NarratorCue(
         name="pre_military_cue",
         delay_before_ms=2000,
         text=(
-            "[ACT 5] Military engine tick -- Iron Legion (strength 100) vs City Guard (60) "
-            "at the barracks. One clock advance resolves the battle."
+            "[ACT 5] Events engine tick -- weighted pool samples a military beat. "
+            "Iron Legion advance template fires at the barracks."
         ),
     ),
     ClockTick(name="military_tick", delay_before_ms=1000, delta_ticks=1),
     NarratorCue(
         name="pre_world_feed_cue",
         delay_before_ms=500,
-        text="[NARRATION] WORLD feed -- battle event surfaced by the military engine.",
+        text="[NARRATION] WORLD feed -- military event surfaced by the events engine.",
     ),
     WorldFeed(
         name="world_feed_battle",

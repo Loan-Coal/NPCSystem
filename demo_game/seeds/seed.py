@@ -902,7 +902,7 @@ _ARMIES: list[tuple[str, str, int, str, str]] = [
         "army_iron_legion",
         "iron_legion",
         100,
-        "loc_guard_barracks",
+        "loc_north_gate",
         '{"infantry": 80, "cavalry": 15, "siege": 5}',
     ),
     (
@@ -916,7 +916,7 @@ _ARMIES: list[tuple[str, str, int, str, str]] = [
 
 # OCCUPIES edges: (army_id, location_id, since_tick)
 _ARMY_OCCUPIES: list[tuple[str, str, int]] = [
-    ("army_iron_legion", "loc_guard_barracks", 0),
+    ("army_iron_legion", "loc_north_gate", 0),
     ("army_city_guard_main", "loc_guard_barracks", 0),
 ]
 

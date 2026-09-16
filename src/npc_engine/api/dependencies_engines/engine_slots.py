@@ -56,4 +56,3 @@ class AdvancedEngineSlots(TypedDict):
     chapter_engine: TickEngine
     agenda_engine: TickEngine
     need_decay_engine: TickEngine
-    military_engine: TickEngine

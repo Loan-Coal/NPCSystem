@@ -18,5 +18,6 @@
   {"id":"evt_17_stolen_horse","weight":4,"severity":48,"location_tag":"tavern","summary_template":"A courier's horse was stolen outside the inn.","event_type":"crime"},
   {"id":"evt_18_blacksmith_strike","weight":3,"severity":57,"location_tag":"market","summary_template":"Blacksmiths halted work over unfair levies.","event_type":"economy"},
   {"id":"evt_19_gate_sabotage","weight":2,"severity":79,"location_tag":"keep","summary_template":"Saboteurs damaged the north gate winch.","event_type":"military"},
-  {"id":"evt_20_harbor_festival","weight":4,"severity":30,"location_tag":"docks","summary_template":"A harbor festival drew crowds from every district.","event_type":"festival"}
+  {"id":"evt_20_harbor_festival","weight":4,"severity":30,"location_tag":"docks","summary_template":"A harbor festival drew crowds from every district.","event_type":"festival"},
+  {"id":"evt_21_iron_legion_advance","weight":3,"severity":85,"location_tag":"barracks","summary_template":"Iron Legion forces were sighted advancing on the guard barracks.","event_type":"military","faction_id":"iron_legion","reputation_delta":-15}
 ]

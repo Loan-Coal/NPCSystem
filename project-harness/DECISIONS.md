@@ -9631,7 +9631,7 @@ all.
 
 ---
 
-## DEC-274: How should the demo stop auto-losing itself three seconds after seeding? — OPEN
+## DEC-274: How should the demo stop auto-losing itself three seconds after seeding? — ACCEPTED
 
 **Raised:** 2026-09-07, full codebase+demo review (findings L6-01 ≡ L9-02, CRITICAL, confirmed live)
 
@@ -9678,7 +9678,15 @@ Whichever is chosen, the regression test must run against the **seed data**, not
 assert `DEMO_LOSE_LOCATION_ID` is not controlled by `DEMO_LOSE_FACTION_ID` in the seeded world at tick 0,
 and that no two opposing armies share a location at tick 0.
 
-**Decision:** _pending_
+**Decision:** Option 4 — delete the military engine entirely (T1.2, 2026-09-16). This subsumes (1)
+and (2): the engine is gone so battles never run, and `army_iron_legion` is staged at `loc_north_gate`
+(not the barracks) so the seed itself cannot pre-stage a conflict. Act 5 of the demo sources its
+military beat from the events engine (`evt_21_iron_legion_advance`, `event_type: military`,
+`location_tag: barracks`, `faction_id: iron_legion`) rather than from a battle resolution.
+
+The narrative question ("do the armies still meet meaningfully?") is not answered here; that is
+demo-side work deferred to Sprint 7. The iron_legion army node and faction remain in the seed so
+Sprint 7 can script the confrontation as a player-triggered event rather than an autopilot battle.
 
 ---
 

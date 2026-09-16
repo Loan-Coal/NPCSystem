@@ -66,7 +66,6 @@ class TickScheduler:
         chapter_engine: TickEngine | None = None,
         agenda_engine: TickEngine | None = None,
         need_decay_engine: TickEngine | None = None,
-        military_engine: TickEngine | None = None,
         event_quest_trigger: TickEngine | None = None,
         need_quest_trigger: TickEngine | None = None,
         world_state_quest_trigger: TickEngine | None = None,
@@ -120,8 +119,6 @@ class TickScheduler:
                 called every tick; resolves open agendas whose deadline has passed.
             need_decay_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; decays character need levels and applies location restoration.
-            military_engine: Optional engine exposing ``run_tick(tick_id)``
-                called every tick; currently a no-op stub (see ISSUES.md ISSUE-001).
             event_quest_trigger: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; generates draft quests from unprocessed trigger events.
             need_quest_trigger: Optional engine exposing ``run_tick(tick_id)``
@@ -177,7 +174,6 @@ class TickScheduler:
         self._chapter_engine = chapter_engine
         self._agenda_engine = agenda_engine
         self._need_decay_engine = need_decay_engine
-        self._military_engine = military_engine
         self._event_quest_trigger = event_quest_trigger
         self._need_quest_trigger = need_quest_trigger
         self._world_state_quest_trigger = world_state_quest_trigger
@@ -316,7 +312,6 @@ class TickScheduler:
             "chapter": [],
             "agenda": [],
             "need_decay": [],
-            "military": [],
             "event_quest": [],
             "need_quest": [],
             "world_state_quest": [],
@@ -341,7 +336,6 @@ class TickScheduler:
             ("mood_contagion", self._mood_contagion_engine),
             ("agenda", self._agenda_engine),
             ("need_decay", self._need_decay_engine),
-            ("military", self._military_engine),
             ("event_quest", self._event_quest_trigger),
             ("need_quest", self._need_quest_trigger),
             ("world_state_quest", self._world_state_quest_trigger),

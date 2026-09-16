@@ -101,7 +101,6 @@ def _advanced_engine_kwargs() -> AdvancedEngineSlots:
         get_agenda_engine,
         get_chapter_engine,
         get_clique_formation_engine,
-        get_military_engine,
         get_memory_consolidation_engine,
         get_mood_contagion_engine,
         get_need_decay_engine,
@@ -118,7 +117,6 @@ def _advanced_engine_kwargs() -> AdvancedEngineSlots:
         "chapter_engine": get_chapter_engine(),
         "agenda_engine": get_agenda_engine(),
         "need_decay_engine": get_need_decay_engine(),
-        "military_engine": get_military_engine(),
     }
 
 

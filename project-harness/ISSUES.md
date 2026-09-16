@@ -1520,13 +1520,6 @@ hallucination guards remain unaffected (separate axis).
 **Why deferred:** The scorer layer is under repair; changing the shared template mid-repair would confound it.
 **To fix:** Fold into the scorer-adequacy remediation rather than editing standalone.
 
-## ISSUE-334: `military` resolves a battle every tick while its docstring calls it a no-op stub
-**Found:** 2026-09-07, during full-review (L13-03, L10-04)
-**Severity:** P2
-**Where:** `src/npc_engine/scheduler/tick_scheduler.py:131-132`; `src/npc_engine/engines/military/`
-**Description:** `MilitaryEngine` resolves battles and processes resource yield for real, reporting `battles_resolved: 1` on every tick indefinitely. The scheduler docstring calls it a no-op stub and cites `ISSUE-001`, an unrelated already-resolved issue. The underlying no-op was fixed 2026-06-19 (ISSUE-111); only the comment never caught up. This stale docstring is why the brief for this very review described `military` as a stub — and it is the engine that auto-loses the demo.
-**Why deferred:** The engine's *behaviour* is covered by the CRITICAL demo auto-lose decision; this entry is the docstring half.
-**To fix:** Correct the docstring and drop the wrong ISSUE reference. Also see CR-L14-01/CR-L09-06 (stale session-kwarg tests in the same directory).
 
 ## ISSUE-335: two unbounded appenders nobody has logged — `:TickLease` nodes and the `SchedulerState` tick-id array
 **Found:** 2026-09-07, during full-review (L13-08)

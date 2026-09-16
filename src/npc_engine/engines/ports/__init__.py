@@ -11,7 +11,7 @@ Dependencies injected: none (pure interfaces).
 Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
                 RoutineGraphPort, PoliticalGraphPort, StoryPacingGraphPort,
                 WorldStateGraphPort, MemoryConsolidationGraphPort, ChapterGraphPort,
-                MilitaryGraphPort, RelationReadPort, PlayerLocationReadPort,
+                RelationReadPort, PlayerLocationReadPort,
                 CharacterReadPort, EmotionGraphPort, EventGraphPort, KnowledgeGraphPort,
                 ReputationGraphPort, PlayerModelGraphPort, PlanningGraphPort,
                 EconomyGraphPort, IntentGraphPort, InteractionGraphPort,
@@ -34,7 +34,6 @@ from npc_engine.engines.ports.investigation_port import InvestigationGraphPort
 from npc_engine.engines.ports.knowledge_port import KnowledgeGraphPort
 from npc_engine.engines.ports.memory_consolidation_port import MemoryConsolidationGraphPort
 from npc_engine.engines.ports.memory_port import MemoryGraphPort
-from npc_engine.engines.ports.military_port import MilitaryGraphPort
 from npc_engine.engines.ports.mood_port import MoodGraphPort
 from npc_engine.engines.ports.need_port import NeedGraphPort
 from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
@@ -65,7 +64,6 @@ __all__ = [
     "KnowledgeGraphPort",
     "MemoryConsolidationGraphPort",
     "MemoryGraphPort",
-    "MilitaryGraphPort",
     "MoodGraphPort",
     "NeedGraphPort",
     "PlanningGraphPort",

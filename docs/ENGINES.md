@@ -40,7 +40,7 @@ within the same tick:
 3. **Routine** movement
 4. **Chapter** detection *(interval-gated, LLM)*
 5. All remaining per-tick engines (faction politics, cliques, skills, treaties,
-   mood, agendas, needs, military, quest triggers, proactive dialogue,
+   mood, agendas, needs, quest triggers, proactive dialogue,
    reputation, intents, goals, player model, director, memory decay, schemes)
 6. **Memory consolidation** *(advance-cadence, LLM)*
 
@@ -120,7 +120,6 @@ LLM-using engines below are marked **🤖 LLM**.
 | **Faction politics** | Deterministically drifts faction standings based on world events and time decay, so alliances and rivalries evolve on their own. | Tick (every tick) | `/v1/admin/factions/*` |
 | **Treaties** | Manages treaty lifecycle between factions: expiry plus mechanical and LLM-checked conditions. 🤖 | Tick (every tick) | `/v1/admin/treaties/*` |
 | **Agendas / voting** | Resolves open agendas (e.g. council votes) whose deadline has passed, driving collective faction decisions. | Tick (every tick) | — |
-| **Military** | Per-tick military simulation — battle resolution between opposing armies. *(Currently a no-op stub; see ISSUES.md.)* | Tick (every tick) | — |
 
 ### Economy & progression
 

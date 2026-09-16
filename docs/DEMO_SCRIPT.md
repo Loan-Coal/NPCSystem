@@ -60,13 +60,13 @@
 | Emotional effect | Aldric's fear spikes (warehouse-fire memory surfaces). Lira sees opportunity. |
 | Demo timing | T+2:45 |
 
-### Event 3: Battle at the Barracks (military engine)
+### Event 3: Battle Report at the Barracks (events engine)
 
 | Field | Value |
 |-------|-------|
-| Trigger | `POST /v1/clock/advance` (military tick) |
-| Armies | `army_iron_legion` (str=100) vs `army_city_guard_main` (str=60) at `loc_guard_barracks` |
-| Outcome | Iron Legion wins; battle Event node emitted; WORLD feed updated |
+| Trigger | `POST /v1/clock/advance` (events engine tick) |
+| Template | `evt_21_iron_legion_advance` — `event_type: military`, `faction_id: iron_legion`, `location_tag: barracks` |
+| Outcome | Iron Legion advance Event node emitted; WORLD feed updated |
 | Demo timing | T+4:20 |
 
 ---
@@ -177,11 +177,11 @@ surfaces. Watch the emotion panel update."
 "Memory engine: Mira's session dialogue gets consolidated into a permanent Memory node.
 Next session, she'll remember this conversation."
 
-[4:20] — Military engine
-"Military engine. Iron Legion, strength 100, faces City Guard, strength 60,
-at the barracks. One clock tick."
+[4:20] — Events engine (military beat)
+"Events engine. A clock tick samples the weighted event pool — the Iron Legion
+advance template fires at the barracks."
 [Clock advance]
-"WORLD feed: battle resolved. Iron Legion wins. The war has reached the city gates."
+"WORLD feed: Iron Legion forces sighted advancing on the guard barracks. The war has reached the city gates."
 
 [4:45]
 "This is middleware. Studio integration is a single API call. The knowledge
@@ -234,7 +234,7 @@ WS /v1/ws/dialogue  { "npc_id": "lira_fence", ... }
 # 11. Memory consolidation (Act 4)
 POST /v1/admin/memories/consolidate/mira_innkeeper
 
-# 12. Military tick (Act 5)
+# 12. Events engine tick — military beat (Act 5)
 POST /v1/clock/advance  { "delta_ticks": 1 }
 
 # 13. WORLD feed
@@ -252,5 +252,5 @@ GET /v1/admin/system/events?limit=8
 - [ ] Emotion panel: Aldric shows fear/negative after market fire
 - [ ] Bribe: standing with thieves_guild increases, gold decreases
 - [ ] Memory: Mira memory_id returned (or turn-threshold message)
-- [ ] WORLD feed: at least one `battle` event visible after military tick
+- [ ] WORLD feed: at least one `military` event visible after events engine tick (evt_21_iron_legion_advance)
 - [ ] Narration script read aloud at pace — total under 5:15

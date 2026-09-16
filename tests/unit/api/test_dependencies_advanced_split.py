@@ -18,7 +18,6 @@ EXPECTED_FACTORIES = {
     "get_clique_formation_engine",
     "get_investigation_engine",
     "get_memory_consolidation_engine",
-    "get_military_engine",
     "get_mood_contagion_engine",
     "get_need_decay_engine",
     "get_negotiation_store",
@@ -30,7 +29,6 @@ SUBMODULE_FACTORIES = {
     "npc_engine.api.dependencies_advanced.politics": {
         "get_treaty_engine",
         "get_agenda_engine",
-        "get_military_engine",
     },
     "npc_engine.api.dependencies_advanced.social": {
         "get_clique_formation_engine",

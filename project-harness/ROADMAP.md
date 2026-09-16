@@ -549,7 +549,7 @@ Validation: `pytest tests/unit/api/test_ws_connection_slot_release.py -v`, then 
 Done when: the new test passes, `make check` is green, and no other WS test regressed.
 Blocks: T1.2, T2.3, and every demo verification in this programme. SEV-01, finding L9-01. ✅ AUTO (T1.1, 2026-09-16)
 
-- [ ] **T1.2** Delete the `military` engine — it conquers the barracks on tick 5 and ends the game
+- [x] **T1.2** Delete the `military` engine — it conquers the barracks on tick 5 and ends the game
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279
 Files: delete `src/npc_engine/engines/military/`, `src/npc_engine/engines/ports/military_port.py`,
 `src/npc_engine/graph/repositories/military_repository.py`, `src/npc_engine/graph/military/`, and
@@ -621,7 +621,7 @@ and confirm Act 5 still surfaces a battle event.
 Done when: `make check` green, `grep -rn "MilitaryEngine\|military_engine" src/ tests/` returns
 nothing, Act 5 produces a battle event from the events engine in a live run, DEC-274 is updated, and
 the LOC delta is reported (expect about -1,373 plus a further -579 for `graph/military/`).
-SEV-01 sibling; findings L6-01, L9-02, L10-04, ISSUE-334, DEC-274.
+SEV-01 sibling; findings L6-01, L9-02, L10-04, ISSUE-334, DEC-274. ✅ AUTO (T1.2, 2026-09-16)
 
 ### Phase T2
 
