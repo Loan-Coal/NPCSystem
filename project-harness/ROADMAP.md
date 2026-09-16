@@ -350,7 +350,12 @@ this one, and T0.0 must already be done.
 
 ### Phase T0B — the skill and the deferred-work hole
 
-- [ ] **T0B.1** Correct the loop skill's stale facts
+- [x] **T0B.1** Correct the loop skill's stale facts
+  ✅ 2026-09-16 (code in `dc520046`). All five items in; the stale-fact grep is clean. Gate figure
+  restated from 2026-09-16 measurements (425-595 s). Live validation: a real loop run over T3.1 on
+  scratch branch `loop-validate-1` returned `TASK_COMPLETE` in 22 min with **no halt** on
+  `Pre-approved: file-deletion, public-interface`, named the approval in its commit body, and its
+  summary cites no 300-line limit. LOC delta: 0 non-test code (skill prose and a config comment).
 Files: `.claude/commands/expand-linear-next.md`, `scripts/loop.config.sh`
 Spec: the skill and the config state five things that are no longer true, and each one costs
 something. Item (5) is not a correction but the mechanism without which half this programme halts.
