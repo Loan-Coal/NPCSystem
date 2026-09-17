@@ -300,6 +300,10 @@ check-harness:
 check-layers:
 	$(PYTHON) scripts/check_layers.py
 
+# check-engine-census: assert every engine dir is classified and reachable (T4.2).
+check-engine-census:
+	$(PYTHON) scripts/check_engine_census.py
+
 # roadmap-verify: grammar doctor for the overnight loop's ROADMAP queue fence.
 # Run after ANY hand edit to project-harness/ROADMAP.md — a marker that does not
 # parse back is invisible to the cursor, and its task gets implemented twice.
@@ -454,7 +458,9 @@ check-engine-logs:
 # R4.5: check-ledger-ids added, 19 -> 20. Placed beside check-harness because both audit
 #        the project ledgers rather than the code, and both must fire before lint can
 #        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
+# R4.6: check-engine-census added, 20 -> 21. Placed beside check-layers (both assert
+#        structure, not behaviour). Gate added by T4.2 (finding L10-03, rules 3+7).
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

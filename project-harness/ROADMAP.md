@@ -933,7 +933,7 @@ Validation: `make check`, then `make test-demo`.
 Done when: green, grep clean, ISSUE-338 archived, LOC delta reported (expect about -2,443).
 Findings L10-01, L10-02, ISSUE-338, DEC-279. ✅ AUTO (T4.1, 2026-09-17)
 
-- [ ] **T4.2** Gate the portfolio — an engine must be reachable and must do work
+- [x] **T4.2** Gate the portfolio — an engine must be reachable and must do work
 Files: new `scripts/check_engine_census.py`, `Makefile`, `scripts/loop_gates.py`, new
 `tests/unit/scripts/test_check_engine_census.py`
 Spec: this is rule 3 ("no code without a live caller") applied to engines, and it is what would
@@ -981,7 +981,7 @@ in the **same commit** as the gate, once its `make` target exists — an entry n
 makes the classifier report a phantom AUTOFIX failure. (Owner, 2026-09-17: the loop makes this edit
 itself; `classify_gate_failure.py` re-imports `loop_gates.py` on every run, so it takes effect at the
 next gate.)
-Findings L10-03, rules 3 and 7.
+Findings L10-03, rules 3 and 7. ✅ AUTO (T4.2, 2026-09-17)
 
 ---
 
