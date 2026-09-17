@@ -16,7 +16,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import WebSocketDisconnect
 
 from npc_engine.api.routes.dialogue.dialogue_ws import (
     MAX_WS_CONNECTIONS_PER_KEY,
@@ -34,13 +33,13 @@ _AUTH: str = "Bearer ws-slot-release-test"
 
 
 def _make_ws() -> MagicMock:
-    """Return a mock WebSocket that disconnects the moment receive() is awaited."""
+    """Return a mock WebSocket whose receive() returns a disconnect message, as Starlette does."""
     ws = MagicMock()
     ws.headers = {"Authorization": _AUTH}
     ws.accept = AsyncMock()
     ws.close = AsyncMock()
     ws.send_json = AsyncMock()
-    ws.receive = AsyncMock(side_effect=WebSocketDisconnect())
+    ws.receive = AsyncMock(return_value={"type": "websocket.disconnect"})
     return ws
 
 
