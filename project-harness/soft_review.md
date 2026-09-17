@@ -26,3 +26,21 @@
 4. **Response validation error not logged when found**: ISSUE-354 cites a `ResponseValidationError` from FastAPI, which suggests active testing of the live stack occurred. The finding was correctly logged, but the task completion marker doesn't reflect that validation caught a failure.
 
 5. **No code changes in this commit**: The commit only logs a finding and ticks tasks. The actual T3.2 deletion work is in the prior commit (`68e796bc`). Verify that prior commit removed `treaty` and `faction_politics` engines cleanly without leaving dangling callers.
+
+## 2026-09-17 23:20:38 — phase T4
+
+Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've identified concrete issues:
+
+## Findings
+
+1. **Quote detection limited to double quotes** (`check_engine_census.py:147`): The `_tick_name_present()` function searches for tick names only with double quotes: `r'"' + re.escape(tick_name) + r'"'`. If `tick_scheduler.py` uses single quotes (`'gossip'`), the gate will incorrectly fail with "tick name not found" for valid engines.
+
+2. **Substring matching false positive with overlapping engine names** (`check_engine_census.py:145`): The regex pattern `r"engines\." + re.escape(dir_name)` uses substring matching. The engine `"quest"` (non-tick) will incorrectly match imports of `"quest_generation"` (tick engine). If only `quest_generation` is imported but `quest` is checked, the gate will falsely report `quest` as imported.
+
+3. **Empty/dead engine directories pass classification** (`check_engine_census.py:220-235`): The script verifies engines are classified and referenced but never checks that directories contain actual code. An empty directory classified as a tick engine could pass if its tick name exists in the scheduler, hiding dead code.
+
+4. **DIR_TO_TICK_NAMES mappings lack validation** (`check_engine_census.py:58-77`): The tick name mappings (e.g., `"need" → ["need_decay"]`) are manually maintained. Incorrect or stale mappings only fail when the gate runs against the live scheduler—no early detection.
+
+5. **ROADMAP.md entry marked done but dependencies unclear**: T4.2 is marked complete but doesn't verify that other T4 phases (T4.1 deletion, T4.3 refactor) completed successfully or that their changes don't invalidate the census gate assumptions.
+
+**All functions comply with file size, length, docstring, and type annotation rules.**
