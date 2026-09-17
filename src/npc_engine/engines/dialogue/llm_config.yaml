@@ -3,7 +3,7 @@ llm:
   backend: ollama
   model: qwen2.5:7b
   temperature: 0.15
-  max_tokens: 512
+  max_tokens: 150
   top_p: 0.95
   stop_sequences: []
   # EVAL-P20.0 / DEC-176: fixed generation seed so a regeneration reproduces text and the

@@ -650,7 +650,7 @@ prevent startup. All three fail today — there is no warm-up at all.
 Validation: `pytest tests/unit/setup/test_llm_warmup_on_startup.py -v`, then `make check`.
 Done when: tests pass and `make check` is green. Finding L9-04, SEV-05. ✅ AUTO (T2.1, 2026-09-17)
 
-- [ ] **T2.2** Cap the reply length — `max_tokens: 512` against a "1-3 sentences" instruction
+- [x] **T2.2** Cap the reply length — `max_tokens: 512` against a "1-3 sentences" instruction
 Files: `src/npc_engine/engines/dialogue/llm_config.yaml`,
 `src/npc_engine/engines/dialogue/dialogue_models.py`, new test
 `tests/unit/engines/test_dialogue_response_length_cap.py`
@@ -669,7 +669,7 @@ third fail today.
 Validation: `pytest tests/unit/engines/test_dialogue_response_length_cap.py -v`, then `make check`.
 **Also prove the hash did not move** — capture `dialogue_prompt_hash` before and after; if it
 changed you edited a prompt file, and you must revert that part.
-Done when: tests pass, `make check` green, hash unchanged. Finding L12-12, SEV-06.
+Done when: tests pass, `make check` green, hash unchanged. Finding L12-12, SEV-06. ✅ AUTO (T2.2, 2026-09-17)
 
 - [ ] **T2.3** Rate-limit WebSocket dialogue throughput
 Files: `src/npc_engine/api/routes/dialogue/dialogue_ws.py`, `src/npc_engine/api/rate_limit.py`,

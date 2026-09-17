@@ -16,7 +16,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import StringConstraints
 
-from npc_engine.config import MAX_PLAYER_MESSAGE_CHARS
+from npc_engine.config import MAX_PLAYER_MESSAGE_CHARS, NPC_RESPONSE_MAX_CHARS
 from npc_engine.retrieval.context.context_receipt import ContextReceipt
 
 # Strips transcript-style echo the LLM sometimes prefixes to npc_response.
@@ -115,7 +115,7 @@ class DialogueGeneration(FrozenDialogueModel):
     Dropping them also keeps ContextReceipt, DroppedItem and TierSpend out of the grammar.
     """
 
-    npc_response: str
+    npc_response: Annotated[str, StringConstraints(max_length=NPC_RESPONSE_MAX_CHARS)]
 
     @field_validator("npc_response", mode="before")
     @classmethod
@@ -136,7 +136,7 @@ class DialogueGeneration(FrozenDialogueModel):
 class DialogueResponse(FrozenDialogueModel):
     """Final dialogue response contract for REST and WebSocket completion."""
 
-    npc_response: str
+    npc_response: Annotated[str, StringConstraints(max_length=NPC_RESPONSE_MAX_CHARS)]
 
     @field_validator("npc_response", mode="before")
     @classmethod

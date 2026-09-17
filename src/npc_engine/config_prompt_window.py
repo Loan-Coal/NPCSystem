@@ -57,7 +57,7 @@ the engine never sends. tests/unit/config/test_prompt_window_constants_are_hones
 bounds this constant against the real assembly in both directions so it cannot drift again.
 """
 
-DIALOGUE_OUTPUT_TOKEN_RESERVE = 512
+DIALOGUE_OUTPUT_TOKEN_RESERVE = 150
 """Tokens reserved for the model's own reply.
 
 Mirrors `llm.max_tokens` in engines/dialogue/llm_config.yaml, which is the source of truth

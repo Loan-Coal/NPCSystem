@@ -52,6 +52,10 @@ MAX_PLAYER_MESSAGE_CHARS: int = 1000
 MAX_DELTA_TICKS: int = 1000
 MAX_CHOICE_ID_CHARS: int = 200
 
+# DEC-273: ~70-token typical dialogue turn; 150 tokens * 4 chars/token gives the cap.
+# Lowering max_tokens in llm_config.yaml to match reduces decode latency (SEV-06, T2.2).
+NPC_RESPONSE_MAX_CHARS: int = 600
+
 # GraphRAG composite-score weights (must sum to 1.0).
 # Extracted from graph_rag.py to allow test-time verification and future tuning.
 RAG_RELEVANCE_WEIGHT: float = 0.5   # vector-similarity component weight
