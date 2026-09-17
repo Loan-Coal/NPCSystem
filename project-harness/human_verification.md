@@ -647,3 +647,25 @@ T16.1	phase=T16	flags=deferred	Amend DEC-273 — its mechanism holds, its consta
 T16.4	phase=T16	flags=deferred	Record the engine's build sha, not the client's working tree ⏸️
     deferred: - [ ] **T16.4** Record the engine's build sha, not the client's working tree ⏸️
 DEFERRED_TOTAL=6
+
+## 2026-09-17 11:47:32 — no status token from task T2.1
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/task-T2.1-1789638093.log
+
+## 2026-09-17 11:47:34 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T6.3	phase=T6	flags=deferred	Confirm on a running stack that `routine` and `need_decay` now do work ⏸️
+    deferred: - [ ] **T6.3** Confirm on a running stack that `routine` and `need_decay` now do work ⏸️
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+T15.2	phase=T15	flags=deferred	Assert the surviving portfolio actually works ⏸️
+    deferred: - [ ] **T15.2** Assert the surviving portfolio actually works ⏸️
+T16.1	phase=T16	flags=deferred	Amend DEC-273 — its mechanism holds, its constants do not ⏸️
+    deferred: - [ ] **T16.1** Amend DEC-273 — its mechanism holds, its constants do not ⏸️
+T16.4	phase=T16	flags=deferred	Record the engine's build sha, not the client's working tree ⏸️
+    deferred: - [ ] **T16.4** Record the engine's build sha, not the client's working tree ⏸️
+DEFERRED_TOTAL=6
