@@ -1,0 +1,4 @@
+# warmup_v1.yaml — minimal prompt to trigger LLM model loading at startup.
+# One token is generated; the output is discarded. This forces Ollama to load the model
+# into VRAM before the first real player request arrives (Finding L9-04, SEV-05, DEC-273).
+prompt: "."

@@ -631,7 +631,7 @@ live-run confirmation is still outstanding — T2.4's `demo-run-live` is its fir
 
 The free latency wins. Both are small, both are user-visible, neither touches a prompt.
 
-- [ ] **T2.1** Warm the model at startup — the demo's opening line currently costs 20 seconds
+- [x] **T2.1** Warm the model at startup — the demo's opening line currently costs 20 seconds
 Files: `src/npc_engine/main.py` (lifespan) or a new `src/npc_engine/setup/llm_warmup.py`,
 `src/npc_engine/config.py`, a new prompt YAML under `src/npc_engine/prompts/`, new test
 `tests/unit/setup/test_llm_warmup_on_startup.py`
@@ -648,7 +648,7 @@ RED anchor: the new test asserts that with the setting true, startup issues exac
 against a mock adapter, and zero when false, and that an adapter raising during warm-up does not
 prevent startup. All three fail today — there is no warm-up at all.
 Validation: `pytest tests/unit/setup/test_llm_warmup_on_startup.py -v`, then `make check`.
-Done when: tests pass and `make check` is green. Finding L9-04, SEV-05.
+Done when: tests pass and `make check` is green. Finding L9-04, SEV-05. ✅ AUTO (T2.1, 2026-09-17)
 
 - [ ] **T2.2** Cap the reply length — `max_tokens: 512` against a "1-3 sentences" instruction
 Files: `src/npc_engine/engines/dialogue/llm_config.yaml`,

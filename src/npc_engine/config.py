@@ -186,6 +186,10 @@ class Settings(BaseSettings):
     # against an empty tier B, use a profile with skip_rag or enabled_tiers minus tierB
     # — not this flag.
     VECTOR_STORE_HYDRATE_ON_STARTUP: bool = True
+    # Issue one minimal generation at startup to load the model into VRAM before the
+    # first real player request arrives. Measured cold-load cost: 10.3s on qwen2.5:7b.
+    # Fails soft — Ollama being down at boot does not prevent startup (Finding L9-04, SEV-05).
+    LLM_WARMUP_ON_STARTUP: bool = True
     # Pair the handlers' existing invalidate with the insert it has always implied
     # (DEC-210 Decision 1). ON for the product, which needs a corpus that tracks the
     # graph; OFF for an eval run, which needs one that cannot move — paired_arms
