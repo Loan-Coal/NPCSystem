@@ -100,20 +100,14 @@ def _advanced_engine_kwargs() -> AdvancedEngineSlots:
     from npc_engine.api.dependencies_advanced import (
         get_agenda_engine,
         get_chapter_engine,
-        get_clique_formation_engine,
         get_memory_consolidation_engine,
-        get_mood_contagion_engine,
         get_need_decay_engine,
-        get_skill_progression_engine,
         get_treaty_engine,
     )
 
     return {
-        "clique_formation_engine": get_clique_formation_engine(),
-        "skill_progression_engine": get_skill_progression_engine(),
         "treaty_engine": get_treaty_engine(),
         "memory_consolidation_engine": get_memory_consolidation_engine(),
-        "mood_contagion_engine": get_mood_contagion_engine(),
         "chapter_engine": get_chapter_engine(),
         "agenda_engine": get_agenda_engine(),
         "need_decay_engine": get_need_decay_engine(),

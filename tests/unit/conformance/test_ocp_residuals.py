@@ -91,16 +91,6 @@ def test_mood_label_to_vad_values_are_int_tuples() -> None:
         assert isinstance(a, int), f"{label}: arousal must be int"
 
 
-def test_mood_contagion_uses_shared_table() -> None:
-    """MoodContagionEngine does not define its own _LABEL_TO_VALENCE_AROUSAL."""
-    import npc_engine.engines.mood.mood_contagion_engine as mod
-
-    assert not hasattr(mod, "_LABEL_TO_VALENCE_AROUSAL"), (
-        "Local _LABEL_TO_VALENCE_AROUSAL should be removed; "
-        "use MOOD_LABEL_TO_VAD from emotion_state"
-    )
-
-
 # ---------------------------------------------------------------------------
 # 3. SchemeStepKind enum
 # ---------------------------------------------------------------------------

@@ -27,7 +27,6 @@ PROMOTED_SCENARIO_IDS: Final[frozenset[str]] = frozenset({
     "scenario_reputation_drift",
     "scenario_memory_consolidation",
     "scenario_time_passage",
-    "scenario_mood_contagion",
 })
 
 # ---------------------------------------------------------------------------
@@ -142,10 +141,6 @@ WORLD_MAP: Final[WorldMap] = WorldMap(
         ),
         ScenarioEntityMap(
             scenario_id="scenario_time_passage",
-            entities={},
-        ),
-        ScenarioEntityMap(
-            scenario_id="scenario_mood_contagion",
             entities={},
         ),
     )

@@ -133,22 +133,6 @@ hand-authors that key into a mock, which is why the test passes.
 seed provides `loc_tavern` with 5 co-located NPCs); fix the Location POST fields; and either surface
 `distortion_level` from the trace query or compute the delta from `distorted_summary`.
 
-## ISSUE-338: `scenario_mood_contagion` passes vacuously — the two NPCs are never co-located
-**Found:** 2026-09-08, during the A/B-readiness analysis
-**Severity:** P2 (annoying — a promoted scenario that cannot fail)
-**Where:** `evals/scenario_adapters_extra.py:187-211`
-**Description:** The scenario posts a Location with `{id, name, description, last_graph_updated_at}`.
-`description` is not a declared field on `location.yaml` and `location_tag`/`descriptor` are required
-and missing, so the POST 422s; the return is unchecked. Both subsequent `LOCATED_AT` POSTs then 404 on
-the missing destination node, so the two NPCs are never co-located and mood contagion never runs on
-them. The assertion is only that both `current_mood` values are non-`None` — which is true from
-creation, since `_char(...)` sets `current_mood`. The scenario therefore passes without exercising the
-behaviour it names. The `RELATES_TO` POST at `:197-202` also omits `last_updated_at`, which is
-`required: true`, so it 422s as well.
-**Why deferred:** as ISSUE-336.
-**To fix:** correct the Location and `RELATES_TO` property sets, check every POST return, and assert a
-mood *change* rather than mood presence.
-
 ## ISSUE-339: 10 of 11 probes request engine status under a name the scheduler never registers
 **Found:** 2026-09-08, during the A/B-readiness analysis
 **Severity:** P3 (nice-to-fix — the effect is a missing metric floor, not a wrong number)

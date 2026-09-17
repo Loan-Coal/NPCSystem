@@ -57,13 +57,10 @@ from npc_engine.api.dependencies_engines import (
 from npc_engine.api.dependencies_advanced import (
     get_agenda_engine,
     get_chapter_engine,
-    get_clique_formation_engine,
     get_investigation_engine,
     get_memory_consolidation_engine,
-    get_mood_contagion_engine,
     get_need_decay_engine,
     get_negotiation_store,
-    get_skill_progression_engine,
     get_treaty_engine,
 )
 
@@ -74,7 +71,6 @@ __all__ = [
     "close_registered_llm_adapters",
     "get_agenda_engine",
     "get_chapter_engine",
-    "get_clique_formation_engine",
     "get_context_cache",
     "get_dialogue_engine_model_config",
     "get_dialogue_graph_ports",
@@ -96,7 +92,6 @@ __all__ = [
     "get_llm_config",
     "get_memory_consolidation_engine",
     "get_memory_engine",
-    "get_mood_contagion_engine",
     "get_need_decay_engine",
     "get_need_quest_trigger",
     "get_negotiation_store",
@@ -107,7 +102,6 @@ __all__ = [
     "get_reindex_job_service",
     "get_routine_engine",
     "get_session_store",
-    "get_skill_progression_engine",
     "get_story_pacing_engine",
     "get_tick_scheduler",
     "get_trade_engine",

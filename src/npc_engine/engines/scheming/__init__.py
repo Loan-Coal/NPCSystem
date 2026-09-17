@@ -1,13 +1,12 @@
 """
 Package: scheming
 Layer: engines
-Purpose: Long-horizon covert scheming engine — forms capped scheme nodes and
-         advances scheme steps via the graph layer. Detection/investigation deferred
-         to slice 2.
+Purpose: Pydantic input/output models for the scheming domain; live tick work is in
+         scheme_advance_tick and scheme_detection_tick.
 Does NOT: call LLMs, contain Cypher queries, wire into the scheduler, or import
           from the investigation engine (graveyard).
-Dependencies injected: Settings (via SchemingEngine constructor).
-Public surface: SchemingEngine, SchemeInput, SchemeStepInput
+Dependencies injected: none (models only).
+Public surface: SchemeInput, SchemeStepInput
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ from __future__ import annotations
 from npc_engine.engines.scheming.scheming_engine import (
     SchemeInput,
     SchemeStepInput,
-    SchemingEngine,
 )
 
-__all__ = ["SchemingEngine", "SchemeInput", "SchemeStepInput"]
+__all__ = ["SchemeInput", "SchemeStepInput"]

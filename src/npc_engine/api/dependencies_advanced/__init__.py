@@ -6,8 +6,7 @@ Purpose: Per-engine-family singleton factory providers for optional/advanced eng
 Does NOT: define factories itself — re-exports the public get_* names from submodules.
 Dependencies injected: none (re-exporter only; submodules inject infra/store singletons).
 Public surface: get_treaty_engine, get_agenda_engine,
-                get_clique_formation_engine, get_mood_contagion_engine,
-                get_need_decay_engine, get_negotiation_store, get_skill_progression_engine,
+                get_need_decay_engine, get_negotiation_store,
                 get_chapter_engine, get_investigation_engine, get_memory_consolidation_engine.
 Used by: api.dependency_singletons, api.dependencies_engines, api.routes.investigations.
 """
@@ -22,11 +21,8 @@ from npc_engine.api.dependencies_advanced.progression import (
     get_chapter_engine,
     get_investigation_engine,
     get_memory_consolidation_engine,
-    get_skill_progression_engine,
 )
 from npc_engine.api.dependencies_advanced.social import (
-    get_clique_formation_engine,
-    get_mood_contagion_engine,
     get_need_decay_engine,
     get_negotiation_store,
 )
@@ -34,12 +30,9 @@ from npc_engine.api.dependencies_advanced.social import (
 __all__ = [
     "get_agenda_engine",
     "get_chapter_engine",
-    "get_clique_formation_engine",
     "get_investigation_engine",
     "get_memory_consolidation_engine",
-    "get_mood_contagion_engine",
     "get_need_decay_engine",
     "get_negotiation_store",
-    "get_skill_progression_engine",
     "get_treaty_engine",
 ]

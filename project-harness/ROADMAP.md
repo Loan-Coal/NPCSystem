@@ -891,7 +891,7 @@ Done when: no module under `demo_game/seeds/` exceeds 800 lines, the two graph e
 `make test-demo` is unmoved at 1,116, the baseline is ratcheted, and the LOC delta is reported
 (expect roughly flat — a split adds import and docstring lines). ✅ AUTO (T4.3, 2026-09-17)
 
-- [ ] **T4.1** Delete `mood`, `clique`, `skill`, `deception`, `currency` and the dead classes
+- [x] **T4.1** Delete `mood`, `clique`, `skill`, `deception`, `currency` and the dead classes
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279
 Files: delete `src/npc_engine/engines/mood/`, `engines/clique/`, `engines/skill/`,
 `engines/deception/`, `engines/currency/`, `engines/contracts/currency_engine.yaml`,
@@ -931,7 +931,7 @@ RED anchor: record the pre-deletion hit count of
 and drive it to zero with `make check` green.
 Validation: `make check`, then `make test-demo`.
 Done when: green, grep clean, ISSUE-338 archived, LOC delta reported (expect about -2,443).
-Findings L10-01, L10-02, ISSUE-338, DEC-279.
+Findings L10-01, L10-02, ISSUE-338, DEC-279. ✅ AUTO (T4.1, 2026-09-17)
 
 - [ ] **T4.2** Gate the portfolio — an engine must be reachable and must do work
 Files: new `scripts/check_engine_census.py`, `Makefile`, `scripts/loop_gates.py`, new

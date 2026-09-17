@@ -2,7 +2,7 @@
 Module: test_world_map
 Layer: test (unit)
 Purpose: Tests for evals/world_map.py — declarative scenario-to-eval-world entity
-         ID mapping, unmapped-ID error raising, and completeness over the 6
+         ID mapping, unmapped-ID error raising, and completeness over the 5
          promoted scenarios.
 Dependencies: pytest, world_map (evals/)
 Used by: pytest (make test / make check)
@@ -79,7 +79,6 @@ def test_mapping_is_total_over_promoted_scenarios() -> None:
         "scenario_reputation_drift": set(),
         "scenario_memory_consolidation": set(),
         "scenario_time_passage": set(),
-        "scenario_mood_contagion": set(),
     }
 
     mapped_scenario_ids = {sm.scenario_id for sm in WORLD_MAP.scenario_maps}

@@ -1,19 +1,10 @@
 """
 Module: scenario_adapters_extra
 Layer: evals (eval harness — not part of src/)
-Purpose: ScenarioFn adapters for the three EVAL-P12.4 promoted scenarios that don't
+Purpose: ScenarioFn adapters for two EVAL-P12.4 promoted scenarios that don't
          fit in scenario_adapters.py's 300-line budget: memory_consolidation,
-         time_passage, mood_contagion.
-
-         Fixes forward a real gap found while wiring mood_contagion (see
-         DECISIONS.md, EVAL-P12.4): the original e2e/scenarios/scenario_mood_contagion.py
-         posts to `POST /v1/admin/advance`, a route that does not exist (grep against
-         src/npc_engine/api/routes/ confirms no such route — dead reference), and reads
-         state via a direct Neo4j driver connection, unlike every other scenario. This
-         adapter drives ticks through the real `POST /v1/clock/advance` route (mood
-         contagion is one of TickScheduler's unconditional per-tick engines — no
-         interval gate to satisfy) and reads mood back through the admin graph HTTP
-         endpoints, matching the access pattern used everywhere else in this module.
+         time_passage.
+         mood_contagion was removed in T4.1 (engine deleted; ISSUE-338 superseded).
 Dependencies: httpx (injected client), uuid, typing, scenario_adapter_utils (evals/)
 Used by: evals/scenario_adapters.py (EVAL-P12.4)
 Does NOT: import from src/npc_engine/, open a Neo4j connection, hold state across calls.
@@ -162,67 +153,10 @@ def make_time_passage(client: httpx.Client) -> Callable[[], bool]:
 
 
 # ---------------------------------------------------------------------------
-# mood_contagion — mood spreads between co-located, affectionate NPCs
-# ---------------------------------------------------------------------------
-
-
-def make_mood_contagion(client: httpx.Client) -> Callable[[], bool]:
-    """Two co-located NPCs with high affection: tick advances persist a mood on both."""
-
-    def _char(char_id: str, name: str, mood: str, intensity: float) -> dict[str, Any]:
-        return {
-            "id": char_id, "name": name, "archetype": "commoner", "is_active": True,
-            "is_player": False, "biography": "eval fixture", "gossipy": 50, "credulity": 50,
-            "honesty": 70, "current_mood": mood, "mood_intensity": intensity,
-            "created_at": now_iso(), "updated_at": now_iso(), "last_graph_updated_at": now_iso(),
-        }
-
-    def _run() -> bool:
-        suffix = uuid.uuid4().hex[:8]
-        alice, bob, tavern = f"mood_alice_{suffix}", f"mood_bob_{suffix}", f"mood_tavern_{suffix}"
-
-        try:
-            client.post(f"{GRAPH_PREFIX}/nodes/Character", json={"properties": _char(alice, "Alice", "elated", 0.7)})
-            client.post(f"{GRAPH_PREFIX}/nodes/Character", json={"properties": _char(bob, "Bob", "melancholic", 0.2)})
-            client.post(f"{GRAPH_PREFIX}/nodes/Location", json={"properties": {
-                "id": tavern, "name": "Eval Tavern", "description": "eval fixture",
-                "last_graph_updated_at": now_iso(),
-            }})
-            client.post(f"{GRAPH_PREFIX}/edges/LOCATED_AT", json={
-                "src_id": alice, "dst_id": tavern, "properties": {"arrived_at": now_iso()},
-            })
-            client.post(f"{GRAPH_PREFIX}/edges/LOCATED_AT", json={
-                "src_id": bob, "dst_id": tavern, "properties": {"arrived_at": now_iso()},
-            })
-            client.post(f"{GRAPH_PREFIX}/edges/RELATES_TO", json={
-                "src_id": alice, "dst_id": bob, "properties": {
-                    "trust": 70, "fear": 10, "affection": 75,
-                    "interaction_count": 20, "relevance_score": 0.8,
-                },
-            })
-            for _ in range(3):
-                client.post("/v1/clock/advance", json={"delta_ticks": 1, "game_time_seconds": 3600})
-            alice_state = client.get(f"{GRAPH_PREFIX}/nodes/Character/{alice}")
-            bob_state = client.get(f"{GRAPH_PREFIX}/nodes/Character/{bob}")
-            if not (is_ok(alice_state) and is_ok(bob_state)):
-                return False
-            alice_mood = alice_state.json().get("data", {}).get("current_mood")
-            bob_mood = bob_state.json().get("data", {}).get("current_mood")
-            return alice_mood is not None and bob_mood is not None
-        finally:
-            client.delete(f"{ADMIN_PREFIX}/graph/characters/{alice}")
-            client.delete(f"{ADMIN_PREFIX}/graph/characters/{bob}")
-            client.delete(f"{ADMIN_PREFIX}/graph/locations/{tavern}")
-
-    return _run
-
-
-# ---------------------------------------------------------------------------
 # Registry (merged into scenario_adapters.SCENARIO_ADAPTER_FACTORIES)
 # ---------------------------------------------------------------------------
 
 EXTRA_SCENARIO_ADAPTER_FACTORIES: dict[str, Callable[[httpx.Client], Callable[[], bool]]] = {
     "scenario_memory_consolidation": make_memory_consolidation,
     "scenario_time_passage": make_time_passage,
-    "scenario_mood_contagion": make_mood_contagion,
 }

@@ -20,7 +20,7 @@ class EmotionStore:
 
     All public methods acquire ``_lock`` before reading or writing ``_states``
     to prevent lost updates across awaits in concurrent async handlers
-    (DialogueHandler, GossipHandler.apply_event_shock, MoodContagionEngine).
+    (DialogueHandler, GossipHandler.apply_event_shock).
     """
 
     def __init__(self) -> None:

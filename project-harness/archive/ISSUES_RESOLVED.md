@@ -4035,3 +4035,22 @@ in a dedicated worktree so interactive sessions cannot collide with it.
 **Description:** `MilitaryEngine` resolves battles and processes resource yield for real, reporting `battles_resolved: 1` on every tick indefinitely. The scheduler docstring calls it a no-op stub and cites `ISSUE-001`, an unrelated already-resolved issue. The underlying no-op was fixed 2026-06-19 (ISSUE-111); only the comment never caught up. This stale docstring is why the brief for this very review described `military` as a stub — and it is the engine that auto-loses the demo.
 **Why deferred:** The engine's *behaviour* is covered by the CRITICAL demo auto-lose decision; this entry is the docstring half.
 **To fix:** Correct the docstring and drop the wrong ISSUE reference. Also see CR-L14-01/CR-L09-06 (stale session-kwarg tests in the same directory).
+
+## [FIXED] ISSUE-338: `scenario_mood_contagion` passes vacuously — the two NPCs are never co-located
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Fixed:** 2026-09-17, in T4.1 — superseded by deletion. MoodContagionEngine deleted; scenario
+removed from `evals/scenario_adapters_extra.py`. Proposing a "mood change" assertion is now actively
+wrong advice for a mechanism that no longer exists.
+**Severity:** P2 (annoying — a promoted scenario that cannot fail)
+**Where:** `evals/scenario_adapters_extra.py:187-211`
+**Description:** The scenario posts a Location with `{id, name, description, last_graph_updated_at}`.
+`description` is not a declared field on `location.yaml` and `location_tag`/`descriptor` are required
+and missing, so the POST 422s; the return is unchecked. Both subsequent `LOCATED_AT` POSTs then 404 on
+the missing destination node, so the two NPCs are never co-located and mood contagion never runs on
+them. The assertion is only that both `current_mood` values are non-`None` — which is true from
+creation, since `_char(...)` sets `current_mood`. The scenario therefore passes without exercising the
+behaviour it names. The `RELATES_TO` POST at `:197-202` also omits `last_updated_at`, which is
+`required: true`, so it 422s as well.
+**Why deferred:** as ISSUE-336.
+**To fix:** correct the Location and `RELATES_TO` property sets, check every POST return, and assert a
+mood *change* rather than mood presence.

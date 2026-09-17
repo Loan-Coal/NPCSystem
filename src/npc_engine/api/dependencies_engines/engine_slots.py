@@ -48,11 +48,8 @@ class CoreEngineSlots(TypedDict):
 class AdvancedEngineSlots(TypedDict):
     """The engine slots filled by ``_advanced_engine_kwargs``; see ``CoreEngineSlots``."""
 
-    clique_formation_engine: TickEngine
-    skill_progression_engine: TickEngine
     treaty_engine: TickEngine
     memory_consolidation_engine: ConsolidationTickEngine
-    mood_contagion_engine: TickEngine
     chapter_engine: TickEngine
     agenda_engine: TickEngine
     need_decay_engine: TickEngine

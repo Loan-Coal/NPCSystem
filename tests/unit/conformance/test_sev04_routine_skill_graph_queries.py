@@ -1,11 +1,9 @@
 """
-Regression tests for SEV-04 domain migrations: routine and skill.
+Regression tests for SEV-04 domain migrations: routine and skill graph layer.
 
 Confirms that:
 - graph.routine_queries exposes the expected async query functions
 - graph.skill_queries exposes get_completed_quests_with_skills
-- engines/skill/skill_progression_engine does NOT call session.run directly
-  (all Cypher routed through graph/)
 """
 from __future__ import annotations
 
@@ -42,19 +40,3 @@ def test_graph_skill_queries_has_completed_quests_function() -> None:
     assert inspect.iscoroutinefunction(skill_queries.get_completed_quests_with_skills)
 
 
-def test_skill_progression_engine_no_direct_session_run() -> None:  # quality-ok: asserts by raising AssertionError inside the AST walk
-    """SkillProgressionEngine.run_tick must delegate to graph/ not call session.run."""
-    import ast
-    import pathlib
-
-    src = pathlib.Path(
-        "src/npc_engine/engines/skill/skill_progression_engine.py"
-    ).read_text()
-    tree = ast.parse(src)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and node.attr == "run":
-            # Any `<expr>.run(...)` where the caller looks like `session`
-            if isinstance(node.value, ast.Name) and node.value.id == "session":
-                raise AssertionError(
-                    "skill_progression_engine must not call session.run() directly"
-                )

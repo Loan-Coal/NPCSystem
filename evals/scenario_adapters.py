@@ -5,8 +5,9 @@ Purpose: ScenarioFn adapters for the six EVAL-P12.4 promoted scenarios, wrapping
          each e2e/scenarios/scenario_*.py's intent as a bare `() -> bool` callable
          sequence_runner.run_sequence can call k times. This module holds the three
          pure-HTTP scenarios (gossip_chain, grief_persistence, reputation_drift) and
-         the registry; memory_consolidation, time_passage and mood_contagion live in
+         the registry; memory_consolidation and time_passage live in
          scenario_adapters_extra.py to keep both files under the 300-line limit.
+         mood_contagion was removed in T4.1 (engine deleted).
 
          Fixes forward two real gaps found while wiring this (see DECISIONS.md,
          EVAL-P12.4): gossip_chain and grief_persistence hardcoded scenario-vocabulary

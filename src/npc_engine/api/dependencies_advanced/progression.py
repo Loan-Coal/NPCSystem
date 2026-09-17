@@ -2,10 +2,10 @@
 Module: dependencies_advanced.progression
 Layer: api
 Purpose: Singleton factory providers for progression/knowledge engines —
-         skill progression, chapter, investigation, memory consolidation.
+         chapter, investigation, memory consolidation.
 Does NOT: create session-scoped or per-request dependencies.
 Dependencies injected: LLM clients (chapter, memory consolidation) + store singletons.
-Dependencies: engines.skill, engines.chapter, engines.investigation,
+Dependencies: engines.chapter, engines.investigation,
               engines.memory_consolidation, api.dependencies_infra,
               api.dependencies_stores, engines.llm, config.
 Used by: api.dependencies_advanced (package re-exporter).
@@ -24,26 +24,9 @@ from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
 
 if TYPE_CHECKING:
-    from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
     from npc_engine.engines.chapter.chapter_engine import ChapterEngine
     from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
     from npc_engine.engines.memory_consolidation.memory_consolidation_engine import MemoryConsolidationEngine
-
-
-@lru_cache
-def get_skill_progression_engine() -> SkillProgressionEngine:
-    """Create singleton skill progression engine for XP awards on quest completion.
-
-    Wires the Neo4j graph adapter (Neo4jSkillRepository) as the engine's injected
-    SkillGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
-
-    Returns:
-        SkillProgressionEngine instance.
-    """
-    from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
-    from npc_engine.graph.repositories.skill_repository import Neo4jSkillRepository
-
-    return SkillProgressionEngine(skill_repo=Neo4jSkillRepository(get_graph_db()))
 
 
 @lru_cache

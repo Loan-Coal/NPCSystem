@@ -15,13 +15,10 @@ import pytest
 EXPECTED_FACTORIES = {
     "get_agenda_engine",
     "get_chapter_engine",
-    "get_clique_formation_engine",
     "get_investigation_engine",
     "get_memory_consolidation_engine",
-    "get_mood_contagion_engine",
     "get_need_decay_engine",
     "get_negotiation_store",
-    "get_skill_progression_engine",
     "get_treaty_engine",
 }
 
@@ -31,13 +28,10 @@ SUBMODULE_FACTORIES = {
         "get_agenda_engine",
     },
     "npc_engine.api.dependencies_advanced.social": {
-        "get_clique_formation_engine",
-        "get_mood_contagion_engine",
         "get_need_decay_engine",
         "get_negotiation_store",
     },
     "npc_engine.api.dependencies_advanced.progression": {
-        "get_skill_progression_engine",
         "get_chapter_engine",
         "get_investigation_engine",
         "get_memory_consolidation_engine",

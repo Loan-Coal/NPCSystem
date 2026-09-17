@@ -164,7 +164,7 @@ async def get_completed_quests_with_skills(
 ) -> list[dict[str, Any]]:
     """Return (quest, character, skill) rows for quests completed this tick.
 
-    Used by SkillProgressionEngine to award XP after quest completion.
+    Used to award XP after quest completion (e.g. by the economy skill service).
 
     Args:
         session: Active Neo4j async session.

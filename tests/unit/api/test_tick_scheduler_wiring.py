@@ -18,7 +18,7 @@ from npc_engine.api.dependencies_engines import (
     get_tick_scheduler,
 )
 
-EXPECTED_ENGINE_SLOT_COUNT = 25
+EXPECTED_ENGINE_SLOT_COUNT = 22
 
 
 def test_composition_root_wires_the_memory_consolidation_engine() -> None:

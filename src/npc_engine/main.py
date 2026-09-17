@@ -33,12 +33,10 @@ from npc_engine.api.dependency_singletons import (
     get_graph_db,
     get_idempotency_service,
     get_llm_config,
-    get_clique_formation_engine,
     get_memory_consolidation_engine,
     get_treaty_engine,
     get_pricing_engine,
     get_session_store,
-    get_skill_progression_engine,
     get_quest_generation_engine,
     get_redis_runtime,
     get_routine_engine,
@@ -119,8 +117,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         get_game_clock.cache_clear()
         get_tick_scheduler.cache_clear()
         get_faction_politics_engine.cache_clear()
-        get_clique_formation_engine.cache_clear()
-        get_skill_progression_engine.cache_clear()
         get_treaty_engine.cache_clear()
         get_story_pacing_engine.cache_clear()
         get_pricing_engine.cache_clear()

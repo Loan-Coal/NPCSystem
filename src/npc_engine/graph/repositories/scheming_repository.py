@@ -4,8 +4,8 @@ Layer: graph
 Purpose: Neo4j adapter for the scheming graph domain. Opens a session per call from the
          injected GraphDB and delegates to scheme_reader (reads), scheme_writer (writes),
          graph_reader (NPC location), and event_writer (atomic step emit via run_in_tx),
-         so SchemingEngine, SchemeAdvanceTick, and SchemeDetectionTick depend on
-         SchemingGraphPort and hold no Neo4j session (DEC-122 / SEV-24).
+         so SchemeAdvanceTick and SchemeDetectionTick depend on SchemingGraphPort and
+         hold no Neo4j session (DEC-122 / SEV-24).
 Does NOT: apply scheme logic, call LLMs, or import the engines layer.
 Dependencies injected: GraphDB (Neo4j driver holder).
 Used by: api composition root (dependencies_engines.get_scheme_advance_tick,

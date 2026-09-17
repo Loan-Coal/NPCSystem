@@ -4,12 +4,10 @@ Layer: engines
 Purpose: Structural Protocol for the scheming graph domain — read active schemes and
          scheme progress, look up NPC location, upsert/advance schemes, emit one
          covert scheme-step Event atomically, and detect discoverable schemes.
-         SchemingEngine, SchemeAdvanceTick, and SchemeDetectionTick all depend on
-         this Protocol (DEC-122 / SEV-24).
+         SchemeAdvanceTick and SchemeDetectionTick depend on this Protocol (DEC-122 / SEV-24).
 Does NOT: open sessions, run Cypher, apply rules, or call LLMs.
 Dependencies injected: none (pure interface).
-Used by: npc_engine.engines.scheming.scheming_engine.SchemingEngine;
-         npc_engine.engines.scheming.scheme_advance_tick.SchemeAdvanceTick;
+Used by: npc_engine.engines.scheming.scheme_advance_tick.SchemeAdvanceTick;
          npc_engine.engines.investigation.scheme_detection_tick.SchemeDetectionTick;
          implemented structurally by
          npc_engine.graph.repositories.scheming_repository.Neo4jSchemingRepository.

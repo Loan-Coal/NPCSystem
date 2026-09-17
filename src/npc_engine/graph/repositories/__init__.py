@@ -8,8 +8,7 @@ Purpose: Neo4j-backed repository adapters that implement the engine-layer graph
          backends (DEC-122 / SEV-24).
 Does NOT: contain business/decay logic, call LLMs, or import the engines layer.
 Dependencies injected: GraphDB (per adapter, at the api composition root).
-Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
-                Neo4jSkillRepository, Neo4jChapterRepository,
+Public surface: Neo4jNeedRepository, Neo4jChapterRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
                 Neo4jCharacterReadRepository, Neo4jEmotionRepository,
                 Neo4jEventRepository, Neo4jFactionPoliticsRepository,
@@ -34,7 +33,6 @@ from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
 from npc_engine.graph.repositories.faction_politics_repository import (
     Neo4jFactionPoliticsRepository,
 )
-from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
 from npc_engine.graph.repositories.intent_repository import Neo4jIntentRepository
 from npc_engine.graph.repositories.interaction_repository import (
     Neo4jInteractionRepository,
@@ -47,7 +45,6 @@ from npc_engine.graph.repositories.memory_consolidation_repository import (
     Neo4jMemoryConsolidationRepository,
 )
 from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
-from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
 from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
 from npc_engine.graph.repositories.player_location_read_repository import (
     Neo4jPlayerLocationReadRepository,
@@ -68,7 +65,6 @@ from npc_engine.graph.repositories.relation_read_repository import (
 )
 from npc_engine.graph.repositories.reputation_repository import Neo4jReputationRepository
 from npc_engine.graph.repositories.routine_repository import Neo4jRoutineRepository
-from npc_engine.graph.repositories.skill_repository import Neo4jSkillRepository
 from npc_engine.graph.repositories.story_pacing_repository import Neo4jStoryPacingRepository
 from npc_engine.graph.repositories.treaty_repository import Neo4jTreatyRepository
 from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
@@ -80,14 +76,12 @@ __all__ = [
     "Neo4jEmotionRepository",
     "Neo4jEventRepository",
     "Neo4jFactionPoliticsRepository",
-    "Neo4jGroupRepository",
     "Neo4jIntentRepository",
     "Neo4jInteractionRepository",
     "Neo4jInvestigationRepository",
     "Neo4jKnowledgeRepository",
     "Neo4jMemoryConsolidationRepository",
     "Neo4jMemoryRepository",
-    "Neo4jMoodRepository",
     "Neo4jNeedRepository",
     "Neo4jPlayerLocationReadRepository",
     "Neo4jPlanningRepository",
@@ -98,7 +92,6 @@ __all__ = [
     "Neo4jRelationReadRepository",
     "Neo4jReputationRepository",
     "Neo4jRoutineRepository",
-    "Neo4jSkillRepository",
     "Neo4jStoryPacingRepository",
     "Neo4jTreatyRepository",
     "Neo4jWorldStateRepository",
