@@ -3408,3 +3408,11 @@ shares the GPU with whatever else is running.
 act, so it is visible rather than silent.
 **To fix:** give `advance_clock` its own timeout sized to the engine's worst case (or pass `NPC_GRAPH_TIMEOUT_S`
 through from `DemoConfig`, which `run.py` currently ignores).
+
+## ISSUE-354: `GET /v1/admin/factions/{id}/standings` returns 500 due to response model mismatch
+**Found:** 2026-09-17, during T3.3 (live stack validation)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/api/routes/faction_politics/factions.py` (`FactionStandingRow`); `src/npc_engine/graph/faction/faction_queries.py` (`CYPHER_LIST_STANDINGS`, `list_standings`)
+**Description:** `CYPHER_LIST_STANDINGS` returns `properties(b)` (the full target faction dict) for the `target` column, but `FactionStandingRow.target: str` expects a faction ID string. FastAPI raises `ResponseValidationError` on every request. Pre-existing — confirmed present in `db5b2c20` (before T3.2). The demo client's `_get_faction_standings_for` returns `[]` on the 500, so the client degrades gracefully, but the sub-endpoint is non-functional. STANDS_WITH edges are seeded and reachable via Cypher; only the HTTP endpoint is broken.
+**Why deferred:** pre-existing; not introduced by T3.2; client degrades gracefully; does not block the live demo.
+**To fix:** either change `CYPHER_LIST_STANDINGS` to `RETURN b.id AS target, r.standing AS standing` (and update `list_standings` accordingly), or update `FactionStandingRow.target` to accept a dict and rename the field. The Cypher fix is simpler and matches the response model's intent.

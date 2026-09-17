@@ -798,7 +798,7 @@ Done when: green, grep clean, `AgendaEngine` still constructible via
 assumed `agenda` went too).
 Findings L10-03, DEC-279. ✅ AUTO (T3.1, 2026-09-16)
 
-- [ ] **T3.2** Delete `treaty` and `faction_politics`
+- [x] **T3.2** Delete `treaty` and `faction_politics`
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279
 Files: delete `src/npc_engine/engines/treaty/`, `src/npc_engine/engines/faction_politics/`,
 `src/npc_engine/engines/ports/treaty_port.py`,
@@ -827,9 +827,9 @@ outlived their last writer. Nothing detects that class of defect mechanically; t
 rather than a courtesy. **Do not attempt the live check here** — confirming the kept services still
 return data needs a running stack built from this commit, and that is T3.3 alone (split 2026-09-17,
 the same way T6.3 was split from T5.1/T5.2).
-Findings L10-03, DEC-279.
+Findings L10-03, DEC-279. ✅ AUTO (T3.2, 2026-09-17)
 
-- [ ] **T3.3** Confirm on a running stack that the kept faction and treaty read paths still return data
+- [x] **T3.3** Confirm on a running stack that the kept faction and treaty read paths still return data
 Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if a check fails)
 Spec: the live tail of T3.2, split out so the loop can do the deletion unattended. T3.2 keeps
 `graph/political/treaty_service.py` and the faction service because `routes/faction_politics/` and
@@ -848,7 +848,7 @@ service and the query.
 Validation: the live calls above against the isolated stack, then `make check`.
 Done when: `GET /v1/admin/factions/` returns non-empty standings on a stack built from a tree that
 contains T3.2, the demo's treaty reads succeed, and the tick note records the standings count
-observed. Findings L10-03, DEC-279.
+observed. Findings L10-03, DEC-279. ✅ AUTO (T3.3, 2026-09-17)
 
 ### Phase T4
 
