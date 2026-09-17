@@ -536,6 +536,7 @@ class TickScheduler:
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             advanced_ticks = 0
             for tick_id in range(start_tick + 1, end_tick + 1):
+                world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
                 if await self._run_tick_body(
                     session=session, tick_id=tick_id,
                     skip_llm_engines=skip_llm_engines,

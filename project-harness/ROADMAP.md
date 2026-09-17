@@ -1092,7 +1092,7 @@ Finding CR-L01-01 (`review-2026-08/TRIAGE.md`). ✅ AUTO (T5.3, 2026-09-18)
 
 Fix the bug that would silently undo Sprint 3, pin the order, then prove the revival on a stack.
 
-- [ ] **T6.1** Re-read world state inside the tick loop — batched advances see a frozen clock
+- [x] **T6.1** Re-read world state inside the tick loop — batched advances see a frozen clock
 Pre-approved: public-interface · owner 2026-09-08
 Files: `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/config.py`,
 `src/npc_engine/api/routes/world/clock.py`, new test
@@ -1118,7 +1118,7 @@ cap is rejected with 422 and the boundary value is accepted.
 Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_clock_advance_delta_bound.py -v`, then
 `make check`. Measure the added per-tick graph read against the 433-570ms baseline and confirm it is
 noise, not a new regression.
-Done when: both tests pass and `make check` is green. Finding L13-09, SEV-08.
+Done when: both tests pass and `make check` is green. Finding L13-09, SEV-08. ✅ AUTO (T6.1, 2026-09-18)
 
 - [ ] **T6.2** Pin the tick execution order
 Files: new `tests/unit/scheduler/test_tick_order.py`, `docs/ENGINES.md`

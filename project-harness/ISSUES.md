@@ -16,6 +16,14 @@ Rules:
 
 ## Open
 
+## ISSUE-355: `demo_game/client.py` docstring says `delta_ticks` accepts "1–1000" after the cap was lowered to 10
+**Found:** 2026-09-18, during T6.1
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/client.py:292`
+**Description:** The `advance_clock` docstring says "Number of ticks to advance (1–1000)." but MAX_DELTA_TICKS was lowered to 10 in T6.1; the docstring is now stale.
+**Why deferred:** `demo_game/client.py` is outside the Files list for T6.1; touching it would widen the diff beyond the task scope.
+**To fix:** Update the docstring to say "1–10" (or reference `MAX_DELTA_TICKS`).
+
 ## ISSUE-342: 494 untracked log files sit in `project-harness/` with no retention policy
 **Found:** 2026-09-09, during the pre-T tidy of `project-harness/`
 **Severity:** P3 (nice-to-fix)
