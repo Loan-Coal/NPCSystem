@@ -39,15 +39,41 @@ within the same tick:
 2. **Gossip** *(interval-gated)* and **Event generation** *(interval-gated)*
 3. **Routine** movement
 4. **Chapter** detection *(interval-gated, LLM)*
-5. All remaining per-tick engines (faction politics, cliques, skills, treaties,
-   mood, agendas, needs, quest triggers, proactive dialogue,
-   reputation, intents, goals, player model, director, memory decay, schemes)
+5. All remaining per-tick engines, in this exact order:
+   `faction_politics`, `treaty`, `agenda`, `need_decay`,
+   `event_quest`, `need_quest`, `world_state_quest`,
+   `proactive_dialogue`, `reputation`, `intent_formation`, `goal_formation`,
+   `player_model`, `director`, `memory_decay`, `scheme_advance`, `scheme_detection`
 6. **Memory consolidation** *(advance-cadence, LLM)*
+
+> **Discrepancy note (T6.2, 2026-09-18):** the previous step 5 listed engines that were
+> removed in Sprints 1–2 (`clique`, `skill_progression`, `oath`, `mood_contagion`,
+> `succession`, `military`). The list above reflects the actual current implementation.
 
 Cadences are configurable. Gossip and event generation run every *N* ticks
 (`GOSSIP_TICK_INTERVAL`, `EVENT_TICK_INTERVAL`); several engines self-gate on their own
 interval and no-op on off-ticks. Each engine is run in isolation — an exception in one
 engine is logged and recorded but **does not stop the tick or the other engines**.
+
+#### Read-after-write dependencies within a single tick
+
+The order above is not arbitrary. The following pairs have confirmed read-after-write
+dependencies (source: `project-harness/review-fixes/evidence/L13.md` §A.2). Moving any
+writer after its reader silently breaks behaviour; `tests/unit/scheduler/test_tick_order.py`
+gates every pair below.
+
+| Reader | Reads this tick | Writer |
+|--------|----------------|--------|
+| `event` | `WorldState.max_event_severity` | `story_pacing` |
+| `event_quest`, `need_quest`, `world_state_quest` | `WorldState.quest_generation_rate` | `story_pacing` |
+| `need_decay` | `(c)-[:LOCATED_AT]->(loc)` written by movement | `routine` |
+| `proactive_dialogue` | co-location (NPC + player) | `routine` |
+| `player_model` | co-location (NPC + player) | `routine` |
+| `event_quest` | unprocessed `:Event` with no `CAUSED_BY` | `event` |
+| `need_quest` | `:Need.level` below threshold | `need_decay` |
+| `chapter` | recent `:Event` + completed `:Quest` | `gossip`, `event` |
+| `reputation` | `RELATES_TO` trust deltas | `gossip` |
+| `scheme_detection` | covert `:Event` steps | `scheme_advance` |
 
 ### Observing engines
 

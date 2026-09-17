@@ -1120,7 +1120,7 @@ Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_clock_advance_delt
 noise, not a new regression.
 Done when: both tests pass and `make check` is green. Finding L13-09, SEV-08. ✅ AUTO (T6.1, 2026-09-18)
 
-- [ ] **T6.2** Pin the tick execution order
+- [x] **T6.2** Pin the tick execution order
 Files: new `tests/unit/scheduler/test_tick_order.py`, `docs/ENGINES.md`
 Spec: `ENGINES.md` says the scheduler runs engines in a fixed order so upstream state is visible
 downstream in the same tick, and the review mapped real read-after-write dependencies
@@ -1148,7 +1148,7 @@ Note the order changed in Sprints 1-2 as engines were deleted; pin the order as 
 RED anchor: swap two adjacent engines in `_ordered_tick_engines()`, run the test, confirm it goes
 red, restore. A test that does not go red here is not finished.
 Validation: `pytest tests/unit/scheduler/test_tick_order.py -v`, then `make check`.
-Done when: both kinds of test pass and the swap experiment was observed red. Finding L13-10, SEV-15.
+Done when: both kinds of test pass and the swap experiment was observed red. Finding L13-10, SEV-15. ✅ AUTO (T6.2, 2026-09-18)
 
 - [ ] **T6.3** Confirm on a running stack that `routine` and `need_decay` now do work
 Files: new `tests/integration/test_revived_engines_do_work.py`, `project-harness/ROADMAP.md`
