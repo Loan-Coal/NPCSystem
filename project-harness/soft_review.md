@@ -64,3 +64,21 @@ Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've
 - No layer rule violations (graph queries in graph layer; seed IO at correct step; no LLM calls).
 
 **Summary:** One concrete edge case — add location_id validation to T5.2's test suite. Otherwise T5 is solid: TDD RED anchors present, immutability respected, pre-approvals cited, roadmap checkmarks accurate.
+
+## 2026-09-18 01:53:53 — phase T6
+
+## T6 Diff Review — 5 Findings
+
+**All three T6 commits are correct and follow project rules.** Top findings:
+
+1. **ISSUE-355 acknowledged but unfixed (T6.1)**: Docstring in `demo_game/client.py:292` says `delta_ticks` accepts "1–1000" but MAX_DELTA_TICKS was lowered to 10. Logged in ISSUES.md (P3, deferred per scope). Not a violation, but represents technical debt.
+
+2. **MAX_DELTA_TICKS boundary tests are gated (T6.1)**: Test hardcodes values `_NEW_CAP=10` and `_OVER_NEW_CAP=11` instead of importing from config. Intentional (per comment) — forces test update if cap changes, preventing silent drift. Design is sound.
+
+3. **Engine execution order sequence is intentionally hardcoded (T6.2)**: `_EXPECTED_SEQUENCE` in `test_tick_order.py` is not imported to avoid circular imports and force deliberate updates. Correct pattern; the ten pairwise dependency tests validate every read-after-write constraint independently.
+
+4. **Integration test defensive on eval stack availability (T6.3)**: `_skip_if_no_eval_stack()` properly skips if `/health` unreachable. Good, though test assumes stack is running before HTTP calls proceed — reasonable for an integration test designed for isolated stack only.
+
+5. **File organization clean**: All three test files ≤322 lines (well under 800-line limit), proper module docstrings, layer rules followed (no Neo4j outside graph, no violations). Carry-forward notes added to ROADMAP.
+
+**No correctness bugs or project-rule violations found.**
