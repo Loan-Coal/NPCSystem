@@ -20,8 +20,10 @@ import pytest
 from npc_engine.api.routes.dialogue.dialogue_ws import (
     MAX_WS_CONNECTIONS_PER_KEY,
     _active_ws_connections,
+    _ws_turn_rate_buckets,
     dialogue_ws,
 )
+from npc_engine.config import Settings
 
 # Time (seconds) given to tasks to run through the drain loop and exit.
 # Fixed code: each task completes in a handful of event-loop iterations well
@@ -59,6 +61,13 @@ class TestWsConnectionSlotRelease:
         is rejected and the assertion below fails.
         """
         _active_ws_connections.clear()
+        _ws_turn_rate_buckets.clear()
+
+        _settings = Settings(
+            API_KEY_SECRET="local_dev_secret_change_this_2026",
+            WS_DIALOGUE_RATE_LIMIT_TURNS_PER_SECOND=100.0,
+            WS_DIALOGUE_RATE_LIMIT_TURNS_BURST=100,
+        )
 
         with (
             patch(
@@ -73,7 +82,8 @@ class TestWsConnectionSlotRelease:
                 "npc_engine.api.routes.dialogue.dialogue_ws.get_proactive_queue"
             ) as mq,
             patch(
-                "npc_engine.api.routes.dialogue.dialogue_ws.get_settings"
+                "npc_engine.api.routes.dialogue.dialogue_ws.get_settings",
+                return_value=_settings,
             ),
         ):
             mq.return_value.drain.return_value = []

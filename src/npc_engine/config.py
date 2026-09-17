@@ -284,6 +284,13 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS_PER_SECOND: float = Field(default=50.0, gt=0)
     RATE_LIMIT_BURST_SIZE: int = Field(default=100, gt=0)
 
+    # Per-turn throughput limit for the WebSocket dialogue endpoint, per API key.
+    # Applied inside the WS handler (BaseHTTPMiddleware never sees WebSocket frames).
+    # Rate is per dialogue turn, not per connection. Default (1 turn/s, burst 10)
+    # is well above the scripted demo cadence (~5 turns over 2+ minutes).
+    WS_DIALOGUE_RATE_LIMIT_TURNS_PER_SECOND: float = Field(default=1.0, gt=0)
+    WS_DIALOGUE_RATE_LIMIT_TURNS_BURST: int = Field(default=10, gt=0)
+
     WITNESSED_MAX_PER_EVENT: int = 10
     CLIQUE_FORMATION_TICK_INTERVAL: int = 10
     # Clique formation thresholds (SEV-12): min bidirectional affection to form a

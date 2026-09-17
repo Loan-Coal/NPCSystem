@@ -20,6 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from npc_engine.api.rate_limit import _TokenBucket
 from npc_engine.api.dependencies import (
     build_dialogue_handler,
     get_llm_client,
@@ -49,6 +50,10 @@ PROACTIVE_DRAIN_POLL_SECONDS: float = 0.5
 # preventing per-frame LLM calls from being used as an unmetered amplification vector.
 MAX_WS_CONNECTIONS_PER_KEY: int = 5
 
+# WebSocket close code sent when the per-key dialogue turn rate limit is exceeded.
+# 1008 = Policy Violation (RFC 6455), matching the existing connection-cap close code.
+WS_TURN_RATE_LIMIT_CLOSE_CODE: int = 1008
+
 
 def check_ws_connection_limit(current_count: int) -> bool:
     """Return True when a new WS connection may be opened for a given key.
@@ -67,6 +72,12 @@ def check_ws_connection_limit(current_count: int) -> bool:
 # but never enforced at the endpoint).
 _active_ws_connections: dict[str, int] = {}
 _ws_connections_lock = asyncio.Lock()
+
+# Per-key token buckets for the per-turn dialogue throughput limit.
+# Keyed by the same SHA-256 key_id as _active_ws_connections so the two accounting
+# structures are always aligned. Created lazily on first turn from each key.
+_ws_turn_rate_buckets: dict[str, _TokenBucket] = {}
+_ws_turn_rate_lock = asyncio.Lock()
 
 
 def _ws_key_id(authorization: str) -> str:
@@ -92,6 +103,66 @@ async def _release_ws_slot(key_id: str) -> None:
             _active_ws_connections[key_id] = remaining
         else:
             _active_ws_connections.pop(key_id, None)
+
+
+async def _consume_ws_turn_rate(key_id: str, settings: Any) -> bool:
+    """Consume one token from the per-key dialogue turn rate bucket.
+
+    Creates the bucket on first access using the current settings values.
+    Returns True when the turn is within the allowed rate; False when throttled.
+
+    Args:
+        key_id: Non-reversible key identity (SHA-256) used to look up the bucket.
+        settings: Application settings supplying rate and burst parameters.
+
+    Returns:
+        True when the turn may proceed; False when the per-key rate is exceeded.
+    """
+    async with _ws_turn_rate_lock:
+        if key_id not in _ws_turn_rate_buckets:
+            _ws_turn_rate_buckets[key_id] = _TokenBucket(
+                rate=settings.WS_DIALOGUE_RATE_LIMIT_TURNS_PER_SECOND,
+                capacity=float(settings.WS_DIALOGUE_RATE_LIMIT_TURNS_BURST),
+            )
+        return _ws_turn_rate_buckets[key_id].consume()
+
+
+async def _gate_ws_turn(
+    websocket: WebSocket, settings: Any, authorization: str
+) -> str | None:
+    """Check auth, rate limit, and connection cap for an incoming WS turn.
+
+    Closes the socket and returns None if any check fails.  Returns the
+    opaque key_id (and an acquired connection slot) on success.
+
+    Args:
+        websocket: Incoming WebSocket connection (not yet accepted).
+        settings: Application settings for rate and cap parameters.
+        authorization: Raw Authorization header value from the request.
+
+    Returns:
+        Non-reversible key_id string when the turn is admitted; None when
+        the connection was closed and the caller should return immediately.
+    """
+    try:
+        resolve_scope_from_authorization(authorization=authorization, settings=settings)
+    except AuthError:
+        await websocket.close(code=1008)
+        return None
+
+    key_id = _ws_key_id(authorization)
+
+    if not await _consume_ws_turn_rate(key_id, settings):
+        logger.warning("ws_turn_rate_limit_reached", extra={"key_id": key_id[:8]})
+        await websocket.close(code=WS_TURN_RATE_LIMIT_CLOSE_CODE)
+        return None
+
+    if not await _acquire_ws_slot(key_id):
+        logger.warning("ws_connection_cap_reached", extra={"max": MAX_WS_CONNECTIONS_PER_KEY})
+        await websocket.close(code=1008)
+        return None
+
+    return key_id
 
 
 def _build_done_data(response: DialogueResponse) -> dict[str, Any]:
@@ -232,20 +303,12 @@ async def dialogue_ws(websocket: WebSocket) -> None:
 
     Phase 1: receive JSON payload, stream token chunks, send done.
     Phase 2 (idle drain): poll the ProactiveQueue and push NPC-initiated lines
-    until the client disconnects.  Auth check and connection cap are unchanged.
+    until the client disconnects.
     """
     settings = get_settings()
     authorization = websocket.headers.get("Authorization", "")
-    try:
-        resolve_scope_from_authorization(authorization=authorization, settings=settings)
-    except AuthError:
-        await websocket.close(code=1008)
-        return
-
-    key_id = _ws_key_id(authorization)
-    if not await _acquire_ws_slot(key_id):
-        logger.warning("ws_connection_cap_reached", extra={"max": MAX_WS_CONNECTIONS_PER_KEY})
-        await websocket.close(code=1008)
+    key_id = await _gate_ws_turn(websocket, settings, authorization)
+    if key_id is None:
         return
 
     await websocket.accept()

@@ -671,7 +671,7 @@ Validation: `pytest tests/unit/engines/test_dialogue_response_length_cap.py -v`,
 changed you edited a prompt file, and you must revert that part.
 Done when: tests pass, `make check` green, hash unchanged. Finding L12-12, SEV-06. ✅ AUTO (T2.2, 2026-09-17)
 
-- [ ] **T2.3** Rate-limit WebSocket dialogue throughput
+- [x] **T2.3** Rate-limit WebSocket dialogue throughput
 Files: `src/npc_engine/api/routes/dialogue/dialogue_ws.py`, `src/npc_engine/api/rate_limit.py`,
 `src/npc_engine/config.py`, new test `tests/unit/api/test_ws_dialogue_rate_limit.py`
 Spec: the WS endpoint has a *concurrency* cap (5 per key) but no *throughput* limit.
@@ -691,7 +691,7 @@ the limit is per key, not global. All fail today — turns are unlimited.
 Sequencing: **must land after T1.1**, which edits the same handler. Do not parallelise them.
 Validation: `pytest tests/unit/api/test_ws_dialogue_rate_limit.py -v`, then `make check`.
 Done when: tests pass, `make check` green, and the limit is above the scripted demo's turn cadence
-so the demo still completes. Finding L1-01, SEV-09.
+so the demo still completes. Finding L1-01, SEV-09. ✅ (T2.3, 2026-09-17 — implemented by the loop, whose session ended before its status line; `make check` re-run green by hand and committed interactively)
 
 - [ ] **T2.4** Add a `demo-run-live` nightly target — the gate that would have caught both CRITICALs
 Files: `Makefile`, `scripts/` (a new runner), `project-harness/OVERNIGHT_LOOP.md`,
