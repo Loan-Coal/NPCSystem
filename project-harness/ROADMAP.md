@@ -109,8 +109,8 @@ needs; delete it once consumed. Keep <= 10 lines.*
 - **Sprint 0 is done (2026-09-16).** The loop runs only from a provisioned worktree — a validated one
   exists at `../NPCSystem-loop` (branch `loop-validate-2`); follow `OVERNIGHT_LOOP.md` § Quick start
   and re-run `make check` there before a night. Open driver bug found on the way: ISSUE-343.
-- **6** tasks in the fence are flagged for an interactive session and the loop will silently pass
-  over them: T6.3, T13.1, T13.2, T15.2, T16.1, **T16.4**. `make roadmap-audit` reports them,
+- **8** tasks in the fence are flagged for an interactive session and the loop will silently pass
+  over them: T3.3, T6.3, T7.4, T13.1, T13.2, T15.2, T16.1, **T16.4**. `make roadmap-audit` reports them,
   with the line that raised each flag. The fence holds **46** tasks in total, 40 of them loop-runnable (verified with the
   loop's own parser, 2026-09-09).
 - The app image is **not** bind-mounted: rebuild before any before/after measurement.
@@ -488,7 +488,9 @@ sprint-relative so they stay meaningful whenever the loop actually reaches them.
 
 | Task | Why it cannot be automated | Blocks | Owner | Due |
 |---|---|---|---|---|
+| **T3.3** | Needs a stack rebuilt from the post-T3.2 tree to prove the kept faction and treaty services still return data | Nothing downstream; without it a kept service returning nothing looks identical to one that works | Lohann Colle | within 7 days of T3.2's commit |
 | **T6.3** | Reads `engine_status` off a running stack to prove `routine` and `need_decay` revived | Sprint 3's entire purpose. If this never runs, the seed edits in T5 are unverified and the world may still be dead. | Lohann Colle | within 7 days of Sprint 3's last commit |
+| **T7.4** | Times the gossip tick on stacks built from before and after T7.3; the numbers are the deliverable | Nothing downstream; SEV-07's latency win stays unmeasured until it runs | Lohann Colle | within 7 days of T7.3's commit |
 | **T13.1** | `coverage run` over a live demo process — the census cannot be derived statically | T13.2, and therefore all of Sprint 7 | Lohann Colle | before any Sprint 7 loop task starts |
 | **T13.2** | Needs T13.1's artifact plus a live demo run to prove nothing load-bearing was cut | Sprint 7's LOC win, the largest available after tests | Lohann Colle | within 7 days of T13.1 |
 | **T15.2** | Asserts the whole surviving portfolio does work against a running stack | The permanent version of the census that found this programme's biggest cluster | Lohann Colle | within 7 days of Sprint 8's last commit |
@@ -804,18 +806,37 @@ is not visible in a five-minute demo, but it must be written down rather than di
 RED anchor: as T3.1 — record the pre-deletion hit count of
 `grep -rn "TreatyEngine\|FactionPoliticsEngine\|TreatyGraphPort\|FactionPoliticsGraphPort" src/
 tests/` and drive it to zero with `make check` staying green.
-Validation: `make check`, then `make test-demo`, then confirm `GET /v1/admin/factions/` still returns
-standings — the service survived.
-Done when: green, grep clean, LOC delta reported (expect about -1,540), **and** two things are
-confirmed on a running stack rather than assumed. (a) `GET /v1/admin/factions/` returns a
-**non-empty** standings list, not merely a 200: `make check` executes zero real Cypher
-(`WITH_SERVICES=0`), so a kept service whose queries now return nothing looks identical to one that
-works. (b) The completion note states the frozen-data consequence explicitly — standings no longer
-decay and treaties no longer expire, so `pledge_service`, `treaty_service` and the faction service
-become read paths that outlived their last writer. Nothing detects that class of defect
-mechanically; the owner decided 2026-09-09 that the written note is the control, which makes writing
-it part of the finish line rather than a courtesy.
+Validation: `make check`, then `make test-demo`.
+Done when: green, grep clean, LOC delta reported (expect about -1,540), **and** the completion note
+states the frozen-data consequence explicitly — standings no longer decay and treaties no longer
+expire, so `pledge_service`, `treaty_service` and the faction service become read paths that
+outlived their last writer. Nothing detects that class of defect mechanically; the owner decided
+2026-09-09 that the written note is the control, which makes writing it part of the finish line
+rather than a courtesy. **Do not attempt the live check here** — confirming the kept services still
+return data needs a running stack built from this commit, and that is T3.3 alone (split 2026-09-17,
+the same way T6.3 was split from T5.1/T5.2).
 Findings L10-03, DEC-279.
+
+- [ ] **T3.3** Confirm on a running stack that the kept faction and treaty read paths still return data ⏸️
+Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if a check fails)
+Spec: the live tail of T3.2, split out so the loop can do the deletion unattended. T3.2 keeps
+`graph/political/treaty_service.py` and the faction service because `routes/faction_politics/` and
+`demo_game/client.py:1410/1446/1463` and `:1829` read them. `make check` executes zero real Cypher
+(`WITH_SERVICES=0`), so a kept service whose queries now return nothing looks identical to one that
+works — only a live read tells them apart.
+Bring up the isolated stack from the post-T3.2 tree with `make eval-stack-up` — **rebuild first, the
+app image is not bind-mounted**, so an old image would confirm the pre-deletion code — then
+`make eval-stack-seed`, and call `GET /v1/admin/factions/`. Assert a **non-empty** standings list,
+not merely a 200. Also exercise the demo's treaty reads at the `demo_game/client.py` lines above
+and confirm none errors.
+Do NOT run the integration suite for this: it writes to the live Neo4j (ISSUE-277).
+RED anchor: none — this is a confirmation task. An empty list or an erroring read is the failure it
+exists to catch: if you see one, do not tick; log it in `ISSUES.md` as a T3.2 regression, naming the
+service and the query.
+Validation: the live calls above against the isolated stack, then `make eval-stack-down`.
+Done when: `GET /v1/admin/factions/` returns non-empty standings on a stack built from a tree that
+contains T3.2, the demo's treaty reads succeed, and the tick note records the standings count
+observed. Findings L10-03, DEC-279.
 
 ### Phase T4
 
@@ -1230,12 +1251,33 @@ the *neighbouring* ticks, not this one.
 Rule 8 applies directly: this is deterministic work being done badly, not a model problem.
 RED anchor: the new test counts graph round-trips (or reconciliation invocations) for a tick
 propagating N pairs and asserts the count does not scale with N. It fails today — the count is
-linear in pairs. Record the measured tick duration before and after against the same seeded world.
-Validation: `pytest tests/unit/graph/test_gossip_tick_query_count.py -v`, then `make check`, then
-measure the gossip tick on a running stack and report the before/after against the 24,252 ms
-baseline.
-Done when: the test passes, `make check` is green, and the completion note states the measured tick
-duration alongside its neighbours. SEV-07, brief at `review-fixes/FIX-SEV-07.md`.
+linear in pairs.
+Validation: `pytest tests/unit/graph/test_gossip_tick_query_count.py -v`, then `make check`.
+Done when: the test passes and `make check` is green. **Do not attempt the live timing here** — the
+before/after tick duration needs a running stack built from each tree, and that is T7.4 alone (split
+2026-09-17). SEV-07, brief at `review-fixes/FIX-SEV-07.md`.
+
+- [ ] **T7.4** Measure the gossip tick before and after T7.3 on a running stack ⏸️
+Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if the tick did not improve)
+Spec: the live tail of T7.3, split out so the loop can land the query fix unattended. T7.3's unit test
+proves the round-trip count no longer scales with propagated pairs; it does not prove the tick got
+faster, and the 24,252 ms figure (40-55x its 433-570 ms neighbours) is the number SEV-07 was raised
+on. Measure it.
+Build the isolated stack twice against the **same seeded world**: once from T7.3's parent commit
+(a throwaway `git worktree`), once from T7.3's commit. Each time `make eval-stack-up` — **rebuild,
+the app image is not bind-mounted** — then `make eval-stack-seed`, advance ticks one at a time, and
+read the per-engine tick durations. Report the gossip tick alongside its neighbouring ticks for both
+trees. Sprint 3 raised co-location, so the "before" may exceed the historical 24,252 ms; compare
+before and after on the same seed, not against the historical figure alone.
+Do NOT run the integration suite for this: it writes to the live Neo4j (ISSUE-277).
+RED anchor: the "before" measurement — the gossip tick is an outlier against its neighbours on the
+pre-T7.3 tree. If it is not an outlier there, say so: the baseline has moved and the comparison
+means nothing.
+Validation: both measurements on the isolated stack, then `make eval-stack-down` and remove the
+worktree.
+Done when: the tick note states the gossip tick duration before and after, each alongside its
+neighbours, on the same seed. If the after figure is still an outlier, do not tick — log it in
+`ISSUES.md` against SEV-07. SEV-07.
 
 ### Phase T8
 
@@ -1771,7 +1813,8 @@ whose target module survived. Those two are T5.1's and T5.2's RED anchors; losin
 un-verifies Sprint 3.
 Then run the scripted demo end to end and confirm all 12 acts still complete — including Act 5,
 which T1.2 re-sourced from the events engine.
-Validation: `make test-demo`, `make check`, scripted demo to completion.
+Validation: `make test-demo`, `make check`, `make type-demo-update` (the deletions lower the
+`demo_game/` mypy count; ratchet it down in the same commit), scripted demo to completion.
 Done when: the demo runs, the census's delete rows are gone, LOC delta reported.
 Findings L6-03, ISSUE-204, ISSUE-311, CR-L07-03.
 
@@ -1780,7 +1823,8 @@ Findings L6-03, ISSUE-204, ISSUE-311, CR-L07-03.
 Gate what survives.
 
 - [ ] **T14.1** Bring `demo_game/` under mypy
-Files: `mypy.ini`, `Makefile`, `demo_game/`
+Files: `Makefile`, `scripts/harness_status.py`, `scripts/check_harness_honesty.py`,
+`project-harness/ISSUES.md` — **not** `demo_game/`
 Spec: **`demo_game/` is ratcheted but not gated — the ratchet you would build already exists.**
 `make type-demo` (`Makefile:226-237`) already drives `scripts/mypy_ratchet.py --target demo_game/
 --baseline-file .mypy_baseline_demo`, with `make type-demo-update` to ratchet it down and
@@ -1792,23 +1836,28 @@ so nothing runs it. That is a one-word edit, not a session of building a ratchet
 second ratchet** — an earlier draft's instruction to "add a `.mypy_baseline`-style ratchet for
 `demo_game` specifically" would add a duplicate mechanism to a programme whose purpose is removing
 things.
-So: add `type-demo` to `check:`, then drive the count down from the post-T13.2 tree with
-`make type-demo-update`, which is a task-session action (see execution contract item 6). After T13.2
-the file count is much smaller, which is why this comes second: fixing types in modules you are
-about to delete is wasted work.
+So: add `type-demo` to `check:` at the current baseline, so the count can no longer grow.
+**Do not fix any `demo_game/` type error in this task** (narrowed 2026-09-17). The loop reaches T14
+while T13.1/T13.2 are still deferred, so the census has not run and nobody knows which modules
+survive; fixing types in modules T13.2 is about to delete is wasted work. Driving the count down
+belongs after T13.2 — log that as an issue in `ISSUES.md` naming T13.2 as its prerequisite, with the
+count recorded here as its starting point. T13.2's own deletions lower the count, and it ratchets the
+baseline down in the same commit (execution contract item 6).
 Note `scripts/check_harness_honesty.py:27` reads `.mypy_baseline` only and has no view of
 `.mypy_baseline_demo`, so a non-zero demo baseline is invisible to the gate whose job is "the docs
 claim a clean state the gates contradict". Extend `harness_status.py`'s existing
 `.mypy_baseline_demo` row into H1, or log an issue saying why not.
-If the residual count cannot be driven to zero in one session, record a target date in `ISSUES.md` —
-the owner decided 2026-09-09 not to gate that date, so it is a promise rather than a mechanism, and
-the completion note should say so plainly rather than implying otherwise.
-RED anchor: `sed -n '432p' Makefile | grep -c type-demo` returns **0** today — the ratchet exists and
-`make check` does not run it. That going to 1, with `python -m mypy demo_game` at or below a recorded
-floor, is the anchor. Record the error count before (256 today, expected lower after T13.2).
+The issue's target date for reaching zero is not gated — the owner decided 2026-09-09 that it is a
+promise rather than a mechanism, and the completion note should say so plainly.
+`type-demo` needs `demo_game/requirements.txt` installed or mypy reports import errors and the count
+will not reproduce (see the `Makefile` comment above the target); confirm the count matches
+`.mypy_baseline_demo` before wiring it in, or the gate reds on its first run.
+RED anchor: `grep '^check:' Makefile | grep -c type-demo` returns **0** today — the ratchet exists and
+`make check` does not run it. That going to 1 is the anchor.
 Validation: `make type-demo`, `python -m mypy demo_game`, then `make check`.
-Done when: `type-demo` is in `make check`'s target list, no second ratchet was created, and the
-`.mypy_baseline_demo` count is recorded before and after. Baseline finding from
+Done when: `type-demo` is in `make check`'s target list, no second ratchet was created, no file under
+`demo_game/` was edited, the `.mypy_baseline_demo` count is recorded, and the drive-to-zero issue is
+logged with T13.2 as its prerequisite. Baseline finding from
 `review-2026-08/BASELINE_2026-08-28.md`.
 
 - [ ] **T14.2** Bring `demo_game/` under the size and structure rules

@@ -182,7 +182,11 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     # to keep them inside the fence — beside the work they verify — rather than outside it.
     # Each is recorded in ROADMAP.md's Deferred backlog with an owner and a due date, and
     # `make roadmap-audit` reports them, so skipping them is visible rather than silent.
+    # 2026-09-17: T3.3 and T7.4 added — the live tails of T3.2 and T7.3, split out the way
+    # T6.3 was split from T5.1/T5.2, so the loop does the code half and skips the stack half.
+    "T3.3": ["deferred"],
     "T6.3": ["deferred"],
+    "T7.4": ["deferred"],
     "T13.1": ["deferred"],
     "T13.2": ["deferred"],
     "T15.2": ["deferred"],
