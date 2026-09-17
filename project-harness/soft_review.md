@@ -12,3 +12,17 @@
 4. **T1.2 dependencies cleanup verified**: No remaining imports of `engines.military`, `graph.military`, or wiring sites missed. All factory singletons (`get_military_engine`, `MilitaryEngine` type imports) removed cleanly.
 
 5. **T1.1 test isolation concern**: Mock `websocket.receive = AsyncMock(side_effect=WebSocketDisconnect())` bypasses actual Starlette WS behavior. Test validates slot management but not that the fix works with real WebSocket implementations or actual message receive loops.
+
+## 2026-09-17 21:29:53 — phase T3
+
+## Findings
+
+1. **ISSUE-354 contradicts T3.3 completion**: The issue documents `GET /v1/admin/factions/{id}/standings` returning 500 due to response model mismatch (Cypher returns dict, model expects string). Task T3.3 requires "the kept faction and treaty read paths still return data" — a 500 error is a validation failure, not a pass. Deferring it because the client "degrades gracefully" misses that the endpoint itself is broken at the API contract level.
+
+2. **Deferred work not isolated to ISSUES.md**: The issue correctly lives in `ISSUES.md`, but the task tick in `ROADMAP.md` (T3.3) should probably include a note linking back to ISSUE-354 rather than silently marking the validation complete when a read path is non-functional.
+
+3. **Pre-existing diagnosis is correct but incomplete**: The issue traces the root cause correctly (`CYPHER_LIST_STANDINGS` returns `properties(b)` instead of `b.id`), but doesn't note whether this was supposed to be deleted in T3.2 or is a kept service. If it's kept, the response model is the bug; if it was supposed to be deleted, that's a gap in T3.2.
+
+4. **Response validation error not logged when found**: ISSUE-354 cites a `ResponseValidationError` from FastAPI, which suggests active testing of the live stack occurred. The finding was correctly logged, but the task completion marker doesn't reflect that validation caught a failure.
+
+5. **No code changes in this commit**: The commit only logs a finding and ticks tasks. The actual T3.2 deletion work is in the prior commit (`68e796bc`). Verify that prior commit removed `treaty` and `faction_politics` engines cleanly without leaving dangling callers.
