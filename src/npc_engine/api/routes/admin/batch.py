@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_event_handler, get_gossip_handler
@@ -20,6 +20,13 @@ from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.api.dependency_singletons import get_game_clock
 from npc_engine.api.helpers import resolve_tick
 from npc_engine.engines.ports.clock_port import ClockPort
+from npc_engine.utils.errors import EventTemplateNotFoundError
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Bounds on a caller-named event template id (pool ids look like "evt_21_iron_legion_advance").
+TEMPLATE_ID_MAX_LENGTH: int = 64
 
 
 class GossipTickRequest(BaseModel):
@@ -37,6 +44,7 @@ class EventTickRequest(BaseModel):
 
     location_ids: list[str] = Field(default_factory=list)
     tick_override: int | None = Field(default=None, ge=0)
+    template_id: str | None = Field(default=None, min_length=1, max_length=TEMPLATE_ID_MAX_LENGTH)
 
     model_config = ConfigDict(frozen=True)
 
@@ -70,8 +78,14 @@ async def run_event_tick(
     event_handler: EventHandler = Depends(get_event_handler),
     clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
-    """Execute one explicit event tick."""
+    """Execute one explicit event tick, optionally forcing a named pool template."""
 
     tick_id = resolve_tick(request.tick_override, clock)
-    result = await event_handler.run_tick(tick_id=tick_id, location_ids=request.location_ids)
+    try:
+        result = await event_handler.run_tick(
+            tick_id=tick_id, location_ids=request.location_ids, template_id=request.template_id
+        )
+    except EventTemplateNotFoundError as error:
+        logger.info("event_tick_unknown_template", extra={"error": str(error)})
+        raise HTTPException(status_code=422, detail="Unknown event template") from error
     return ok_response(result)

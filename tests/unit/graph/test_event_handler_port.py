@@ -18,6 +18,7 @@ import pytest
 
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.events.event_pool import EventTemplate
+from npc_engine.utils.errors import EventTemplateNotFoundError
 
 
 def _make_settings() -> MagicMock:
@@ -151,3 +152,41 @@ async def test_witness_not_called_when_no_src_character_id() -> None:
     await handler.run_tick(tick_id=6)
 
     repo.record_witnesses.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_tick_template_id_forces_that_template() -> None:
+    """A named template is used instead of the weighted draw (Act 5 needs a known beat)."""
+    heavy = _template(id="evt_heavy", weight=1000, location_tag="docks")
+    named = _template(id="evt_named", weight=1, location_tag="barracks")
+    repo = _event_repo()
+    handler = _make_handler([heavy, named], event_repo=repo, world_state_repo=_world_state_repo())
+
+    result = await handler.run_tick(tick_id=7, template_id="evt_named")
+
+    assert result["created"] == 1
+    repo.get_locations_by_tag.assert_awaited_once_with(location_tag="barracks")
+
+
+@pytest.mark.asyncio
+async def test_run_tick_unknown_template_id_raises() -> None:
+    repo = _event_repo()
+    handler = _make_handler([_template()], event_repo=repo, world_state_repo=_world_state_repo())
+
+    with pytest.raises(EventTemplateNotFoundError):
+        await handler.run_tick(tick_id=8, template_id="evt_missing")
+    repo.emit_event_atomic.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_tick_template_id_still_respects_severity_cap() -> None:
+    named = _template(id="evt_named", severity=90)
+    repo = _event_repo()
+    handler = _make_handler(
+        [named], event_repo=repo, world_state_repo=_world_state_repo(max_severity=50)
+    )
+
+    result = await handler.run_tick(tick_id=9, template_id="evt_named")
+
+    assert result == {"tick_id": 9, "created": 0}
+    repo.emit_event_atomic.assert_not_awaited()

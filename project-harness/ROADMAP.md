@@ -622,6 +622,10 @@ Done when: `make check` green, `grep -rn "MilitaryEngine\|military_engine" src/ 
 nothing, Act 5 produces a battle event from the events engine in a live run, DEC-274 is updated, and
 the LOC delta is reported (expect about -1,373 plus a further -579 for `graph/military/`).
 SEV-01 sibling; findings L6-01, L9-02, L10-04, ISSUE-334, DEC-274. ✅ AUTO (T1.2, 2026-09-16)
+Follow-up 2026-09-17 (interactive): the loop ran without services, so the live Act 5 check never ran,
+and as wired the beat almost never fired (events every 20 ticks, `evt_21` at weight 3/74). Act 5 now
+forces `evt_21` via `template_id` on `POST /v1/admin/batch/event_tick` (DEC-274 amendment). The
+live-run confirmation is still outstanding — T2.4's `demo-run-live` is its first chance.
 
 ### Phase T2
 

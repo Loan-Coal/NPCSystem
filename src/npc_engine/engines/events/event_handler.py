@@ -33,6 +33,7 @@ from npc_engine.graph.event.event_emission_service import RoutineOverridePlan
 from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
+from npc_engine.utils.errors import EventTemplateNotFoundError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -151,7 +152,13 @@ class EventHandler:
             or (rule.trigger_severity_min is not None and severity >= rule.trigger_severity_min)
         ]
 
-    def _select_template(self, tick_id: int) -> EventTemplate:
+    def _select_template(self, tick_id: int, template_id: str | None = None) -> EventTemplate:
+        """Return the named template when given, else a weighted draw for this tick."""
+        if template_id is not None:
+            for template in self._templates:
+                if template.id == template_id:
+                    return template
+            raise EventTemplateNotFoundError(template_id=template_id)
         rng = _rng_for_tick(
             configured=self._rng, seed=self._settings.EVENT_RNG_SEED, tick_id=tick_id
         )
@@ -164,6 +171,7 @@ class EventHandler:
         tick_id: int,
         location_ids: list[str] | None = None,
         cause_event_id: str | None = None,
+        template_id: str | None = None,
     ) -> dict[str, Any]:
         """Create one weighted event, seed NPC awareness, and optionally update world state.
 
@@ -179,14 +187,19 @@ class EventHandler:
                 locations when not provided.
             cause_event_id: When provided, writes a CAUSED_BY edge from the new event to
                 this event ID (direct causation, strength=DIRECT_CAUSATION_STRENGTH).
+            template_id: When provided, use this pool template instead of the weighted
+                draw. The severity cap still applies.
 
         Returns:
             Dict with ``tick_id`` and ``created`` (0 or 1). When created=1, also includes
             ``event_id`` and ``location_id``.
+
+        Raises:
+            EventTemplateNotFoundError: If ``template_id`` names no loaded template.
         """
 
         async with self._lock:
-            template = self._select_template(tick_id=tick_id)
+            template = self._select_template(tick_id=tick_id, template_id=template_id)
             world_state_check = await self._world_state_repo.get_world_state(world_id=self._settings.WORLD_ID)
             if template.severity > world_state_check.max_event_severity:
                 LOGGER.debug(

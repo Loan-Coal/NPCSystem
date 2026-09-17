@@ -64,7 +64,7 @@
 
 | Field | Value |
 |-------|-------|
-| Trigger | `POST /v1/clock/advance` (events engine tick) |
+| Trigger | `POST /v1/admin/batch/event_tick` with `template_id` (events engine, named template) |
 | Template | `evt_21_iron_legion_advance` — `event_type: military`, `faction_id: iron_legion`, `location_tag: barracks` |
 | Outcome | Iron Legion advance Event node emitted; WORLD feed updated |
 | Demo timing | T+4:20 |
@@ -178,9 +178,9 @@ surfaces. Watch the emotion panel update."
 Next session, she'll remember this conversation."
 
 [4:20] — Events engine (military beat)
-"Events engine. A clock tick samples the weighted event pool — the Iron Legion
-advance template fires at the barracks."
-[Clock advance]
+"Events engine. The same templates that fire on their own every few ticks can be
+triggered on cue — here, the Iron Legion advance at the barracks."
+[Event tick: evt_21_iron_legion_advance]
 "WORLD feed: Iron Legion forces sighted advancing on the guard barracks. The war has reached the city gates."
 
 [4:45]
@@ -235,7 +235,7 @@ WS /v1/ws/dialogue  { "npc_id": "lira_fence", ... }
 POST /v1/admin/memories/consolidate/mira_innkeeper
 
 # 12. Events engine tick — military beat (Act 5)
-POST /v1/clock/advance  { "delta_ticks": 1 }
+POST /v1/admin/batch/event_tick  { "template_id": "evt_21_iron_legion_advance" }
 
 # 13. WORLD feed
 GET /v1/admin/system/events?limit=8

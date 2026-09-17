@@ -118,6 +118,32 @@ class ClockTick(Scene):
         runner.print_ok("Clock advanced")
 
 
+_EVENT_TICK_PATH = "/v1/admin/batch/event_tick"
+
+
+@dataclass
+class ForcedEventTick(Scene):
+    """Fire one named event-pool template through the events engine (deterministic beat)."""
+
+    template_id: str = ""
+
+    def execute(self, runner: DemoRunner) -> None:
+        """POST an event tick naming the template; report a severity-capped skip honestly."""
+        runner.print_step(f"Events engine tick -- template {self.template_id}")
+        if runner.dry_run:
+            return
+        resp = runner.client._client.post(
+            _EVENT_TICK_PATH,
+            json={"template_id": self.template_id},
+            timeout=runner.client._graph_timeout,
+        )
+        resp.raise_for_status()
+        if resp.json()["data"].get("created", 0) == 0:
+            runner.print_ok(f"[skip] {self.template_id} not created (severity cap or no location)")
+            return
+        runner.print_ok(f"Event created: {self.template_id}")
+
+
 # ---------------------------------------------------------------------------
 # Dialogue
 # ---------------------------------------------------------------------------

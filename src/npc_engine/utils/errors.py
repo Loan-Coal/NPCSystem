@@ -269,6 +269,13 @@ class ScheduleNotFoundError(StructuredNPCSystemError):
 
 
 @dataclass(frozen=True)
+class EventTemplateNotFoundError(StructuredNPCSystemError):
+    """Raised when a caller names an event template that the loaded pool does not contain."""
+
+    template_id: str
+
+
+@dataclass(frozen=True)
 class ScheduleAssignmentError(StructuredNPCSystemError):
     """Raised when a schedule assignment cannot be completed."""
 

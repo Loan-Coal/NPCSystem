@@ -9688,6 +9688,15 @@ The narrative question ("do the armies still meet meaningfully?") is not answere
 demo-side work deferred to Sprint 7. The iron_legion army node and faction remain in the seed so
 Sprint 7 can script the confrontation as a player-triggered event rather than an autopilot battle.
 
+**Amendment 2026-09-17 (owner):** the T1.2 wiring left Act 5 non-deterministic — events run every
+`EVENT_TICK_INTERVAL` (20) ticks and `evt_21` draws at weight 3/74, so a one-tick advance almost never
+produced it. Chosen fix: an optional `template_id` on `POST /v1/admin/batch/event_tick`; the handler
+uses that template instead of the weighted draw, an unknown id raises `EventTemplateNotFoundError`
+(HTTP 422), and the `max_event_severity` cap still applies. Act 5 calls it via the `ForcedEventTick`
+scene. Rejected: narration-only (random/empty beat), `EventFire` world-state prop (no Event node, feed
+stays empty), pinned `EVENT_RNG_SEED` (silently breaks on any pool edit), cutting Act 5 (reverses the
+2026-09-09 keep-the-beat decision).
+
 ---
 
 ## DEC-275: Are the ~40 `engines/ports/*` Protocols abstraction or ceremony? — OPEN

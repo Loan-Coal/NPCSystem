@@ -39,6 +39,7 @@ from demo_game.runners.run_scenes import (
     EmotionDisplay,
     PlayerModelDisplay,
     EventFire,
+    ForcedEventTick,
     MemoryConsolidate,
     NarratorCue,
     PropagatedReputationAct,
@@ -267,11 +268,11 @@ SCENES: list[Scene] = [
         name="pre_military_cue",
         delay_before_ms=2000,
         text=(
-            "[ACT 5] Events engine tick -- weighted pool samples a military beat. "
-            "Iron Legion advance template fires at the barracks."
+            "[ACT 5] Events engine tick -- the Iron Legion advance template "
+            "fires at the barracks."
         ),
     ),
-    ClockTick(name="military_tick", delay_before_ms=1000, delta_ticks=1),
+    ForcedEventTick(name="military_tick", delay_before_ms=1000, template_id="evt_21_iron_legion_advance"),
     NarratorCue(
         name="pre_world_feed_cue",
         delay_before_ms=500,
