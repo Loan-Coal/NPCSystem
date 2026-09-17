@@ -1023,7 +1023,7 @@ Validation: `pytest demo_game/tests/seeds/test_seed_schedules.py -v`, then `make
 `make test-demo`.
 Done when: the test passes and `make check` is green. Finding L13-01. ✅ AUTO (T5.1, 2026-09-17)
 
-- [ ] **T5.2** Add `HAS_NEED` edges so `need_decay` stops being dead
+- [x] **T5.2** Add `HAS_NEED` edges so `need_decay` stops being dead
 Pre-approved: graph-schema · owner 2026-09-08 · DEC-276
 Files: `demo_game/seeds/seed.py` (and the domain module T4.3 split it into), new test
 `demo_game/tests/seeds/test_seed_needs.py`,
@@ -1055,7 +1055,7 @@ immediately; do not reorder the two sprints.
 RED anchor: the new test asserts every seeded `:Need` is reachable from its `:Character` via
 `HAS_NEED`. It fails today with zero such edges found.
 Validation: `pytest demo_game/tests/seeds/test_seed_needs.py -v`, then `make check`, then `make test-demo`.
-Done when: the test passes, `make check` is green, and ISSUE-210 is re-scoped. Finding L13-02.
+Done when: the test passes, `make check` is green, and ISSUE-210 is re-scoped. Finding L13-02. ✅ AUTO (T5.2, 2026-09-17)
 
 - [ ] **T5.3** Read gossip distortion back — it is written on every hop and discarded on read
 Pre-approved: public-interface · owner 2026-09-09

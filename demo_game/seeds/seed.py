@@ -49,6 +49,7 @@ from demo_game.seeds.seed_domain import (  # noqa: F401
     _seed_h2_npcs,
     _seed_h2_quests,
     _seed_location_hierarchy,
+    _seed_needs,
     _seed_player_and_items,
     _seed_quest_unlocks_chains,
     _seed_quests,
@@ -312,17 +313,9 @@ def seed_all(client: EngineClient) -> dict:
     logger.info("[seed] Chain quests")
     created += _seed_chain_quests(client)
 
-    # 15. NPC Needs
+    # 15. NPC Needs (original NPCs): Need nodes + HAS_NEED + SATISFIES_NEED edges
     logger.info("[seed] NPC Needs")
-    for npc_id, kind, level, decay_rate in _NPC_NEEDS:
-        node_id = f"{npc_id}_need_{kind}"
-        _tally(_seed_node(client, "Need", {
-            "id": node_id,
-            "kind": kind,
-            "level": level,
-            "decay_rate": decay_rate,
-            "character_id": npc_id,
-        }))
+    created += _seed_needs(client)
 
     # 16. Political layer — Leverage nodes + HAS_LEVERAGE edges + Pledges
     logger.info("[seed] Leverage nodes")

@@ -1,0 +1,4 @@
+edge_type: HAS_NEED
+src_type: character
+dst_type: need
+fields: {}

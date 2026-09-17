@@ -262,6 +262,22 @@ H2_NPC_NEEDS: list[tuple] = [
     (NPC_ID_GARRICK_DESERTER, "social", 25, 2),
 ]
 
+# SATISFIES_NEED edges for H2 NPCs: (location_id, need_id, magnitude)
+H2_SATISFIES_NEED_EDGES: list[tuple[str, str, int]] = [
+    (LOC_ID_FORGE,          f"{NPC_ID_BREN_SMITH}_need_hunger",          3),
+    (LOC_ID_FORGE,          f"{NPC_ID_BREN_SMITH}_need_recreation",      2),
+    (LOC_ID_TEMPLE,         f"{NPC_ID_NESSA_PRIESTESS}_need_social",     4),
+    (LOC_ID_TEMPLE,         f"{NPC_ID_NESSA_PRIESTESS}_need_rest",       2),
+    (LOC_ID_DOCKS,          f"{NPC_ID_DORN_DOCKMASTER}_need_social",     3),
+    (LOC_ID_DOCKS,          f"{NPC_ID_DORN_DOCKMASTER}_need_rest",       2),
+    ("loc_guard_barracks",  f"{NPC_ID_VEX_SPYMASTER}_need_rest",         3),
+    ("loc_guard_barracks",  f"{NPC_ID_VEX_SPYMASTER}_need_social",       2),
+    ("loc_market_square",   f"{NPC_ID_TILDA_HERBALIST}_need_hunger",     4),
+    ("loc_market_square",   f"{NPC_ID_TILDA_HERBALIST}_need_recreation", 3),
+    ("loc_tavern",          f"{NPC_ID_GARRICK_DESERTER}_need_social",    3),
+    ("loc_tavern",          f"{NPC_ID_GARRICK_DESERTER}_need_rest",      2),
+]
+
 # ---------------------------------------------------------------------------
 # H2.3 new locations:
 # (id, name, location_tag, descriptor)

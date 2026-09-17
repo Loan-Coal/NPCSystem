@@ -267,6 +267,36 @@ _NPC_NEEDS: list[tuple[str, str, int, int]] = [
     (NPC_ID_NEL_PICKPOCKET, "hunger",    40, 4),
 ]
 
+# SATISFIES_NEED edges: (location_id, need_id, magnitude)
+# Links each NPC's home location to the specific Need nodes it satisfies.
+# Magnitude is the level-points restored per tick when the character is present.
+_SATISFIES_NEED_EDGES: list[tuple[str, str, int]] = [
+    # mira_innkeeper — loc_tavern is her workplace and rest spot
+    ("loc_tavern",         "mira_innkeeper_need_social",       5),
+    ("loc_tavern",         "mira_innkeeper_need_rest",         2),
+    # aldric_merchant — market satisfies hunger and social drives
+    ("loc_market_square",  "aldric_merchant_need_hunger",      4),
+    ("loc_market_square",  "aldric_merchant_need_social",      3),
+    # captain_sorn — barracks provides rest and structured recreation
+    ("loc_guard_barracks", "captain_sorn_need_rest",           5),
+    ("loc_guard_barracks", "captain_sorn_need_recreation",     3),
+    # lira_fence — tavern keeps her connected and off her feet
+    ("loc_tavern",         "lira_fence_need_social",           3),
+    ("loc_tavern",         "lira_fence_need_rest",             2),
+    # old_henryk — market square for food; some rest there too
+    ("loc_market_square",  "old_henryk_need_hunger",           3),
+    ("loc_market_square",  "old_henryk_need_rest",             1),
+    # sera_barmaid — tavern is home base
+    ("loc_tavern",         f"{NPC_ID_SERA_BARMAID}_need_social",  4),
+    ("loc_tavern",         f"{NPC_ID_SERA_BARMAID}_need_rest",    1),
+    # harwick_guard — barracks handles both
+    ("loc_guard_barracks", f"{NPC_ID_HARWICK_GUARD}_need_recreation", 4),
+    ("loc_guard_barracks", f"{NPC_ID_HARWICK_GUARD}_need_rest",      3),
+    # nel_pickpocket — tavern for social, market for food
+    ("loc_tavern",         f"{NPC_ID_NEL_PICKPOCKET}_need_social",  3),
+    ("loc_market_square",  f"{NPC_ID_NEL_PICKPOCKET}_need_hunger",  4),
+]
+
 # ---------------------------------------------------------------------------
 # Military layer — armies for S6.6 battle demo
 # ---------------------------------------------------------------------------

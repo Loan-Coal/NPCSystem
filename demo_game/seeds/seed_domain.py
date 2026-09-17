@@ -44,6 +44,7 @@ from demo_game.seeds.seed_npc_data import (
     H2_NPCS,
     H2_PART_OF_EDGES,
     H2_QUEST_UNLOCKS_CHAINS,
+    H2_SATISFIES_NEED_EDGES,
     H2_SOURCE_CHAIN_QUESTS,
 )
 from demo_game.seeds.seed_world_data import (
@@ -55,8 +56,10 @@ from demo_game.seeds.seed_world_data import (
     _DECEPTION_BELIEF_ID,
     _DECEPTION_BELIEF_NPC,
     _DECEPTION_GOAL_ID,
+    _NPC_NEEDS,
     _PLAYER_ID,
     _QUEST_UNLOCKS_CHAINS,
+    _SATISFIES_NEED_EDGES,
     _SCHEDULES,
     _SOURCE_CHAIN_QUESTS,
     _SPICE_ID,
@@ -76,6 +79,7 @@ __all__ = [
     "_seed_player_and_items",
     "_seed_aldric_inventory",
     "_seed_aldric_currency",
+    "_seed_needs",
     "_seed_quests",
     "_seed_source_chain_quests",
     "_seed_chain_quests",
@@ -190,7 +194,7 @@ def _seed_h2_npcs(client: EngineClient) -> int:
         )
         created += n
 
-    # Needs
+    # Needs: nodes + HAS_NEED edges
     for npc_id, kind, level, decay_rate in H2_NPC_NEEDS:
         node_id = f"{npc_id}_need_{kind}"
         result = _seed_node(client, "Need", {
@@ -200,6 +204,15 @@ def _seed_h2_npcs(client: EngineClient) -> int:
             "decay_rate": decay_rate,
             "character_id": npc_id,
         })
+        if result == "created":
+            created += 1
+        result = _seed_edge(client, "HAS_NEED", npc_id, node_id, {})
+        if result == "created":
+            created += 1
+
+    # SATISFIES_NEED edges: wire H2 locations to H2 Need nodes
+    for loc_id, need_id, magnitude in H2_SATISFIES_NEED_EDGES:
+        result = _seed_edge(client, "SATISFIES_NEED", loc_id, need_id, {"magnitude": magnitude})
         if result == "created":
             created += 1
 
@@ -564,6 +577,43 @@ def _seed_quest_unlocks_chains(client: EngineClient) -> int:
         )
         if result == "created":
             created += 1
+    return created
+
+
+def _seed_needs(client: EngineClient) -> int:
+    """Seed Need nodes, HAS_NEED edges, and SATISFIES_NEED edges for original demo NPCs.
+
+    Creates one Need node per entry in _NPC_NEEDS, one HAS_NEED edge from the
+    owning Character to each Need, and SATISFIES_NEED edges from locations to
+    each Need node. Idempotent: _seed_node and _seed_edge skip items that exist.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of nodes and edges created.
+    """
+    created = 0
+    for npc_id, kind, level, decay_rate in _NPC_NEEDS:
+        node_id = f"{npc_id}_need_{kind}"
+        result = _seed_node(client, "Need", {
+            "id": node_id,
+            "kind": kind,
+            "level": level,
+            "decay_rate": decay_rate,
+            "character_id": npc_id,
+        })
+        if result == "created":
+            created += 1
+        result = _seed_edge(client, "HAS_NEED", npc_id, node_id, {})
+        if result == "created":
+            created += 1
+
+    for loc_id, need_id, magnitude in _SATISFIES_NEED_EDGES:
+        result = _seed_edge(client, "SATISFIES_NEED", loc_id, need_id, {"magnitude": magnitude})
+        if result == "created":
+            created += 1
+
     return created
 
 

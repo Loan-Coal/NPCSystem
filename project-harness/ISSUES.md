@@ -1947,7 +1947,11 @@ be run at the POST-TRIM window, not at 32768 where it would pass vacuously.
 
 ## ISSUE-210: no seeder creates `Need` nodes, so `npc.top_need` is structurally empty
 **Found:** 2026-08-26, during P4's live verification
-**Severity:** P2 (annoying) - a prompt field that is empty in 100% of rows for a data reason
+**Severity:** ~~P2 (annoying)~~ **P1 (blocking) — RE-SCOPED 2026-09-17 (T5.2)**: missing
+`HAS_NEED` edges mean `need_decay` and `need_quest_trigger` are two dead engines, not just a
+cosmetic empty prompt field. `need_decay` reports 0 decays and 0 satisfactions on every tick.
+`need_quest_trigger` never fires, so need-driven quests have never generated. This is the
+actual impact; the original scoping as P2 was wrong.
 **Where:** `seeds/worlds/`, `demo_game/seeds/seed.py`; consumed by
 `retrieval/context/context_builder.py:_maybe_append_top_need`
 **Description:** `npc.top_need` was empty in 975 of 975 rows of the last eval transcript and
@@ -1972,6 +1976,10 @@ reader queries `(:Character)-[:HAS_NEED]->(:Need)`. Root cause is ISSUE-213: the
 wrong, not the data. So "seed or delete" is a false choice — fixing the label resolver plus
 writing the edges is the cheaper third path. It is still a graph-schema-shaped change that
 mutates the baseline fixture, so it must not land between P9 and P10. See ISSUE-213.
+**UPDATE 2026-09-17 (T5.2 re-scope):** The `HAS_NEED` edge seeding is fixed in T5.2.
+`need_decay` and `need_quest_trigger` are now unblocked but remain unmeasured until a live
+stack run in T6. Note: T5.2 also revives `need_quest_trigger`, increasing quest-generation
+LLM amplification — Sprint 4 (immediately following) bounds this. Do not reorder.
 
 ## ISSUE-212: the admin reindex job reports `completed` while only deleting entries that were never inserted
 **Found:** 2026-08-27, during the P8 planning review (DEC-208)
