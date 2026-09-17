@@ -28,9 +28,9 @@ def test_seed_chain_quests_creates_nodes_and_edges() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", return_value="created") as mock_node,
-        patch("demo_game.seeds.seed._seed_edge", return_value="created") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", return_value="created") as mock_node,
+        patch("demo_game.seeds.seed_domain._seed_edge", return_value="created") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_chain_quests(client)
 
@@ -52,9 +52,9 @@ def test_seed_chain_quests_skips_existing_nodes() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", return_value="skipped") as mock_node,
-        patch("demo_game.seeds.seed._seed_edge") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", return_value="skipped") as mock_node,
+        patch("demo_game.seeds.seed_domain._seed_edge") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_chain_quests(client)
 
@@ -68,14 +68,14 @@ def test_seed_chain_quests_non_fatal_on_exception() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", side_effect=RuntimeError("connection refused")),
-        patch("demo_game.seeds.seed._seed_edge") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", side_effect=RuntimeError("connection refused")),
+        patch("demo_game.seeds.seed_domain._seed_edge") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_chain_quests(client)
 
     assert count == 0
-    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed._seed_edge)
+    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed_domain._seed_edge)
     mock_edge.assert_not_called()
 
 
@@ -89,9 +89,9 @@ def test_seed_source_chain_quests_creates_nodes_and_edges() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", return_value="created") as mock_node,
-        patch("demo_game.seeds.seed._seed_edge", return_value="created") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", return_value="created") as mock_node,
+        patch("demo_game.seeds.seed_domain._seed_edge", return_value="created") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_source_chain_quests(client)
 
@@ -111,9 +111,9 @@ def test_seed_source_chain_quests_skips_existing_nodes() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", return_value="skipped") as mock_node,
-        patch("demo_game.seeds.seed._seed_edge") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", return_value="skipped") as mock_node,
+        patch("demo_game.seeds.seed_domain._seed_edge") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_source_chain_quests(client)
 
@@ -127,12 +127,12 @@ def test_seed_source_chain_quests_non_fatal_on_exception() -> None:
     client = _make_client()
 
     with (
-        patch("demo_game.seeds.seed._seed_node", side_effect=RuntimeError("connection refused")),
-        patch("demo_game.seeds.seed._seed_edge") as mock_edge,
-        patch("demo_game.seeds.seed._now", return_value="2026-01-01T00:00:00Z"),
+        patch("demo_game.seeds.seed_domain._seed_node", side_effect=RuntimeError("connection refused")),
+        patch("demo_game.seeds.seed_domain._seed_edge") as mock_edge,
+        patch("demo_game.seeds.seed_domain._now", return_value="2026-01-01T00:00:00Z"),
     ):
         count = _seed_source_chain_quests(client)
 
     assert count == 0
-    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed._seed_edge)
+    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed_domain._seed_edge)
     mock_edge.assert_not_called()

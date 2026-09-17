@@ -425,7 +425,7 @@ def test_seed_quests_writes_quest_id_to_cache() -> None:
 
     client = _mock_client()
     client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
-    with _patch("demo_game.seeds.seed.Path") as mock_path_cls:
+    with _patch("demo_game.seeds.seed_domain.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
         mock_path_inst.exists.return_value = False
         mock_path_inst.parent = MagicMock()
@@ -519,7 +519,7 @@ def test_seed_aldric_inventory_skips_spice_if_already_owned() -> None:
 def test_seed_all_calls_quest_offer() -> None:
     client = _mock_client()
     client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
-    with patch("demo_game.seeds.seed.Path") as mock_path_cls:
+    with patch("demo_game.seeds.seed_domain.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
         mock_path_inst.exists.return_value = False
         mock_path_inst.parent = MagicMock()

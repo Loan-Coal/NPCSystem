@@ -856,7 +856,7 @@ The seed split first (moved to the head of the phase 2026-09-17: a halt on T4.1 
 rest of the phase, and T5.1/T5.2 red `check-rules` without it), then the remaining dead and
 unreachable engines, then a gate so this never regrows.
 
-- [ ] **T4.3** Split `demo_game/seeds/seed.py` so Sprint 3 has headroom
+- [x] **T4.3** Split `demo_game/seeds/seed.py` so Sprint 3 has headroom
 Pre-approved: file-deletion, public-interface · owner 2026-09-09
 Files: `demo_game/seeds/seed.py`, new modules under `demo_game/seeds/`,
 `scripts/rules_baseline.txt`, `demo_game/tests/` as needed
@@ -889,7 +889,7 @@ eval-stack-seed`, export every node (labels, id, properties) and relationship ov
 `bolt://localhost:7688`; repeat from this tree; diff the two exports.
 Done when: no module under `demo_game/seeds/` exceeds 800 lines, the two graph exports are identical, every NPC id is unchanged,
 `make test-demo` is unmoved at 1,116, the baseline is ratcheted, and the LOC delta is reported
-(expect roughly flat — a split adds import and docstring lines).
+(expect roughly flat — a split adds import and docstring lines). ✅ AUTO (T4.3, 2026-09-17)
 
 - [ ] **T4.1** Delete `mood`, `clique`, `skill`, `deception`, `currency` and the dead classes
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-279

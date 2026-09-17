@@ -2,7 +2,6 @@
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
 # (run the corresponding update target). Never add a line by hand to dodge the gate.
 R001|demo_game/client.py:1901
-R001|demo_game/seeds/seed.py:1677
 R001|demo_game/ui/layout/game_window.py:925
 R004|src/npc_engine/setup/neo4j_manager.py
 R004|src/npc_engine/setup/ollama_manager.py
@@ -11,7 +10,6 @@ R006|scripts/check_harness_honesty.py::main
 R006|scripts/check_layers.py::find_violations_in_file
 R006|scripts/check_rules.py::_run_check
 R006|scripts/check_test_quality.py::_scan_fn
-R006|scripts/migrate_panel_judged.py::migrate
 R006|scripts/migrations/migrate_faction_strings.py::run_migration
 R006|scripts/seed_reproduction_probe.py::measure
 R006|src/npc_engine/api/helpers/quest_helpers.py::build_transition_meta
@@ -55,8 +53,6 @@ R006|src/npc_engine/engines/llm/ollama_adapter.py::OllamaAdapter.generate_struct
 R006|src/npc_engine/engines/llm/ollama_adapter.py::OllamaAdapter.stream
 R006|src/npc_engine/engines/llm_runtime_config.py::get_config
 R006|src/npc_engine/engines/memory_consolidation/memory_consolidation_engine.py::MemoryConsolidationEngine.consolidate
-R006|src/npc_engine/engines/military/military_battle_service.py::_resolve_one_battle
-R006|src/npc_engine/engines/military/military_resource_service.py::process_resource_yield
 R006|src/npc_engine/engines/need/need_decay_engine.py::NeedDecayEngine.run_tick
 R006|src/npc_engine/engines/planning/goal_former.py::GoalFormer.form_goal
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.check_trigger
@@ -91,7 +87,6 @@ R006|src/npc_engine/graph/idempotency/idempotency_writer.py::Neo4jIdempotencySto
 R006|src/npc_engine/graph/infra/transfer_validators.py::build_currency_transfer_command
 R006|src/npc_engine/graph/infra/transfer_validators.py::build_item_transfer_command
 R006|src/npc_engine/graph/memory/memory_service.py::create_memory
-R006|src/npc_engine/graph/military/military_writer.py::create_army
 R006|src/npc_engine/graph/needs_goals/goal_service.py::create_goal
 R006|src/npc_engine/graph/political/pledge_service.py::break_pledge
 R006|src/npc_engine/graph/political/pledge_violation_service.py::check_pledge_violations
