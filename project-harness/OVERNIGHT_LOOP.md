@@ -29,7 +29,11 @@ cp ../NPCSystem/.env .env
 make check                                # must be green; the FIRST run on a fresh
                                           # .venv is slow (cold caches, ~55 min measured)
 
-# 5. start the loop — from the worktree
+# 5. keep Docker Desktop and Ollama running all night: live-check tasks rebuild the
+#    isolated eval stack (app :8001, neo4j :7688) from their own commit with
+#    scripts/eval_stack_at.sh, and reset its Neo4j — keep nothing you need in it
+
+# 6. start the loop — from the worktree
 git status --porcelain                    # must be empty
 bash scripts/expand_loop.sh --max-tasks 1 # watch one task, foreground
 ```

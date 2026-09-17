@@ -94,7 +94,7 @@ Emit the halt token and stop (no edits, clean tree) if any of these holds:
 |---|---|
 | Task body carries a `Pre-approved:` line naming the exact class you are about to trip — one of `file-deletion`, `public-interface`, `graph-schema`, `new-dependency` | do NOT halt — the owner approved it; proceed, and name the approval in your commit body |
 | Task body carries `⚠️ ask-gate` | `AUTO_STATUS: HALT ask-gate <what needs deciding>` |
-| Task is tagged `(live` — needs Neo4j/Ollama/seeded worlds | `AUTO_STATUS: HALT live-task` |
+| Task needs a running stack (Neo4j, Ollama, a seeded world, a live measurement) | do NOT halt — follow **Live checks** below. Halt `blocked-prerequisite eval-stack <cause>` only if the stack cannot be built or boot-checked |
 | Needs a 🔶 DECISIONS entry that is not ACCEPTED | `AUTO_STATUS: HALT needs-decision DEC-NNN` |
 | Needs something that does not exist yet | `AUTO_STATUS: HALT blocked-prerequisite <what>` |
 | Requires a layer violation, new dependency, graph schema change, or a public-interface change with callers outside the module | `AUTO_STATUS: HALT ask-gate <what>` |
@@ -120,6 +120,38 @@ else, guessing at a human decision costs more than a skipped phase. **When in do
 
 **Do not do any work outside `<TASK>`.** If you notice a problem elsewhere, append it to
 `project-harness/ISSUES.md` with the next free ID and carry on. Do not context-switch.
+
+## Live checks — when the task needs a running stack
+
+A task that says "running stack", "live", "the isolated stack", `make eval-stack-up`, or asks you
+to observe or measure the running app is **loop work** (owner, 2026-09-17). The app image is **not
+bind-mounted**, so a stack that is already up runs whatever commit it was built from — checking it
+checks old code. **Always rebuild first**, in the foreground, and wait (several minutes):
+
+```bash
+bash scripts/eval_stack_at.sh HEAD --reset     # build from YOUR working tree, clean eval Neo4j
+make eval-stack-seed                           # seed the demo world into it
+# ...the task's checks, against http://localhost:8001 ...
+```
+
+- **An older tree** (a RED anchor "on the tree before Tx", a before/after pair, a stale image):
+  `bash scripts/eval_stack_at.sh <sha> --reset`, then seed. Find the sha with
+  `git log --oneline --grep "(Tx)"`. Never use `git worktree` or `git stash` for this.
+- The script exits non-zero unless `/health` reports the sha you asked for. **Never trust a live
+  result from a stack whose sha you did not just confirm.**
+- **Only the eval stack**: app `:8001`, Neo4j `bolt://localhost:7688`, compose project
+  `npcsystem-eval`. Never touch the default stack on `:8000`, its `neo4j_data` volume, or any
+  `docker compose` command without `-p npcsystem-eval`.
+- **Integration tests** run only with `NEO4J_URI=bolt://localhost:7688` and `NEO4J_USER` /
+  `NEO4J_PASSWORD` from `.env` exported explicitly. Never run `tests/integration` with the default
+  URI — that is the developer's live database (ISSUE-277).
+- **Order**: targeted tests → `make check` green → live checks (the HEAD build includes your
+  uncommitted edits) → tick and commit. Put the observed numbers in the commit body.
+- **Finish with the stack built from your final tree** — if you last built an older commit, run
+  `bash scripts/eval_stack_at.sh HEAD` before committing. The owner keeps it up.
+- If Docker is unreachable, the build fails, or boot-check never reports the sha: clean the tree and
+  emit `AUTO_STATUS: HALT blocked-prerequisite eval-stack <one-line cause>`. **Never tick a task
+  whose live check did not run.**
 
 ## 4. Gate — foreground, and wait
 

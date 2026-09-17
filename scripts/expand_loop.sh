@@ -258,6 +258,10 @@ preflight() {
     fi
   fi
   compat_ollama_ready && log "preflight: ollama reachable" || log "preflight: ollama not reachable (fine unless a live task runs)"
+  # Live-check tasks rebuild the isolated eval stack (scripts/eval_stack_at.sh); without Docker
+  # they halt blocked-prerequisite, which skips their phase. Logged, never fatal.
+  docker info >/dev/null 2>&1 && log "preflight: docker reachable — live checks can rebuild the eval stack" \
+    || log "preflight: docker NOT reachable — live-check tasks will halt and skip their phase"
 
   log "preflight OK | branch=$START_BRANCH model=$MODEL push=$PUSH_ENABLED services=$WITH_SERVICES"
   log "queue: $(cursor --status | tail -1)"
