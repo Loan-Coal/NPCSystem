@@ -44,3 +44,23 @@ Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've
 5. **ROADMAP.md entry marked done but dependencies unclear**: T4.2 is marked complete but doesn't verify that other T4 phases (T4.1 deletion, T4.3 refactor) completed successfully or that their changes don't invalidate the census gate assumptions.
 
 **All functions comply with file size, length, docstring, and type annotation rules.**
+
+## 2026-09-18 00:14:38 — phase T5
+
+## T5 Phase Review
+
+**Finding 1 — T5.2: Missing location_id validation test (edge case)**
+- **File:** `demo_game/tests/seeds/test_seed_needs.py`
+- **Issue:** Tests validate that `SATISFIES_NEED` edges reference valid Need IDs (`test_satisfies_need_edges_reference_known_need_ids`), but do NOT validate that location_ids are seeded/valid.
+- **Comparison:** `test_seed_schedules.py` (T5.1) includes `test_schedule_entries_reference_valid_location_ids()` with a comprehensively built `_ALL_LOCATION_IDS` set. T5.2 should match this rigor.
+- **Edge case:** Typo'd or non-existent location IDs in `_SATISFIES_NEED_EDGES` or `H2_SATISFIES_NEED_EDGES` would pass tests today.
+
+**Finding 2 — T5.3: Gossip distortion query — edge validation sound**
+- The `coalesce(best_distorted_summary, best_event.summary)` fallback correctly handles first-hand witnesses (no distorted edge field) returning canonical text. Test RED anchors (query-string assertions) are well-designed. No correctness issues detected.
+
+**Finding 3 — All phases: Documentation and file size within bounds**
+- `_seed_schedules()` ~25 lines, `_seed_needs()` ~38 lines, all well under 40-line function limit.
+- Module docstrings present; function docstrings complete.
+- No layer rule violations (graph queries in graph layer; seed IO at correct step; no LLM calls).
+
+**Summary:** One concrete edge case — add location_id validation to T5.2's test suite. Otherwise T5 is solid: TDD RED anchors present, immutability respected, pre-approvals cited, roadmap checkmarks accurate.
