@@ -5,7 +5,7 @@ Purpose: Cypher read queries for faction politics engine — recent events,
          character faction membership, and all faction standings.
 Does NOT: write to the graph, open transactions, or call LLMs.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.engines.faction_politics.faction_politics_engine
+Used by: npc_engine.api.routes.faction_politics (read path only; writer engine removed T3.2)
 """
 
 from __future__ import annotations

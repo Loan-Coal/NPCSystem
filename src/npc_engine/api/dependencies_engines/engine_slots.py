@@ -29,7 +29,6 @@ class CoreEngineSlots(TypedDict):
     gossip_handler: TickEngine
     event_handler: TickEngine
     routine_engine: RoutineTickEngine
-    faction_politics_engine: TickEngine
     story_pacing_engine: TickEngine
     event_quest_trigger: TickEngine
     need_quest_trigger: TickEngine
@@ -48,7 +47,6 @@ class CoreEngineSlots(TypedDict):
 class AdvancedEngineSlots(TypedDict):
     """The engine slots filled by ``_advanced_engine_kwargs``; see ``CoreEngineSlots``."""
 
-    treaty_engine: TickEngine
     memory_consolidation_engine: ConsolidationTickEngine
     chapter_engine: TickEngine
     agenda_engine: TickEngine

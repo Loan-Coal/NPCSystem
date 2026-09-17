@@ -11,8 +11,7 @@ Dependencies injected: GraphDB (per adapter, at the api composition root).
 Public surface: Neo4jNeedRepository, Neo4jChapterRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
                 Neo4jCharacterReadRepository, Neo4jEmotionRepository,
-                Neo4jEventRepository, Neo4jFactionPoliticsRepository,
-                Neo4jKnowledgeRepository, Neo4jMemoryRepository,
+                Neo4jEventRepository, Neo4jKnowledgeRepository, Neo4jMemoryRepository,
                 Neo4jReputationRepository,
                 Neo4jPlayerModelRepository, Neo4jPlanningRepository,
                 Neo4jEconomyRepository, Neo4jIntentRepository,
@@ -30,9 +29,6 @@ from npc_engine.graph.repositories.character_read_repository import (
 from npc_engine.graph.repositories.economy_repository import Neo4jEconomyRepository
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
 from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
-from npc_engine.graph.repositories.faction_politics_repository import (
-    Neo4jFactionPoliticsRepository,
-)
 from npc_engine.graph.repositories.intent_repository import Neo4jIntentRepository
 from npc_engine.graph.repositories.interaction_repository import (
     Neo4jInteractionRepository,
@@ -66,7 +62,6 @@ from npc_engine.graph.repositories.relation_read_repository import (
 from npc_engine.graph.repositories.reputation_repository import Neo4jReputationRepository
 from npc_engine.graph.repositories.routine_repository import Neo4jRoutineRepository
 from npc_engine.graph.repositories.story_pacing_repository import Neo4jStoryPacingRepository
-from npc_engine.graph.repositories.treaty_repository import Neo4jTreatyRepository
 from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
 
 __all__ = [
@@ -75,7 +70,6 @@ __all__ = [
     "Neo4jEconomyRepository",
     "Neo4jEmotionRepository",
     "Neo4jEventRepository",
-    "Neo4jFactionPoliticsRepository",
     "Neo4jIntentRepository",
     "Neo4jInteractionRepository",
     "Neo4jInvestigationRepository",
@@ -93,6 +87,5 @@ __all__ = [
     "Neo4jReputationRepository",
     "Neo4jRoutineRepository",
     "Neo4jStoryPacingRepository",
-    "Neo4jTreatyRepository",
     "Neo4jWorldStateRepository",
 ]

@@ -5,7 +5,7 @@ Purpose: Append-only log of faction standing changes via FactionStandingEvent no
 Does NOT: modify STANDS_WITH edges or implement faction logic.
 Dependencies: graph.faction_history_queries
 Dependencies injected: AsyncSession.
-Used by: npc_engine.engines.faction_politics.faction_politics_engine
+Used by: npc_engine.api.routes.faction_politics (read path only; writer engine removed T3.2)
 """
 
 from __future__ import annotations

@@ -20,7 +20,6 @@ from typing import Any
 
 from npc_engine.api.dependencies_engines.core import (
     get_event_handler,
-    get_faction_politics_engine,
     get_gossip_handler,
     get_memory_engine,
     get_pricing_engine,
@@ -66,7 +65,6 @@ __all__ = [
     "get_director_tick",
     "get_event_handler",
     "get_event_quest_trigger",
-    "get_faction_politics_engine",
     "get_goal_formation_engine",
     "get_gossip_handler",
     "get_intent_formation_engine",
@@ -104,11 +102,9 @@ def _advanced_engine_kwargs() -> AdvancedEngineSlots:
         get_chapter_engine,
         get_memory_consolidation_engine,
         get_need_decay_engine,
-        get_treaty_engine,
     )
 
     return {
-        "treaty_engine": get_treaty_engine(),
         "memory_consolidation_engine": get_memory_consolidation_engine(),
         "chapter_engine": get_chapter_engine(),
         "agenda_engine": get_agenda_engine(),
@@ -135,7 +131,6 @@ def _core_engine_kwargs() -> CoreEngineSlots:
         "gossip_handler": get_gossip_handler(),
         "event_handler": get_event_handler(),
         "routine_engine": get_routine_engine(),
-        "faction_politics_engine": get_faction_politics_engine(),
         "story_pacing_engine": get_story_pacing_engine(),
         "event_quest_trigger": get_event_quest_trigger(),
         "need_quest_trigger": get_need_quest_trigger(),

@@ -5,7 +5,7 @@ Purpose: Own the Neo4j transaction lifecycle for multi-statement engine writes (
 Does NOT: build Cypher, validate payloads, or contain domain logic; it only runs a caller-provided
           unit-of-work inside one transaction and commits it.
 Dependencies injected: AsyncSession (passed per call).
-Used by: engines that perform multi-writer atomic units (event_handler, faction_politics_engine,
+Used by: engines that perform multi-writer atomic units (event_handler,
          quest_lifecycle_engine, quest_offer_service, quest_reward_router).
 """
 

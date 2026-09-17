@@ -62,10 +62,8 @@ class TickScheduler:
         event_interval: int,
         *,
         routine_engine: RoutineTickEngine | None = None,
-        faction_politics_engine: TickEngine | None = None,
         story_pacing_engine: TickEngine | None = None,
         memory_consolidation_engine: ConsolidationTickEngine | None = None,
-        treaty_engine: TickEngine | None = None,
         chapter_engine: TickEngine | None = None,
         agenda_engine: TickEngine | None = None,
         need_decay_engine: TickEngine | None = None,
@@ -103,14 +101,10 @@ class TickScheduler:
             event_interval: Run events every N ticks; clamped to a minimum of 1.
             routine_engine: Optional engine exposing ``run_tick(time_of_day, tick_id)``
                 called every tick to move characters per their schedules.
-            faction_politics_engine: Optional engine exposing ``run_tick(tick_id)``
-                called every tick to adjust faction standings from events and apply decay.
             story_pacing_engine: Optional engine exposing ``run_tick(tick_id)``
                 called before gossip/event sampling to write pacing multipliers to WorldState.
             memory_consolidation_engine: Optional engine exposing ``run_tick(game_time)``
                 called once per advance on the configured cadence.
-            treaty_engine: Optional engine exposing ``run_tick(tick_id)``
-                called every tick; expires treaties and checks mechanical conditions.
             chapter_engine: Optional engine exposing ``run_tick(tick_id)``
                 called every tick; detects chapter transitions and labels them via LLM.
             agenda_engine: Optional engine exposing ``run_tick(tick_id)``
@@ -165,10 +159,8 @@ class TickScheduler:
         self._gossip_handler = gossip_handler
         self._event_handler = event_handler
         self._routine_engine = routine_engine
-        self._faction_politics_engine = faction_politics_engine
         self._story_pacing_engine = story_pacing_engine
         self._memory_consolidation_engine = memory_consolidation_engine
-        self._treaty_engine = treaty_engine
         self._chapter_engine = chapter_engine
         self._agenda_engine = agenda_engine
         self._need_decay_engine = need_decay_engine
@@ -301,10 +293,8 @@ class TickScheduler:
             "gossip": [],
             "event": [],
             "routine": [],
-            "faction_politics": [],
             "story_pacing": [],
             "consolidation": [],
-            "treaty": [],
             "chapter": [],
             "agenda": [],
             "need_decay": [],
@@ -325,8 +315,6 @@ class TickScheduler:
     def _ordered_tick_engines(self) -> list[tuple[str, TickEngine | None]]:
         """Return (name, engine) pairs for all simple per-tick engines, in execution order."""
         return [
-            ("faction_politics", self._faction_politics_engine),
-            ("treaty", self._treaty_engine),
             ("agenda", self._agenda_engine),
             ("need_decay", self._need_decay_engine),
             ("event_quest", self._event_quest_trigger),

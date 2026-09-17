@@ -15,7 +15,7 @@ Public surface: NeedGraphPort, RoutineGraphPort, PoliticalGraphPort, StoryPacing
                 ReputationGraphPort, PlayerModelGraphPort, PlanningGraphPort,
                 EconomyGraphPort, IntentGraphPort, InteractionGraphPort,
                 InvestigationGraphPort, MemoryGraphPort,
-                ProactiveMemoryReadPort, RelationPhaseWritePort, FactionPoliticsGraphPort.
+                ProactiveMemoryReadPort, RelationPhaseWritePort.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from npc_engine.engines.ports.character_read_port import CharacterReadPort
 from npc_engine.engines.ports.economy_port import EconomyGraphPort
 from npc_engine.engines.ports.emotion_port import EmotionGraphPort
 from npc_engine.engines.ports.event_port import EventGraphPort
-from npc_engine.engines.ports.faction_politics_port import FactionPoliticsGraphPort
 from npc_engine.engines.ports.intent_port import IntentGraphPort
 from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 from npc_engine.engines.ports.investigation_port import InvestigationGraphPort
@@ -43,7 +42,6 @@ from npc_engine.engines.ports.relation_read_port import RelationReadPort
 from npc_engine.engines.ports.reputation_port import ReputationGraphPort
 from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.story_pacing_port import StoryPacingGraphPort
-from npc_engine.engines.ports.treaty_port import TreatyGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 
 __all__ = [
@@ -52,7 +50,6 @@ __all__ = [
     "EconomyGraphPort",
     "EmotionGraphPort",
     "EventGraphPort",
-    "FactionPoliticsGraphPort",
     "IntentGraphPort",
     "InteractionGraphPort",
     "InvestigationGraphPort",
@@ -70,6 +67,5 @@ __all__ = [
     "ReputationGraphPort",
     "RoutineGraphPort",
     "StoryPacingGraphPort",
-    "TreatyGraphPort",
     "WorldStateGraphPort",
 ]

@@ -64,7 +64,6 @@ def _make_scheduler(
     event_engine: Any = None,
     story_pacing_engine: Any = None,
     routine_engine: Any = None,
-    faction_politics_engine: Any = None,
     status_store: EngineStatusStore | None = None,
 ) -> TickScheduler:
     clock = GameClock(mode="game_driven")
@@ -76,7 +75,6 @@ def _make_scheduler(
         event_interval=1,
         story_pacing_engine=story_pacing_engine,
         routine_engine=routine_engine,
-        faction_politics_engine=faction_politics_engine,
         engine_status_store=status_store,
     )
 
@@ -107,11 +105,15 @@ async def test_throwing_event_does_not_stop_gossip_engine() -> None:
 async def test_throwing_optional_engine_does_not_stop_gossip() -> None:
     gossip = _GoodEngine()
     event = _GoodEngine()
-    throwing_fp = _ThrowingEngine()
-    scheduler = _make_scheduler(
-        gossip_engine=gossip,
-        event_engine=event,
-        faction_politics_engine=throwing_fp,
+    throwing_opt = _ThrowingEngine()
+    clock = GameClock(mode="game_driven")
+    scheduler = TickScheduler(
+        clock=clock,
+        gossip_handler=gossip,
+        event_handler=event,
+        gossip_interval=1,
+        event_interval=1,
+        agenda_engine=throwing_opt,
     )
     await scheduler.advance(session=_FakeSession(), tick_delta=2, time_delta_seconds=0)
     assert gossip.tick_ids == [1, 2]

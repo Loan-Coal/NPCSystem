@@ -42,7 +42,6 @@ a = Analysis(
         (str(SRC_ROOT / "npc_engine" / "engines" / "dialogue"), "npc_engine/engines/dialogue"),
         (str(SRC_ROOT / "npc_engine" / "engines" / "economy"), "npc_engine/engines/economy"),
         (str(SRC_ROOT / "npc_engine" / "engines" / "events"), "npc_engine/engines/events"),
-        (str(SRC_ROOT / "npc_engine" / "engines" / "faction_politics"), "npc_engine/engines/faction_politics"),
         (str(SRC_ROOT / "npc_engine" / "engines" / "gossip"), "npc_engine/engines/gossip"),
         (str(SRC_ROOT / "npc_engine" / "engines" / "memory_consolidation"), "npc_engine/engines/memory_consolidation"),
         (str(SRC_ROOT / "npc_engine" / "engines" / "proactive_dialogue"), "npc_engine/engines/proactive_dialogue"),

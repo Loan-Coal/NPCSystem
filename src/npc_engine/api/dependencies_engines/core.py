@@ -2,8 +2,7 @@
 Module: dependencies_engines.core
 Layer: api
 Purpose: Singleton factory providers for core simulation engines —
-         gossip, event, memory, economy (pricing/trade), faction politics,
-         story pacing, and routine.
+         gossip, event, memory, economy (pricing/trade), story pacing, and routine.
 Does NOT: create session-scoped or per-request dependencies, or call LLM clients directly.
 Dependencies injected: infra + store singletons from dependencies_infra / dependencies_stores.
 Used by: api.dependencies_engines (package __init__ and tick_slots / quest submodules).
@@ -21,8 +20,6 @@ from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.pricing_rules_loader import load_pricing_rules
 from npc_engine.engines.economy.trade_engine import TradeEngine
 from npc_engine.engines.events.event_handler import EventHandler
-from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
-from npc_engine.engines.faction_politics.rules_loader import load_rules
 from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.memory.memory_engine import MemoryEngine
@@ -144,23 +141,6 @@ def get_trade_engine() -> TradeEngine:
         pricing_engine=get_pricing_engine(),
         economy_repo=Neo4jEconomyRepository(get_graph_db()),
     )
-
-
-@lru_cache
-def get_faction_politics_engine() -> FactionPoliticsEngine:
-    """Create singleton faction politics engine loaded from rules.yaml.
-
-    Returns:
-        FactionPoliticsEngine wired to the bundled rules.yaml and a Neo4j repository.
-    """
-    from npc_engine.api.dependencies_infra import get_graph_db
-    from npc_engine.graph.repositories.faction_politics_repository import (
-        Neo4jFactionPoliticsRepository,
-    )
-
-    rules_path = Path(__file__).resolve().parent.parent.parent / "engines" / "faction_politics" / "rules.yaml"
-    rules = load_rules(rules_path)
-    return FactionPoliticsEngine(rules=rules, repo=Neo4jFactionPoliticsRepository(get_graph_db()))
 
 
 @lru_cache

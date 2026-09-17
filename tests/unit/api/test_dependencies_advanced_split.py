@@ -19,12 +19,10 @@ EXPECTED_FACTORIES = {
     "get_memory_consolidation_engine",
     "get_need_decay_engine",
     "get_negotiation_store",
-    "get_treaty_engine",
 }
 
 SUBMODULE_FACTORIES = {
     "npc_engine.api.dependencies_advanced.politics": {
-        "get_treaty_engine",
         "get_agenda_engine",
     },
     "npc_engine.api.dependencies_advanced.social": {

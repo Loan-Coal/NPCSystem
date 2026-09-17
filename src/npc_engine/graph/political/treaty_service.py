@@ -5,7 +5,7 @@ Purpose: Create, read, expire, and break Treaty nodes with mechanical condition 
 Does NOT: call LLMs directly (LLM eval is delegated to the caller engine).
 Dependencies injected: AsyncSession.
 Dependencies: graph.treaty_queries
-Used by: npc_engine.engines.treaty.treaty_engine, npc_engine.api.routes.treaties
+Used by: npc_engine.api.routes.treaties (read path only; writer engine removed T3.2)
 """
 
 from __future__ import annotations

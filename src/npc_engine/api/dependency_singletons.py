@@ -41,7 +41,6 @@ from npc_engine.api.dependencies_stores import (
 from npc_engine.api.dependencies_engines import (
     get_event_handler,
     get_event_quest_trigger,
-    get_faction_politics_engine,
     get_gossip_handler,
     get_interaction_graph_repo,
     get_memory_engine,
@@ -62,7 +61,6 @@ from npc_engine.api.dependencies_advanced import (
     get_memory_consolidation_engine,
     get_need_decay_engine,
     get_negotiation_store,
-    get_treaty_engine,
 )
 
 __all__ = [
@@ -81,7 +79,6 @@ __all__ = [
     "get_engine_status_store",
     "get_event_handler",
     "get_event_quest_trigger",
-    "get_faction_politics_engine",
     "get_game_clock",
     "get_game_schema",
     "get_gossip_handler",
@@ -107,6 +104,5 @@ __all__ = [
     "get_tick_budget_guard",
     "get_tick_scheduler",
     "get_trade_engine",
-    "get_treaty_engine",
     "get_type_registry",
 ]

@@ -19,7 +19,7 @@ There are two execution models:
 | Model | Trigger | Examples |
 |-------|---------|----------|
 | **Request-driven** | A game/HTTP call invokes the engine synchronously and returns a result. | Dialogue, Economy pricing, Quest lifecycle, Relationship standing |
-| **Tick-driven** | The engine runs autonomously when the game clock advances, simulating the world off-screen. | Gossip, Faction politics, Routine movement, Schemes, Memory decay |
+| **Tick-driven** | The engine runs autonomously when the game clock advances, simulating the world off-screen. | Gossip, Routine movement, Schemes, Memory decay |
 
 ### The tick model
 
@@ -40,7 +40,7 @@ within the same tick:
 3. **Routine** movement
 4. **Chapter** detection *(interval-gated, LLM)*
 5. All remaining per-tick engines, in this exact order:
-   `faction_politics`, `treaty`, `agenda`, `need_decay`,
+   `agenda`, `need_decay`,
    `event_quest`, `need_quest`, `world_state_quest`,
    `proactive_dialogue`, `reputation`, `intent_formation`, `goal_formation`,
    `player_model`, `director`, `memory_decay`, `scheme_advance`, `scheme_detection`
@@ -143,8 +143,6 @@ LLM-using engines below are marked **🤖 LLM**.
 
 | Engine | Capability | Execution | Key APIs |
 |--------|-----------|-----------|----------|
-| **Faction politics** | Deterministically drifts faction standings based on world events and time decay, so alliances and rivalries evolve on their own. | Tick (every tick) | `/v1/admin/factions/*` |
-| **Treaties** | Manages treaty lifecycle between factions: expiry plus mechanical and LLM-checked conditions. 🤖 | Tick (every tick) | `/v1/admin/treaties/*` |
 | **Agendas / voting** | Resolves open agendas (e.g. council votes) whose deadline has passed, driving collective faction decisions. | Tick (every tick) | — |
 
 ### Economy & progression

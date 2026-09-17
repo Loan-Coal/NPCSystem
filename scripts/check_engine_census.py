@@ -48,7 +48,6 @@ TICK_DIRS: frozenset[str] = frozenset(
         "chapter",
         "director",
         "events",
-        "faction_politics",
         "gossip",
         "investigation",
         "memory",
@@ -62,7 +61,6 @@ TICK_DIRS: frozenset[str] = frozenset(
         "routine",
         "scheming",
         "story_pacing",
-        "treaty",
         # Sprint-2 (T4.1) deletions — present in the pre-sprint tree, absent from main.
         # Kept here so --root checks against that tree still classify them as tick engines
         # and report the expected violations (deception, currency were never in the
@@ -73,6 +71,9 @@ TICK_DIRS: frozenset[str] = frozenset(
         "deception",
         "mood",
         "skill",
+        # T3.2 deletions — kept for the same --root reason as the T4.1 block above.
+        "faction_politics",
+        "treaty",
     }
 )
 

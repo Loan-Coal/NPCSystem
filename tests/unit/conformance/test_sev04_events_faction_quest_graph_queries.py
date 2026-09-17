@@ -86,13 +86,6 @@ def test_faction_politics_queries_has_required_functions() -> None:
     assert "get_all_standings" in text
 
 
-def test_faction_politics_engine_no_raw_cypher() -> None:
-    text = (_ENGINES / "faction_politics" / "faction_politics_engine.py").read_text(encoding="utf-8")
-    assert "CYPHER_GET_RECENT_EVENTS" not in text
-    assert "CYPHER_GET_CHARACTER_FACTIONS" not in text
-    assert "CYPHER_GET_ALL_STANDINGS" not in text
-
-
 # ---------------------------------------------------------------------------
 # Quest generation domain
 # ---------------------------------------------------------------------------

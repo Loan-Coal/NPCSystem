@@ -18,7 +18,6 @@ from npc_engine.api.dependency_singletons import (
     get_emotion_store,
     get_emotion_updater,
     get_event_handler,
-    get_faction_politics_engine,
     get_game_clock,
     get_game_schema,
     get_gossip_handler,
@@ -72,7 +71,6 @@ def _clear_all() -> None:
     get_event_handler.cache_clear()
     get_quest_lifecycle_engine.cache_clear()
     get_game_clock.cache_clear()
-    get_faction_politics_engine.cache_clear()
     get_story_pacing_engine.cache_clear()
     get_quest_generation_engine.cache_clear()
     get_routine_engine.cache_clear()

@@ -27,14 +27,12 @@ from npc_engine.api.dependency_singletons import (
     get_dialogue_engine_model_config,
     get_embedding_index,
     get_emotion_store,
-    get_faction_politics_engine,
     get_game_clock,
     get_game_schema,
     get_graph_db,
     get_idempotency_service,
     get_llm_config,
     get_memory_consolidation_engine,
-    get_treaty_engine,
     get_pricing_engine,
     get_session_store,
     get_quest_generation_engine,
@@ -116,8 +114,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # Clock before scheduler: get_tick_scheduler captures the clock singleton.
         get_game_clock.cache_clear()
         get_tick_scheduler.cache_clear()
-        get_faction_politics_engine.cache_clear()
-        get_treaty_engine.cache_clear()
         get_story_pacing_engine.cache_clear()
         get_pricing_engine.cache_clear()
         # get_trade_engine is per-request (not lru_cache) since SEV-24 — no cache to clear.
@@ -152,7 +148,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             dialogue_engine_config.llm.backend,
             dialogue_engine_config.llm.model,
         )
-        get_faction_politics_engine()
         get_story_pacing_engine()
         get_quest_generation_engine()
         await graph_db.connect()
