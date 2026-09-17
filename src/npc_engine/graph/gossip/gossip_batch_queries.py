@@ -30,17 +30,18 @@ CYPHER_BATCH_EVENT_TRUST = f"""
 UNWIND $pairs AS pair
 MATCH (a:{_CHARACTER} {{id: pair.sharer_id}})-[k:{_KNOWS_ABOUT}]->(e:{_EVENT})
 WHERE coalesce(k.knowledge_state, '') <> 'corrected'
-WITH pair, a, e,
+WITH pair, a, e, k,
      coalesce(e.is_canonical, false) AS is_canonical,
      e.occurred_at AS occurred_at
 ORDER BY pair.sharer_id, is_canonical DESC, occurred_at DESC
 WITH pair, head(collect(e)) AS best_event,
-     head(collect(is_canonical)) AS best_is_canonical
+     head(collect(is_canonical)) AS best_is_canonical,
+     head(collect(k.distorted_summary)) AS best_distorted_summary
 OPTIONAL MATCH (a2:{_CHARACTER} {{id: pair.sharer_id}})-[r:{_RELATES_TO}]->(b:{_CHARACTER} {{id: pair.receiver_id}})
 RETURN pair.sharer_id  AS sharer_id,
        pair.receiver_id AS receiver_id,
        best_event.id    AS event_id,
-       best_event.summary   AS summary,
+       coalesce(best_distorted_summary, best_event.summary) AS summary,
        best_event.severity  AS severity,
        best_is_canonical    AS is_canonical,
        coalesce(r.trust, 50) AS trust

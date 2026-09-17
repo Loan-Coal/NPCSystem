@@ -1057,7 +1057,7 @@ RED anchor: the new test asserts every seeded `:Need` is reachable from its `:Ch
 Validation: `pytest demo_game/tests/seeds/test_seed_needs.py -v`, then `make check`, then `make test-demo`.
 Done when: the test passes, `make check` is green, and ISSUE-210 is re-scoped. Finding L13-02. ✅ AUTO (T5.2, 2026-09-17)
 
-- [ ] **T5.3** Read gossip distortion back — it is written on every hop and discarded on read
+- [x] **T5.3** Read gossip distortion back — it is written on every hop and discarded on read
 Pre-approved: public-interface · owner 2026-09-09
 Files: `src/npc_engine/graph/gossip/gossip_batch_queries.py`, new test
 `tests/unit/graph/test_gossip_distortion_read_back.py`, `project-harness/DECISIONS.md`
@@ -1086,7 +1086,7 @@ Validation: `pytest tests/unit/graph/test_gossip_distortion_read_back.py -v`, th
 Done when: the test passes, `make check` is green, the `DECISIONS.md` note is written, and the
 completion note records that CR-L01-01 is closed — it survived two review cycles under a `CR-L*` id
 this programme never cross-referenced.
-Finding CR-L01-01 (`review-2026-08/TRIAGE.md`).
+Finding CR-L01-01 (`review-2026-08/TRIAGE.md`). ✅ AUTO (T5.3, 2026-09-18)
 
 ### Phase T6
 
