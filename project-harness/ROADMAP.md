@@ -120,6 +120,11 @@ needs; delete it once consumed. Keep <= 10 lines.*
   casually, and never between a corpus freeze and its generation.
 - Use Git Bash for `make`; the Makefile pins no `SHELL` and POSIX recipes fail under PowerShell
   (ISSUE-281).
+- **Co-location revival confirmed (2026-09-18, T6.3).** After T5.1 (FOLLOWS_SCHEDULE) and T5.2
+  (HAS_NEED) seeding, `routine` moves characters across time-of-day slots (moved > 0) and
+  `need_decay` updates need levels (needs_updated > 0) on the live eval stack. At least one NPC has
+  an unmet need (level < 50). Sprint 4's tick-budget and admission-control work now has real
+  co-location and need pressure to measure against — the before-baseline is set.
 
 ### History
 
@@ -1150,7 +1155,7 @@ red, restore. A test that does not go red here is not finished.
 Validation: `pytest tests/unit/scheduler/test_tick_order.py -v`, then `make check`.
 Done when: both kinds of test pass and the swap experiment was observed red. Finding L13-10, SEV-15. ✅ AUTO (T6.2, 2026-09-18)
 
-- [ ] **T6.3** Confirm on a running stack that `routine` and `need_decay` now do work
+- [x] **T6.3** Confirm on a running stack that `routine` and `need_decay` now do work
 Files: new `tests/integration/test_revived_engines_do_work.py`, `project-harness/ROADMAP.md`
 (carry-forward note)
 Spec: this is the live tail of T5.1 and T5.2, split out so the loop can grind the seed edits
@@ -1176,7 +1181,7 @@ RED anchor: run this against the tree as it stood before T5.1 — both engines r
 test fails. That failure is the evidence the sprint was needed.
 Validation: run against the isolated stack, then `make check`, then tear the stack down.
 Done when: both engines demonstrably do work, and the carry-forward note recording the co-location
-revival is added for downstream sprints. Findings L13-01, L13-02.
+revival is added for downstream sprints. Findings L13-01, L13-02. ✅ AUTO (T6.3, 2026-09-18)
 
 
 ---
