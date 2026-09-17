@@ -3320,3 +3320,91 @@ and humans running both targets pay the cost.
 **Why deferred:** outside `make check`, which is the scope of this task.
 **To fix:** pass a `--cache-dir .mypy_cache/demo` through `mypy_ratchet.py` when `--target` is not `src/`, with a
 test mirroring `tests/unit/scripts/test_mypy_evals_ratchet.py`.
+
+## ISSUE-347: a WebSocket recv timeout hangs the scripted demo forever
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P2 (annoying)
+**Where:** `demo_game/dialogue_ws.py:86-92`, `demo_game/runners/run_scenes.py:219`
+**Description:** On `TimeoutError` from `recv(timeout=NPC_DIALOGUE_TIMEOUT_S)` the worker `break`s without putting
+anything on the result queue. `StreamingDialogueBeat` then waits on `result_q.get()` with no timeout, so
+`make demo-run` blocks forever instead of failing.
+**Why deferred:** `scripts/demo_run_live.py` already bounds the run with a watchdog and reports a hang as a
+failure, so the nightly cannot stall on it; the interactive runner is out of T2.4's scope.
+**To fix:** put `("error", TimeoutError(...))` on the queue before breaking, and give `result_q.get()` a timeout.
+Regression test in `demo_game/tests/core/test_dialogue_ws.py` driving a `recv` that raises `TimeoutError`.
+
+## ISSUE-348: the demo LLM cache stores an empty reply and replays it forever
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/runners/run_scenes.py:199,231-232`, `demo_game/runners/run.py` (`LLMCache`)
+**Description:** A `done` frame with zero tokens is cached as `{"npc_response": ""}`. That dict is truthy, so
+`if cached:` treats it as a hit on every later `make demo-run` / `--cached` run and the beat stays empty.
+**Why deferred:** `demo-run-live` bypasses the disk cache (in-memory recorder) and fails on an empty reply, so
+the gate is not affected; fixing the recording cache is a separate change.
+**To fix:** refuse to `put` a response whose stripped `npc_response` is empty (raise, or skip with a warning), and
+treat such a file as a miss in `get`. Unit test both.
+
+## ISSUE-349: demo docs have drifted — `DEMO_SCRIPT.md` says Act 5 is final; freeze.yml names a wrong route
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `docs/DEMO_SCRIPT.md` (Act Structure, API-calls table); `docker-compose.freeze.yml:22`
+**Description:** `DEMO_SCRIPT.md` describes five acts ending in Act 5; `demo_game/runners/run.py` SCENES runs 12
+acts plus `outro`, and `demo-run-live` treats `outro` as the final act. The ACT 7 gossip-boundary tick, the ACT 8
+admin route and the seed change are not reflected either. Separately, the freeze.yml comment says request-driven
+ticks go through `POST /v1/admin/clock/advance`; the route is `POST /v1/clock/advance`.
+**Why deferred:** documentation only; T2.4 does not own the demo narrative, and changing a compose file needs the
+owner's approval.
+**To fix:** regenerate the act table and API-call list in `DEMO_SCRIPT.md` from `run.py` SCENES; fix the route in
+the freeze.yml comment.
+
+## ISSUE-350: the WORLD feed scene prints `?` for every event summary
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/runners/run_scenes.py` `WorldFeed.execute` (`evt.get("summary", "?")`)
+**Description:** `GET /v1/admin/system/events` rows (`EventFeedRow`) carry the text as `label`, not `summary`, so
+every live line reads `[world tick=3] military: ?`. The ACT 5 beat is present but its narration is blank on
+screen. The unit tests mock a `summary` key, so they pass.
+**Why deferred:** display-only; the event itself is created and verified by `demo-run-live`.
+**To fix:** read `label`, and change the scene test's mock to the real `EventFeedRow` shape.
+
+## ISSUE-351: several live demo beats run but do not demonstrate what their narration claims
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`, GREEN run at e7d4ba87)
+**Severity:** P2 (annoying)
+**Where:** `demo_game/runners/run.py` SCENES — ACT 4, 6, 9, 10, 11, 12
+**Description:** None of these fail the run (they are not required beats), but on a clean seed:
+ACT 9 reports `Graph: 1 KNOWS_ABOUT 'northern_war_begins' edges for aldric_merchant (expected 0)` and Aldric talks
+about the war — the tick-10 gossip run in ACT 7 reaches him, so the anti-hallucination beat shows the opposite of
+its claim (and the scene counts all his KNOWS_ABOUT edges, not the war's). ACT 6's three blind ticks (3→6) never
+reach a gossip tick, so the reputation event cannot propagate before Mira speaks. ACT 10 reads
+`interactions=0` while the reply claims to remember. ACT 11 finds no pending proactive intents; ACT 12 finds no
+player model; ACT 4 reports the consolidation turn threshold not met.
+**Why deferred:** content quality of non-required beats; T2.4 only makes the run complete and required beats
+non-empty. Promoting any of these to a required beat is a separate owner call.
+**To fix:** per beat — move ACT 9 before ACT 7 or scope the check to the war event; use `GossipBoundaryTick` in
+ACT 6; decide which of ACT 4/10/11/12 must actually land and make them required in
+`scripts/demo_run_live.py`.
+
+## ISSUE-352: the frozen eval world baseline still seeds `garrick_safe_passage` at severity 70
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/fixtures/eval_world_baseline.json` (`garrick_safe_passage`)
+**Description:** T2.4 lowered the demo seed's `garrick_safe_passage` to severity 60 so story pacing does not stay
+suppressed and block ACT 5 (`tests/unit/seeds/test_seed_does_not_suppress_story_pacing.py`). The eval baseline is
+a snapshot taken from the old seed and still holds 70, so an eval world restored from it stays pacing-suppressed.
+**Why deferred:** the baseline is a frozen corpus; editing it by hand breaks comparability with earlier eval runs.
+**To fix:** at the next deliberate corpus refreeze, regenerate with `make eval-world-snapshot` from the current
+seed, and note the pacing change in that run's comparability record.
+
+## ISSUE-353: the demo client's 15 s graph timeout is shorter than a synchronous tick with LLM quest generation
+**Found:** 2026-09-17, during T2.4 (first RED attempt)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/client.py` (`advance_clock`, `_graph_timeout`); `/v1/clock/advance` runs every due engine
+in-request
+**Description:** `POST /v1/clock/advance` runs quest generation, which calls the LLM with a 60 s timeout and up to
+three fill attempts. With Ollama contended (a crash-looping default app hitting it), the first tick exceeded the
+client's 15 s and the demo died in ACT 1 with `ReadTimeout`. It did not recur on a quiet Ollama, but the nightly
+shares the GPU with whatever else is running.
+**Why deferred:** did not reproduce once Ollama was uncontended; `demo-run-live` reports it as a failure with the
+act, so it is visible rather than silent.
+**To fix:** give `advance_clock` its own timeout sized to the engine's worst case (or pass `NPC_GRAPH_TIMEOUT_S`
+through from `DemoConfig`, which `run.py` currently ignores).

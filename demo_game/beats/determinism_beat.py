@@ -1,7 +1,7 @@
 """
 Module: determinism_beat
 Layer: demo_game
-Purpose: DeterminismBeat demo scene — calls POST /v1/batch/gossip_tick twice with
+Purpose: DeterminismBeat demo scene — calls POST /v1/admin/batch/gossip_tick twice with
          the same tick_override and asserts seeds_used are identical, printing a
          two-column table to prove same-seed → same-distortion replay.
 Dependencies: demo_game.runners.run_scenes (Scene base)
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 _DETERMINISM_TICK_OVERRIDE: int = 42
 _DETERMINISM_NPC_IDS: list[str] = ["captain_sorn", "mira_innkeeper"]
-_GOSSIP_TICK_PATH: str = "/v1/batch/gossip_tick"
+_GOSSIP_TICK_PATH: str = "/v1/admin/batch/gossip_tick"
 
 _HEADER_WIDTH: int = 70
 _COL_WIDTH: int = 20
@@ -43,7 +43,7 @@ class DeterminismBeat(Scene):
     Steps:
     1. Print step header.
     2. Return immediately on dry_run.
-    3. POST /v1/batch/gossip_tick twice with tick_override=42 and the demo pair.
+    3. POST /v1/admin/batch/gossip_tick twice with tick_override=42 and the demo pair.
     4. Extract seeds_used from both responses.
     5. Print a two-column table (run 1 seed | run 2 seed | match?).
     6. Assert seeds_match=True and print a confirmation line.

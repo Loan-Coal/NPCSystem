@@ -23,7 +23,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
@@ -40,6 +40,7 @@ from demo_game.runners.run_scenes import (
     PlayerModelDisplay,
     EventFire,
     ForcedEventTick,
+    GossipBoundaryTick,
     MemoryConsolidate,
     NarratorCue,
     PropagatedReputationAct,
@@ -355,10 +356,9 @@ SCENES: list[Scene] = [
     NarratorCue(
         name="pre_propagate_cue",
         delay_before_ms=1000,
-        text="[NARRATION] Clock advances +2. Gossip engine propagates the lie to Mira.",
+        text="[NARRATION] Clock advances to the next gossip tick. The engine propagates the lie to Mira.",
     ),
-    ClockTick(name="rumor_tick_1", delay_before_ms=500, delta_ticks=1),
-    ClockTick(name="rumor_tick_2", delay_before_ms=500, delta_ticks=1),
+    GossipBoundaryTick(name="rumor_gossip_tick", delay_before_ms=500),
     RumorTraceDisplay(
         name="trace_after_propagate",
         delay_before_ms=500,
@@ -541,23 +541,31 @@ class DemoRunner:
         dry_run: bool = False,
         cached: bool = False,
         cinematic: bool = False,
+        cache: LLMCache | None = None,
     ) -> None:
         self.dry_run = dry_run
         self.cinematic = cinematic
-        self.cache = LLMCache(readonly=cached)
+        self.cache = cache if cache is not None else LLMCache(readonly=cached)
         cfg = DemoConfig()
         self.client: EngineClient = EngineClient(
             base_url=cfg.NPC_BASE_URL,
             api_key=cfg.NPC_API_KEY,
         )
 
-    def run(self) -> None:
-        """Execute all scenes in order."""
+    def run(self, on_scene: Callable[[Scene], None] | None = None) -> None:
+        """Execute all scenes in order.
+
+        Args:
+            on_scene: Optional observer called with each scene just before it executes
+                (used by scripts/demo_run_live.py to know which act a failure landed in).
+        """
         start = time.monotonic()
         skip_delays = self.dry_run or self.cache.readonly
         for scene in SCENES:
             if scene.delay_before_ms and not skip_delays:
                 time.sleep(scene.delay_before_ms / 1000)
+            if on_scene is not None:
+                on_scene(scene)
             scene.execute(self)
         elapsed = time.monotonic() - start
         self.print_done(elapsed_s=elapsed)

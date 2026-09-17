@@ -118,6 +118,37 @@ class ClockTick(Scene):
         runner.print_ok("Clock advanced")
 
 
+_CLOCK_TICK_KEY = "tick_id"
+_NEXT_GOSSIP_TICK_KEY = "next_gossip_tick"
+
+
+@dataclass
+class GossipBoundaryTick(Scene):
+    """Advance the clock exactly to the next gossip tick, so propagation really runs.
+
+    Gossip runs every GOSSIP_TICK_INTERVAL ticks; a blind +N advance can fall between
+    boundaries and propagate nothing (ACT 7 died on that in the first live run, T2.4).
+    """
+
+    def execute(self, runner: DemoRunner) -> None:
+        """Read next_gossip_tick from GET /v1/clock/state and advance to it.
+
+        Raises:
+            RuntimeError: If the clock state names no gossip tick ahead of the current one.
+        """
+        runner.print_step("Advancing clock to the next gossip tick")
+        if runner.dry_run:
+            return
+        state = runner.client.get_clock_state().get("data", {})
+        tick, boundary = state.get(_CLOCK_TICK_KEY), state.get(_NEXT_GOSSIP_TICK_KEY)
+        if tick is None or boundary is None or boundary <= tick:
+            raise RuntimeError(
+                f"clock state has no {_NEXT_GOSSIP_TICK_KEY} ahead of the current tick: {state!r}"
+            )
+        runner.client.advance_clock(delta_ticks=boundary - tick)
+        runner.print_ok(f"Clock advanced {tick} -> {boundary} (gossip tick)")
+
+
 _EVENT_TICK_PATH = "/v1/admin/batch/event_tick"
 
 
@@ -472,7 +503,7 @@ class SpreadRumorScene(Scene):
             return
 
         clock = runner.client.get_clock_state()
-        tick_id: int = clock.get("data", {}).get("current_tick", 0)
+        tick_id: int = clock.get("data", {}).get(_CLOCK_TICK_KEY, 0)
 
         resp = runner.client.spread_rumor(
             target_npc_id=self.target_npc_id,

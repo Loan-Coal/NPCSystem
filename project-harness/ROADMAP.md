@@ -636,6 +636,10 @@ Follow-up 2026-09-17 (interactive): the loop ran without services, so the live A
 and as wired the beat almost never fired (events every 20 ticks, `evt_21` at weight 3/74). Act 5 now
 forces `evt_21` via `template_id` on `POST /v1/admin/batch/event_tick` (DEC-274 amendment). The
 live-run confirmation is still outstanding — T2.4's `demo-run-live` is its first chance.
+Live confirmation 2026-09-17 (T2.4): **confirmed only after a seed fix.** The first `demo-run-live` showed
+`evt_21` skipped by the story-pacing severity cap (85 > 30, a seeded severity-70 quest kept pacing suppressed);
+with `garrick_safe_passage` lowered to 60 (DEC-274 second amendment), Act 5 creates a `military` event at
+`loc_guard_barracks` from the events engine — `act5_battle=yes` at e7d4ba87.
 
 ### Phase T2
 
@@ -703,7 +707,7 @@ Validation: `pytest tests/unit/api/test_ws_dialogue_rate_limit.py -v`, then `mak
 Done when: tests pass, `make check` green, and the limit is above the scripted demo's turn cadence
 so the demo still completes. Finding L1-01, SEV-09. ✅ (T2.3, 2026-09-17 — implemented by the loop, whose session ended before its status line; `make check` re-run green by hand and committed interactively)
 
-- [ ] **T2.4** Add a `demo-run-live` nightly target — the gate that would have caught both CRITICALs
+- [x] **T2.4** Add a `demo-run-live` nightly target — the gate that would have caught both CRITICALs
 Files: `Makefile`, `scripts/` (a new runner), `project-harness/OVERNIGHT_LOOP.md`,
 `project-harness/DECISIONS.md`
 Spec: closes **DEC-280(a)**, open and undecided since 2026-09-07; the owner decided 2026-09-09 to
@@ -727,7 +731,7 @@ Validation: `make demo-run-live` against a stack brought up with `make eval-stac
 first — the app image is not bind-mounted), then `make check` to confirm the target was **not** added
 to it.
 Done when: the target exists, is reported by the nightly loop, is absent from `make check`'s target
-list, and DEC-280(a) is closed in `DECISIONS.md`. Finding R6-04, DEC-280(a).
+list, and DEC-280(a) is closed in `DECISIONS.md`. Finding R6-04, DEC-280(a). ✅ (T2.4, 2026-09-17 — interactive, live stack; RED at `a1365cc5^` died ACT 6 on the WS 403; first GREEN failed on three real demo defects, fixed in-task (seed pacing suppression → DEC-274 second amendment, ACT 7 gossip boundary + clock key, ACT 8 route); final `DEMO_LIVE=PASS acts_reached=12/12`; evidence in DEC-280(a))
 
 ---
 

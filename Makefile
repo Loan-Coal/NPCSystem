@@ -23,7 +23,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
-        demo demo-stale demo-seed demo-run demo-village demo-tavern test-demo dashboard \
+        demo demo-stale demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
 
@@ -841,6 +841,15 @@ demo-seed:
 # ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)
 demo-run:
 	$(PYTHON) -m demo_game.runners.run $(ARGS)
+
+# demo-run-live: play the scripted demo through REAL API calls against a live stack and judge
+# it — final act reached, no empty required beat (T2.4, DEC-280(a)). A nightly REPORT, not a
+# gate: deliberately NOT in `check` (it needs a booted stack; see OVERNIGHT_LOOP.md). Defaults
+# to the isolated eval stack; bring it up first (eval-stack-reset/-up/-seed).
+# Exit 0 pass / 1 demo broke / 2 no stack or stale image. ARGS: --expect-sha SHA, --timeout-s N
+DEMO_LIVE_BASE_URL ?= $(EVAL_BASE_URL)
+demo-run-live:
+	NPC_BASE_URL=$(DEMO_LIVE_BASE_URL) NPC_API_KEY=$(API_KEY) $(PYTHON) scripts/demo_run_live.py --base-url $(DEMO_LIVE_BASE_URL) $(ARGS)
 
 # test-demo: run demo_game unit tests in isolation (separate from make test)
 # Requires: pip install -r demo_game/requirements.txt

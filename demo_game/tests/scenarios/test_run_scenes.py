@@ -29,7 +29,9 @@ def _make_runner(
     # MagicMock auto-creates attributes as truthy Mocks, which defeats `if not event_id`.
     runner.planted_event_id = planted_event_id
 
-    runner.client.get_clock_state.return_value = {"data": {"current_tick": clock_tick}}
+    # Real GET /v1/clock/state shape: the tick is `tick_id` (a `current_tick` mock hid the
+    # bug that planted every live rumor at tick 0 — T2.4 live run).
+    runner.client.get_clock_state.return_value = {"data": {"tick_id": clock_tick}}
     runner.client.spread_rumor.return_value = spread_response or {
         "data": {"event_id": "evt_rumor_lira_5", "npc_id": "lira_fence"}
     }

@@ -106,7 +106,20 @@ or `⏸️`. Today that is EVAL-P0.3, EVAL-P0.4, EVAL-P1.2, EVAL-P6.3.
 2. `git log --oneline` — one commit per task. Look for `[UNVERIFIED: regression]` and
    `fix(loop): auto-repair ... [needs review]`.
 3. `grep "UNVERIFIED" project-harness/ROADMAP.md` — tasks committed over a red gate.
-4. ~~`project-harness/soft_review.md`~~ — deleted 2026-08-28 (DEC-225/DEC-227): 305 lines of
+4. The session log's two end-of-run reports. Neither is a gate: neither fails a task nor
+   turns anything red, and both always let the run finish.
+   - `deferred work (end):` — flagged tasks the loop never dispatches (`make roadmap-audit`).
+   - `demo-run-live:` — the scripted demo played through **real API calls** (T2.4,
+     DEC-280(a)). The loop rebuilds the isolated eval stack at HEAD
+     (`scripts/eval_stack_at.sh HEAD --reset`), reseeds it, and runs `make demo-run-live`.
+     `PASS acts_reached=12/12 ...` is logged; `stack unavailable` (Docker down, or the
+     rebuild/seed failed) is logged and nothing else happens; a `FAIL`, a hang, a stale
+     image or a crash lands in `human_verification.md` as **live demo broke**, with the
+     act and scene it died in. This is the only nightly check that boots the app —
+     `make check` never does, which is how the WS slot leak and the tick-5 defeat got past
+     every gate. By hand: `make eval-stack-reset && make eval-stack-up && make
+     eval-stack-seed && make demo-run-live` (exit 0 pass, 1 demo broke, 2 no stack).
+5. ~~`project-harness/soft_review.md`~~ — deleted 2026-08-28 (DEC-225/DEC-227): 305 lines of
    loop-generated findings that nothing read. The loop rework (R6) must not recreate an
    unread output; findings go to `ISSUES.md` or nowhere.
 

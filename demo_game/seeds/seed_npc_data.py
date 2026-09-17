@@ -441,7 +441,9 @@ H2_CHAIN_QUESTS: list[dict] = [
         "quest_giver_id": NPC_ID_GARRICK_DESERTER,
         "success_condition": "Help Garrick reach the north gate undetected.",
         "status": "offered",
-        "severity": 70,
+        # 60, not 70: an open quest at pacing's high_severity_quest_threshold (70) caps
+        # max_event_severity at 30 for the whole demo and blocks ACT 5 (T2.4 live run).
+        "severity": 60,
     },
 ]
 

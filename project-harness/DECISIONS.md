@@ -9697,6 +9697,16 @@ scene. Rejected: narration-only (random/empty beat), `EventFire` world-state pro
 stays empty), pinned `EVENT_RNG_SEED` (silently breaks on any pool edit), cutting Act 5 (reverses the
 2026-09-09 keep-the-beat decision).
 
+**Amendment 2026-09-17, second (owner, T2.4):** the first live run (`make demo-run-live`) showed the forced
+`evt_21` was **never** created: `event_handler tick 3: skipping event severity=85 (cap=30)`. The seed offered
+`garrick_safe_passage` at severity 70, which equals pacing's `high_severity_quest_threshold`, so story pacing was
+suppressed on every tick and capped `max_event_severity` at 30 for the whole demo. Options put to the owner:
+forced `template_id` bypasses the cap; a severity-≤30 demo template; change the seed. **Chosen: change the seed**
+— `garrick_safe_passage` 70 → 60, in line with its sibling chain quests. The cap still applies to forced templates.
+Guarded by `tests/unit/seeds/test_seed_does_not_suppress_story_pacing.py`. Live result at e7d4ba87: ACT 5 creates
+`evt_21` at `loc_guard_barracks` (`military`, tick 3) — the live confirmation T1.2 was waiting for. The frozen eval
+baseline still holds 70 (ISSUE-352).
+
 ---
 
 ## DEC-275: Are the ~40 `engines/ports/*` Protocols abstraction or ceremony? — OPEN
@@ -9891,7 +9901,7 @@ so this bears directly on the small-model goal.
 
 ---
 
-## DEC-280: Two smaller calls — a live demo gate, and the fate of `TraitReadPort` — OPEN
+## DEC-280: Two smaller calls — a live demo gate, and the fate of `TraitReadPort` — (a) ACCEPTED · (b) OPEN
 
 **Raised:** 2026-09-07, full codebase+demo review (findings L9-08; L2-01 ≡ L7-05)
 
@@ -9915,7 +9925,40 @@ the loop DEC-137 opened; or **delete** the port, the constructor parameter, the 
 and `TraitModulatedEmotionModel`, and log the deferred feature as an issue instead of leaving it as
 silent dead code. Either is fine; the current state — a documented feature that cannot execute — is not.
 
-**Decision:** _pending_
+**Decision (a) — ACCEPTED 2026-09-17 (T2.4, Finding R6-04).** The DEC-224 reading is confirmed: this is a new
+*target* plus a nightly *report*, not a gate, so no gate is retired for it.
+- **Target:** `make demo-run-live` → `scripts/demo_run_live.py`. It reuses `demo_game/runners/run.py` (`DemoRunner`,
+  `SCENES`) through two optional hooks (`cache=`, `run(on_scene=)`), so there is still one demo driver. The disk
+  LLM cache is replaced by an in-memory recorder that never hits, so every dialogue beat goes over the live API.
+- **Assertions:** (1) the run reaches the `outro` scene with no exception and no hang (watchdog, default 1800 s);
+  (2) no empty required beat — every dialogue reply (WebSocket and REST) is non-empty, and ACT 5 leaves a
+  `military` event at `loc_guard_barracks` in the events feed. Info/skip displays are not required (ISSUE-351).
+- **Exit contract:** 0 pass · 1 demo broke · 2 stack unavailable or stale image. Last line
+  `DEMO_LIVE=PASS|FAIL|STACK_UNAVAILABLE|STALE_IMAGE acts_reached=N/12 empty_beats=K act5_battle=yes|no`.
+- **Placement:** **not** in `make check` (`grep -n '^check:' Makefile` does not list it) — `check` never boots the
+  app and must not make every task pay for a stack or hand the loop a failure it cannot repair. It runs in
+  `scripts/expand_loop.sh`'s end-of-run report (`report_demo_live`, right after `report_deferred end`, before
+  `checkpoint_reports`): rebuild the isolated eval stack at HEAD with `scripts/eval_stack_at.sh HEAD --reset`,
+  `make eval-stack-seed`, `make demo-run-live --expect-sha HEAD`. PASS is logged; Docker down or a failed
+  rebuild/seed is logged as `stack unavailable`; FAIL, timeout, stale image or crash goes to
+  `human_verification.md` as "live demo broke". It always returns 0: it cannot fail a task, move the red-commit
+  count, or stop the run. The verdict is read from the `DEMO_LIVE=` line, not make's rc (make exits 2 on any
+  recipe failure). Documented in `OVERNIGHT_LOOP.md` → Morning review.
+- **Freeze mode is representative:** `docker-compose.freeze.yml` only sets `TICK_AUTOPILOT_ENABLED=false`, and
+  every demo scene is request-driven (`/v1/clock/advance` runs the due engines in-request), so the eval stack's
+  layering is kept as is.
+- **Evidence.** RED — stack built from `a1365cc5^` (011617e2, before T1.1):
+  `died in: ACT 6 scene=beat_6_mira_propagated reason=RuntimeError: WS dialogue error for mira_innkeeper: server
+  rejected WebSocket connection: HTTP 403` → `DEMO_LIVE=FAIL acts_reached=6/12 empty_beats=1 act5_battle=no`, exit 1
+  (five dialogue turns leak all five per-key slots). GREEN — the first run on HEAD **failed**, which is the gate
+  working: ACT 5 never fired (severity cap, DEC-274 second amendment), ACT 7's rumor never propagated (two blind
+  ticks 6→8 never reached the every-10-ticks gossip run, and the rumor was planted at tick 0 because the scene read
+  `current_tick` instead of `tick_id`), and once past ACT 7, ACT 8 posted to an unmounted `/v1/batch/gossip_tick`.
+  Fixed in the same task with regression tests (`GossipBoundaryTick`, the clock-key mock, the mounted-route
+  conformance test). After the fixes, at e7d4ba87: `DEMO_LIVE=PASS acts_reached=12/12 empty_beats=0
+  act5_battle=yes`, 11 dialogue beats, 157-161 s, run both by hand and through the loop hook.
+
+**Decision (b):** _pending_
 
 ---
 

@@ -285,6 +285,38 @@ report_deferred() {
   return 0
 }
 
+# T2.4 / DEC-280(a): play the scripted demo live at the end of the night, into the morning
+# report next to the deferred-work audit. A report, never a gate — it cannot fail a task,
+# touch the red-commit count, or stop the run, and always returns 0. It rebuilds the ISOLATED
+# eval stack at HEAD (eval_stack_at.sh --reset), reseeds, and runs `make demo-run-live`.
+# make exits 2 on any recipe failure, so the verdict is read from the DEMO_LIVE= line, not rc.
+DEMO_LIVE_TIMEOUT_SECS="${DEMO_LIVE_TIMEOUT_SECS:-2700}"
+report_demo_live() {
+  local logfile rc=0 sha verdict
+  if [ "$DRY_RUN" = "1" ]; then log "demo-run-live: skipped (dry run)"; return 0; fi
+  if ! docker info >/dev/null 2>&1; then
+    log "demo-run-live: stack unavailable (docker not reachable) — not run"; return 0
+  fi
+  logfile="$LOOP_LOG_DIR/demo-run-live-$(date +%Y%m%d-%H%M%S).log"
+  sha="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  compat_run_timeout "$DEMO_LIVE_TIMEOUT_SECS" "$logfile" bash -c "
+    cd '$REPO_ROOT' || exit 2
+    { bash scripts/eval_stack_at.sh HEAD --reset && make --no-print-directory eval-stack-seed; } \
+      || { echo 'DEMO_LIVE=STACK_UNAVAILABLE reason=eval-stack rebuild or seed failed'; exit 2; }
+    make --no-print-directory demo-run-live ARGS='--expect-sha $sha'" || rc=$?
+  verdict="$(grep '^DEMO_LIVE=' "$logfile" 2>/dev/null | tail -1)"
+  case "$verdict" in
+    DEMO_LIVE=PASS*)              log "demo-run-live: $verdict" ;;
+    DEMO_LIVE=STACK_UNAVAILABLE*) log "demo-run-live: stack unavailable — $verdict (log: $logfile)" ;;
+    *)
+      [ "$rc" -eq 124 ] && verdict="timed out after ${DEMO_LIVE_TIMEOUT_SECS}s"
+      flag_for_human "live demo broke (make demo-run-live @ $sha)" \
+        "$(printf '%s\n\nLog: %s\n\n%s' "${verdict:-no DEMO_LIVE verdict line (rc=$rc)}" "$logfile" \
+           "$(grep -v 'HTTP Request' "$logfile" 2>/dev/null | tail -15)")" ;;
+  esac
+  return 0
+}
+
 # ======================================================================================
 # clocks
 # ======================================================================================
@@ -791,6 +823,7 @@ be committed. Inspect the last task log before re-running."
   done
 
   report_deferred end
+  report_demo_live
   checkpoint_reports
   log "=== run finished | tasks=$TASKS_DONE phases=$PHASES_DONE skipped=[${SKIPPED_PHASES:-none}] ==="
   log "queue now: $(cursor --status | tail -1)"
