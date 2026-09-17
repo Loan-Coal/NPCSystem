@@ -489,3 +489,66 @@ _SOURCE_CHAIN_QUESTS: list[dict] = [
         "severity": 45,
     },
 ]
+
+# ---------------------------------------------------------------------------
+# Schedule data (T5.1)
+# ---------------------------------------------------------------------------
+
+# Each entry: (schedule_id, character_id, name, description, entries)
+# entries: list of {"time_of_day": ..., "location_id": ..., "activity": ...}
+# Covers the 3 MetaHumans (Mira, Sorn, Lira) + gossip-path terminal (Henryk)
+# so routine_engine can start moving NPCs between real seeded locations.
+_SCHEDULES: list[tuple[str, str, str, str, list[dict[str, str]]]] = [
+    (
+        "sched_captain_sorn",
+        "captain_sorn",
+        "Captain Sorn's Duty Rotation",
+        "Military duty cycle at the guard barracks with afternoon gate inspection.",
+        [
+            {"time_of_day": "morning",   "location_id": "loc_guard_barracks", "activity": "morning briefing"},
+            {"time_of_day": "midday",    "location_id": "loc_guard_barracks", "activity": "midday review"},
+            {"time_of_day": "afternoon", "location_id": "loc_north_gate",     "activity": "gate inspection"},
+            {"time_of_day": "evening",   "location_id": "loc_guard_barracks", "activity": "evening duty"},
+            {"time_of_day": "night",     "location_id": "loc_guard_barracks", "activity": "night watch"},
+        ],
+    ),
+    (
+        "sched_mira_innkeeper",
+        "mira_innkeeper",
+        "Mira's Tavern Keeper Schedule",
+        "Daily routine anchored at the tavern with a morning supply run to the market.",
+        [
+            {"time_of_day": "morning",   "location_id": "loc_market_square", "activity": "buying supplies"},
+            {"time_of_day": "midday",    "location_id": "loc_tavern",        "activity": "lunch service"},
+            {"time_of_day": "afternoon", "location_id": "loc_tavern",        "activity": "afternoon prep"},
+            {"time_of_day": "evening",   "location_id": "loc_tavern",        "activity": "evening service"},
+            {"time_of_day": "night",     "location_id": "loc_tavern",        "activity": "closing up"},
+        ],
+    ),
+    (
+        "sched_lira_fence",
+        "lira_fence",
+        "Lira's Fence Routine",
+        "Movement between tavern and docks for fencing and contact work.",
+        [
+            {"time_of_day": "morning",   "location_id": "loc_tavern",        "activity": "morning contacts"},
+            {"time_of_day": "midday",    "location_id": "loc_market_square", "activity": "midday deals"},
+            {"time_of_day": "afternoon", "location_id": "loc_docks",         "activity": "afternoon pickup"},
+            {"time_of_day": "evening",   "location_id": "loc_tavern",        "activity": "evening fencing"},
+            {"time_of_day": "night",     "location_id": "loc_tavern",        "activity": "late business"},
+        ],
+    ),
+    (
+        "sched_old_henryk",
+        "old_henryk",
+        "Old Henryk's Wandering Schedule",
+        "Daily circuit between market and tavern — gossip flows wherever he goes.",
+        [
+            {"time_of_day": "morning",   "location_id": "loc_market_square", "activity": "morning gossip"},
+            {"time_of_day": "midday",    "location_id": "loc_tavern",        "activity": "midday ale"},
+            {"time_of_day": "afternoon", "location_id": "loc_market_square", "activity": "afternoon wandering"},
+            {"time_of_day": "evening",   "location_id": "loc_tavern",        "activity": "evening tales"},
+            {"time_of_day": "night",     "location_id": "loc_tavern",        "activity": "nightcap"},
+        ],
+    ),
+]

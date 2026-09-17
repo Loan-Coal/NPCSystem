@@ -999,7 +999,7 @@ deferred the whole of T5, which would have meant the loop skipped this sprint's 
 The seed defects. Both are graph-shape bugs that no observable can currently express, and both are
 pure edits to `demo_game/seeds/seed.py` plus a unit test — no services required.
 
-- [ ] **T5.1** Seed `:Schedule` nodes and `FOLLOWS_SCHEDULE` edges so `routine` can move NPCs
+- [x] **T5.1** Seed `:Schedule` nodes and `FOLLOWS_SCHEDULE` edges so `routine` can move NPCs
 Pre-approved: graph-schema · owner 2026-09-08 · DEC-276
 Files: `demo_game/seeds/seed.py` (and the domain module T4.3 split it into), new test
 `demo_game/tests/seeds/test_seed_schedules.py`
@@ -1021,7 +1021,7 @@ RED anchor: the new test asserts that after seeding, every seeded `:Character` h
 with zero schedules found.
 Validation: `pytest demo_game/tests/seeds/test_seed_schedules.py -v`, then `make check`, then
 `make test-demo`.
-Done when: the test passes and `make check` is green. Finding L13-01.
+Done when: the test passes and `make check` is green. Finding L13-01. ✅ AUTO (T5.1, 2026-09-17)
 
 - [ ] **T5.2** Add `HAS_NEED` edges so `need_decay` stops being dead
 Pre-approved: graph-schema · owner 2026-09-08 · DEC-276

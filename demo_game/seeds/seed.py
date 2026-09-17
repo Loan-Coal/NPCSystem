@@ -52,6 +52,7 @@ from demo_game.seeds.seed_domain import (  # noqa: F401
     _seed_player_and_items,
     _seed_quest_unlocks_chains,
     _seed_quests,
+    _seed_schedules,
     _seed_source_chain_quests,
 )
 from demo_game.seeds.seed_io import (  # noqa: F401
@@ -106,6 +107,7 @@ from demo_game.seeds.seed_world_data import (  # noqa: F401
     _PLAYER_KNOWS_ABOUT,
     _PLEDGE_SEED,
     _QUEST_UNLOCKS_CHAINS,
+    _SCHEDULES,
     _SOURCE_CHAIN_QUESTS,
     _SPICE_ID,
     _SPICE_VALUE,
@@ -380,6 +382,10 @@ def seed_all(client: EngineClient) -> dict:
     # 18. H2.5: 12 new quests across 6 new chains
     logger.info("[seed] H2 quests + chains")
     created += _seed_h2_quests(client)
+
+    # 21. Schedules (T5.1) — after all Characters and Locations exist
+    logger.info("[seed] Schedules + FOLLOWS_SCHEDULE edges")
+    created += _seed_schedules(client)
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}

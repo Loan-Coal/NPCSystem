@@ -57,6 +57,7 @@ from demo_game.seeds.seed_world_data import (
     _DECEPTION_GOAL_ID,
     _PLAYER_ID,
     _QUEST_UNLOCKS_CHAINS,
+    _SCHEDULES,
     _SOURCE_CHAIN_QUESTS,
     _SPICE_ID,
     _SPICE_VALUE,
@@ -78,6 +79,7 @@ __all__ = [
     "_seed_quests",
     "_seed_source_chain_quests",
     "_seed_chain_quests",
+    "_seed_schedules",
     "_seed_quest_unlocks_chains",
 ]
 
@@ -560,6 +562,40 @@ def _seed_quest_unlocks_chains(client: EngineClient) -> int:
             dst_id,
             {"on_outcome": on_outcome},
         )
+        if result == "created":
+            created += 1
+    return created
+
+
+def _seed_schedules(client: EngineClient) -> int:
+    """Seed Schedule nodes and FOLLOWS_SCHEDULE edges for the core demo NPCs.
+
+    Covers the three MetaHumans (mira_innkeeper, captain_sorn, lira_fence) and the
+    gossip-path terminal node (old_henryk) — the minimum set routine_engine needs to
+    start moving NPCs. All entries reference location IDs that already exist in the seed.
+
+    Idempotent: _seed_node and _seed_edge skip items that already exist.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of nodes and edges created.
+    """
+    created = 0
+    now = _now()
+    for schedule_id, character_id, name, description, entries in _SCHEDULES:
+        result = _seed_node(client, "Schedule", {
+            "id": schedule_id,
+            "name": name,
+            "description": description,
+            "entries": json.dumps(entries),
+            "created_at": now,
+            "last_graph_updated_at": now,
+        })
+        if result == "created":
+            created += 1
+        result = _seed_edge(client, "FOLLOWS_SCHEDULE", character_id, schedule_id, {})
         if result == "created":
             created += 1
     return created
