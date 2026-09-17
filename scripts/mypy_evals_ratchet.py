@@ -24,11 +24,15 @@ BASELINE_PATH = REPO_ROOT / ".mypy_evals_baseline"
 _FOUND_RE = re.compile(r"Found (\d+) error")
 _SUCCESS_RE = re.compile(r"Success: no issues")
 
+# Own cache dir: sharing .mypy_cache with `make type` (mypy src/) made each run invalidate
+# the other's entries, ~10 s extra per run on every `make check` (DEC-283).
+MYPY_COMMAND: tuple[str, ...] = (sys.executable, "-m", "mypy", "--cache-dir", ".mypy_cache/evals", "evals/")
+
 
 def _run_mypy() -> int:
     """Run `mypy evals/` and return the reported error count (0 on success)."""
     proc = subprocess.run(
-        [sys.executable, "-m", "mypy", "evals/"],
+        list(MYPY_COMMAND),
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

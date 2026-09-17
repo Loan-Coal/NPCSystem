@@ -99,6 +99,7 @@ def test_editing_the_makefile_is_flagged() -> None:
         ("@pytest.mark.skip(reason='later')", "skip-marker"),
         ("        pytest.skip('no neo4j')", "runtime-skip"),
         ("\t--cov-fail-under=50 \\", "coverage-threshold"),
+        ('\t$(PYTHON) -m coverage report --include="evals/*" --fail-under=50', "coverage-threshold"),
         ("ignore_errors = True", "mypy-silence"),
     ],
 )

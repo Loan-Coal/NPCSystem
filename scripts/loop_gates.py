@@ -49,8 +49,9 @@ def python_executable() -> str:
 FULL_GATE_CMD: tuple[str, ...] = ("make", "check")
 
 # Behaviour checks. Run first; any failure is HALT-class and is never auto-repaired.
-# Coverage is deliberately NOT duplicated here — `make check` already enforces
-# --cov-fail-under=80, and re-running the suite with coverage would double a 144 s gate.
+# Coverage is deliberately NOT duplicated here — `make check` already enforces the
+# coverage floors (`coverage report --fail-under`, DEC-283), and re-running the suite
+# with coverage would double the gate's only pytest run.
 # A red `make check` with every constituent green is attributed to coverage by
 # classify_gate_failure.py and treated as HALT-class.
 HALT_CHECK_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -133,7 +134,7 @@ SUPPRESSION_PATTERNS: tuple[tuple[str, str], ...] = (
     ("bare-except", r"except\s*:\s*$"),
     ("skip-marker", r"@pytest\.mark\.(skip|xfail)"),
     ("runtime-skip", r"pytest\.skip\("),
-    ("coverage-threshold", r"--cov-fail-under"),
+    ("coverage-threshold", r"--(cov-)?fail-under"),
     ("ratchet-update", r"--update-baseline|--update\b"),
     ("mypy-silence", r"disallow_untyped_defs\s*=\s*False|ignore_errors\s*=\s*True"),
     ("ruff-disable", r"per-file-ignores|extend-ignore"),

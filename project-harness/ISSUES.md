@@ -3286,3 +3286,37 @@ token path.
 **To fix:** treat both boundary call sites the same: capture `brc` on the scar-6.10 path and `break` on 2. Add a
 rig/driver test in which the fake session returns `TASK_COMPLETE` on the phase's last task with a red gate and
 `--max-red-gates 1`, asserting "stopping: repeated red gates" and no further task dispatch.
+
+## ISSUE-344: every httpx-backed LLM adapter reloads the CA bundle, ~0.5 s per construction on Windows
+**Found:** 2026-09-17, during the `make check` speed-up (DEC-283)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/llm/ollama_adapter.py:33` (`__init__`), and the other httpx adapters
+**Description:** Each adapter builds its own `httpx.AsyncClient`, and each client calls
+`ssl.create_default_context()` → `load_verify_locations` (0.57 s per call, profiled). A plain
+`http://localhost:11434` Ollama never uses TLS. Tests that build a real adapter pay this cost: the `tests/unit/llm`
+factory tests run ~1.7 s each, and composition-root tests build dozens of adapters.
+**Why deferred:** a production-code change in `engines/llm/`. `make check` is already 112 s after DEC-283, and
+xdist absorbs this cost.
+**To fix:** share one module-level `ssl.SSLContext` across adapters, or pass `verify=False` only when the base URL
+is `http://`. Measure `pytest tests/unit/llm --durations=10` before and after.
+
+## ISSUE-345: `test_sev15_type_gate::test_mypy_exits_zero` runs mypy a third time inside `make check`
+**Found:** 2026-09-17, during the `make check` speed-up (DEC-283)
+**Severity:** P3 (nice-to-fix)
+**Where:** `tests/unit/conformance/test_sev15_type_gate.py`
+**Description:** `make check` already runs `make type` (mypy src/, hard gate at 0). This test shells out to mypy
+again from inside the pytest run: 7.5 s under xdist load, and it is the slowest test after the lifespan fix.
+**Why deferred:** removing or skipping a gate-shaped test requires a human call (DEC-224/DEC-250 gate freeze).
+**To fix:** decide whether the test earns its place now that `type` is in `check` and CI runs `check` (DEC-238).
+If not, delete it and cite `type`.
+
+## ISSUE-346: `make type-demo` shares `.mypy_cache` with `make type`, so each invalidates the other
+**Found:** 2026-09-17, during the `make check` speed-up (DEC-283)
+**Severity:** P3 (nice-to-fix)
+**Where:** `Makefile` `type-demo` / `scripts/mypy_ratchet.py`
+**Description:** The same cache thrash DEC-283 fixed for `type-evals`: alternating mypy targets over different
+roots in one cache dir forces rechecks (~10 s each way). `type-demo` is not in `check`, so only the CI demo job
+and humans running both targets pay the cost.
+**Why deferred:** outside `make check`, which is the scope of this task.
+**To fix:** pass a `--cache-dir .mypy_cache/demo` through `mypy_ratchet.py` when `--target` is not `src/`, with a
+test mirroring `tests/unit/scripts/test_mypy_evals_ratchet.py`.

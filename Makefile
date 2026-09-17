@@ -9,7 +9,7 @@ endif
 BASE_URL ?= http://localhost:8000
 API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)', open('.env').read(), re.M); print(m.group(1).strip() if m else '')")
 
-.PHONY: install run test test-cov test-cov-v13 test-cov-full-report \
+.PHONY: install run test test-cov-run test-cov test-cov-v13 test-cov-full-report \
         app-frozen check-corpus-frozen check-corpus-quiescent \
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
@@ -135,17 +135,36 @@ eval-stack-down:
 eval-stack-reset:
 	$(EVAL_STACK_COMPOSE) down -v
 
+# --- Coverage: one instrumented pytest run feeds every coverage gate (DEC-283) -----------
+# test-cov-run is the only pytest invocation in `make check`. test-cov, test-cov-evals,
+# test-cov-v13 and test-cov-full-report used to run pytest each — the full suite twice —
+# and now only read the .coverage file it writes. --cov-context=test records which test
+# covered each line, so the two slice floors still count only their own tests:
+# `coverage report --contexts` filters to the slice. `^\Z` (the empty context) must stay
+# in each list: it holds module-level lines run at collection time, and without it both
+# slice floors collapse to 18-45%. Parity with the old per-slice runs, measured
+# 2026-09-17: main 88.06 vs 88.14, evals 82.76 vs 82.79, v13 89.04 vs 88.33.
+# PYTEST_WORKERS: pytest-xdist workers. `auto` = one per core; `PYTEST_WORKERS=0` = serial.
+PYTEST_WORKERS ?= auto
+COV_MAIN_INCLUDE := src/npc_engine/*,evals/matchers.py,evals/summary.py,evals/runner.py
+COV_EVALS_CONTEXTS := ^\Z,^tests/unit/evals/,^tests/unit/scripts/
+COV_V13_INCLUDE := src/npc_engine/schema/*,src/npc_engine/retrieval/embedding_reconciler*
+COV_V13_CONTEXTS := ^\Z,^tests/unit/config/test_schema_loader.py,^tests/unit/conformance/test_v1_route_versioning.py,^tests/unit/retrieval/test_embedding_reconciler.py,^tests/unit/api/test_main_reconciler_lifespan.py,^tests/unit/config/test_schema_resolvers.py
+
 test:
-	$(PYTHON) -m pytest tests/ -q
+	$(PYTHON) -m pytest tests/ -q -n $(PYTEST_WORKERS)
 
-test-cov:
-	$(PYTHON) -m pytest tests/ -q --cov=npc_engine --cov=matchers --cov=summary --cov=runner --cov-report=term-missing --cov-fail-under=80
+test-cov-run:
+	$(PYTHON) -m pytest tests/ -q -n $(PYTEST_WORKERS) --cov=npc_engine --cov=evals --cov-context=test --cov-report=
 
-test-cov-v13:
-	$(PYTHON) -m pytest -q tests/unit/config/test_schema_loader.py tests/unit/conformance/test_v1_route_versioning.py tests/unit/retrieval/test_embedding_reconciler.py tests/unit/api/test_main_reconciler_lifespan.py tests/unit/config/test_schema_resolvers.py --cov=src/npc_engine/schema --cov=src/npc_engine/retrieval/embedding_reconciler --cov-report=term-missing --cov-fail-under=80
+test-cov: test-cov-run
+	$(PYTHON) -m coverage report --include="$(COV_MAIN_INCLUDE)" --skip-covered --show-missing --precision=2 --fail-under=80
 
-test-cov-full-report:
-	$(PYTHON) -m pytest -q tests/ --cov=npc_engine --cov=evals --cov-report=term-missing
+test-cov-v13: test-cov-run
+	$(PYTHON) -m coverage report --include="$(COV_V13_INCLUDE)" --contexts="$(COV_V13_CONTEXTS)" --show-missing --precision=2 --fail-under=80
+
+test-cov-full-report: test-cov-run
+	$(PYTHON) -m coverage report --show-missing --precision=2
 
 test-v13-contracts:
 	$(PYTHON) -m pytest -q tests/unit/config/test_schema_loader.py tests/unit/conformance/test_v1_route_versioning.py tests/unit/api/test_auth_permissions_v13.py
@@ -268,10 +287,10 @@ check-integration-baseline:
 check-integration-baseline-update:
 	$(PYTHON) scripts/check_integration_baseline.py --update-baseline
 
-# test-cov-evals: gate evals/ test coverage at ~78% measured baseline; floor 75 (EVAL-P15.4).
-# Runs evals unit tests and script tests only (fast; integration evals need real artifacts).
-test-cov-evals:
-	$(PYTHON) -m pytest tests/unit/evals/ tests/unit/scripts/ -q --cov=evals --cov-report=term-missing --cov-fail-under=75
+# test-cov-evals: gate evals/ test coverage; floor 75 (EVAL-P15.4). Counts only lines covered
+# by evals unit tests and script tests, via coverage contexts over test-cov-run (DEC-283).
+test-cov-evals: test-cov-run
+	$(PYTHON) -m coverage report --include="evals/*" --contexts="$(COV_EVALS_CONTEXTS)" --skip-covered --show-missing --precision=2 --fail-under=75
 
 # check-harness: fail when the harness docs contradict the live gates.
 check-harness:

@@ -99,6 +99,32 @@ class _RedisRuntimeStub:
         self.closed = True
 
 
+class _LlmProbeStub:
+    async def health_check(self) -> bool:
+        return True
+
+
+def _llm_probe_factory(**_) -> _LlmProbeStub:
+    return _LlmProbeStub()
+
+
+def _isolate_from_llm_backend(monkeypatch) -> None:
+    """Swap the startup LLM probe for a stub so no test reaches a live backend."""
+    monkeypatch.setattr(main, "create_llm_client_for_engine", _llm_probe_factory)
+
+
+def _lifespan_settings(**overrides) -> Settings:
+    """Settings for lifespan tests: no LLM warm-up, no autopilot (both do real I/O)."""
+    return Settings(
+        API_KEY_SECRET="local_dev_secret_change_this_2026",
+        DISTRIBUTED_TICK_LEASE_ENABLED=False,
+        EMBEDDING_RECONCILE_INTERVAL_SECONDS=30,
+        LLM_WARMUP_ON_STARTUP=False,
+        TICK_AUTOPILOT_ENABLED=False,
+        **overrides,
+    )
+
+
 class _ReconcilerStub:
     def __init__(self, graph_db, embedding_index, interval_seconds: int, batch_size: int = 200, nodes_read: int = 51):
         self.graph_db = graph_db
@@ -146,15 +172,8 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
     monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
-    monkeypatch.setattr(
-        main,
-        "get_settings",
-        lambda: Settings(
-            API_KEY_SECRET="local_dev_secret_change_this_2026",
-            DISTRIBUTED_TICK_LEASE_ENABLED=False,
-            EMBEDDING_RECONCILE_INTERVAL_SECONDS=30,
-        ),
-    )
+    _isolate_from_llm_backend(monkeypatch)
+    monkeypatch.setattr(main, "get_settings", _lifespan_settings)
 
     async with main.lifespan(FastAPI()):
         assert graph_db.connected is True
@@ -197,15 +216,8 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
     monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
-    monkeypatch.setattr(
-        main,
-        "get_settings",
-        lambda: Settings(
-            API_KEY_SECRET="local_dev_secret_change_this_2026",
-            DISTRIBUTED_TICK_LEASE_ENABLED=False,
-            EMBEDDING_RECONCILE_INTERVAL_SECONDS=30,
-        ),
-    )
+    _isolate_from_llm_backend(monkeypatch)
+    monkeypatch.setattr(main, "get_settings", _lifespan_settings)
 
     async with main.lifespan(FastAPI()):
         await asyncio.sleep(0)
@@ -234,15 +246,8 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", _ReconcilerStub)
     monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
-    monkeypatch.setattr(
-        main,
-        "get_settings",
-        lambda: Settings(
-            API_KEY_SECRET="local_dev_secret_change_this_2026",
-            DISTRIBUTED_TICK_LEASE_ENABLED=False,
-            EMBEDDING_RECONCILE_INTERVAL_SECONDS=30,
-        ),
-    )
+    _isolate_from_llm_backend(monkeypatch)
+    monkeypatch.setattr(main, "get_settings", _lifespan_settings)
 
     with pytest.raises(RuntimeError, match="embedding index init failed"):
         async with main.lifespan(FastAPI()):
@@ -270,16 +275,8 @@ def _wire_lifespan(monkeypatch, *, reconciler, hydrate: bool):
     monkeypatch.setattr(main, "get_redis_runtime", lambda: _RedisRuntimeStub())
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler)
     monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
-    monkeypatch.setattr(
-        main,
-        "get_settings",
-        lambda: Settings(
-            API_KEY_SECRET="local_dev_secret_change_this_2026",
-            DISTRIBUTED_TICK_LEASE_ENABLED=False,
-            EMBEDDING_RECONCILE_INTERVAL_SECONDS=30,
-            VECTOR_STORE_HYDRATE_ON_STARTUP=hydrate,
-        ),
-    )
+    _isolate_from_llm_backend(monkeypatch)
+    monkeypatch.setattr(main, "get_settings", lambda: _lifespan_settings(VECTOR_STORE_HYDRATE_ON_STARTUP=hydrate))
     return graph_db
 
 
@@ -336,3 +333,19 @@ async def test_boot_hydration_that_reads_nothing_logs_at_error(monkeypatch) -> N
 
     assert [r.getMessage() for r in records if r.levelno >= logging.ERROR
             and "boot_hydration_read_nothing" in r.getMessage()]
+
+
+@pytest.mark.asyncio
+async def test_lifespan_probes_a_stub_llm_not_the_real_backend(monkeypatch) -> None:
+    """Unit tests do no I/O: the startup LLM probe must never reach a live Ollama.
+
+    Unpatched, every lifespan test health-checked and warmed up the real dialogue
+    backend — ~7 s each against a local Ollama, ~28 s each under a parallel run.
+    """
+    reconciler = _ReconcilerStub(graph_db=None, embedding_index=_EmbeddingIndexStub(), interval_seconds=30)
+    _wire_lifespan(monkeypatch, reconciler=reconciler, hydrate=False)
+
+    async with main.lifespan(FastAPI()):
+        await asyncio.sleep(0)
+
+    assert main.create_llm_client_for_engine is _llm_probe_factory

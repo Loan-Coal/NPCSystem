@@ -10078,3 +10078,33 @@ contract part (b) changes — its prose is current but its code sample at line 1
 `select_baseline(harness_version, ...)` signature that no longer matches
 `baseline_selection.py:109`. That doc is therefore inside part (b)'s blast radius and updating it is
 part of that change, not separate work.
+
+## DEC-283: `make check` runs pytest once, on every core, and the coverage floors read that one run
+**Date:** 2026-09-17 · **Status:** ✅ ACCEPTED (user-requested) · **Drives:** `Makefile`
+(`test-cov-run`, `test-cov`, `test-cov-evals`, `test-cov-v13`, `test-cov-full-report`), `pyproject.toml`
+(`pytest-xdist` dev dep), `scripts/loop_gates.py` (coverage-threshold tripwire)
+**Context:** `make check` took ~14 min, ~12 of them in four pytest runs: `test-cov` and
+`test-cov-full-report` each ran the full suite, `test-cov-evals` and `test-cov-v13` re-ran slices of
+it. All were serial on a 16-core box. Separately, the six `test_main_reconciler_lifespan.py` tests
+health-checked and warmed up the **real** dialogue LLM (~7 s each against a local Ollama, ~28 s each
+under parallel load); they alone were ~160 s of `test-cov-v13`'s 169 s.
+**Decision:** One target, `test-cov-run`, runs `pytest tests/ -n $(PYTEST_WORKERS)` with
+`--cov=npc_engine --cov=evals --cov-context=test`. The four coverage targets depend on it and run only
+`coverage report` against its data file. The slice floors keep their slice semantics through
+`--contexts`: evals counts `tests/unit/evals/` + `tests/unit/scripts/`, v13 counts its five files.
+Both lists include `^\Z`, the empty context, which holds module-level lines run at collection.
+`PYTEST_WORKERS` defaults to `auto`; `PYTEST_WORKERS=0` runs serial for debugging. The lifespan tests
+now stub the LLM probe and turn warm-up and autopilot off.
+**Rationale:** Measured parity with the old per-slice runs on the same tree: main 88.06 vs 88.14,
+evals 82.76 vs 82.79, v13 89.04 vs 88.33. Without contexts the same floors read 88 and 97, which is
+looser. Without `^\Z` they read 45 and 18, which would red for no real reason. Contexts cost nothing
+measurable (50.5 s vs 49.7 s under xdist).
+**Trade-off:** `^\Z` credits module-level lines imported by *any* test's collection, not only the
+slice's. This inflates v13 by ~0.7 pts and cannot mask an untested function body. `--precision=2` is
+slightly stricter than pytest-cov's rounding: a total must actually reach the floor, not round up to it.
+`make test-cov-v13` alone now runs the whole suite (~50 s parallel), not five files. `loop_gates.py`'s
+tripwire widened from `--cov-fail-under` to `--(cov-)?fail-under` so a loop diff that lowers the new
+`coverage report --fail-under` is still flagged.
+**Also:** `scripts/mypy_evals_ratchet.py` got its own `--cache-dir .mypy_cache/evals`. Sharing
+`.mypy_cache` with `mypy src/` made the two runs invalidate each other's entries: `type-evals` took
+15.9 s right after `type`, and 1.5 s with its own cache.
