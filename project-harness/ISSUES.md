@@ -16,6 +16,64 @@ Rules:
 
 ## Open
 
+## ISSUE-360: the loop worktree's venv has no `pygame`, so `make test-demo` cannot collect the demo UI tests
+**Found:** 2026-09-18, while verifying the demo clock-timeout fix
+**Severity:** P2 (annoying)
+**Where:** `NPCSystem-loop/.venv` (the overnight loop's worktree); `scripts/loop_gates.py:80` (`DEMO_GATE_CMD`)
+**Description:** `import pygame` fails in the loop worktree's venv, so `make test-demo` there stops
+with 12 collection errors (`demo_game/tests/ui/*`). The loop runs `make test-demo` for every task that
+touches `demo_game/`; the 2026-09-17 night's T4.3, T5.1 and T5.2 transcripts all hit
+`No module named 'pygame'`. The demo UI tests have therefore not been a working gate in the loop.
+Separately, `test_run_dry_run_encoding.py` needs `NPC_API_KEY` in the environment and fails without it.
+With the main checkout's venv and `NPC_API_KEY=x`, the loop tree's demo suite is 1157 passed.
+**Why deferred:** environment setup of the loop worktree, not the task at hand (fixing the misplaced T3.2
+commit and the demo timeout).
+**To fix:** `pip install -r demo_game/requirements.txt` into `NPCSystem-loop/.venv`; make `test-demo`
+set a dummy `NPC_API_KEY` (or the test set its own); consider a loop preflight that fails when
+`import pygame` fails.
+
+## ISSUE-359: demo faction board is never fed, and would render every standing as 0 if it were
+**Found:** 2026-09-18, while analysing ISSUE-354
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/client.py:1829` (`get_faction_standings`), `demo_game/ui/boards/faction_board.py:156`,
+`demo_game/ui/layout/right_panel.py:362`
+**Description:** No non-test code calls `get_faction_standings()` or `set_faction_standings()`, so the
+FACTION panel is dead wiring. It also expects three incompatible shapes: the client docstring and
+`test_faction_board.py` mocks use `src_id`/`dst_id`/`standing` rows; the API model says
+`target: str`; the query returns `target` as a whole node dict. `FactionBoard` reads
+`entry.get("standing")` from the *outer* per-faction dict (which has `faction_id`, `faction_name`,
+`standings`), so every row would render as `0`.
+**Why deferred:** not blocking the demo (the panel is never shown with data); its fix depends on the
+ISSUE-354 decision.
+**To fix:** after ISSUE-354 fixes the response shape, either wire the panel (fetch on tab open, render
+the inner `standings` list) or delete the dead client method and widget.
+
+## ISSUE-358: the per-minute LLM ceiling only admits ticks; one admitted tick made 12 calls against a limit of 6
+**Found:** 2026-09-18, while analysing the demo-run-live failure
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/scheduler/tick_scheduler.py` (`_resolve_skip_llm`, `_record_budget_calls`); DEC-285
+**Description:** `TICK_LLM_CALLS_PER_MINUTE_MAX` is 6. DEC-285 checks `should_skip_llm()` once before the
+tick and records the tick's call count afterwards, so a tick admitted with budget left may use any
+number of calls. Measured on the eval stack @ `3019b51e`: tick 1 made 12 LLM calls in ~15 s (event_quest 2,
+need_quest 10). The only in-tick cap is `QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK=10` invocations
+(×2 calls each). Whether that is intended (the ceiling throttles the *next* ticks) or a gap is not recorded
+in DEC-285.
+**Why deferred:** a design question about T7.1's semantics, not part of fixing the demo timeout.
+**To fix:** decide whether the ceiling is an admission gate or a hard cap. If a hard cap, pass the guard's
+remaining budget into the quest triggers' `TickLLMBudget` for the tick. Either way, state it in DEC-285.
+
+## ISSUE-357: `check_engine_census` treats a folder holding only `__pycache__` as a live engine
+**Found:** 2026-09-18, while cherry-picking T3.2 onto `auto/roadmap-night`
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_engine_census.py:199` (`engines_dir.iterdir()` / `is_dir()`)
+**Description:** Git deletes an engine's tracked files but leaves the untracked `__pycache__/` behind, so
+`engines/<name>/` still exists on disk. The census then reports it as unwired or dead and fails `make check`
+locally, although the clean tree is correct (a fresh clone passes). Hit with `faction_politics/` and `treaty/`.
+**Why deferred:** `scripts/check_engine_census.py` is a frozen gate path (`loop_gates.FROZEN_PATH_PREFIXES`);
+changing a gate needs owner review, not a drive-by edit.
+**To fix:** skip directories that contain no `*.py` outside `__pycache__` (the script already has
+`rglob("*.py")` at `:122`), with a test for a pycache-only directory.
+
 ## ISSUE-356: gossip tick still an outlier after T7.3 embedding-reconcile fix
 **Found:** 2026-09-18, during T7.4
 **Severity:** P1 (blocking — gossip tick is ~46× its neighbours)
@@ -23,6 +81,13 @@ Rules:
 **Description:** T7.3 hoisted the embedding reconcile from O(N) per pair to O(1) per tick, reducing the gossip tick from 22,484 ms to 19,797 ms on the 301-node seed (~12% improvement, same world both trees). Neighbours run in 77–425 ms; gossip is still >46× the slowest non-LLM neighbour. The T7.3 fix addressed the corpus-reconciliation component; the dominant cost lies elsewhere in the gossip handler.
 **Why deferred:** Identifying the remaining bottleneck requires profiling the gossip handler with a running stack, which is outside T7.4's scope (measurement only). A new fix task is needed.
 **To fix:** Profile the gossip tick against the eval stack to find the dominant remaining bottleneck; implement a targeted fix; re-run T7.4's measurement protocol to confirm the outlier is resolved.
+**UPDATE 2026-09-18 (re-diagnosed, measured):** the premise above is wrong. The slow cost is not in
+the gossip handler; it's the first `get_encoder` call in the process, which lazily imports
+`sentence_transformers`/`torch` (11.3 s) and builds the model (10.0 s) inside the first gossip tick after
+boot. On the same stack the second gossip tick takes 1,131 ms (`57fe6bf4`) and 1,449 ms (`3019b51e`),
+against 23,471 ms and 19,221 ms for the first. T7.4's two figures were both first-after-boot ticks. Fix
+is ROADMAP **T7.5** (warm the encoder at boot, owner decision 2026-09-18); T7.4's protocol is amended to
+report first and second ticks.
 
 ## ISSUE-355: `demo_game/client.py` docstring says `delta_ticks` accepts "1–1000" after the cap was lowered to 10
 **Found:** 2026-09-18, during T6.1
@@ -3424,3 +3489,11 @@ through from `DemoConfig`, which `run.py` currently ignores).
 **Description:** `CYPHER_LIST_STANDINGS` returns `properties(b)` (the full target faction dict) for the `target` column, but `FactionStandingRow.target: str` expects a faction ID string. FastAPI raises `ResponseValidationError` on every request. Pre-existing — confirmed present in `db5b2c20` (before T3.2). The demo client's `_get_faction_standings_for` returns `[]` on the 500, so the client degrades gracefully, but the sub-endpoint is non-functional. STANDS_WITH edges are seeded and reachable via Cypher; only the HTTP endpoint is broken.
 **Why deferred:** pre-existing; not introduced by T3.2; client degrades gracefully; does not block the live demo.
 **To fix:** either change `CYPHER_LIST_STANDINGS` to `RETURN b.id AS target, r.standing AS standing` (and update `list_standings` accordingly), or update `FactionStandingRow.target` to accept a dict and rename the field. The Cypher fix is simpler and matches the response model's intent.
+**UPDATE 2026-09-18 (analysis, no fix yet — owner to choose):** broken since `87038812` (2026-06-15),
+which added `response_model=OkEnvelope[list[FactionStandingRow]]` with `target: str`; the query has
+returned `properties(b)` since `6cfe763f` (2026-05-06). Consumers disagree on the shape:
+`e2e/scenarios/scenario_faction_politics.py:94` reads `s["target"]["id"]` (dict) — and that scenario
+asserts decay by the `faction_politics` engine deleted in T3.2, so it is obsolete either way; the demo
+client and faction board expect `src_id`/`dst_id` rows and are never called (ISSUE-359). After T3.2
+no tick engine mutates standings. Other readers: the chapter engine reads a top-5 summary internally
+(`get_faction_standings_summary`); this GET is the dedicated per-faction HTTP read.

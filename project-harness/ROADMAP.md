@@ -1281,6 +1281,43 @@ Done when: the test passes and `make check` is green. **Do not attempt the live 
 before/after tick duration needs a running stack built from each tree, and that is T7.4 alone (split
 2026-09-17). SEV-07, brief at `review-fixes/FIX-SEV-07.md`. ✅ AUTO (T7.3, 2026-09-18)
 
+- [ ] **T7.5** Load the embedding encoder at boot — the "slow gossip tick" is a one-time cold load
+Files: `src/npc_engine/retrieval/embedding/sentence_encoder.py` (a warm-up function beside
+`get_encoder`), `src/npc_engine/main.py` (call it in `lifespan`, after `warm_up_llm`),
+`src/npc_engine/config.py` (new `EMBEDDING_WARMUP_ON_STARTUP: bool = True`, mirroring
+`LLM_WARMUP_ON_STARTUP`), new test `tests/unit/api/test_main_encoder_warmup.py`
+Spec: ISSUE-356 and SEV-07 blame gossip logic; the measurement says otherwise. Measured 2026-09-18 on
+the isolated stack, replaying the demo's opening (epoch=war, +1 tick, then advance to each gossip
+boundary), per-engine `last_duration_ms` from `GET /v1/admin/system/engines`:
+`57fe6bf4` (237-node seed): first gossip tick after boot **23,471 ms**, second **1,131 ms**;
+`3019b51e` (301-node seed): first **19,221 ms**, second **1,449 ms**.
+The app log of the cold tick shows where the ~21 s goes: the first pair finishes at +0.7 s; then
+`get_encoder` runs for the first time in the process — `from sentence_transformers import ...` plus
+`import torch` (11.3 s, ending at the `Loading embedding model all-MiniLM-L6-v2 on cpu` line), then
+building the model (10.0 s, ending at the first `vector_store.incremental_upsert`). The other ~9 pairs
+finish within 1.2 s. `get_encoder` is `lru_cache`d and never called at startup; `lifespan` warms the
+LLM (`warm_up_llm`) but not the encoder. So whichever request first needs an embedding pays ~21 s —
+the first gossip tick if nothing embedded earlier; a dialogue turn otherwise (this is why the live
+demo, which talks before its ACT 7 gossip tick, passed with this code). SEV-07's 24,252 ms was taken
+on "the tick landing on GOSSIP_TICK_INTERVAL=10", i.e. the first gossip tick — consistent with a cold
+load, though whether that stack was freshly booted is not recorded.
+Owner decision 2026-09-18: warm the encoder **at boot**, behind the new setting, accepting a slower
+boot. Layer note: `setup/` is rank 1 and cannot import `retrieval/` (rank 3), so the warm-up is a
+`retrieval/embedding` function called from `main.py` (api, rank 6), run via `asyncio.to_thread` like
+every other encoder call in `embedding_index.py`. A warm-up failure logs a warning and boot continues
+degraded (the lazy path still works) — it must not crash boot.
+RED anchor: the new test drives `lifespan` with `get_encoder` patched (no model load, no I/O) and
+asserts it is called once with `settings.EMBEDDING_MODEL` when the setting is true, not at all when
+false, and that an exception from it does not propagate. It fails today — `lifespan` never calls it.
+Validation: `pytest tests/unit/api/test_main_encoder_warmup.py -v`, `make check`; then live —
+`bash scripts/eval_stack_at.sh HEAD --reset` (rebuild; the image is not bind-mounted), note the boot
+time, `make eval-stack-seed`, replay the protocol above and read the first and second gossip ticks.
+Do NOT run the integration suite for this: it writes to the live Neo4j (ISSUE-277).
+Done when: the unit test passes, `make check` is green, `eval_stack_at.sh` still reports
+`EVAL_STACK_SHA` (so the compose healthcheck window — `start_period: 30s`, 5 × 15 s — still covers
+the slower boot), and on the live stack the **first** gossip tick after boot is within 2× the second.
+Record boot time and both gossip ticks in the tick note. ISSUE-356, SEV-07.
+
 - [ ] **T7.4** Measure the gossip tick before and after T7.3 on a running stack
 Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if the tick did not improve)
 Spec: the live tail of T7.3, split out so the loop can land the query fix unattended. T7.3's unit test
@@ -1305,6 +1342,12 @@ neighbours, on the same seed. If the after figure is still an outlier, do not ti
 before (68735025): gossip 22,484 ms — neighbours goal_formation 436 ms, chapter 135 ms, need_decay 109 ms, faction_politics 100 ms, routine 73 ms (>50×);
 after (c190952d): gossip 19,797 ms — neighbours goal_formation 425 ms, chapter 90 ms, faction_politics 104 ms, need_decay 109 ms, routine 77 ms (>46×).
 T7.3 reduced the gossip tick by ~12% (embedding-reconcile O(N)→O(1)). Gossip is still a severe outlier. Logged as ISSUE-356; task not ticked.
+**Amended 2026-09-18 (owner):** both figures above are the *first* gossip tick after boot, which
+includes the one-time ~21 s encoder load (see T7.5) — they measure the cold start, not the tick. Re-run
+the protocol after T7.5 and report the **first and second** gossip tick after boot for each tree; the
+outlier test in "Done when" uses the second (warm) tick. Reference from 2026-09-18, same protocol:
+warm gossip 1,131 ms at `57fe6bf4` (slowest neighbour: event 231 ms), 1,449 ms at `3019b51e`
+(slowest neighbour: goal_formation 475 ms).
 
 ### Phase T8
 
