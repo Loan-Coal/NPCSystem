@@ -82,3 +82,17 @@ Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've
 5. **File organization clean**: All three test files ≤322 lines (well under 800-line limit), proper module docstrings, layer rules followed (no Neo4j outside graph, no violations). Carry-forward notes added to ROADMAP.
 
 **No correctness bugs or project-rule violations found.**
+
+## 2026-09-18 12:31:21 — phase T7
+
+**Findings (T7 phase review):**
+
+1. **T7.1 — metric collection race condition**: `_record_budget_calls()` reads `get_metric_total()` *after* advances complete; if multiple workers call `advance()` concurrently, the delta is wrong (both see the same pre-value, both add the same delta twice). Test `test_tick_budget_guard_counts_calls` only runs single-threaded. Fix: snapshot pre-calls *inside* a lock if distributed mode is enabled, or document this as single-worker only.
+
+2. **T7.2 — TickLLMBudget tick_id mismatch vulnerability**: If a quest trigger's `generate()` straddles a tick boundary (awaits across ticks), the second `consume_for_tick` call resets the counter mid-invocation, allowing budgets to slip. The structure assumes all three triggers run *within* a single tick body, but if one is awaited after a tick completes, the budget is silently reset. No test covers cross-tick awaits.
+
+3. **T7.3 — receiver_ids collection assumes all pairs succeed through side_effects**: `_batch_refresh_receivers()` collects receiver_ids only from pairs that don't raise in the loop, but if `_maybe_propagate_secret()` or emotion distortion fails mid-pair, that receiver is omitted from the batch refresh. The comment says "best-effort" but the doc doesn't clarify if stale embeddings for skipped receivers are acceptable (likely yes, but unspecified).
+
+4. **T7.5 — encoder warmup timeout not bounded**: `asyncio.to_thread(warm_up_encoder, ...)` has no timeout. If the model download stalls (network hiccup, missing model), boot blocks indefinitely. The 30s `start_period` in healthcheck will eventually fail it, but there's no per-warmup timeout. Recommend: wrap with `asyncio.wait_for(..., timeout=30)`.
+
+5. **T7.4 documentation inconsistency**: The ROADMAP now reports warm tick as 1,322 ms after T7.3, but the T7.2 test expects a cap of 40 calls max (10 invocations × 4 calls each). If warm gossip takes 1,322 ms *and* 40+ LLM calls fire in other quest triggers that tick, the gossip tick will be delayed or preempted by LLM call exhaustion — no trace in the measurements explains which tick's LLM budget was charged.
