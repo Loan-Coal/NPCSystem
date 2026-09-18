@@ -17,6 +17,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.ports.quest_generation_port import EventTriggerGraphPort
+from npc_engine.engines.quest_generation.tick_llm_budget import TickLLMBudget
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
@@ -51,6 +52,7 @@ class EventQuestTrigger:
         self,
         generation_engine: QuestGenerationEngine,
         trigger_repo: EventTriggerGraphPort,
+        llm_budget: TickLLMBudget | None = None,
         trigger_event_types: frozenset[str] = DEFAULT_TRIGGER_EVENT_TYPES,
         military_archetypes: frozenset[str] = DEFAULT_MILITARY_ARCHETYPES,
     ) -> None:
@@ -59,11 +61,14 @@ class EventQuestTrigger:
         Args:
             generation_engine: Quest generation engine used to create draft quests.
             trigger_repo: Graph port for unprocessed event queries and NPC look-ups.
+            llm_budget: Shared per-tick LLM invocation budget (T7.2, L11-03). When
+                ``None`` no cap is applied (useful in tests that pre-date the budget).
             trigger_event_types: Event ``event_type`` values that trigger quest creation.
             military_archetypes: Character archetypes considered military for NPC selection.
         """
         self._generation_engine = generation_engine
         self._trigger_repo = trigger_repo
+        self._llm_budget = llm_budget
         self._trigger_event_types = trigger_event_types
         self._military_archetypes = military_archetypes
 
@@ -112,6 +117,13 @@ class EventQuestTrigger:
             _logger.warning(
                 "event_quest_trigger: no military NPC found for event",
                 extra={"event_id": event_id, "tick_id": tick_id},
+            )
+            return None
+
+        if self._llm_budget is not None and not self._llm_budget.consume_for_tick(tick_id):
+            _logger.info(
+                "event_quest_trigger: llm budget exhausted, skipping event",
+                extra={"event_id": event_id, "tick_id": tick_id, "duration_ms": 0},
             )
             return None
 

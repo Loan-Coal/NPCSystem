@@ -52,6 +52,12 @@ MAX_PLAYER_MESSAGE_CHARS: int = 1000
 MAX_DELTA_TICKS: int = 10
 MAX_CHOICE_ID_CHARS: int = 200
 
+# Shared per-tick LLM invocation cap for the three quest trigger engines (T7.2, L11-03).
+# One invocation = one call to QuestGenerationEngine.generate(); worst-case 4 LLM API
+# calls each (3 retries + 1 flavor).  Set to 10 so worst-case total is 40 LLM calls,
+# down from 84 on a saturated tick with 21 trigger firings.
+QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK: int = 10
+
 # DEC-273: ~70-token typical dialogue turn; 150 tokens * 4 chars/token gives the cap.
 # Lowering max_tokens in llm_config.yaml to match reduces decode latency (SEV-06, T2.2).
 NPC_RESPONSE_MAX_CHARS: int = 600
@@ -278,6 +284,7 @@ class Settings(BaseSettings):
     TICK_INTERVAL_SECONDS: int = 10
     TICK_GAME_SECONDS_PER_TICK: int = 1
     TICK_LLM_CALLS_PER_MINUTE_MAX: int = 6  # actual LLM backend calls/min; see DEC-285
+    QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK: int = QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK
     CHAPTER_TICK_INTERVAL: int = 1
 
     RATE_LIMIT_ENABLED: bool = True

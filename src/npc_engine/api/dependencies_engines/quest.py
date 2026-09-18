@@ -29,6 +29,7 @@ from npc_engine.engines.quest_generation.event_quest_trigger import EventQuestTr
 from npc_engine.engines.quest_generation.need_quest_trigger import NeedQuestTrigger
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.engines.quest_generation.template_loader import load_templates
+from npc_engine.engines.quest_generation.tick_llm_budget import TickLLMBudget
 from npc_engine.engines.quest_generation.world_state_quest_trigger import WorldStateQuestTrigger
 from npc_engine.graph.repositories.interaction_repository import Neo4jInteractionRepository
 
@@ -147,6 +148,18 @@ def get_quest_generation_engine() -> QuestGenerationEngine:
 
 
 @lru_cache
+def get_quest_trigger_llm_budget() -> TickLLMBudget:
+    """Create singleton TickLLMBudget shared by all three quest trigger engines.
+
+    Returns:
+        TickLLMBudget capped at QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK. The
+        budget auto-resets per tick_id, so the singleton is safe across ticks.
+    """
+    settings = get_settings()
+    return TickLLMBudget(max_invocations=settings.QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK)
+
+
+@lru_cache
 def get_event_quest_trigger() -> EventQuestTrigger:
     """Create singleton EventQuestTrigger wired to the shared quest generation engine.
 
@@ -159,6 +172,7 @@ def get_event_quest_trigger() -> EventQuestTrigger:
     return EventQuestTrigger(
         generation_engine=get_quest_generation_engine(),
         trigger_repo=Neo4jEventTriggerRepository(get_graph_db()),
+        llm_budget=get_quest_trigger_llm_budget(),
     )
 
 
@@ -175,6 +189,7 @@ def get_need_quest_trigger() -> NeedQuestTrigger:
     return NeedQuestTrigger(
         generation_engine=get_quest_generation_engine(),
         need_trigger_repo=Neo4jNeedTriggerRepository(get_graph_db()),
+        llm_budget=get_quest_trigger_llm_budget(),
     )
 
 
@@ -194,4 +209,5 @@ def get_world_state_quest_trigger() -> WorldStateQuestTrigger:
         generation_engine=get_quest_generation_engine(),
         world_state_repo=Neo4jWorldStateRepository(graph_db),
         trigger_repo=Neo4jEventTriggerRepository(graph_db),
+        llm_budget=get_quest_trigger_llm_budget(),
     )

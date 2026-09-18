@@ -1231,7 +1231,7 @@ Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_advance_clock_pass
 then `make check`.
 Done when: all three pass, `make check` green, DECISIONS entry written. Finding L13-05, **SEV-02**. ✅ AUTO (T7.1, 2026-09-18)
 
-- [ ] **T7.2** Give the three quest triggers one shared per-tick model budget
+- [x] **T7.2** Give the three quest triggers one shared per-tick model budget
 Files: `src/npc_engine/engines/quest_generation/quest_generation_engine.py`,
 the trigger modules in `src/npc_engine/engines/quest_generation/` — `event_quest_trigger.py`,
 `need_quest_trigger.py`, `world_state_quest_trigger.py` (they are **not** in `engines/quest/`, which
@@ -1256,7 +1256,7 @@ RED anchor: the new test constructs a tick where all three triggers fire with ma
 counts calls through a mock adapter, and asserts the total is at or below the shared cap. It should
 count 40+ and fail today.
 Validation: `pytest tests/unit/engines/test_quest_trigger_shared_budget.py -v`, then `make check`.
-Done when: the test passes and `make check` is green. Finding L11-03, **SEV-03**.
+Done when: the test passes and `make check` is green. Finding L11-03, **SEV-03**. ✅ AUTO (T7.2, 2026-09-18)
 
 - [ ] **T7.3** Stop the gossip tick reconciling the whole corpus per propagated pair
 Files: `src/npc_engine/graph/gossip/` (the propagation query path),

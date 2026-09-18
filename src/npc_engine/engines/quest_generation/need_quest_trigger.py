@@ -17,6 +17,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.ports.quest_generation_port import NeedTriggerGraphPort
+from npc_engine.engines.quest_generation.tick_llm_budget import TickLLMBudget
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
@@ -47,6 +48,7 @@ class NeedQuestTrigger:
         self,
         generation_engine: QuestGenerationEngine,
         need_trigger_repo: NeedTriggerGraphPort,
+        llm_budget: TickLLMBudget | None = None,
         threshold: int = DEFAULT_NEED_THRESHOLD,
     ) -> None:
         """Initialise the need quest trigger.
@@ -54,10 +56,13 @@ class NeedQuestTrigger:
         Args:
             generation_engine: Quest generation engine used to create draft quests.
             need_trigger_repo: Graph port for need and draft-quest queries.
+            llm_budget: Shared per-tick LLM invocation budget (T7.2, L11-03). When
+                ``None`` no cap is applied (useful in tests that pre-date the budget).
             threshold: Need level at or below which quest generation is triggered.
         """
         self._generation_engine = generation_engine
         self._need_trigger_repo = need_trigger_repo
+        self._llm_budget = llm_budget
         self._threshold = threshold
 
     async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
@@ -113,6 +118,13 @@ class NeedQuestTrigger:
         if character_id in seen_npcs:
             return None
         seen_npcs.add(character_id)
+
+        if self._llm_budget is not None and not self._llm_budget.consume_for_tick(tick_id):
+            _logger.info(
+                "need_quest_trigger: llm budget exhausted, skipping need",
+                extra={"character_id": character_id, "tick_id": tick_id, "duration_ms": 0},
+            )
+            return None
 
         already_has_draft = await self._need_trigger_repo.has_draft_quest(character_id=character_id)
         if already_has_draft:

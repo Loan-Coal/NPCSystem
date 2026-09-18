@@ -23,6 +23,7 @@ from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 from npc_engine.engines.quest_generation.event_quest_trigger import (
     DEFAULT_MILITARY_ARCHETYPES,
 )
+from npc_engine.engines.quest_generation.tick_llm_budget import TickLLMBudget
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
@@ -64,6 +65,7 @@ class WorldStateQuestTrigger:
         generation_engine: QuestGenerationEngine,
         world_state_repo: WorldStateGraphPort,
         trigger_repo: EventTriggerGraphPort,
+        llm_budget: TickLLMBudget | None = None,
         max_per_tick: int = DEFAULT_MAX_PER_TICK,
     ) -> None:
         """Initialise the world-state quest trigger.
@@ -72,11 +74,14 @@ class WorldStateQuestTrigger:
             generation_engine: Quest generation engine used to create draft quests.
             world_state_repo: Graph port for world-state epoch reads.
             trigger_repo: Graph port for military NPC look-ups.
+            llm_budget: Shared per-tick LLM invocation budget (T7.2, L11-03). When
+                ``None`` no cap is applied (useful in tests that pre-date the budget).
             max_per_tick: Maximum number of quests to generate per tick (currently 1).
         """
         self._generation_engine = generation_engine
         self._world_state_repo = world_state_repo
         self._trigger_repo = trigger_repo
+        self._llm_budget = llm_budget
         self._max_per_tick = max_per_tick
         self._last_triggered_tick: str | int | None = None
 
@@ -152,6 +157,13 @@ class WorldStateQuestTrigger:
             _logger.info(
                 "world_state_quest_trigger: skipping NPC with existing draft quest",
                 extra={"tick_id": tick_id, "npc_id": npc_id, "epoch": epoch, "duration_ms": 0},
+            )
+            return None
+
+        if self._llm_budget is not None and not self._llm_budget.consume_for_tick(tick_id):
+            _logger.info(
+                "world_state_quest_trigger: llm budget exhausted, skipping epoch quest",
+                extra={"tick_id": tick_id, "epoch": epoch, "duration_ms": 0},
             )
             return None
 
