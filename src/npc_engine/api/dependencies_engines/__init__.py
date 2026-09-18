@@ -57,6 +57,7 @@ from npc_engine.api.dependencies_engines.tick_slots import (
 from npc_engine.api.dependencies_stores import get_engine_status_store, get_game_clock
 from npc_engine.config import get_settings
 from npc_engine.api.dependencies_engines.engine_slots import AdvancedEngineSlots, CoreEngineSlots
+from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.utils.errors import EngineWiringError
 
@@ -89,6 +90,7 @@ __all__ = [
     "get_scheme_advance_tick",
     "get_scheme_detection_tick",
     "get_story_pacing_engine",
+    "get_tick_budget_guard",
     "get_tick_scheduler",
     "get_trade_engine",
     "get_world_state_quest_trigger",
@@ -196,6 +198,17 @@ def _assert_every_engine_slot_wired(engines: dict[str, Any], *, expected: frozen
 
 
 @lru_cache
+def get_tick_budget_guard() -> TickBudgetGuard:
+    """Return the singleton TickBudgetGuard shared by the scheduler and autopilot.
+
+    Both clock modes (game_driven and autopilot) reference the same instance so
+    LLM call counts accumulate in one sliding window regardless of which mode is active.
+    """
+    settings = get_settings()
+    return TickBudgetGuard(max_per_minute=settings.TICK_LLM_CALLS_PER_MINUTE_MAX)
+
+
+@lru_cache
 def get_tick_scheduler() -> TickScheduler:
     """Return the singleton TickScheduler wired to all shared engine singletons.
 
@@ -208,6 +221,7 @@ def get_tick_scheduler() -> TickScheduler:
     return TickScheduler(
         clock=get_game_clock(),
         engine_status_store=get_engine_status_store(),
+        budget_guard=get_tick_budget_guard(),
         **engines,
         **_scheduler_config_kwargs(settings),
     )

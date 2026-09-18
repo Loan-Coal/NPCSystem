@@ -33,15 +33,21 @@ from npc_engine.graph.scheduling.tick_scheduler_queries import is_tick_done, mar
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.engine_tick_timer import EngineTickTimer
 from npc_engine.scheduler.game_clock import ClockState, GameClock
+from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_state import WorldState
 from npc_engine.config import get_settings
 from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.graph.world_state.world_state_writer import persist_clock_state
+from npc_engine.utils.metrics import get_metric_total
 
 
 LOGGER = logging.getLogger(__name__)
+
+# Name must match llm_metrics.LLM_BACKEND_CALLS_METRIC — kept in sync by test_tick_budget_guard_counts_calls.
+_LLM_BACKEND_CALLS_METRIC: str = "llm_backend_calls_total"
+_QUEST_TRIGGER_NAMES: frozenset[str] = frozenset({"event_quest", "need_quest", "world_state_quest"})
 
 
 class TickScheduler:
@@ -83,6 +89,7 @@ class TickScheduler:
         lease_ttl_seconds: int = 30,
         lease_repo: TickLeaseRepositoryProtocol | None = None,
         engine_status_store: EngineStatusStore | None = None,
+        budget_guard: TickBudgetGuard | None = None,
     ) -> None:
         """Initialise the tick scheduler.
 
@@ -149,6 +156,9 @@ class TickScheduler:
             engine_status_store: Optional store for per-engine last-run tick and last error.
                 When provided, all engine calls are tracked; errors are recorded without
                 killing the loop.
+            budget_guard: Optional per-minute LLM call ceiling. When provided, ``advance()``
+                checks ``should_skip_llm()`` before each tick and records the actual call
+                count afterward so both game_driven and autopilot clock modes are gated.
         """
 
         self._clock = clock
@@ -189,6 +199,7 @@ class TickScheduler:
             lease_ttl_seconds=lease_ttl_seconds,
         )
         self._engine_status_store = engine_status_store
+        self._budget_guard = budget_guard
 
     async def _run_engine_safe(
         self,
@@ -435,6 +446,8 @@ class TickScheduler:
                 response["chapter"].append(row)
         for name, engine in self._ordered_tick_engines():
             if engine is not None:
+                if skip_llm_engines and name in _QUEST_TRIGGER_NAMES:
+                    continue
                 row = await self._run_engine_safe(name, tick_id, engine.run_tick(tick_id=tick_id))
                 if row is not None:
                     response[name].append(row)
@@ -513,43 +526,103 @@ class TickScheduler:
             consolidation_row.get("consolidated", []) if consolidation_row is not None else []
         )
 
+    def _resolve_skip_llm(self, skip_llm_engines: bool) -> bool:
+        """Return the effective skip flag after consulting the budget guard.
+
+        Args:
+            skip_llm_engines: Caller-supplied override.
+        Returns:
+            True when LLM engines should be skipped this advance.
+        """
+        if skip_llm_engines:
+            return True
+        if self._budget_guard is None:
+            return False
+        if self._budget_guard.should_skip_llm():
+            LOGGER.warning(
+                "tick_budget_exceeded",
+                extra={"remaining": self._budget_guard.remaining, "max_per_minute": self._budget_guard._max_per_minute},
+            )
+            return True
+        return False
+
+    def _record_budget_calls(self, pre_calls: float) -> None:
+        """Record the LLM backend calls made since ``pre_calls`` into the budget guard."""
+        if self._budget_guard is None:
+            return
+        calls_made = int(get_metric_total(_LLM_BACKEND_CALLS_METRIC) - pre_calls)
+        self._budget_guard.record_llm_calls(calls_made)
+
+    async def _advance_ticks(
+        self,
+        *,
+        session: AsyncSession,
+        start_tick: int,
+        end_tick: int,
+        skip_llm_engines: bool,
+        response: dict[str, Any],
+    ) -> tuple[int, WorldState]:
+        """Run tick bodies for (start_tick, end_tick]; return (ticks_advanced, final_world_state).
+
+        Stops early and returns a partial count when a distributed-lease tick is unresolved.
+
+        Args:
+            session: Active Neo4j async session.
+            start_tick: Last tick already persisted; loop begins at start_tick + 1.
+            end_tick: Inclusive upper bound of the range.
+            skip_llm_engines: Forward to each tick body.
+            response: Mutated in-place with per-engine results.
+        Returns:
+            Tuple of (ticks_advanced, world_state) where world_state is re-read each tick.
+        """
+        world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
+        advanced_ticks = 0
+        for tick_id in range(start_tick + 1, end_tick + 1):
+            world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
+            if await self._run_tick_body(
+                session=session, tick_id=tick_id,
+                skip_llm_engines=skip_llm_engines,
+                response=response, world_state=world_state,
+            ):
+                break
+            advanced_ticks += 1
+        return advanced_ticks, world_state
+
     async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int, skip_llm_engines: bool = False) -> dict[str, Any]:
         """Advance the clock and run due handlers, returning per-engine result lists.
 
         Iterates [current+1, current+tick_delta]. Engines run at configured intervals;
         gossip/event support distributed dedup. Per-engine exceptions are caught and
-        do not stop the loop.
+        do not stop the loop. When a ``budget_guard`` is injected, its ceiling applies
+        to both game_driven and autopilot clock modes.
 
         Args:
             session: Active Neo4j async session.
             tick_delta: Ticks to advance; non-positive is a no-op.
             time_delta_seconds: In-game seconds advanced proportionally.
-            skip_llm_engines: When True, skip chapter and consolidation engines.
-
+            skip_llm_engines: When True, skip chapter, quest triggers, and consolidation.
+                The budget_guard may also set this to True independently.
         Returns:
             Dict with ``clock``, ``gossip``, ``event``, and per-engine result lists.
         """
         async with self._lock:
+            effective_skip = self._resolve_skip_llm(skip_llm_engines)
+            pre_calls = get_metric_total(_LLM_BACKEND_CALLS_METRIC)
             start_tick = self._clock.state.tick_id
             end_tick = start_tick + max(0, tick_delta)
             response = self._build_empty_response()
-            world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
-            advanced_ticks = 0
-            for tick_id in range(start_tick + 1, end_tick + 1):
-                world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
-                if await self._run_tick_body(
-                    session=session, tick_id=tick_id,
-                    skip_llm_engines=skip_llm_engines,
-                    response=response, world_state=world_state,
-                ):
-                    break
-                advanced_ticks += 1
+            advanced_ticks, world_state = await self._advance_ticks(
+                session=session, start_tick=start_tick, end_tick=end_tick,
+                skip_llm_engines=effective_skip, response=response,
+            )
             await self._finalize_advance(
                 session=session, tick_delta=tick_delta, advanced_ticks=advanced_ticks,
-                start_tick=start_tick, skip_llm_engines=skip_llm_engines,
+                start_tick=start_tick, skip_llm_engines=effective_skip,
                 world_state=world_state, response=response,
                 time_delta_seconds=time_delta_seconds,
             )
+            if not effective_skip:
+                self._record_budget_calls(pre_calls)
             return response
 
     @property

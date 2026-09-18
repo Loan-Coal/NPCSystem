@@ -51,6 +51,7 @@ from npc_engine.api.dependencies_engines import (
     get_quest_lifecycle_engine,
     get_routine_engine,
     get_story_pacing_engine,
+    get_tick_budget_guard,
     get_tick_scheduler,
     get_trade_engine,
 )
@@ -103,6 +104,7 @@ __all__ = [
     "get_routine_engine",
     "get_session_store",
     "get_story_pacing_engine",
+    "get_tick_budget_guard",
     "get_tick_scheduler",
     "get_trade_engine",
     "get_treaty_engine",

@@ -266,7 +266,14 @@ async def test_advance_once_passes_skip_llm_true_when_budget_exhausted() -> None
 
 
 @pytest.mark.asyncio
-async def test_advance_once_records_llm_tick_when_not_skipped() -> None:
+async def test_advance_once_delegates_recording_to_scheduler() -> None:
+    """Autopilot must not record LLM ticks itself; recording is TickScheduler's responsibility.
+
+    T7.1 Step 2 moved recording from advance_once() into TickScheduler.advance() so
+    both clock modes (game_driven and autopilot) share a single accounting seam.
+    When the scheduler is mocked, no recording happens anywhere — which is correct:
+    the real scheduler handles it when it runs.
+    """
     scheduler = _make_scheduler()
     guard = TickBudgetGuard(max_per_minute=5)
     autopilot = TickAutopilot(
@@ -278,27 +285,8 @@ async def test_advance_once_records_llm_tick_when_not_skipped() -> None:
     )
     assert len(guard._timestamps) == 0
     await autopilot.advance_once()
-    assert len(guard._timestamps) == 1
-
-
-@pytest.mark.asyncio
-async def test_advance_once_does_not_record_when_budget_skipped() -> None:
-    scheduler = _make_scheduler()
-    guard = TickBudgetGuard(max_per_minute=5)
-
-    def _forced_skip(**kwargs):
-        return True
-
-    guard.should_skip_llm = _forced_skip  # type: ignore[method-assign]
-
-    autopilot = TickAutopilot(
-        graph_db=_make_graph_db(),
-        tick_scheduler=scheduler,
-        interval_seconds=10,
-        game_seconds_per_tick=1,
-        budget_guard=guard,
-    )
-    await autopilot.advance_once()
+    # No timestamps: the mock scheduler does not exercise the real advance() recording path.
+    # The real TickScheduler records via record_llm_calls() after each tick body.
     assert len(guard._timestamps) == 0
 
 

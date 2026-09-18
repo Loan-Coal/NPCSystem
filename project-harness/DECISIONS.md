@@ -10159,3 +10159,18 @@ tripwire widened from `--cov-fail-under` to `--(cov-)?fail-under` so a loop diff
 **What this changes for callers:** Any recorded eval output containing gossip text predates this fix and reflects canonical text; those outputs are no longer representative of what the engine now returns. A/B tests comparing gossip coherence before and after this task will show the mechanic actually working for the first time.
 **Rationale:** The write side was always correct; this fix aligns the read side with it. The fallback via `coalesce` is deliberately conservative — it does not invent distortion, it only surfaces what was already written.
 **CR-L01-01 closed:** This finding survived two review cycles under a `CR-L*` id that the roadmap never cross-referenced until T5.3. It is now fixed and the regression test in `test_gossip_distortion_read_back.py` pins the correct behaviour going forward.
+
+
+## DEC-285: T7.1 — Move LLM budget gate into TickScheduler and count per backend call
+
+**Date:** 2026-09-18 · **Status:** ✅ ACCEPTED · **Drives:** `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/scheduler/tick_budget_guard.py`, `src/npc_engine/scheduler/tick_autopilot.py`, `src/npc_engine/api/dependencies_engines/__init__.py`, `src/npc_engine/main.py`
+
+**Context (Step 2 — wrong entry-point axis):** `TICK_LLM_CALLS_PER_MINUTE_MAX` existed only in the autopilot path. `advance_clock` (the recommended `game_driven` mode per `ENGINES.md §29-31`) called `scheduler.advance()` without any budget guard consultation. In game_driven mode the guard did not exist at all.
+
+**Decision (Step 2):** Inject `TickBudgetGuard` into `TickScheduler` as an optional constructor parameter. `TickScheduler.advance()` calls `_resolve_skip_llm()` — which checks the internal guard — before running tick engines. Both `advance_clock` (game_driven) and `TickAutopilot` (autopilot) reach the scheduler, so both modes now respect the same ceiling without any change to the route or autopilot call-sites. The `TickBudgetGuard` instance is created once as a singleton in `get_tick_budget_guard()` and shared across the scheduler and autopilot so call counts accumulate in a single sliding window. Recording is moved from `TickAutopilot.advance_once()` into `TickScheduler._record_budget_calls()`, which is called after each advance when LLM engines ran.
+
+**Context (Step 3 — wrong-unit axis):** `record_llm_tick()` appended one timestamp per advance call regardless of how many backend calls that advance made. A worst-case tick (84 calls) consumed 1 budget slot. After two such ticks the guard showed 2 of 6 consumed — nowhere near exhausted.
+
+**Decision (Step 3):** Add `record_llm_calls(count: int, *, now: float | None = None)` to `TickBudgetGuard`. The method appends `count` timestamps so each LLM backend call costs one slot. `record_llm_tick()` is kept as a backward-compatible shim that delegates to `record_llm_calls(1)`. `TickScheduler._record_budget_calls()` snapshots `llm_backend_calls_total` before and after the tick body (using `utils.metrics.get_metric_total()`), computes the delta, and records that many slots. `TICK_LLM_CALLS_PER_MINUTE_MAX` already named the unit correctly (`CALLS`); only the guard's docstring required updating from "activations" to "calls".
+
+**What this changes for callers:** `TickScheduler.__init__()` gains an optional `budget_guard` parameter; all existing callers that omit it get the previous behaviour (no budget ceiling). `TickAutopilot.__init__()` is unchanged — it still accepts `budget_guard` for the `should_skip_llm()` check — but `advance_once()` no longer calls `record_llm_tick()`.

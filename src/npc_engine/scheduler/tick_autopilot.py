@@ -98,9 +98,6 @@ class TickAutopilot:
                 skip_llm_engines=skip_llm,
             )
 
-        if self._budget_guard is not None and not skip_llm:
-            self._budget_guard.record_llm_tick()
-
         return result
 
     async def run_forever(self) -> None:

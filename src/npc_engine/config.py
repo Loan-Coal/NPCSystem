@@ -277,7 +277,7 @@ class Settings(BaseSettings):
     TICK_AUTOPILOT_ENABLED: bool = True
     TICK_INTERVAL_SECONDS: int = 10
     TICK_GAME_SECONDS_PER_TICK: int = 1
-    TICK_LLM_CALLS_PER_MINUTE_MAX: int = 6
+    TICK_LLM_CALLS_PER_MINUTE_MAX: int = 6  # actual LLM backend calls/min; see DEC-285
     CHAPTER_TICK_INTERVAL: int = 1
 
     RATE_LIMIT_ENABLED: bool = True

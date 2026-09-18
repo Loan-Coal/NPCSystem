@@ -1196,7 +1196,7 @@ found contention, not model size, is the binding constraint.
 
 Reduce the offered load before arbitrating it.
 
-- [ ] **T7.1** Make `TICK_LLM_CALLS_PER_MINUTE_MAX` real — it is broken on three axes
+- [x] **T7.1** Make `TICK_LLM_CALLS_PER_MINUTE_MAX` real — it is broken on three axes
 Pre-approved: public-interface · owner 2026-09-08
 Files: `src/npc_engine/scheduler/tick_budget_guard.py`, `src/npc_engine/scheduler/tick_scheduler.py`,
 `src/npc_engine/scheduler/tick_autopilot.py`, `src/npc_engine/api/routes/world/clock.py`,
@@ -1229,7 +1229,7 @@ quest trigger engines make **zero** LLM calls through a mock adapter. It must fa
 tree; that failure is the bug. The other two tests likewise fail today.
 Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_advance_clock_passes_skip_llm.py -v`,
 then `make check`.
-Done when: all three pass, `make check` green, DECISIONS entry written. Finding L13-05, **SEV-02**.
+Done when: all three pass, `make check` green, DECISIONS entry written. Finding L13-05, **SEV-02**. ✅ AUTO (T7.1, 2026-09-18)
 
 - [ ] **T7.2** Give the three quest triggers one shared per-tick model budget
 Files: `src/npc_engine/engines/quest_generation/quest_generation_engine.py`,

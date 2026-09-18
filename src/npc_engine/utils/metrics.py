@@ -130,6 +130,12 @@ class MetricsRegistry:
         with self._lock:
             return self._counters.get(key, 0.0)
 
+    def metric_total(self, metric: str) -> float:
+        """Sum all counter entries for the given metric name, across all label combinations."""
+
+        with self._lock:
+            return sum(v for (m, _), v in self._counters.items() if m == metric)
+
     def snapshot(self) -> dict[str, dict[str, float | dict[str, float]]]:
         """Return immutable snapshot of counters and observations."""
 
@@ -182,6 +188,12 @@ def get_counter_value(metric: str, labels: Mapping[str, str] | None = None) -> f
     """Get counter value from default registry for tests and diagnostics."""
 
     return get_metrics_registry().counter_value(metric=metric, labels=labels)
+
+
+def get_metric_total(metric: str) -> float:
+    """Sum all counter entries for the given metric name across every label combination."""
+
+    return get_metrics_registry().metric_total(metric=metric)
 
 
 def reset_metrics_registry() -> None:
