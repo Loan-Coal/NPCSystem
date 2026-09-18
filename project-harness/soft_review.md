@@ -96,3 +96,22 @@ Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've
 4. **T7.5 — encoder warmup timeout not bounded**: `asyncio.to_thread(warm_up_encoder, ...)` has no timeout. If the model download stalls (network hiccup, missing model), boot blocks indefinitely. The 30s `start_period` in healthcheck will eventually fail it, but there's no per-warmup timeout. Recommend: wrap with `asyncio.wait_for(..., timeout=30)`.
 
 5. **T7.4 documentation inconsistency**: The ROADMAP now reports warm tick as 1,322 ms after T7.3, but the T7.2 test expects a cap of 40 calls max (10 invocations × 4 calls each). If warm gossip takes 1,322 ms *and* 40+ LLM calls fire in other quest triggers that tick, the gossip tick will be delayed or preempted by LLM call exhaustion — no trace in the measurements explains which tick's LLM budget was charged.
+
+## 2026-09-18 13:18:07 — phase T8
+
+**T8 Phase Review — 5 Findings**
+
+**1. Missing edge case test for gate initialization**
+`admission_control.py:124-128` documents that `LLMAdmissionGate(max_concurrent < 2)` raises ValueError, but `test_admission_control.py` has no test covering this documented error path (RED → test must exist to confirm the guard).
+
+**2. Private attribute access in public tests**
+`test_llm_factory.py:718,727,737,747` access `client._inner` (a private attribute). Should test through public `model_name()` or `health_check()` instead, or make `_inner` public if it's part of the contract.
+
+**3. No validation on per-engine timeout values**
+`factory.py:370-378` and `test_per_engine_timeout_wiring.py` verify that `timeouts_ms.full` is *wired*, but don't validate that the timeout is positive. A zero or negative value in `llm_config.yaml` would pass tests but fail at runtime in the adapter layer (shedding all calls).
+
+**4. Gate singleton is not thread-safe**
+`admission_control.py:344-347` uses check-then-set pattern without locking. In asyncio it's safe (no context switch in sync code), but if called from multiple threads, two gates could be created. Document this or add a lock if threading is possible.
+
+**5. Unreachable condition in background shedding**
+`admission_control.py:185-191` checks `_interactive_count > 0`, then later `_background_held >= _background_max`. If an interactive call is pending (waiting for semaphore), a fresh background call will be shed at line 187. Correct behavior, but the `_background_held >= _background_max` check on line 188 is now unreachable (any arrival while interactive is pending hits line 187 first).  This is semantically OK, but suggests redundant logic—consider reordering or removing the second check for clarity.
