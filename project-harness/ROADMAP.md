@@ -1387,7 +1387,7 @@ Done when: tests pass and `make check` is green. Finding L13-06, SEV-04.
 Note (owner, 2026-09-18, ISSUE-358): out of scope here, but if a hard per-minute cap on background calls
 is ever wanted, it belongs in this gate, which sees every backend call, not in the scheduler. ✅ AUTO (T8.1, 2026-09-18)
 
-- [ ] **T8.2** Wire the per-engine timeouts that four of five engines declare and nobody reads
+- [x] **T8.2** Wire the per-engine timeouts that four of five engines declare and nobody reads
 Pre-approved: public-interface · owner 2026-09-08
 Files: `src/npc_engine/engines/llm/factory.py`, `src/npc_engine/engines/llm_config_models.py`,
 `src/npc_engine/engines/*/llm_config.yaml`,
@@ -1415,7 +1415,7 @@ whose effective timeout is 30s, not 10s; and that no `llm_config.yaml` declares 
 reads. Both fail today.
 Validation: `pytest tests/unit/llm/ tests/unit/engines/ -v`, then `make check`.
 Done when: tests pass, `make check` green. Related to ISSUE-298 (the temperature version of the
-same defect). Finding L11-02, SEV-10.
+same defect). Finding L11-02, SEV-10. ✅ AUTO (T8.2, 2026-09-18)
 
 ---
 

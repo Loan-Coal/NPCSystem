@@ -47,6 +47,17 @@ def registered_backends() -> frozenset[str]:
     return frozenset(_REGISTRY)
 
 
+def _resolve_timeout(engine_config: EngineModelConfig, settings: Settings) -> float:
+    """Return per-engine transport timeout in seconds.
+
+    Uses ``engine_config.timeouts_ms.full`` when the engine declares one,
+    falling back to the process-wide ``settings.LLM_TIMEOUT_SECONDS``.
+    """
+    if engine_config.timeouts_ms is not None:
+        return engine_config.timeouts_ms.full / 1000.0
+    return settings.LLM_TIMEOUT_SECONDS
+
+
 def create_llm_client_for_engine(
     engine_config: EngineModelConfig,
     settings: Settings,
@@ -54,13 +65,13 @@ def create_llm_client_for_engine(
     """Return a backend adapter configured from a per-engine LLM config.
 
     The backend type is taken from ``engine_config.llm.backend``; connection
-    parameters (URLs, global timeout) are taken from ``settings``.  For the
-    Ollama backend the model name comes from ``engine_config.llm.model``,
-    enabling per-engine model selection.
+    parameters (URLs, per-engine timeout) are taken from ``engine_config`` and
+    ``settings``.  Per-engine ``timeouts_ms.full`` is used as the HTTP transport
+    ceiling; ``settings.LLM_TIMEOUT_SECONDS`` is the fallback when absent.
 
     Args:
         engine_config: Validated per-engine LLM configuration.
-        settings: Application settings providing backend URLs and timeout.
+        settings: Application settings providing backend URLs and timeout fallback.
 
     Returns:
         Concrete LLMClientProtocol for the engine's declared backend.
@@ -88,7 +99,7 @@ def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMCl
     return OllamaAdapter(
         base_url=settings.OLLAMA_API_URL,
         model_name=engine_config.llm.model,
-        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+        timeout_seconds=_resolve_timeout(engine_config, settings),
         keep_alive=settings.OLLAMA_KEEP_ALIVE,
         engine_name=engine_config.engine,
     )
@@ -103,7 +114,7 @@ def _build_openai(engine_config: EngineModelConfig, settings: Settings) -> LLMCl
         base_url=settings.OPENAI_API_URL,
         api_key=settings.OPENAI_API_KEY,
         model_name=engine_config.llm.model,
-        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+        timeout_seconds=_resolve_timeout(engine_config, settings),
     )
 
 
