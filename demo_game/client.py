@@ -30,8 +30,7 @@ class EngineClient:
     Args:
         base_url: Engine base URL, e.g. http://localhost:8000.
         api_key: Bearer token for authentication.
-        dialogue_timeout: Stall-detection timeout for LLM-backed calls (seconds), including
-            clock/advance, which runs the LLM-backed tick engines.
+        dialogue_timeout: Stall-detection timeout for LLM-backed calls, incl. clock/advance (s).
         graph_timeout: Stall-detection timeout for graph/clock read calls (seconds).
         _http_client: Injected httpx.Client for testing — do not use in production.
     """
@@ -287,10 +286,7 @@ class EngineClient:
         game_time_seconds: int = 1,
         advance_time_field: str | None = None,
     ) -> dict:
-        """Advance the game clock and trigger all due engine ticks.
-
-        Uses the dialogue (LLM-class) timeout: the tick runs LLM-backed engines — quest
-        triggers and chapter labelling — so it is not a graph read.
+        """Advance the clock and run due engine ticks (LLM-backed: uses the dialogue timeout).
 
         Args:
             delta_ticks: Number of ticks to advance (1–1000).
