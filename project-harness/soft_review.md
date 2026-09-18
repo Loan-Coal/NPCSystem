@@ -115,3 +115,22 @@ Looking at the T4.2 commit diff (the only T4 commit in the latest history), I've
 
 **5. Unreachable condition in background shedding**
 `admission_control.py:185-191` checks `_interactive_count > 0`, then later `_background_held >= _background_max`. If an interactive call is pending (waiting for semaphore), a fresh background call will be shed at line 187. Correct behavior, but the `_background_held >= _background_max` check on line 188 is now unreachable (any arrival while interactive is pending hits line 187 first).  This is semantically OK, but suggests redundant logic—consider reordering or removing the second check for clarity.
+
+## 2026-09-18 15:16:13 — phase T9
+
+Looking at the T9 roadmap phase commits, here are 5 concrete findings:
+
+### 1. **Misleading parameter name in SlotValidator**
+`slot_validator.py:22` — Parameter named `quest_gen_repo` but receives `SlotValidationGraphPort`. Should be `slot_validation_repo` for semantic clarity. Names should reflect actual types (NPC project rule: clear naming).
+
+### 2. **Incomplete protocol split in docstring**
+`quest_generation_port.py:3-7` — Docstring promises protocols for "trigger reads for the three trigger classes" (EventTriggerGraphPort, NeedTriggerGraphPort listed in "Used by"), but these are not defined in this file. Either the split is incomplete, or the docstring overstates what's present.
+
+### 3. **No type-checker guard for dual-protocol repository**
+`dependencies_engines/quest.py:141-143` and test files — Both `quest_gen_repo` and `slot_validation_repo` receive the same `Neo4jQuestGenerationRepository` instance. Nothing verifies the repository actually implements both `QuestContextGraphPort` *and* `SlotValidationGraphPort`. If the implementation later drops one protocol, this coupling breaks silently.
+
+### 4. **Redeclared-method test has a gap**
+`test_ports_t9_2.py:46-76` — Test correctly checks that no method is directly declared twice across the four quest_port siblings using `vars()`. But it doesn't verify that the mixin protocols themselves don't declare the same method (e.g., both `_QuestStateMixin` and `_QuestEventMixin` defining a method). Should add a check for mixin-to-mixin collision.
+
+### 5. **Confusing parameter wiring at callsite**
+`quest_generation_engine.py:147` — Passes `self._slot_validation_repo` with parameter name `quest_gen_repo`. While the type is correct, the naming mismatch at the callsite obscures what's happening. Parameter name in SlotValidator should match the semantic role.
