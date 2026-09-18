@@ -5,7 +5,7 @@ Purpose: After a dialogue relation delta lands, read the edge's current affinity
          scalars + phase, derive whether the relationship crossed a phase band,
          and persist the new phase only on a transition (F1.1 call-site wiring).
 Does NOT: apply relation deltas, open sessions/transactions, or call LLM services.
-Dependencies injected: RelationReadPort (read) + RelationPhaseWritePort (write) ports
+Dependencies injected: RelationReadPort (read) + Neo4jRelationPhaseWriteRepository (write) ports
          per call (DEC-122 / SEV-24 — no Neo4j session); composes the pure
          affinity_engine.derive_phase.
 Used by: engines/dialogue/dialogue_handler.
@@ -22,7 +22,7 @@ from npc_engine.engines.relationship.affinity_engine import (
 )
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
+    from npc_engine.graph.repositories.relation_phase_write_repository import Neo4jRelationPhaseWriteRepository
     from npc_engine.engines.ports.relation_read_port import RelationReadPort
 
 _DEFAULT_PHASE: RelationshipPhase = RelationshipPhase.STRANGER
@@ -35,7 +35,7 @@ def _current_phase(stored: str | None) -> RelationshipPhase:
 
 async def apply_phase_transition(
     relation_reader: RelationReadPort,
-    phase_writer: RelationPhaseWritePort,
+    phase_writer: Neo4jRelationPhaseWriteRepository,
     *,
     src_id: str,
     dst_id: str,

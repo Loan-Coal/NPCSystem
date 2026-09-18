@@ -20,12 +20,11 @@ from types import SimpleNamespace
 
 
 def test_registered_emotion_models_returns_builtins() -> None:
-    """registered_emotion_models() exposes at least vad and trait_modulated."""
+    """registered_emotion_models() exposes at least vad."""
     from npc_engine.engines.emotion.emotion_model_factory import registered_emotion_models
 
     backends = registered_emotion_models()
     assert "vad" in backends
-    assert "trait_modulated" in backends
 
 
 def test_register_emotion_model_extends_registry() -> None:
@@ -51,13 +50,9 @@ def test_build_emotion_model_dispatches_via_registry() -> None:
     """build_emotion_model returns the registered implementation for the name."""
     from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
     from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
-    from npc_engine.engines.emotion.trait_modulated_model import TraitModulatedEmotionModel
 
     settings_vad = SimpleNamespace(EMOTION_MODEL="vad")
-    settings_trait = SimpleNamespace(EMOTION_MODEL="trait_modulated")
-
     assert isinstance(build_emotion_model(settings_vad), VadEmotionModel)
-    assert isinstance(build_emotion_model(settings_trait), TraitModulatedEmotionModel)
 
 
 # ---------------------------------------------------------------------------

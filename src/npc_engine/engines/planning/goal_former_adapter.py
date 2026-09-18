@@ -7,14 +7,13 @@ Purpose: Adapts GoalFormer to the TickEngine protocol — on each tick fetches a
          ActionSelector to optionally dispatch a move.
 Dependencies: npc_engine.engines.planning.goal_former,
               npc_engine.engines.planning.action_selector,
-              npc_engine.engines.ports.character_read_port (CharacterReadPort),
+              npc_engine.engines.ports.character_read_port (Neo4jCharacterReadRepository),
               npc_engine.engines.ports.world_state_port (WorldStateGraphPort),
               npc_engine.config (get_settings).
 Used by: npc_engine.scheduler.tick_scheduler (injected as goal_formation_engine),
          npc_engine.api.dependencies_engines.get_goal_formation_engine.
 
-Does NOT: call LLMs, open transactions, hold a session, or import from api/, services/,
-          or the graph layer.
+Does NOT: call LLMs, open transactions, hold a session, or import from api/ or services/.
 Dependencies injected: goal_former, action_selector, character_reader,
                        world_state_repo (via __init__).
 """
@@ -27,7 +26,7 @@ from typing import Any
 from npc_engine.config import get_settings
 from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former import GoalFormer
-from npc_engine.engines.ports.character_read_port import CharacterReadPort
+from npc_engine.graph.repositories.character_read_repository import Neo4jCharacterReadRepository
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 from npc_engine.world.time_utils import TimePoint
 
@@ -46,7 +45,7 @@ class GoalFormerAdapter:
     Attributes:
         _goal_former: Injected GoalFormer instance.
         _action_selector: Injected ActionSelector instance.
-        _character_reader: Injected CharacterReadPort (active NPC ids).
+        _character_reader: Injected Neo4jCharacterReadRepository (active NPC ids).
         _world_state_repo: Injected WorldStateGraphPort (current game time).
     """
 
@@ -54,7 +53,7 @@ class GoalFormerAdapter:
         self,
         goal_former: GoalFormer,
         action_selector: ActionSelector,
-        character_reader: CharacterReadPort,
+        character_reader: Neo4jCharacterReadRepository,
         world_state_repo: WorldStateGraphPort,
     ) -> None:
         """Initialise the adapter with injected engines and read ports.
@@ -62,7 +61,7 @@ class GoalFormerAdapter:
         Args:
             goal_former: GoalFormer instance (injected PlanningGraphPort).
             action_selector: ActionSelector instance (injected PlanningGraphPort).
-            character_reader: CharacterReadPort for active NPC ids.
+            character_reader: Neo4jCharacterReadRepository for active NPC ids.
             world_state_repo: WorldStateGraphPort for the current game time.
         """
         self._goal_former = goal_former

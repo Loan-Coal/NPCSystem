@@ -4,13 +4,13 @@ Layer: engines
 Purpose: Reads NPC Need nodes, identifies the most-decayed need, and forms a Goal node
          with urgency = min(MAX_URGENCY, MAX_URGENCY - need.level). Writes a GOAL_TARGETS
          edge to the first satisfying location found for that need kind.
-Dependencies: npc_engine.engines.ports.planning_port (PlanningGraphPort),
+Dependencies: npc_engine.engines.ports.planning_port (Neo4jPlanningRepository),
               npc_engine.engines.planning.action_priority,
               npc_engine.utils.logging, npc_engine.world.time_utils
 Used by: npc_engine.scheduler.tick_scheduler (slice-2 wiring)
 Does NOT: call LLMs, open transactions, run Cypher, hold a session, or import from
           api/, services/, retrieval/, or the graph layer.
-Dependencies injected: PlanningGraphPort (via __init__).
+Dependencies injected: Neo4jPlanningRepository (via __init__).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 
 from npc_engine.engines.planning.action_priority import MAX_URGENCY
-from npc_engine.engines.ports.planning_port import PlanningGraphPort
+from npc_engine.graph.repositories.planning_repository import Neo4jPlanningRepository
 from npc_engine.utils.logging import get_logger
 from npc_engine.world.time_utils import TimePoint
 
@@ -35,14 +35,14 @@ class GoalFormer:
     4. Creates a Goal node via goal_service.create_goal (MERGE-safe).
     5. If a satisfying location exists, creates a GOAL_TARGETS edge to it.
 
-    The PlanningGraphPort is injected once; no session is held.
+    The Neo4jPlanningRepository is injected once; no session is held.
     """
 
-    def __init__(self, planning_repo: PlanningGraphPort) -> None:
+    def __init__(self, planning_repo: Neo4jPlanningRepository) -> None:
         """Initialise with the injected planning graph port.
 
         Args:
-            planning_repo: PlanningGraphPort for need reads + goal/target writes.
+            planning_repo: Neo4jPlanningRepository for need reads + goal/target writes.
         """
         self._planning = planning_repo
 

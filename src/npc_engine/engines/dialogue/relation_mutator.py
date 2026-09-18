@@ -2,11 +2,11 @@
 relation_mutator.py - Applies validated relation deltas through the dialogue graph port.
 Layer: engines
 Purpose: Emit structured audit-log events and delegate relation-delta writes to the
-         injected DialogueGraphPort (which owns the first-contact retry logic).
+         injected Neo4jDialogueRepository (which owns the first-contact retry logic).
 
 Does NOT: import neo4j types; open sessions; implement graph write logic.
 
-Dependencies injected: DialogueGraphPort, Settings.
+Dependencies injected: Neo4jDialogueRepository, Settings.
 
 Structured audit log events emitted:
 - ``relation_delta_attempt``: before the graph write (INFO).
@@ -22,14 +22,15 @@ from npc_engine.engines.dialogue.dialogue_models import RelationDeltas
 from npc_engine.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.dialogue_graph_port import DialogueGraphPort
+    from npc_engine.config import Settings
+    from npc_engine.graph.repositories.dialogue_repository import Neo4jDialogueRepository
 
 _LOGGER = get_logger(__name__)
 
 
 async def apply_dialogue_relation_deltas(
-    repo: DialogueGraphPort,
-    settings: object,
+    repo: Neo4jDialogueRepository,
+    settings: Settings,
     npc_id: str,
     player_id: str,
     relation_deltas: RelationDeltas,
@@ -42,8 +43,8 @@ async def apply_dialogue_relation_deltas(
     First-contact edge creation is handled by the port adapter.
 
     Args:
-        repo: DialogueGraphPort implementation managing the graph writes.
-        settings: Application settings forwarded to the graph writer.
+        repo: Neo4jDialogueRepository implementation managing the graph writes.
+        settings: Application Settings forwarded to the graph writer.
         npc_id: Source node identifier (NPC).
         player_id: Destination node identifier (player).
         relation_deltas: Per-field delta values from the dialogue response.

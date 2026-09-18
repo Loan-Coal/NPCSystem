@@ -3,7 +3,7 @@ Module: pair_selector
 Layer: engines
 Purpose: Selects gossip-eligible NPC pairs with faction-weighted deterministic ordering.
 Does NOT: mutate knowledge edges.
-Dependencies injected: GossipGraphPort.
+Dependencies injected: Neo4jGossipRepository.
 Used by: npc_engine.engines.gossip.gossip_handler.GossipHandler.run_tick.
 """
 
@@ -15,7 +15,7 @@ from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_weighting import compute_faction_weight
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.gossip_port import GossipGraphPort
+    from npc_engine.graph.repositories.gossip_repository import Neo4jGossipRepository
 
 _GOAL_ALIGNMENT_BONUS = 10
 
@@ -24,7 +24,7 @@ def _pair_weight(character: dict[str, Any]) -> int:
     return int(character.get("gossipy", 50))
 
 
-async def _fetch_goal_target_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
+async def _fetch_goal_target_ids(repo: Neo4jGossipRepository, character_id: str) -> set[str]:
     """Return the set of non-empty target_id values from this character's active goals.
 
     Args:
@@ -38,13 +38,13 @@ async def _fetch_goal_target_ids(repo: GossipGraphPort, character_id: str) -> se
     return {g["target_id"] for g in goals if g.get("target_id")}
 
 
-async def _fetch_known_node_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
+async def _fetch_known_node_ids(repo: Neo4jGossipRepository, character_id: str) -> set[str]:
     """Delegate to graph port: returns node IDs known by character via KNOWS_ABOUT."""
     return await repo.fetch_known_node_ids(character_id)
 
 
 async def select_pairs(
-    repo: GossipGraphPort,
+    repo: Neo4jGossipRepository,
     max_pairs: int,
     weight_config: GossipWeightConfig,
 ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]]:

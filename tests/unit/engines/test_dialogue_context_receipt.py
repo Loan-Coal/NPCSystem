@@ -3,7 +3,7 @@ test_dialogue_context_receipt.py - The context receipt on DialogueResponse (item
 
 Does NOT: call live LLM services; open Neo4j sessions.
 
-Dependencies injected: fake LLM client, mock DialogueGraphPort, mock DialogueContextPort.
+Dependencies injected: fake LLM client, mock Neo4jDialogueRepository, mock Neo4jDialogueContextAdapter.
 
 What is under test is an attribution property, not a feature. Retrieval precision measured
 over what the retriever RANKED and precision measured over what SURVIVED the prompt budget
@@ -234,16 +234,13 @@ async def test_asking_for_a_receipt_does_not_change_the_prompt(monkeypatch) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_port_and_adapter_agree_on_the_three_element_return() -> None:
-    """SEV-15: an adapter that returns a receipt against a port that does not declare one
-    type-checks only until someone writes against the Protocol instead of the class."""
-    from npc_engine.engines.ports.dialogue_context_port import DialogueContextPort
+def test_adapter_build_context_return_carries_context_receipt() -> None:
+    """SEV-15: Neo4jDialogueContextAdapter.build_context must declare ContextReceipt in its
+    return type so callers get full attribution (receipt, not None) on a cache miss."""
     from npc_engine.retrieval.dialogue_context.dialogue_context_adapter import (
         Neo4jDialogueContextAdapter,
     )
 
-    port_return = inspect.signature(DialogueContextPort.build_context).return_annotation
     adapter_return = inspect.signature(Neo4jDialogueContextAdapter.build_context).return_annotation
 
-    assert "ContextReceipt" in str(port_return)
-    assert str(port_return) == str(adapter_return)
+    assert "ContextReceipt" in str(adapter_return)

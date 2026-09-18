@@ -5,7 +5,7 @@ Purpose: Per-request dialogue orchestrator; delegates all graph I/O to injected 
 
 Does NOT: implement HTTP transport concerns; hold AsyncSession; open Neo4j sessions.
 
-Dependencies injected: DialogueGraphPort, DialogueContextPort, Settings, LLMClientProtocol,
+Dependencies injected: Neo4jDialogueRepository, Neo4jDialogueContextAdapter, Settings, LLMClientProtocol,
                        EngineModelConfig, SessionStore, EmotionUpdater,
                        KnowledgeExtractionEngine (optional).
 
@@ -37,8 +37,8 @@ from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.ports.clock_port import ClockPort
-from npc_engine.engines.ports.dialogue_context_port import DialogueContextPort
-from npc_engine.engines.ports.dialogue_graph_port import DialogueGraphPort
+from npc_engine.graph.repositories.dialogue_repository import Neo4jDialogueRepository
+from npc_engine.retrieval.dialogue_context.dialogue_context_adapter import Neo4jDialogueContextAdapter
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from npc_engine.engines.dialogue.system_state_context import SystemStateContext
     from npc_engine.engines.interaction.negotiation_store import NegotiationStore
     from npc_engine.engines.memory.memory_engine import MemoryEngine
-    from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
+    from npc_engine.graph.repositories.relation_phase_write_repository import Neo4jRelationPhaseWriteRepository
     from npc_engine.engines.ports.relation_read_port import RelationReadPort
 
 
@@ -117,8 +117,8 @@ def resolve_log_prompts(settings: Settings) -> bool:
 class DialogueHandler:
     """Dialogue engine orchestrator.
 
-    Holds no AsyncSession — all graph I/O is delegated to DialogueGraphPort
-    (for pure graph ops) and DialogueContextPort (for the retrieval pipeline).
+    Holds no AsyncSession — all graph I/O is delegated to Neo4jDialogueRepository
+    (for pure graph ops) and Neo4jDialogueContextAdapter (for the retrieval pipeline).
     """
 
     def __init__(
@@ -126,8 +126,8 @@ class DialogueHandler:
         llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
         emotion_updater: EmotionUpdater,
         input_moderation: InputModerationService, output_moderation: OutputModerationService,
-        dialogue_repo: DialogueGraphPort,
-        dialogue_context: DialogueContextPort,
+        dialogue_repo: Neo4jDialogueRepository,
+        dialogue_context: Neo4jDialogueContextAdapter,
         clock: ClockPort,
         effective_rating: ContentRating = "mature",
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
@@ -135,14 +135,14 @@ class DialogueHandler:
         knowledge_engine: KnowledgeExtractionEngine | None = None,
         negotiation_store: NegotiationStore | None = None,
         relation_reader: RelationReadPort | None = None,
-        relation_phase_writer: RelationPhaseWritePort | None = None,
+        relation_phase_writer: Neo4jRelationPhaseWriteRepository | None = None,
         memory_engine: MemoryEngine | None = None,
     ) -> None:
         """Initialise with all engine dependencies injected.
 
         Args:
-            dialogue_repo: Port for pure graph operations (archetype, voice, relation deltas, etc.).
-            dialogue_context: Port for the serialized-context retrieval pipeline.
+            dialogue_repo: Repository for pure graph operations (archetype, voice, relation deltas, etc.).
+            dialogue_context: Retrieval pipeline adapter for the serialized context.
             clock: Read-only game clock; the authoritative tick stamped on every write
                 this turn makes (relation deltas, phase, emotion, knowledge, routine
                 override). Replaces the wall-clock timestamp of ISSUE-165.

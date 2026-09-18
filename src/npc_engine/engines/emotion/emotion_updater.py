@@ -2,15 +2,11 @@
 Module: emotion_updater
 Layer: engines
 Purpose: Applies mood updates and decay rules to emotion states via async store calls.
-         When a TraitReadPort is injected, fetches per-NPC trait multipliers on each
-         update call and builds a per-call TraitModulatedEmotionModel (ISSUE-096/DEC-137).
 Does NOT: read or write graph data directly.  Delegates computation to EmotionModelProtocol
           and graph write-through to an injected Neo4jEmotionRepository (no session held).
 Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_model_protocol,
-              engines/emotion/vad_emotion_model, engines/emotion/trait_modulated_model,
-              graph/repositories/emotion_repository, engines/ports/trait_read_port
-Dependencies injected: EmotionStore, EmotionModelProtocol, Neo4jEmotionRepository (optional),
-                       TraitReadPort (optional).
+              engines/emotion/vad_emotion_model, graph/repositories/emotion_repository
+Dependencies injected: EmotionStore, EmotionModelProtocol, Neo4jEmotionRepository (optional).
 Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
 
@@ -21,12 +17,10 @@ from typing import TYPE_CHECKING
 from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
-from npc_engine.engines.emotion.trait_modulated_model import TraitModulatedEmotionModel
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 
 if TYPE_CHECKING:
     from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
-    from npc_engine.engines.ports.trait_read_port import TraitReadPort
 
 _MOOD_AROUSAL_INCREMENT = 5
 
@@ -39,12 +33,6 @@ class EmotionUpdater:
 
     When a Neo4jEmotionRepository is injected, every store write is followed by a
     graph write-through so emotion state survives process restarts.
-
-    When a TraitReadPort is injected, each update call fetches the NPC's
-    personality trait multipliers and builds a per-call TraitModulatedEmotionModel
-    so different NPCs receive appropriately scaled emotion deltas (ISSUE-096/DEC-137).
-    The fallback model (model parameter or VadEmotionModel) is used when no
-    TraitReadPort is provided, preserving backward compatibility.
     """
 
     def __init__(
@@ -53,7 +41,6 @@ class EmotionUpdater:
         decay_rate: int = 2,
         model: EmotionModelProtocol | None = None,
         writer: Neo4jEmotionRepository | None = None,
-        trait_reader: TraitReadPort | None = None,
     ) -> None:
         """Initialise the updater with a backing store, decay rate, and optional deps.
 
@@ -61,19 +48,13 @@ class EmotionUpdater:
             emotion_store: Store used to read and persist NPC emotion states.
             decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
             model: EmotionModelProtocol implementation.  Defaults to VadEmotionModel().
-                   Ignored per-call when trait_reader is provided (per-NPC model is built).
             writer: Optional Neo4jEmotionRepository for graph write-through.  When None,
                     state is only stored in-memory (no graph persistence).
-            trait_reader: Optional TraitReadPort.  When provided, each update call
-                fetches the NPC's traits and builds a TraitModulatedEmotionModel
-                for that call (ISSUE-096/DEC-137).  Default None preserves existing
-                behaviour.
         """
         self._store = emotion_store
         self._decay_rate = decay_rate
         self._model: EmotionModelProtocol = model if model is not None else VadEmotionModel()
         self._writer: Neo4jEmotionRepository | None = writer
-        self._trait_reader: TraitReadPort | None = trait_reader
 
     async def apply_dialogue_mood(
         self,
@@ -86,7 +67,6 @@ class EmotionUpdater:
         If mood_update is None, the current state is decayed toward neutral.
         Otherwise arousal is incremented by 5 (subject to label-inertia rules).
         When a writer is injected, the new state is written through to the graph.
-        When a trait_reader is injected, the model is built per-NPC per-call.
 
         Args:
             npc_id: Unique identifier of the NPC.
@@ -97,11 +77,10 @@ class EmotionUpdater:
             The newly computed and stored EmotionState.
         """
         previous = await self._store.get(npc_id=npc_id)
-        model = await self._get_model_for(npc_id)
         if mood_update is None:
-            next_state = model.decay(previous, self._decay_rate)
+            next_state = self._model.decay(previous, self._decay_rate)
         else:
-            next_state = model.apply_mood_hint(
+            next_state = self._model.apply_mood_hint(
                 previous, mood_label=mood_update, arousal_increment=_MOOD_AROUSAL_INCREMENT,
             )
         await self._store.set(npc_id=npc_id, state=next_state)
@@ -129,8 +108,7 @@ class EmotionUpdater:
 
         Decreases valence and increases arousal proportionally to event severity,
         pushing the NPC toward "agitated" or "melancholic".  The effect is bounded
-        so a single event cannot force an extreme state.  When a trait_reader is
-        injected, the model is built per-NPC so fear_sensitivity amplifies shocks.
+        so a single event cannot force an extreme state.
 
         Args:
             npc_id: Unique identifier of the NPC.
@@ -141,18 +119,10 @@ class EmotionUpdater:
             The newly computed and stored EmotionState.
         """
         previous = await self._store.get(npc_id=npc_id)
-        model = await self._get_model_for(npc_id)
-        next_state = model.apply_shock(previous, severity)
+        next_state = self._model.apply_shock(previous, severity)
         await self._store.set(npc_id=npc_id, state=next_state)
         await self._write_through(npc_id=npc_id, state=next_state, tick=tick)
         return next_state
-
-    async def _get_model_for(self, npc_id: str) -> EmotionModelProtocol:
-        """Return the per-NPC emotion model (trait-modulated) or the shared fallback."""
-        if self._trait_reader is None:
-            return self._model
-        traits = await self._trait_reader.get_npc_traits(npc_id=npc_id)
-        return TraitModulatedEmotionModel(traits=traits)
 
     async def _write_through(
         self,

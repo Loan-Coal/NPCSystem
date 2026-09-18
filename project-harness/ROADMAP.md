@@ -1468,7 +1468,7 @@ Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275
 Files: as T9.1b, for rows 9-16 of `ports_census.md`
 Spec, RED anchor, Validation and Done when: as T9.1b, for its own row range. ✅ AUTO (T9.1c, 2026-09-18)
 
-- [ ] **T9.1d** Collapse the remaining census rows
+- [x] **T9.1d** Collapse the remaining census rows
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275
 Files: as T9.1b, for the remaining rows of `ports_census.md`; also
 `tests/unit/engines/test_emotion_updater.py`
@@ -1507,7 +1507,7 @@ landed; log the deferred feature as an issue rather than leaving dead code. This
 Counting note for T9.1a: `scripts/check_dip_threshold.py` is built in **T10.1**, one phase later, so
 do not treat it as a prerequisite — write a throwaway counting script for the census and let T10.1's
 gate confirm the result afterwards. Do not block on a tool that does not exist yet.
-Findings L2-01, L2-02, L2-03, L7-05, DEC-275, rule 4.
+Findings L2-01, L2-02, L2-03, L7-05, DEC-275, rule 4. ✅ AUTO (T9.1d, 2026-09-18)
 
 - [ ] **T9.2** Fix the two god-ports and the ports that leak graph-owned types
 Pre-approved: public-interface · owner 2026-09-08 · DEC-275

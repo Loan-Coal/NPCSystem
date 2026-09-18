@@ -7,7 +7,7 @@ Purpose: Tick-scheduler adapter that discovers active schemes (F1.6 detection-ha
 Does NOT: call LLMs, create nodes/edges, change type_registry YAML, or advance
           schemes (that is SchemeAdvanceTick's job). Schema-free: only mutates the
           existing Scheme.status free-string field.
-Dependencies injected: Settings (constructor); SchemingGraphPort (constructor, DEC-122).
+Dependencies injected: Settings (constructor); Neo4jSchemingRepository (constructor, DEC-122).
 Used by: scheduler/tick_scheduler.py (scheme_detection_engine slot); wired in
          api/dependencies_engines.get_scheme_detection_tick.
 """
@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from npc_engine.engines.ports.scheming_port import SchemingGraphPort
+from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.config import Settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,12 +32,12 @@ class SchemeDetectionTick:
     'discovered' (no new node/edge — schema-free).
     """
 
-    def __init__(self, settings: Settings, scheming_repo: SchemingGraphPort) -> None:
+    def __init__(self, settings: Settings, scheming_repo: Neo4jSchemingRepository) -> None:
         """Initialise the detection tick adapter.
 
         Args:
             settings: Application settings (cadence + discovery step threshold).
-            scheming_repo: SchemingGraphPort for discoverable-scheme queries and marking.
+            scheming_repo: Neo4jSchemingRepository for discoverable-scheme queries and marking.
         """
         self._interval = settings.SCHEME_DETECTION_TICK_INTERVAL
         self._min_steps = settings.SCHEME_DISCOVERY_MIN_STEPS

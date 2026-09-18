@@ -3445,10 +3445,10 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 **PLAN 2026-09-18 (owner, after adversarial review):** fix additively — keep `target: str`, add
 `target_name: str`; no API-contract re-record. Scheduled as ROADMAP **T15.4**.
 
-## ISSUE-361: `project-harness/ports_census.md` is a temporary file — delete by end of Sprint 5
-**Found:** 2026-09-18, during T9.1a
+## ISSUE-362: per-NPC trait-modulated emotion model (DEC-137) was removed in T9.1d; re-enabling requires a concrete TraitReadPort implementation
+**Found:** 2026-09-18, during T9.1d
 **Severity:** P3 (nice-to-fix)
-**Where:** `project-harness/ports_census.md`
-**Description:** Census artifact created by T9.1a to drive T9.1b–d collapse batches. Once T9.1d closes and all 24 COLLAPSE rows are gone, this file has no further purpose and should be deleted.
-**Why deferred:** The file is needed by T9.1b, T9.1c, and T9.1d.
-**To fix:** Delete `project-harness/ports_census.md` at the end of T9.1d (end of Sprint 5).
+**Where:** `src/npc_engine/engines/emotion/` — `TraitModulatedEmotionModel` and `TraitReadPort` deleted
+**Description:** `TraitReadPort` had 0 implementors and was never wired (DEC-137, never completed). T9.1d removed the dead port, its serving model class `TraitModulatedEmotionModel`, and all references. Per-NPC personality trait modulation is now absent from the emotion system.
+**Why deferred:** The feature was never finished (no concrete implementor existed); removing the dead stub was the DIP-threshold collapse rule. Re-introducing it requires design work beyond T9.1d's scope.
+**To fix:** Introduce a concrete `Neo4jTraitReadRepository` that reads trait constants from the graph, re-add `TraitModulatedEmotionModel` as a new file, re-wire `EmotionUpdater` to accept it optionally, and register it in `emotion_model_factory`. Also requires seed data for NPC trait constants.

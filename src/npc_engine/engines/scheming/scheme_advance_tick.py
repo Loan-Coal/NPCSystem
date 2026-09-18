@@ -7,7 +7,7 @@ Purpose: Tick-scheduler adapter that auto-advances active schemes (F1.6 / DEC-10
 Does NOT: call LLMs, run the public EventHandler.run_tick side effects (awareness,
           reputation, witnessing, world-state), change type_registry YAML, or
           perform scheme detection (that is the investigation engine's job).
-Dependencies injected: Settings + TypeRegistry + SchemingGraphPort (constructor).
+Dependencies injected: Settings + TypeRegistry + Neo4jSchemingRepository (constructor).
 Used by: scheduler/tick_scheduler.py (scheme_advance_engine slot); wired in
          api/dependencies_engines.get_scheme_advance_tick.
 """
@@ -20,7 +20,7 @@ from typing import Any
 from uuid import uuid4
 
 from npc_engine.config import Settings
-from npc_engine.engines.ports.scheming_port import SchemingGraphPort
+from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.engines.scheming.covert_event_factory import build_covert_event_props
 from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress
 from npc_engine.type_registry.contracts import TypeRegistry
@@ -45,7 +45,7 @@ class SchemeAdvanceTick:
         self,
         settings: Settings,
         registry: TypeRegistry,
-        scheming_repo: SchemingGraphPort,
+        scheming_repo: Neo4jSchemingRepository,
     ) -> None:
         """Initialise the scheme-advance tick adapter.
 

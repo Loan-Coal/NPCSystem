@@ -4122,3 +4122,12 @@ against 23,471 ms and 19,221 ms for the first. T7.4's two figures were both firs
 is ROADMAP **T7.5** (warm the encoder at boot, owner decision 2026-09-18); T7.4's protocol is amended to
 report first and second ticks.
 **Fixed:** 2026-09-18, in measure(gossip): T7.3+T7.5 resolve SEV-07 — warm gossip after T7.3 is 1,322 ms (not an outlier: 0.1× slowest neighbour) (auto/roadmap-night, T7.4)
+
+## [FIXED] ISSUE-361: `project-harness/ports_census.md` is a temporary file — delete by end of Sprint 5
+**Found:** 2026-09-18, during T9.1a
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/ports_census.md`
+**Description:** Census artifact created by T9.1a to drive T9.1b–d collapse batches. Once T9.1d closes and all 24 COLLAPSE rows are gone, this file has no further purpose and should be deleted.
+**Why deferred:** The file is needed by T9.1b, T9.1c, and T9.1d.
+**To fix:** Delete `project-harness/ports_census.md` at the end of T9.1d (end of Sprint 5).
+**Fixed:** 2026-09-18, in T9.1d

@@ -6,12 +6,12 @@ Purpose: Given a character's active goals, selects the highest-urgency one and
          Goals at or below ROUTINE_PRIORITY are ignored — the routine engine
          has already placed the NPC.
 Dependencies: npc_engine.engines.planning.action_priority,
-              npc_engine.engines.ports.planning_port (PlanningGraphPort),
+              npc_engine.engines.ports.planning_port (Neo4jPlanningRepository),
               npc_engine.utils.logging
 Used by: npc_engine.scheduler.tick_scheduler (slice-2 wiring)
 Does NOT: call LLMs, read from Neo4j directly, hold a session, or import from api/,
           services/, or the graph layer.
-Dependencies injected: PlanningGraphPort (via __init__), goal list (passed per call).
+Dependencies injected: Neo4jPlanningRepository (via __init__), goal list (passed per call).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any
 import logging
 
 from npc_engine.engines.planning.action_priority import ROUTINE_PRIORITY
-from npc_engine.engines.ports.planning_port import PlanningGraphPort
+from npc_engine.graph.repositories.planning_repository import Neo4jPlanningRepository
 from npc_engine.utils.logging import get_logger
 
 logger: logging.Logger = get_logger("npc_engine.engines.planning.action_selector")
@@ -33,14 +33,14 @@ class ActionSelector:
     - urgency > ROUTINE_PRIORITY  → call update_character_location (planning wins)
     - urgency <= ROUTINE_PRIORITY → no-op (routine engine keeps control)
 
-    The PlanningGraphPort is injected once; no session is held.
+    The Neo4jPlanningRepository is injected once; no session is held.
     """
 
-    def __init__(self, planning_repo: PlanningGraphPort) -> None:
+    def __init__(self, planning_repo: Neo4jPlanningRepository) -> None:
         """Initialise with the injected planning graph port.
 
         Args:
-            planning_repo: PlanningGraphPort for the move-character write.
+            planning_repo: Neo4jPlanningRepository for the move-character write.
         """
         self._planning = planning_repo
 

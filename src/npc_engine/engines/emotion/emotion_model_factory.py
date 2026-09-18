@@ -15,26 +15,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
-from npc_engine.engines.emotion.trait_modulated_model import (
-    TRAIT_ANGER_SENSITIVITY,
-    TRAIT_FEAR_SENSITIVITY,
-    TRAIT_JOY_SENSITIVITY,
-    TraitModulatedEmotionModel,
-)
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 
 if TYPE_CHECKING:
     from npc_engine.config import Settings
-
-# Demo-tuned default trait multipliers used when the trait-modulated model is
-# selected without per-NPC traits (per-NPC trait fetch is a deferred slice).
-# fear > 1.0 makes shocks visibly stronger than the VAD baseline so the wiring
-# is demonstrable in a live tick.
-_DEMO_DEFAULT_TRAITS: dict[str, float] = {
-    TRAIT_FEAR_SENSITIVITY: 1.5,
-    TRAIT_ANGER_SENSITIVITY: 1.2,
-    TRAIT_JOY_SENSITIVITY: 1.0,
-}
 
 # Registry of zero-arg constructors keyed by EMOTION_MODEL name.
 # Add new models via register_emotion_model; never edit this dict directly.
@@ -90,7 +74,3 @@ def build_emotion_model(settings: Settings) -> EmotionModelProtocol:
 # ---------------------------------------------------------------------------
 
 register_emotion_model("vad", VadEmotionModel)
-register_emotion_model(
-    "trait_modulated",
-    lambda: TraitModulatedEmotionModel(traits=dict(_DEMO_DEFAULT_TRAITS)),
-)

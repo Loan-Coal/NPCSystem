@@ -7,7 +7,7 @@ Purpose: Executes one gossip tick: selects NPC pairs, batch-reads events+trust,
 
 Does NOT: run global scheduling loops, open Neo4j sessions.
 
-Dependencies injected: GossipGraphPort, Settings, GossipWeightConfig, EmbeddingIndex.
+Dependencies injected: Neo4jGossipRepository, Settings, GossipWeightConfig, EmbeddingIndex.
 
 300-LINE WAIVER: run_tick + _process_pairs + _build_write_params + _run_side_effects
 are tightly coupled phases of a single gossip-tick orchestration class; splitting
@@ -40,7 +40,7 @@ from npc_engine.engines.gossip.gossip_distort import (
 from npc_engine.engines.gossip.gossip_config import SECRET_DISTORTION_CHANCE
 from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
-from npc_engine.engines.ports.gossip_port import GossipGraphPort
+from npc_engine.graph.repositories.gossip_repository import Neo4jGossipRepository
 from npc_engine.engines.relationship.standing import derive_standing
 from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.utils.logging import get_logger
@@ -80,7 +80,7 @@ class GossipHandler:
         embedding_index: EmbeddingIndex,
         weight_config: GossipWeightConfig,
         emotion_updater: EmotionUpdater | None = None,
-        gossip_repo: GossipGraphPort = None,  # type: ignore[assignment]
+        gossip_repo: Neo4jGossipRepository = None,  # type: ignore[assignment]
         corpus_refresher: CorpusRefresherProtocol | None = None,
     ) -> None:
         """Initialise the gossip handler.
@@ -91,7 +91,7 @@ class GossipHandler:
             weight_config: Faction weight multipliers for pair selection and distortion.
             emotion_updater: Optional emotion updater; when supplied, receivers of high-severity
                 events have their emotion state shocked toward agitated/melancholic.
-            gossip_repo: Gossip graph port; must be injected before calling run_tick.
+            gossip_repo: Gossip repository; must be injected before calling run_tick.
             corpus_refresher: Writes the refreshed vector-store entry after invalidation
                 (DEC-210). None means invalidate-only, which is the behaviour every caller
                 had before P8.
@@ -101,7 +101,7 @@ class GossipHandler:
         self._embedding_index = embedding_index
         self._weight_config = weight_config
         self._emotion_updater = emotion_updater
-        self._gossip_repo: GossipGraphPort = gossip_repo
+        self._gossip_repo: Neo4jGossipRepository = gossip_repo
         self._corpus_refresher = corpus_refresher
         self._lock = asyncio.Lock()
 

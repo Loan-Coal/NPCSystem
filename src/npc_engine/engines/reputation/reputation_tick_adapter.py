@@ -3,16 +3,16 @@ Module: reputation_tick_adapter
 Layer: engines
 Purpose: Tick-scheduler adapter wrapping ReputationEngine with the
          run_tick(tick_id) -> dict signature expected by TickScheduler.
-         Fetches active NPC IDs from the injected CharacterReadPort each tick and
+         Fetches active NPC IDs from the injected Neo4jCharacterReadRepository each tick and
          delegates propagation to the underlying ReputationEngine.
          Returns {"nudges": 0} immediately when config.enabled is False
          (zero runtime cost, engine never touches the graph).
-Does NOT: run Cypher queries directly or hold a Neo4j session (CharacterReadPort and
+Does NOT: run Cypher queries directly or hold a Neo4j session (Neo4jCharacterReadRepository and
           the engine's RelationReadPort/Neo4jReputationRepository own session lifecycle).
 Dependencies: engines.reputation.reputation_engine.ReputationEngine,
               engines.reputation.propagation_config.PropagationConfig,
-              engines.ports.character_read_port.CharacterReadPort
-Dependencies injected: ReputationEngine, CharacterReadPort, player_id, PropagationConfig.
+              engines.ports.character_read_port.Neo4jCharacterReadRepository
+Dependencies injected: ReputationEngine, Neo4jCharacterReadRepository, player_id, PropagationConfig.
 Used by: scheduler.tick_scheduler (wired via dependencies_engines.py).
 """
 
@@ -26,7 +26,7 @@ from npc_engine.engines.reputation.reputation_engine import ReputationEngine
 from npc_engine.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.character_read_port import CharacterReadPort
+    from npc_engine.graph.repositories.character_read_repository import Neo4jCharacterReadRepository
 
 logger: logging.Logger = get_logger()
 
@@ -47,7 +47,7 @@ class ReputationTickAdapter:
 
     Attributes:
         _engine: The wrapped ReputationEngine instance.
-        _character_reader: CharacterReadPort for NPC ID enumeration (session-per-call).
+        _character_reader: Neo4jCharacterReadRepository for NPC ID enumeration (session-per-call).
         _player_id: Player ID whose reputation propagates each tick.
         _config: PropagationConfig; checked for enabled flag before any I/O.
     """
@@ -55,7 +55,7 @@ class ReputationTickAdapter:
     def __init__(
         self,
         engine: ReputationEngine,
-        character_reader: CharacterReadPort,
+        character_reader: Neo4jCharacterReadRepository,
         player_id: str,
         config: PropagationConfig,
     ) -> None:
@@ -63,7 +63,7 @@ class ReputationTickAdapter:
 
         Args:
             engine: Configured ReputationEngine instance.
-            character_reader: CharacterReadPort implementing get_npc_ids().
+            character_reader: Neo4jCharacterReadRepository implementing get_npc_ids().
             player_id: ID of the player character for reputation propagation.
             config: PropagationConfig; used for the enabled guard.
         """
