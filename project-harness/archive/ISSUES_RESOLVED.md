@@ -4075,3 +4075,21 @@ venv; add `pygame` to `preflight_worktree`'s import check **and** its provisioni
 OVERNIGHT_LOOP.md's quick start; set `NPC_API_KEY` with `monkeypatch.setenv` inside
 `test_run_dry_run_encoding.py`, not as a Makefile default.
 **Fixed:** 2026-09-18, in fix(loop): provision pygame in the loop venv and make the dry-run test self-sufficient (auto/roadmap-night)
+
+## [FIXED] ISSUE-358: the per-minute LLM ceiling only admits ticks; one admitted tick made 12 calls against a limit of 6
+**Found:** 2026-09-18, while analysing the demo-run-live failure
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/scheduler/tick_scheduler.py` (`_resolve_skip_llm`, `_record_budget_calls`); DEC-285
+**Description:** `TICK_LLM_CALLS_PER_MINUTE_MAX` is 6. DEC-285 checks `should_skip_llm()` once before the
+tick and records the tick's call count afterwards, so a tick admitted with budget left may use any
+number of calls. Measured on the eval stack @ `3019b51e`: tick 1 made 12 LLM calls in ~15 s (event_quest 2,
+need_quest 10). The only in-tick cap is `QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK=10` invocations
+(×2 calls each). Whether that is intended (the ceiling throttles the *next* ticks) or a gap is not recorded
+in DEC-285.
+**Why deferred:** a design question about T7.1's semantics, not part of fixing the demo timeout.
+**To fix:** decide whether the ceiling is an admission gate or a hard cap. If a hard cap, pass the guard's
+remaining budget into the quest triggers' `TickLLMBudget` for the tick. Either way, state it in DEC-285.
+**PLAN 2026-09-18 (owner):** it's an admission gate. Amend DEC-285 and the setting's comment in
+`config.py` to say so, then close this issue. A note in T8.1 (added) says any future hard per-minute
+cap belongs in T8.1's LLM-layer gate.
+**Fixed:** 2026-09-18, in docs(decisions): record the per-minute LLM ceiling as an admission gate (auto/roadmap-night)

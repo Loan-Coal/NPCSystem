@@ -10175,6 +10175,15 @@ tripwire widened from `--cov-fail-under` to `--(cov-)?fail-under` so a loop diff
 
 **What this changes for callers:** `TickScheduler.__init__()` gains an optional `budget_guard` parameter; all existing callers that omit it get the previous behaviour (no budget ceiling). `TickAutopilot.__init__()` is unchanged — it still accepts `budget_guard` for the `should_skip_llm()` check — but `advance_once()` no longer calls `record_llm_tick()`.
 
+**Amendment 2026-09-18 (owner, ISSUE-358):** `TICK_LLM_CALLS_PER_MINUTE_MAX` is an **admission gate**,
+not a hard cap. `should_skip_llm()` is checked once, before a tick; a tick admitted with budget left
+may make any number of calls, and `_record_budget_calls()` charges them to the window afterwards.
+Measured on the eval stack @ `3019b51e`: tick 1 made 12 LLM calls (event_quest 2, need_quest 10)
+against a limit of 6. The only in-tick bound is `QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK`. The
+ceiling therefore throttles the *later* ticks; it does not bound a single tick, and it does not
+protect interactive (dialogue) calls. Protecting those — and any future hard per-minute cap — is
+T8.1's job, in the LLM-layer gate.
+
 ## DEC-286: Loop task sessions run without the ECC session-summary hooks, behind a worktree leak guard
 
 **Date:** 2026-09-18 · **Status:** ✅ ACCEPTED (owner, 2026-09-18) · **Drives:** `scripts/expand_loop.sh`, `scripts/worktree_guard.py`
