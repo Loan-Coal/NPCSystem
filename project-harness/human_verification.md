@@ -691,3 +691,39 @@ T16.1	phase=T16	flags=deferred	Amend DEC-273 — its mechanism holds, its consta
 T16.4	phase=T16	flags=deferred	Record the engine's build sha, not the client's working tree ⏸️
     deferred: - [ ] **T16.4** Record the engine's build sha, not the client's working tree ⏸️
 DEFERRED_TOTAL=6
+
+## 2026-09-18 03:39:26 — HALT on task T7.4
+
+sev07-gossip-still-outlier-after-t7.3 (after: 19797ms vs neighbors 77-425ms, ~46x; new fix task needed — see ISSUE-356)
+
+## 2026-09-18 03:39:27 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
+
+## 2026-09-18 03:40:59 — live demo broke (make demo-run-live @ 68d76b85)
+
+DEMO_LIVE=FAIL acts_reached=1/12 empty_beats=1 act5_battle=no
+
+Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/demo-run-live-20260918-033928.log
+
+  ok World state updated
+
+------------------------------------------------------------
+  [NARRATION] Clock advances. Gossip propagates: Sorn -> Mira -> Henryk.
+------------------------------------------------------------
+  >  Advancing clock +1 tick(s)
+
+[demo-run-live] ---------------- verdict ----------------
+  reached final act : False
+  died in           : ACT 1 scene=tick_1 reason=ReadTimeout: timed out
+  dialogue beats    : 0
+  EMPTY beat        : ACT 5 military_tick
+  ACT 5 battle event: no
+DEMO_LIVE=FAIL acts_reached=1/12 empty_beats=1 act5_battle=no
+make: *** [Makefile:858: demo-run-live] Error 1
