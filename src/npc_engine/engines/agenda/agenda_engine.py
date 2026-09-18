@@ -4,9 +4,8 @@ Layer: engines
 Purpose: Per-tick agenda resolution for Phase 7.2 Political Simulation.
          Tallies SUPPORTS_AGENDA and OPPOSES_AGENDA weights for agendas past
          their deadline and marks them passed or failed.
-Does NOT: call LLMs, create events, modify faction standings, open sessions, or
-          import the graph layer.
-Dependencies injected: PoliticalGraphPort (via __init__).
+Does NOT: call LLMs, create events, modify faction standings, or open sessions.
+Dependencies injected: Neo4jPoliticalRepository (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -15,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from npc_engine.engines.ports.political_port import PoliticalGraphPort
+from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRepository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,16 +29,17 @@ class AgendaEngine:
     - If total opposition >= total support → status = 'failed'.
     - Agendas with no votes are marked 'failed' (no consensus = failure).
 
-    Graph access is injected as a PoliticalGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session.    """
+    Graph access is injected as a Neo4jPoliticalRepository (DEC-122 / SEV-24); the engine
+    holds no Neo4j session.
+    """
 
-    def __init__(self, political_repo: PoliticalGraphPort) -> None:
+    def __init__(self, political_repo: Neo4jPoliticalRepository) -> None:
         """Initialise the agenda engine.
 
         Args:
-            political_repo: Graph access port for the political domain.
+            political_repo: Neo4jPoliticalRepository for the political domain.
         """
-        self._political_repo = political_repo
+        self._political_repo: Neo4jPoliticalRepository = political_repo
 
     async def run_tick(
         self,

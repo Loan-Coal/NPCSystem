@@ -6,9 +6,9 @@ Purpose: Per-tick need decay for Phase 7.3 Social Simulation.
          If the character is at a location with a SATISFIES_NEED edge,
          the magnitude is added back (net change may be positive or negative).
          Level is clamped to [0, 100] before writing.
-Does NOT: call LLMs, create events, modify faction/relationship state, open
-          sessions, or import the graph layer.
-Dependencies injected: NeedGraphPort (graph access) via __init__.
+Does NOT: call LLMs, create events, modify faction/relationship state, or
+          open sessions.
+Dependencies injected: Neo4jNeedRepository (graph access) via __init__.
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from npc_engine.engines.ports.need_port import NeedGraphPort
+from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,17 +34,17 @@ class NeedDecayEngine:
     edge between the character's current LOCATED_AT location and the Need node.
     If the character has no location or no satisfier, satisfaction_magnitude = 0.
 
-    Graph access is injected as a NeedGraphPort (DEC-122 / SEV-24), so the engine
+    Graph access is injected as a Neo4jNeedRepository (DEC-122 / SEV-24), so the engine
     holds no Neo4j session.
     """
 
-    def __init__(self, need_repo: NeedGraphPort) -> None:
-        """Initialise with the injected graph port.
+    def __init__(self, need_repo: Neo4jNeedRepository) -> None:
+        """Initialise with the injected graph repository.
 
         Args:
-            need_repo: Graph access port (read needs, write levels).
+            need_repo: Neo4jNeedRepository (read needs, write levels).
         """
-        self._need_repo = need_repo
+        self._need_repo: Neo4jNeedRepository = need_repo
 
     async def run_tick(
         self,

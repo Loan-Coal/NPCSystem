@@ -1453,7 +1453,7 @@ unverdicted, and the keep/collapse counts are stated.
 Done when: the table is complete, every row has a verdict, and the total collapse count is recorded
 so T10.1's gate has a number to drive to zero. ✅ AUTO (T9.1a, 2026-09-18)
 
-- [ ] **T9.1b** Collapse the ports in rows 1-8 of the census
+- [x] **T9.1b** Collapse the ports in rows 1-8 of the census
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275
 Files: the port files, consuming engines, `src/npc_engine/engines/ports/__init__.py`,
 `src/npc_engine/api/dependencies*.py` and the tests named in rows 1-8 of `ports_census.md`
@@ -1461,7 +1461,7 @@ Spec: apply the shared method below to the first eight rows only. One commit, ow
 LOC delta. Do not read ahead into other rows — the split exists so a regression is bisectable.
 RED anchor: the census's recorded below-threshold count for these eight rows, driven to zero.
 Validation: `make check`, then `make test-demo`.
-Done when: rows 1-8 are collapsed, `make check` green, LOC delta reported.
+Done when: rows 1-8 are collapsed, `make check` green, LOC delta reported. ✅ AUTO (T9.1b, 2026-09-18)
 
 - [ ] **T9.1c** Collapse the ports in rows 9-16 of the census
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275

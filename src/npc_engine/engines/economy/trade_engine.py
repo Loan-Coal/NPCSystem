@@ -3,9 +3,9 @@ Module: trade_engine
 Layer: engines
 Purpose: Evaluates trade offers and executes atomic item+currency transfers on acceptance.
 Does NOT: apply business-policy caps, run Cypher, hold a session, or call LLMs.
-Dependencies injected: PricingEngine + EconomyGraphPort (via constructor).
+Dependencies injected: PricingEngine + Neo4jEconomyRepository (via constructor).
 Dependencies: npc_engine.engines.economy.pricing_engine,
-              npc_engine.engines.ports.economy_port (EconomyGraphPort)
+              npc_engine.graph.repositories.economy_repository
 Used by: npc_engine.api.routes.economy
 """
 
@@ -15,7 +15,7 @@ import uuid
 
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.trade_models import TradeResult
-from npc_engine.engines.ports.economy_port import EconomyGraphPort
+from npc_engine.graph.repositories.economy_repository import Neo4jEconomyRepository
 
 _ACTIVE_EVENT_WINDOW_TICKS = 10
 
@@ -28,15 +28,15 @@ class TradeEngine:
     seller, in two separate graph transactions.
     """
 
-    def __init__(self, pricing_engine: PricingEngine, economy_repo: EconomyGraphPort) -> None:
-        """Initialise with a pre-constructed PricingEngine and economy graph port.
+    def __init__(self, pricing_engine: PricingEngine, economy_repo: Neo4jEconomyRepository) -> None:
+        """Initialise with a pre-constructed PricingEngine and economy repository.
 
         Args:
             pricing_engine: Configured PricingEngine used for fair-price calculation.
-            economy_repo: EconomyGraphPort for pricing-context reads + atomic transfers.
+            economy_repo: Neo4jEconomyRepository for pricing-context reads + atomic transfers.
         """
         self._pricing_engine = pricing_engine
-        self._economy = economy_repo
+        self._economy: Neo4jEconomyRepository = economy_repo
 
     async def evaluate_offer(
         self,

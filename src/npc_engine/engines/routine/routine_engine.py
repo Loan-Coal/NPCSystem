@@ -2,9 +2,8 @@
 Module: routine_engine
 Layer: engines
 Purpose: Moves active characters to their scheduled locations on each game tick.
-Does NOT: define scheduling intervals, read world state directly, open sessions,
-          or import the graph layer.
-Dependencies injected: RoutineGraphPort (via __init__).
+Does NOT: define scheduling intervals, read world state directly, or open sessions.
+Dependencies injected: Neo4jRoutineRepository (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -15,7 +14,7 @@ import json
 import logging
 from typing import Any
 
-from npc_engine.engines.ports.routine_port import RoutineGraphPort
+from npc_engine.graph.repositories.routine_repository import Neo4jRoutineRepository
 
 
 LOGGER = logging.getLogger(__name__)
@@ -29,16 +28,17 @@ class RoutineEngine:
     active routine_override), and updates LOCATED_AT edges when the target
     differs from the current location.
 
-    Graph access is injected as a RoutineGraphPort (DEC-122 / SEV-24); the engine
-    holds no Neo4j session.    """
+    Graph access is injected as a Neo4jRoutineRepository (DEC-122 / SEV-24); the engine
+    holds no Neo4j session.
+    """
 
-    def __init__(self, routine_repo: RoutineGraphPort) -> None:
+    def __init__(self, routine_repo: Neo4jRoutineRepository) -> None:
         """Initialise the routine engine.
 
         Args:
-            routine_repo: Graph access port (schedule reads, location writes).
+            routine_repo: Neo4jRoutineRepository (schedule reads, location writes).
         """
-        self._routine_repo = routine_repo
+        self._routine_repo: Neo4jRoutineRepository = routine_repo
         self._lock = asyncio.Lock()
 
     async def run_tick(

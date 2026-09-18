@@ -4,11 +4,10 @@ Layer: engines
 Purpose: Meta-engine that reads active quests and recent events each tick, then writes
          max_event_severity and quest_generation_rate multipliers to WorldState so other
          engines can gate their sampling accordingly.
-Does NOT: call LLMs, create graph nodes/edges, expose HTTP routes, open sessions,
-          or import the graph layer.
-Dependencies: engines.story_pacing.pacing_rules_loader, engines.ports.story_pacing_port,
-              engines.ports.world_state_port
-Dependencies injected: PacingRules, StoryPacingGraphPort, WorldStateGraphPort (via __init__).
+Does NOT: call LLMs, create graph nodes/edges, expose HTTP routes, or open sessions.
+Dependencies: engines.story_pacing.pacing_rules_loader,
+              graph.repositories.story_pacing_repository, engines.ports.world_state_port
+Dependencies injected: PacingRules, Neo4jStoryPacingRepository, WorldStateGraphPort (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -19,8 +18,8 @@ import logging
 from typing import Any
 
 from npc_engine.config import get_settings
-from npc_engine.engines.ports.story_pacing_port import StoryPacingGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
+from npc_engine.graph.repositories.story_pacing_repository import Neo4jStoryPacingRepository
 from npc_engine.engines.story_pacing.pacing_rules_loader import PacingRules
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,18 +38,18 @@ class StoryPacingEngine:
     def __init__(
         self,
         rules: PacingRules,
-        story_pacing_repo: StoryPacingGraphPort,
+        story_pacing_repo: Neo4jStoryPacingRepository,
         world_state_repo: WorldStateGraphPort,
     ) -> None:
-        """Initialise the engine with a loaded rule set and graph ports.
+        """Initialise the engine with a loaded rule set and graph repositories.
 
         Args:
             rules: Validated PacingRules loaded from pacing_rules.yaml.
-            story_pacing_repo: Graph reads for active quests + recent major events.
+            story_pacing_repo: Neo4jStoryPacingRepository for active quests + recent major events.
             world_state_repo: Shared graph port for reading/upserting WorldState.
         """
         self._rules = rules
-        self._story_pacing_repo = story_pacing_repo
+        self._story_pacing_repo: Neo4jStoryPacingRepository = story_pacing_repo
         self._world_state_repo = world_state_repo
         self._lock = asyncio.Lock()
 

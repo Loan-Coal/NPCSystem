@@ -4,9 +4,9 @@ Layer: engines
 Purpose: Rules-based engine for forming memories from high-arousal moments, commitment
     events, running daily vividness decay, computing memory salience, and deciding
     forgettability (EXP-212, EXP-214).
-Does NOT: query or persist state directly — all I/O is delegated to a MemoryGraphPort.
-Dependencies: engines.ports.memory_port, world.time_utils
-Dependencies injected: MemoryGraphPort (via __init__; DEC-122 / SEV-24 — no session).
+Does NOT: query or persist state directly — all I/O is delegated to a Neo4jMemoryRepository.
+Dependencies: graph.repositories.memory_repository, world.time_utils
+Dependencies injected: Neo4jMemoryRepository (via __init__; DEC-122 / SEV-24 — no session).
 Used by: engines.dialogue.dialogue_handler, api.routes.clock,
          engines.quest.quest_lifecycle_engine
 """
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from npc_engine.world.time_utils import TimePoint
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.memory_port import MemoryGraphPort
+    from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
 
 # ---------------------------------------------------------------------------
 # Memory kind constants (DEC-100 — values must match memory.yaml schema).
@@ -121,17 +121,17 @@ class MemoryEngine:
     threshold after a dialogue exchange. Vividness decay runs once per
     day advance, reducing all memory vividness by a fixed amount.
 
-    Persistence is delegated to an injected MemoryGraphPort; the engine holds
+    Persistence is delegated to an injected Neo4jMemoryRepository; the engine holds
     no Neo4j session (DEC-122 / SEV-24).
     """
 
-    def __init__(self, memory_repo: MemoryGraphPort) -> None:
-        """Initialise with the memory persistence port.
+    def __init__(self, memory_repo: Neo4jMemoryRepository) -> None:
+        """Initialise with the memory repository.
 
         Args:
-            memory_repo: Graph adapter implementing create_memory + the two decays.
+            memory_repo: Neo4jMemoryRepository implementing create_memory + the two decays.
         """
-        self._repo = memory_repo
+        self._repo: Neo4jMemoryRepository = memory_repo
 
     async def create_from_arousal(
         self,

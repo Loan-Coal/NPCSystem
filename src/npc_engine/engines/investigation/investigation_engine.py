@@ -5,7 +5,7 @@ Purpose: Query-based investigation engine for Detective/Mystery scenarios (Phase
          Aggregates evidence, witnesses, suspects, alibi windows, and rumor contradictions
          for a given event and surfaces structural inconsistencies for LLM narration.
 Does NOT: call LLMs directly, modify graph state, hold a Neo4j session, or run on a tick.
-Dependencies injected: InvestigationGraphPort (via __init__).
+Dependencies injected: Neo4jInvestigationRepository (via __init__).
 Used by: npc_engine.api.dependency_singletons (singleton), API routes (future)
 """
 
@@ -15,7 +15,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.investigation_port import InvestigationGraphPort
+    from npc_engine.graph.repositories.investigation_repository import Neo4jInvestigationRepository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,16 +26,16 @@ class InvestigationEngine:
     This engine is query-only — it does not write to the graph. Call
     ``get_investigation_context`` from API routes or other engines to obtain a structured
     payload suitable for LLM narration. Graph reads go through the injected
-    InvestigationGraphPort (DEC-122 / SEV-24); the engine holds no session.
+    Neo4jInvestigationRepository (DEC-122 / SEV-24); the engine holds no session.
     """
 
-    def __init__(self, investigation_repo: InvestigationGraphPort) -> None:
-        """Initialise with the injected investigation graph port.
+    def __init__(self, investigation_repo: Neo4jInvestigationRepository) -> None:
+        """Initialise with the injected investigation repository.
 
         Args:
-            investigation_repo: Read-only graph port for crime-event aggregation.
+            investigation_repo: Read-only Neo4jInvestigationRepository for crime-event aggregation.
         """
-        self._repo = investigation_repo
+        self._repo: Neo4jInvestigationRepository = investigation_repo
 
     async def get_investigation_context(
         self,

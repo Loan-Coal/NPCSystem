@@ -5,11 +5,11 @@ Purpose: Applies mood updates and decay rules to emotion states via async store 
          When a TraitReadPort is injected, fetches per-NPC trait multipliers on each
          update call and builds a per-call TraitModulatedEmotionModel (ISSUE-096/DEC-137).
 Does NOT: read or write graph data directly.  Delegates computation to EmotionModelProtocol
-          and graph write-through to an injected EmotionGraphPort (no session held).
+          and graph write-through to an injected Neo4jEmotionRepository (no session held).
 Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_model_protocol,
               engines/emotion/vad_emotion_model, engines/emotion/trait_modulated_model,
-              engines/ports/emotion_port, engines/ports/trait_read_port
-Dependencies injected: EmotionStore, EmotionModelProtocol, EmotionGraphPort (optional),
+              graph/repositories/emotion_repository, engines/ports/trait_read_port
+Dependencies injected: EmotionStore, EmotionModelProtocol, Neo4jEmotionRepository (optional),
                        TraitReadPort (optional).
 Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
@@ -25,7 +25,7 @@ from npc_engine.engines.emotion.trait_modulated_model import TraitModulatedEmoti
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.emotion_port import EmotionGraphPort
+    from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
     from npc_engine.engines.ports.trait_read_port import TraitReadPort
 
 _MOOD_AROUSAL_INCREMENT = 5
@@ -37,7 +37,7 @@ class EmotionUpdater:
     All emotion computation is delegated to the injected EmotionModelProtocol.
     This class owns only store I/O and method orchestration (OCP / DIP).
 
-    When an EmotionGraphPort is injected, every store write is followed by a
+    When a Neo4jEmotionRepository is injected, every store write is followed by a
     graph write-through so emotion state survives process restarts.
 
     When a TraitReadPort is injected, each update call fetches the NPC's
@@ -52,7 +52,7 @@ class EmotionUpdater:
         emotion_store: EmotionStore,
         decay_rate: int = 2,
         model: EmotionModelProtocol | None = None,
-        writer: EmotionGraphPort | None = None,
+        writer: Neo4jEmotionRepository | None = None,
         trait_reader: TraitReadPort | None = None,
     ) -> None:
         """Initialise the updater with a backing store, decay rate, and optional deps.
@@ -62,7 +62,7 @@ class EmotionUpdater:
             decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
             model: EmotionModelProtocol implementation.  Defaults to VadEmotionModel().
                    Ignored per-call when trait_reader is provided (per-NPC model is built).
-            writer: Optional EmotionGraphPort for graph write-through.  When None,
+            writer: Optional Neo4jEmotionRepository for graph write-through.  When None,
                     state is only stored in-memory (no graph persistence).
             trait_reader: Optional TraitReadPort.  When provided, each update call
                 fetches the NPC's traits and builds a TraitModulatedEmotionModel
@@ -72,7 +72,7 @@ class EmotionUpdater:
         self._store = emotion_store
         self._decay_rate = decay_rate
         self._model: EmotionModelProtocol = model if model is not None else VadEmotionModel()
-        self._writer: EmotionGraphPort | None = writer
+        self._writer: Neo4jEmotionRepository | None = writer
         self._trait_reader: TraitReadPort | None = trait_reader
 
     async def apply_dialogue_mood(
