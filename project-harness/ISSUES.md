@@ -3444,3 +3444,11 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 (`get_faction_standings_summary`); this GET is the dedicated per-faction HTTP read.
 **PLAN 2026-09-18 (owner, after adversarial review):** fix additively — keep `target: str`, add
 `target_name: str`; no API-contract re-record. Scheduled as ROADMAP **T15.4**.
+
+## ISSUE-361: `project-harness/ports_census.md` is a temporary file — delete by end of Sprint 5
+**Found:** 2026-09-18, during T9.1a
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/ports_census.md`
+**Description:** Census artifact created by T9.1a to drive T9.1b–d collapse batches. Once T9.1d closes and all 24 COLLAPSE rows are gone, this file has no further purpose and should be deleted.
+**Why deferred:** The file is needed by T9.1b, T9.1c, and T9.1d.
+**To fix:** Delete `project-harness/ports_census.md` at the end of T9.1d (end of Sprint 5).

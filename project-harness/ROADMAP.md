@@ -1437,7 +1437,7 @@ of that budget. A timed-out session is killed and its partial work stashed
 detectable partial completion in the programme. So the census is its own task and each batch is its
 own task; the shared method below belongs to all four.
 
-- [ ] **T9.1a** Recount the ports layer and record the collapse plan
+- [x] **T9.1a** Recount the ports layer and record the collapse plan
 Files: new `project-harness/ports_census.md` (temporary — delete at end of Sprint 5)
 Spec: **no deletions in this task.** Run the count described in the shared method below over the
 ports surviving Sprints 1-3, and write one table: port, implementor count, caller count, verdict
@@ -1451,7 +1451,7 @@ start without it.
 Validation: the table covers every file in `src/npc_engine/engines/ports/` with no row left
 unverdicted, and the keep/collapse counts are stated.
 Done when: the table is complete, every row has a verdict, and the total collapse count is recorded
-so T10.1's gate has a number to drive to zero.
+so T10.1's gate has a number to drive to zero. ✅ AUTO (T9.1a, 2026-09-18)
 
 - [ ] **T9.1b** Collapse the ports in rows 1-8 of the census
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275
