@@ -104,12 +104,13 @@ def test_dialogue_stream_path_includes_emotion_state_in_context_builder_call() -
 
 
 def test_gossip_and_event_handlers_use_shared_safe_invalidation_helper() -> None:
-    """Engine handlers should use the shared safe invalidate-then-refresh helper.
+    """Engine handlers must use the shared safe invalidation helper (DEC-210).
 
-    `refresh_embedding_safely` wraps `invalidate_embedding_safely` and adds the insert
-    the handlers have always implied (DEC-210). Both handlers must go through it: an
-    open-coded try/except around the index is what this test exists to prevent, and
-    that is unchanged.
+    The gossip handler (T7.3) hoisted embedding refresh out of the per-pair loop:
+    it now calls invalidate_embedding_safely per-pair and refresh_batch once per
+    tick.  The event handler still uses the combined refresh_embedding_safely.
+    Both must use the shared helpers — open-coded try/except around the index is
+    what this test exists to prevent.
     """
 
     gossip_handler_path = PROJECT_ROOT / "engines" / "gossip" / "gossip_handler.py"
@@ -118,5 +119,5 @@ def test_gossip_and_event_handlers_use_shared_safe_invalidation_helper() -> None
     gossip_text = gossip_handler_path.read_text(encoding="utf-8")
     event_text = event_handler_path.read_text(encoding="utf-8")
 
-    assert "refresh_embedding_safely" in gossip_text
+    assert "invalidate_embedding_safely" in gossip_text
     assert "refresh_embedding_safely" in event_text

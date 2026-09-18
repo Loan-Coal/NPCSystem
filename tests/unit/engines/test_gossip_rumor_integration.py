@@ -92,7 +92,7 @@ async def test_gossip_handler_calls_propagate_always():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         await handler.run_tick(tick_id=1)
 
@@ -128,7 +128,7 @@ async def test_gossip_creates_rumor_when_distortion_level_exceeds_threshold():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
             "npc_engine.engines.gossip.gossip_handler.gossip_distort",
             return_value=GossipDistortion(
@@ -165,7 +165,7 @@ async def test_gossip_no_rumor_when_distortion_below_threshold():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
             "npc_engine.engines.gossip.gossip_handler.gossip_distort",
             return_value=GossipDistortion(
@@ -231,7 +231,7 @@ async def test_knows_about_still_created_alongside_rumor():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
             "npc_engine.engines.gossip.gossip_handler.gossip_distort",
             return_value=GossipDistortion(

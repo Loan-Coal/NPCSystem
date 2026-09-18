@@ -41,7 +41,7 @@ as trusting the flag.
 
 
 class CorpusRefresherProtocol(Protocol):
-    """Re-embeds one node and writes it into the vector store."""
+    """Re-embeds one or more nodes and writes them into the vector store."""
 
     async def refresh(self, node_id: str) -> bool:
         """Refresh one node's vector-store entry.
@@ -51,6 +51,19 @@ class CorpusRefresherProtocol(Protocol):
 
         Returns:
             True when an entry was written, False when the node carries no embedding.
+        """
+
+    async def refresh_batch(self, node_ids: list[str]) -> int:
+        """Reconcile once, then upsert all given nodes in a single pass.
+
+        Drives exactly one reconcile_in_session call regardless of how many
+        node_ids are given — use this when multiple nodes need refreshing.
+
+        Args:
+            node_ids: Identifiers of the nodes to re-embed and upsert.
+
+        Returns:
+            Number of entries written to the store.
         """
 
 

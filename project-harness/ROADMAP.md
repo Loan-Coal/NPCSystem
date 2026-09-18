@@ -1258,7 +1258,7 @@ count 40+ and fail today.
 Validation: `pytest tests/unit/engines/test_quest_trigger_shared_budget.py -v`, then `make check`.
 Done when: the test passes and `make check` is green. Finding L11-03, **SEV-03**. ✅ AUTO (T7.2, 2026-09-18)
 
-- [ ] **T7.3** Stop the gossip tick reconciling the whole corpus per propagated pair
+- [x] **T7.3** Stop the gossip tick reconciling the whole corpus per propagated pair
 Files: `src/npc_engine/graph/gossip/` (the propagation query path),
 `src/npc_engine/engines/gossip/`, new test `tests/unit/graph/test_gossip_tick_query_count.py`
 Spec: **SEV-07, whose fix brief is already written at `project-harness/review-fixes/FIX-SEV-07.md`
@@ -1279,7 +1279,7 @@ linear in pairs.
 Validation: `pytest tests/unit/graph/test_gossip_tick_query_count.py -v`, then `make check`.
 Done when: the test passes and `make check` is green. **Do not attempt the live timing here** — the
 before/after tick duration needs a running stack built from each tree, and that is T7.4 alone (split
-2026-09-17). SEV-07, brief at `review-fixes/FIX-SEV-07.md`.
+2026-09-17). SEV-07, brief at `review-fixes/FIX-SEV-07.md`. ✅ AUTO (T7.3, 2026-09-18)
 
 - [ ] **T7.4** Measure the gossip tick before and after T7.3 on a running stack
 Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if the tick did not improve)

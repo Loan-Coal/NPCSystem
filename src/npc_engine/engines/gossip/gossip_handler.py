@@ -28,10 +28,8 @@ from npc_engine.common.knowledge_types import (
     KnowledgeState,
 )
 from npc_engine.config import Settings
-from npc_engine.engines.embedding_refresh import (
-    CorpusRefresherProtocol,
-    refresh_embedding_safely,
-)
+from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
+from npc_engine.engines.embedding_refresh import CorpusRefresherProtocol
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.gossip_distort import (
     compute_confidence,
@@ -116,10 +114,11 @@ class GossipHandler:
     ) -> dict[str, Any]:
         """Execute one gossip tick: select pairs, batch-read events+trust, distort, batch-write.
 
-        Replaces the previous N×3 sequential Neo4j round-trips with a single batch
-        read (event + trust for all pairs) and a single batch write (all propagations).
-        Conditional operations (log_gossip, rumor creation, emotion shock, secret
-        propagation) still run per-pair after the batch write.
+        Batch-reads event+trust and batch-writes propagations (one round-trip each).
+        Per-pair side effects (log_gossip, rumor creation, emotion shock, secret
+        propagation, embedding invalidation) still run per-pair after the batch write.
+        Embedding refresh (reconcile_in_session) runs once per tick after all pairs,
+        not once per pair — SEV-07 / T7.3.
 
         Args:
             tick_id: Current game tick identifier.
@@ -295,7 +294,9 @@ class GossipHandler:
         """Run conditional per-pair side effects after the batch write.
 
         Side effects: rumor creation, emotion shock, relation-log update,
-        embedding invalidation, and secret propagation.
+        per-pair embedding invalidation, secret propagation, and one post-loop
+        batch embedding refresh (SEV-07 / T7.3 — previously O(N) reconcile passes,
+        now O(1) per tick).
 
         Args:
             pair_lookup: Mapping of (sharer_id, receiver_id) → (sharer, receiver, faction_ctx).
@@ -307,6 +308,7 @@ class GossipHandler:
             Number of pairs successfully propagated.
         """
         propagated = 0
+        receiver_ids: list[str] = []
         for key, write in distortion_map.items():
             sharer, receiver, _faction_ctx = pair_lookup[key]
             row = event_trust_map[key]
@@ -356,14 +358,13 @@ class GossipHandler:
                 tick_id=tick_id,
                 trust_delta=trust_delta,
             )
-            await refresh_embedding_safely(
+            await invalidate_embedding_safely(
                 embedding_index=self._embedding_index,
-                refresher=self._corpus_refresher,
                 item_id=receiver["id"],
-                enabled=self._settings.VECTOR_STORE_INCREMENTAL_UPSERT,
                 logger=LOGGER,
                 entity_label="receiver",
             )
+            receiver_ids.append(receiver["id"])
             propagated += 1
 
             await self._maybe_propagate_secret(
@@ -371,7 +372,34 @@ class GossipHandler:
                 trust=int(row["trust"]), tick_id=tick_id,
             )
 
+        await self._batch_refresh_receivers(receiver_ids)
         return propagated
+
+    async def _batch_refresh_receivers(self, receiver_ids: list[str]) -> None:
+        """Re-embed all receivers in one reconcile pass (SEV-07 / T7.3).
+
+        Drives exactly one reconcile_in_session call for the whole tick rather
+        than one per pair. Best-effort: a failure here must not abort the tick.
+
+        Args:
+            receiver_ids: IDs of the NPC receivers whose embeddings were invalidated.
+        """
+        if not receiver_ids or not self._settings.VECTOR_STORE_INCREMENTAL_UPSERT:
+            return
+        if self._corpus_refresher is None:
+            return
+        try:
+            refreshed = await self._corpus_refresher.refresh_batch(receiver_ids)
+            LOGGER.info(
+                "vector_store.incremental_upsert receivers=%d refreshed=%d",
+                len(receiver_ids),
+                refreshed,
+            )
+        except Exception:
+            LOGGER.warning(
+                "vector_store.incremental_upsert batch failed for %d receivers",
+                len(receiver_ids),
+            )
 
     async def _maybe_propagate_secret(
         self, *, sharer_id: str, receiver_id: str, trust: int, tick_id: int,

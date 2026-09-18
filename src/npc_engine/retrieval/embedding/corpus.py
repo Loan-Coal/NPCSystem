@@ -40,6 +40,7 @@ __all__ = [
     "ensure_corpus",
     "read_corpus_fingerprint",
     "refresh_corpus_node",
+    "refresh_corpus_nodes_batch",
 ]
 
 MAX_RECONCILE_PASSES: int = 100
@@ -269,3 +270,36 @@ async def refresh_corpus_node(
         return False
     await _upsert_rows(index, rows)
     return True
+
+
+async def refresh_corpus_nodes_batch(
+    session: AsyncSession,
+    index: CorpusStoreProtocol,
+    reconciler: CorpusReconcilerProtocol,
+    *,
+    node_ids: list[str],
+) -> int:
+    """Reconcile once, then upsert all given nodes in a single pass.
+
+    The batch companion of ``refresh_corpus_node``: one reconciliation pass
+    covers all pending embeddings, then all ``node_ids`` are queried and
+    upserted together.  Use this when multiple nodes need refreshing in one
+    call — it drives O(1) reconcile passes instead of O(len(node_ids)).
+
+    Args:
+        session: Active Neo4j async session.
+        index: Vector store to write into.
+        reconciler: Reconciler run exactly once for the whole batch.
+        node_ids: Nodes whose entries should be refreshed.
+
+    Returns:
+        Number of entries written to the store (may be less than len(node_ids)
+        when some nodes carry no embedding yet).
+    """
+    if not node_ids:
+        return 0
+    await reconciler.reconcile_in_session(session)
+    rows = await select_embedded_nodes(session, skip=0, limit=len(node_ids), node_ids=node_ids)
+    if not rows:
+        return 0
+    return await _upsert_rows(index, rows)

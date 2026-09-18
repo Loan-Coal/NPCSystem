@@ -18,6 +18,7 @@ from npc_engine.retrieval.embedding.corpus import (
     CorpusReconcilerProtocol,
     CorpusStoreProtocol,
     refresh_corpus_node,
+    refresh_corpus_nodes_batch,
 )
 
 __all__ = ["EmbeddingCorpusRefresher"]
@@ -60,4 +61,21 @@ class EmbeddingCorpusRefresher:
         async with self._graph_db.get_session() as session:
             return await refresh_corpus_node(
                 session, self._embedding_index, self._reconciler, node_id=node_id,
+            )
+
+    async def refresh_batch(self, node_ids: list[str]) -> int:
+        """Reconcile once, then upsert all given nodes in a single session.
+
+        Drives exactly one reconcile_in_session call regardless of how many
+        node_ids are supplied — the batch companion of ``refresh``.
+
+        Args:
+            node_ids: Identifiers of the nodes to re-embed and upsert.
+
+        Returns:
+            Number of entries written to the store.
+        """
+        async with self._graph_db.get_session() as session:
+            return await refresh_corpus_nodes_batch(
+                session, self._embedding_index, self._reconciler, node_ids=node_ids,
             )

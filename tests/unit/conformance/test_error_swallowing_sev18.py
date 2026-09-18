@@ -215,15 +215,9 @@ async def test_gossip_rumor_record_failure_reraises():
         gossip_repo=repo,
     )
 
-    with (
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new=AsyncMock(return_value=[(sharer, receiver, MagicMock(), {"best_standing": None})]),
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely",
-            new=AsyncMock(return_value=None),
-        ),
+    with patch(
+        "npc_engine.engines.gossip.gossip_handler.select_pairs",
+        new=AsyncMock(return_value=[(sharer, receiver, MagicMock(), {"best_standing": None})]),
     ):
         with pytest.raises(RuntimeError, match="rumor db down"):
             await handler.run_tick(tick_id=1)

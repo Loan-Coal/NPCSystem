@@ -80,7 +80,7 @@ async def test_emotion_shock_called_for_high_severity():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
         await handler.run_tick(tick_id=10)
@@ -97,7 +97,7 @@ async def test_emotion_shock_not_called_for_low_severity():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
         await handler.run_tick(tick_id=10)
@@ -112,7 +112,7 @@ async def test_emotion_shock_skipped_when_no_updater():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         handler = _make_handler(emotion_updater=None, emotion_threshold=50, repo=repo)
         result = await handler.run_tick(tick_id=10)
@@ -129,7 +129,7 @@ async def test_emotion_shock_at_exact_threshold():
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
         await handler.run_tick(tick_id=10)

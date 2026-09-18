@@ -91,7 +91,7 @@ async def test_seeds_used_key_in_run_tick_result() -> None:
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         result = await handler.run_tick(tick_id=42)
 
@@ -105,7 +105,7 @@ async def test_same_tick_override_produces_same_seeds() -> None:
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         result_a = await handler.run_tick(tick_id=42)
 
@@ -115,7 +115,7 @@ async def test_same_tick_override_produces_same_seeds() -> None:
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         result_b = await handler.run_tick(tick_id=42)
 
@@ -130,7 +130,7 @@ async def test_different_tick_id_produces_different_seeds() -> None:
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         result_42 = await handler.run_tick(tick_id=42)
 
@@ -139,7 +139,7 @@ async def test_different_tick_id_produces_different_seeds() -> None:
 
     with (
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
-        patch("npc_engine.engines.gossip.gossip_handler.refresh_embedding_safely", new=AsyncMock()),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
         result_43 = await handler.run_tick(tick_id=43)
 
