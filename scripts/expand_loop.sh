@@ -192,9 +192,11 @@ preflight_worktree() {
   local py=""
   [ -x "$REPO_ROOT/.venv/Scripts/python.exe" ] && py="$REPO_ROOT/.venv/Scripts/python.exe"
   [ -z "$py" ] && [ -x "$REPO_ROOT/.venv/bin/python" ] && py="$REPO_ROOT/.venv/bin/python"
-  if [ -z "$py" ] || ! "$py" -c "import pytest, mypy, ruff" >/dev/null 2>&1; then
+  # pygame: without it make test-demo cannot collect demo_game/tests/ui (ISSUE-360).
+  if [ -z "$py" ] || ! "$py" -c "import pytest, mypy, ruff, pygame" >/dev/null 2>&1; then
     fatal "no working .venv in this worktree ($REPO_ROOT). Provision it:
-    python -m venv .venv && .venv/Scripts/python.exe -m pip install -e \".[dev]\""
+    python -m venv .venv && .venv/Scripts/python.exe -m pip install -e \".[dev]\"
+    .venv/Scripts/python.exe -m pip install -r demo_game/requirements.txt"
   fi
   [ -f "$REPO_ROOT/.env" ] || fatal "no .env in this worktree ($REPO_ROOT). Copy it:
     cp <primary-checkout>/.env \"$REPO_ROOT/.env\""

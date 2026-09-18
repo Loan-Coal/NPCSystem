@@ -4054,3 +4054,24 @@ behaviour it names. The `RELATES_TO` POST at `:197-202` also omits `last_updated
 **Why deferred:** as ISSUE-336.
 **To fix:** correct the Location and `RELATES_TO` property sets, check every POST return, and assert a
 mood *change* rather than mood presence.
+
+## [FIXED] ISSUE-360: the loop worktree's venv has no `pygame`, so `make test-demo` cannot collect the demo UI tests
+**Found:** 2026-09-18, while verifying the demo clock-timeout fix
+**Severity:** P2 (annoying)
+**Where:** `NPCSystem-loop/.venv` (the overnight loop's worktree); `scripts/loop_gates.py:80` (`DEMO_GATE_CMD`)
+**Description:** `import pygame` fails in the loop worktree's venv, so `make test-demo` there stops
+with 12 collection errors (`demo_game/tests/ui/*`). The loop runs `make test-demo` for every task that
+touches `demo_game/`; the 2026-09-17 night's T4.3, T5.1 and T5.2 transcripts all hit
+`No module named 'pygame'`. The demo UI tests have therefore not been a working gate in the loop.
+Separately, `test_run_dry_run_encoding.py` needs `NPC_API_KEY` in the environment and fails without it.
+With the main checkout's venv and `NPC_API_KEY=x`, the loop tree's demo suite is 1157 passed.
+**Why deferred:** environment setup of the loop worktree, not the task at hand (fixing the misplaced T3.2
+commit and the demo timeout).
+**To fix:** `pip install -r demo_game/requirements.txt` into `NPCSystem-loop/.venv`; make `test-demo`
+set a dummy `NPC_API_KEY` (or the test set its own); consider a loop preflight that fails when
+`import pygame` fails.
+**PLAN 2026-09-18 (owner, adjusted by review):** install `demo_game/requirements.txt` into the loop
+venv; add `pygame` to `preflight_worktree`'s import check **and** its provisioning message and
+OVERNIGHT_LOOP.md's quick start; set `NPC_API_KEY` with `monkeypatch.setenv` inside
+`test_run_dry_run_encoding.py`, not as a Makefile default.
+**Fixed:** 2026-09-18, in fix(loop): provision pygame in the loop venv and make the dry-run test self-sufficient (auto/roadmap-night)

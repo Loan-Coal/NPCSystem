@@ -29,6 +29,8 @@ def _run_dry_run_on_cp1252_stdout(monkeypatch) -> str:
     stream = io.TextIOWrapper(buffer, encoding="cp1252", newline="")
     monkeypatch.setattr(sys, "stdout", stream)
     monkeypatch.setattr(sys, "argv", ["run", "--dry-run"])
+    # DemoConfig requires NPC_API_KEY even offline; the dry run never sends it (ISSUE-360).
+    monkeypatch.setenv("NPC_API_KEY", "dry-run-dummy-key")
 
     main()
 

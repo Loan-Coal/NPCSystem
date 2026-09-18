@@ -21,6 +21,7 @@ cd ../NPCSystem-loop
 #    primary checkout's src/, so the gate would test the wrong code
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"
+.venv/Scripts/python.exe -m pip install -r demo_game/requirements.txt  # pygame for the demo gate
 
 # 3. the .env (API_KEY for the Makefile, settings for the tests)
 cp ../NPCSystem/.env .env
