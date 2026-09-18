@@ -4,27 +4,29 @@ Layer: engines
 Purpose: Tick-scheduler adapter that updates each NPC's model of the player (F1.4).
          For every co-located (npc, player) pair it reads the RELATES_TO scalars,
          derives a PlayerModelUpdate via the pure PlayerModelEngine, and persists it
-         through the injected PlayerModelGraphPort.
+         through the injected Neo4jPlayerModelRepository (DEC-275 — concrete injection).
 Does NOT: run Cypher directly (delegates to injected read/write ports), call LLMs,
           hold a Neo4j session, or derive trust/intent itself.
 Dependencies injected: PlayerModelEngine, PlayerLocationReadPort, RelationReadPort,
-                       PlayerModelGraphPort (via __init__).
+                       Neo4jPlayerModelRepository (via __init__).
 Used by: scheduler.tick_scheduler (wired via dependencies_engines.py).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.player_model.player_model_engine import (
     PlayerModelEngine,
     PlayerModelInput,
 )
 from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
-from npc_engine.engines.ports.player_model_port import PlayerModelGraphPort
 from npc_engine.engines.ports.relation_read_port import RelationReadPort
 from npc_engine.utils.errors import RelationEdgeNotFoundError
+
+if TYPE_CHECKING:
+    from npc_engine.graph.repositories.player_model_repository import Neo4jPlayerModelRepository
 
 # Maximum co-located (npc, player) pairs modelled per scheduler tick — bounds
 # graph read/write cost when many NPCs share a location.
@@ -46,7 +48,7 @@ class PlayerModelTick:
         engine: PlayerModelEngine,
         location_reader: PlayerLocationReadPort,
         relation_reader: RelationReadPort,
-        model_repo: PlayerModelGraphPort,
+        model_repo: Neo4jPlayerModelRepository,
     ) -> None:
         """Initialise with injected dependencies.
 
@@ -54,7 +56,7 @@ class PlayerModelTick:
             engine: Pure PlayerModelEngine that derives perceived_trust/intent.
             location_reader: PlayerLocationReadPort for co-location queries.
             relation_reader: RelationReadPort for RELATES_TO scalar reads.
-            model_repo: PlayerModelGraphPort for upserting derived player models.
+            model_repo: Neo4jPlayerModelRepository for upserting derived player models.
         """
         self._engine = engine
         self._location_reader = location_reader

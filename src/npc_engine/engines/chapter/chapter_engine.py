@@ -2,11 +2,11 @@
 Module: chapter_engine
 Layer: engines
 Purpose: Detects chapter transitions via quest density and creates LLM-labeled CHAPTER nodes.
-Does NOT: perform graph reads/writes directly — delegates to the injected ChapterGraphPort
+Does NOT: perform graph reads/writes directly — delegates to the injected Neo4jChapterRepository
           (chapter reads/writes + faction standings) and WorldStateGraphPort.
-Dependencies: engines.ports.chapter_port, engines.ports.world_state_port, engines.llm.protocols,
-              common.yaml_utils, engines.chapter.chapter_labeler, config
-Dependencies injected: LLMGenerateProtocol, ChapterGraphPort, WorldStateGraphPort.
+Dependencies: graph.repositories.chapter_repository, engines.ports.world_state_port,
+              engines.llm.protocols, common.yaml_utils, engines.chapter.chapter_labeler, config
+Dependencies injected: LLMGenerateProtocol, Neo4jChapterRepository, WorldStateGraphPort.
 Used by: scheduler.tick_scheduler, api.dependencies_advanced.progression
 
 NOTE: single cohesive class; six tightly-coupled async methods share injected state.
@@ -28,8 +28,8 @@ from npc_engine.engines.chapter.chapter_labeler import label_chapter_by_rules
 
 if TYPE_CHECKING:
     from npc_engine.engines.llm.protocols import LLMGenerateProtocol
-    from npc_engine.engines.ports.chapter_port import ChapterGraphPort
     from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
+    from npc_engine.graph.repositories.chapter_repository import Neo4jChapterRepository
 
 
 LOGGER = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class ChapterEngine:
     def __init__(
         self,
         llm_client: LLMGenerateProtocol,
-        chapter_repo: ChapterGraphPort,
+        chapter_repo: Neo4jChapterRepository,
         world_state_repo: WorldStateGraphPort,
         *,
         quest_threshold: int = _DEFAULT_QUEST_THRESHOLD,
@@ -82,7 +82,7 @@ class ChapterEngine:
 
         Args:
             llm_client: LLM adapter for generating chapter titles and themes.
-            chapter_repo: Graph port for chapter reads/writes + faction standings.
+            chapter_repo: Neo4jChapterRepository for chapter reads/writes + faction standings.
             world_state_repo: Shared graph port for reading the WorldState.
             quest_threshold: Number of completed quests in ``window_ticks`` that
                 triggers a chapter transition.
@@ -107,7 +107,7 @@ class ChapterEngine:
     async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Run chapter detection and optional transition logic for the current tick.
 
-        Reads/writes flow through the injected ChapterGraphPort + WorldStateGraphPort,
+        Reads/writes flow through the injected Neo4jChapterRepository + WorldStateGraphPort,
         which own their Neo4j sessions (DEC-122 / SEV-24).
 
         Args:

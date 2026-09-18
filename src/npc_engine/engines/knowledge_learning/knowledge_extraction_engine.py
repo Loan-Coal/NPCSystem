@@ -5,9 +5,10 @@ Purpose: Extracts player-stated facts from dialogue and writes them as NPC belie
          skipping facts that duplicate an existing belief (EXP-215 slice 1).
 Does NOT: call LLMs or validate facts semantically — raw fact strings come pre-extracted
           from DialogueResponse. Does NOT perform semantic contradiction detection (slice 2).
-          Does NOT open Neo4j sessions — belief reads/writes go through the injected port.
-Dependencies: engines.knowledge_learning.models, engines.ports.knowledge_port
-Dependencies injected: KnowledgeGraphPort (via constructor).
+          Does NOT open Neo4j sessions — belief reads/writes go through the injected repo.
+Dependencies: engines.knowledge_learning.models,
+              graph.repositories.knowledge_repository
+Dependencies injected: Neo4jKnowledgeRepository (via constructor).
 Used by: engines.dialogue.dialogue_handler
 """
 
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING
 from npc_engine.engines.knowledge_learning.models import KnowledgeExtractionResult
 
 if TYPE_CHECKING:
-    from npc_engine.engines.ports.knowledge_port import KnowledgeGraphPort
+    from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRepository
 
 _logger = logging.getLogger(__name__)
 
@@ -41,15 +42,15 @@ class KnowledgeExtractionEngine:
     (EXP-215 slice 1: case-insensitive exact-content match).
     Semantic contradiction detection is deferred to slice 2.
 
-    Injected dependencies: KnowledgeGraphPort (all belief reads/writes are delegated to
+    Injected dependencies: Neo4jKnowledgeRepository (all belief reads/writes are delegated to
     it; the engine holds no Neo4j session — DEC-122 / SEV-24).
     """
 
-    def __init__(self, *, knowledge_repo: KnowledgeGraphPort) -> None:
-        """Store the injected belief-domain repository port.
+    def __init__(self, *, knowledge_repo: Neo4jKnowledgeRepository) -> None:
+        """Store the injected belief-domain knowledge repository.
 
         Args:
-            knowledge_repo: Port for duplicate-belief lookup and belief write-through.
+            knowledge_repo: Neo4jKnowledgeRepository for duplicate-belief lookup and belief write-through.
         """
         self._repo = knowledge_repo
 

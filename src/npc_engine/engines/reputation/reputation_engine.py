@@ -6,8 +6,10 @@ Purpose: 1-hop personal reputation propagation engine (EXP-52 slice-1).
          nudges trust on every bridge NPC B that has an existing edge toward the player,
          provided S's standing toward B meets the bridge threshold.
 Does NOT: open Neo4j sessions, run Cypher, call LLMs, or create new RELATES_TO edges.
-          Reads/writes are delegated to the injected RelationReadPort + ReputationGraphPort.
-Dependencies injected: PropagationConfig, RelationReadPort (reads), ReputationGraphPort (nudge write).
+          Reads/writes are delegated to the injected RelationReadPort +
+          Neo4jReputationRepository.
+Dependencies injected: PropagationConfig, RelationReadPort (reads),
+          Neo4jReputationRepository (nudge write).
 Used by: engines.reputation.reputation_tick_adapter (wired via dependencies_engines.py).
 """
 
@@ -23,7 +25,7 @@ from npc_engine.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from npc_engine.engines.ports.relation_read_port import RelationReadPort
-    from npc_engine.engines.ports.reputation_port import ReputationGraphPort
+    from npc_engine.graph.repositories.reputation_repository import Neo4jReputationRepository
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -55,21 +57,21 @@ class ReputationEngine:
     Attributes:
         _config: Tuning constants loaded from reputation_rules.yaml.
         _reader: RelationReadPort used to fetch edge scalars (session-per-call adapter).
-        _repo: ReputationGraphPort that writes the bounded nudge to the graph layer.
+        _repo: Neo4jReputationRepository that writes the bounded nudge to the graph layer.
     """
 
     def __init__(
         self,
         config: PropagationConfig,
         relation_reader: RelationReadPort,
-        reputation_repo: ReputationGraphPort,
+        reputation_repo: Neo4jReputationRepository,
     ) -> None:
         """Initialise with injected dependencies (no Neo4j session — DEC-122 / SEV-24).
 
         Args:
             config: Validated PropagationConfig instance.
             relation_reader: RelationReadPort providing get_relation_scalars(src_id, dst_id).
-            reputation_repo: ReputationGraphPort whose apply_trust_nudge writes the nudge.
+            reputation_repo: Neo4jReputationRepository whose apply_trust_nudge writes the nudge.
         """
         self._config = config
         self._reader = relation_reader

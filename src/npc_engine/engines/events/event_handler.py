@@ -1,11 +1,9 @@
 """
-event_handler.py - Orchestrates weighted event generation and awareness seeding.
+Module: event_handler
 Layer: engines
 Purpose: Orchestrates weighted event generation and awareness seeding.
-
 Does NOT: run periodic scheduler loops, open Neo4j sessions, or hold a transaction.
-
-Dependencies injected: Settings, EmbeddingIndex, TypeRegistry, EventGraphPort,
+Dependencies injected: Settings, EmbeddingIndex, TypeRegistry, Neo4jEventRepository,
     WorldStateGraphPort.
 """
 from __future__ import annotations
@@ -20,6 +18,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from typing import TYPE_CHECKING
+
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_refresh import (
     CorpusRefresherProtocol,
@@ -27,13 +27,15 @@ from npc_engine.engines.embedding_refresh import (
 )
 from npc_engine.engines.events.disruption_loader import DisruptionRule, load_disruption_rules
 from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
-from npc_engine.engines.ports.event_port import EventGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 from npc_engine.graph.event.event_emission_service import RoutineOverridePlan
 from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
 from npc_engine.utils.errors import EventTemplateNotFoundError
+
+if TYPE_CHECKING:
+    from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
 
 
 LOGGER = logging.getLogger(__name__)
@@ -93,7 +95,7 @@ class EventHandler:
         self,
         settings: Settings,
         embedding_index: EmbeddingIndex,
-        event_repo: EventGraphPort,
+        event_repo: Neo4jEventRepository,
         world_state_repo: WorldStateGraphPort,
         registry: TypeRegistry | None = None,
         disruption_rules_path: str | None = None,
@@ -104,7 +106,7 @@ class EventHandler:
         Args:
             settings: Application settings (EVENT_POOL_PATH, EVENT_RNG_SEED).
             embedding_index: Vector index invalidated after event creation.
-            event_repo: Event graph domain port (atomic emit + witness/causation).
+            event_repo: Neo4jEventRepository for atomic emit + witness/causation.
             world_state_repo: World-state port for the severity-cap read.
             registry: Type registry providing the event node model; injected by the
                 composition root (``api/dependency_singletons.py``).
@@ -177,7 +179,7 @@ class EventHandler:
 
         High-severity events (severity ≥ HIGH_SEVERITY_THRESHOLD) add the event type to the
         world's ``active_conditions`` list. Location embedding is invalidated after creation.
-        All graph work is delegated to the injected EventGraphPort (atomic emit) and
+        All graph work is delegated to the injected Neo4jEventRepository (atomic emit) and
         WorldStateGraphPort (severity-cap read); the scheduler's ``session=`` kwarg is
         accepted and ignored during the SEV-24 migration.
 

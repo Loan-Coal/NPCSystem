@@ -1463,10 +1463,10 @@ RED anchor: the census's recorded below-threshold count for these eight rows, dr
 Validation: `make check`, then `make test-demo`.
 Done when: rows 1-8 are collapsed, `make check` green, LOC delta reported. ✅ AUTO (T9.1b, 2026-09-18)
 
-- [ ] **T9.1c** Collapse the ports in rows 9-16 of the census
+- [x] **T9.1c** Collapse the ports in rows 9-16 of the census
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275
 Files: as T9.1b, for rows 9-16 of `ports_census.md`
-Spec, RED anchor, Validation and Done when: as T9.1b, for its own row range.
+Spec, RED anchor, Validation and Done when: as T9.1b, for its own row range. ✅ AUTO (T9.1c, 2026-09-18)
 
 - [ ] **T9.1d** Collapse the remaining census rows
 Pre-approved: file-deletion, public-interface · owner 2026-09-08 · DEC-275

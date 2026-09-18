@@ -88,7 +88,7 @@ def get_knowledge_extraction_engine() -> KnowledgeExtractionEngine:
     (default False) — this wiring is inert until the feature flag is enabled.
 
     Returns:
-        KnowledgeExtractionEngine depending on the KnowledgeGraphPort abstraction.
+        KnowledgeExtractionEngine wired to Neo4jKnowledgeRepository (DEC-275).
     """
     return KnowledgeExtractionEngine(
         knowledge_repo=Neo4jKnowledgeRepository(get_graph_db()),

@@ -2,10 +2,12 @@
 Module: memory_consolidation_engine
 Layer: engines
 Purpose: Consolidates recent session turns into a Memory node via a single LLM summarisation call.
-Does NOT: query Neo4j directly — delegates to the injected MemoryConsolidationGraphPort.
-Dependencies: engines.llm.protocols, engines.dialogue.session_store, engines.ports.memory_consolidation_port,
+Does NOT: query Neo4j directly — delegates to the injected Neo4jMemoryConsolidationRepository.
+Dependencies: engines.llm.protocols, engines.dialogue.session_store,
+              graph.repositories.memory_consolidation_repository,
               config, world.time_utils, common.yaml_utils
-Dependencies injected: SessionStore, LLMGenerateProtocol, MemoryConsolidationGraphPort, Settings.
+Dependencies injected: SessionStore, LLMGenerateProtocol,
+              Neo4jMemoryConsolidationRepository, Settings.
 Used by: scheduler.tick_scheduler
 """
 
@@ -24,7 +26,7 @@ from npc_engine.world.time_utils import TimePoint
 
 if TYPE_CHECKING:
     from npc_engine.engines.dialogue.session_store import SessionStore
-    from npc_engine.engines.ports.memory_consolidation_port import MemoryConsolidationGraphPort
+    from npc_engine.graph.repositories.memory_consolidation_repository import Neo4jMemoryConsolidationRepository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class MemoryConsolidationEngine:
 
     run_tick parallelises consolidation across NPCs using asyncio.gather bounded
     by asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS). Each parallel task drives
-    the injected MemoryConsolidationGraphPort, which opens its own Neo4j session per
+    the injected Neo4jMemoryConsolidationRepository, which opens its own Neo4j session per
     operation (DEC-122 / SEV-24), so the engine holds no session.
     """
 
@@ -56,7 +58,7 @@ class MemoryConsolidationEngine:
         self,
         session_store: SessionStore,
         llm_client: LLMGenerateProtocol,
-        memory_repo: MemoryConsolidationGraphPort,
+        memory_repo: Neo4jMemoryConsolidationRepository,
         settings: Settings,
         turn_threshold: int,
         clear_turns_after: bool = False,
@@ -68,7 +70,7 @@ class MemoryConsolidationEngine:
         Args:
             session_store: SessionStore to read dialogue turns from.
             llm_client: LLM adapter for generating the summary paragraph.
-            memory_repo: Graph port for belief/memory/witness reads + the Memory write.
+            memory_repo: Neo4jMemoryConsolidationRepository for belief/memory/witness reads + the Memory write.
             settings: Application settings (supplies MAX_CONCURRENT_TICKS).
             turn_threshold: Minimum turn count before consolidation triggers.
             clear_turns_after: When True, clears consolidated turns from the store.
@@ -201,7 +203,7 @@ class MemoryConsolidationEngine:
         Called by the tick scheduler on its configured cadence. Fans out one
         coroutine per eligible NPC, bounded by
         asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS). Each coroutine drives the
-        injected MemoryConsolidationGraphPort, which manages its own session per
+        injected Neo4jMemoryConsolidationRepository, which manages its own session per
         operation (DEC-122 / SEV-24).
 
         Args:

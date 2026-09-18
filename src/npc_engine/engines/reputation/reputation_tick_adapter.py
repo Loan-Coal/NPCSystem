@@ -8,7 +8,7 @@ Purpose: Tick-scheduler adapter wrapping ReputationEngine with the
          Returns {"nudges": 0} immediately when config.enabled is False
          (zero runtime cost, engine never touches the graph).
 Does NOT: run Cypher queries directly or hold a Neo4j session (CharacterReadPort and
-          the engine's RelationReadPort/ReputationGraphPort own session lifecycle).
+          the engine's RelationReadPort/Neo4jReputationRepository own session lifecycle).
 Dependencies: engines.reputation.reputation_engine.ReputationEngine,
               engines.reputation.propagation_config.PropagationConfig,
               engines.ports.character_read_port.CharacterReadPort

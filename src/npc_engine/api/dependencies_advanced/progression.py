@@ -34,7 +34,7 @@ def get_chapter_engine() -> ChapterEngine:
     """Create singleton chapter engine with its own LLM client.
 
     Wires the Neo4j graph adapters (Neo4jChapterRepository + Neo4jWorldStateRepository)
-    as the engine's injected ChapterGraphPort / WorldStateGraphPort (DEC-122 / SEV-24)
+    directly into the engine constructor (DEC-275 — concrete injection, DEC-122 / SEV-24)
     so the engine holds no Neo4j session.
 
     Returns:
@@ -79,8 +79,9 @@ def get_investigation_engine() -> InvestigationEngine:
 def get_memory_consolidation_engine() -> MemoryConsolidationEngine:
     """Create singleton for the memory consolidation engine using its own LLM config.
 
-    Wires the Neo4j graph adapter (Neo4jMemoryConsolidationRepository) as the engine's
-    injected MemoryConsolidationGraphPort (DEC-122 / SEV-24) so the engine holds no session.
+    Wires the Neo4j graph adapter (Neo4jMemoryConsolidationRepository) directly into the
+    engine constructor (DEC-275 — concrete injection, DEC-122 / SEV-24) so the engine
+    holds no session.
 
     Returns:
         MemoryConsolidationEngine configured from engines/memory_consolidation/llm_config.yaml.

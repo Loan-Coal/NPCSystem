@@ -4,11 +4,12 @@ Layer: engines
 Purpose: Detects high-vividness unshared NPC memories co-located with an idle player
          and generates one in-character proactive dialogue line via the LLM.
 Does NOT: wire into the tick scheduler, send WS messages, persist state, or hold a
-         Neo4j session. Graph reads go through injected ports (DEC-122 / SEV-24).
+         Neo4j session. Graph reads go through injected repositories (DEC-122 / SEV-24).
 Dependencies: engines.llm.protocols, engines.proactive_dialogue.models,
-              engines.ports.proactive_memory_read_port, engines.ports.player_location_read_port,
-              common.yaml_utils
-Dependencies injected: LLMGenerateProtocol, ProactiveMemoryReadPort, PlayerLocationReadPort.
+              graph.repositories.proactive_memory_read_repository,
+              engines.ports.player_location_read_port, common.yaml_utils
+Dependencies injected: LLMGenerateProtocol, Neo4jProactiveMemoryReadRepository,
+              PlayerLocationReadPort.
 Used by: scheduler.tick_scheduler (via proactive_tick_adapter)
 """
 
@@ -24,7 +25,7 @@ from npc_engine.engines.proactive_dialogue.models import ProactiveLine, Proactiv
 
 if TYPE_CHECKING:
     from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
-    from npc_engine.engines.ports.proactive_memory_read_port import ProactiveMemoryReadPort
+    from npc_engine.graph.repositories.proactive_memory_read_repository import Neo4jProactiveMemoryReadRepository
 
 _logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class ProactiveDialogueEngine:
     def __init__(
         self,
         llm_client: LLMGenerateProtocol,
-        memory_service: ProactiveMemoryReadPort,
+        memory_service: Neo4jProactiveMemoryReadRepository,
         location_service: PlayerLocationReadPort,
         prompts_dir: Path = _PROMPTS_DIR,
     ) -> None:
@@ -101,7 +102,7 @@ class ProactiveDialogueEngine:
 
         Args:
             llm_client: LLM adapter implementing LLMGenerateProtocol.
-            memory_service: ProactiveMemoryReadPort returning unshared memories (sessionless).
+            memory_service: Neo4jProactiveMemoryReadRepository returning unshared memories.
             location_service: PlayerLocationReadPort returning player idle-tick counts.
             prompts_dir: Override path to the proactive prompt directory
                 (defaults to src/npc_engine/prompts/proactive/).
