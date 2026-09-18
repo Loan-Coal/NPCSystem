@@ -4093,3 +4093,16 @@ remaining budget into the quest triggers' `TickLLMBudget` for the tick. Either w
 `config.py` to say so, then close this issue. A note in T8.1 (added) says any future hard per-minute
 cap belongs in T8.1's LLM-layer gate.
 **Fixed:** 2026-09-18, in docs(decisions): record the per-minute LLM ceiling as an admission gate (auto/roadmap-night)
+
+## [FIXED] ISSUE-357: `check_engine_census` treats a folder holding only `__pycache__` as a live engine
+**Found:** 2026-09-18, while cherry-picking T3.2 onto `auto/roadmap-night`
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_engine_census.py:199` (`engines_dir.iterdir()` / `is_dir()`)
+**Description:** Git deletes an engine's tracked files but leaves the untracked `__pycache__/` behind, so
+`engines/<name>/` still exists on disk. The census then reports it as unwired or dead and fails `make check`
+locally, although the clean tree is correct (a fresh clone passes). Hit with `faction_politics/` and `treaty/`.
+**Why deferred:** `scripts/check_engine_census.py` is a frozen gate path (`loop_gates.FROZEN_PATH_PREFIXES`);
+changing a gate needs owner review, not a drive-by edit.
+**To fix:** skip directories that contain no `*.py` outside `__pycache__` (the script already has
+`rglob("*.py")` at `:122`), with a test for a pycache-only directory.
+**Fixed:** 2026-09-18, in fix(census): ignore engine folders that hold only __pycache__ (auto/roadmap-night)

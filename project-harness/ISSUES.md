@@ -34,18 +34,6 @@ the inner `standings` list) or delete the dead client method and widget.
 **PLAN 2026-09-18 (owner):** handed to **T13.1**, which rules on unused demo panels (like TREATY/OATH).
 No code before that ruling; if kept, feed it on tab open via `RightPanelRenderer`, no poller.
 
-## ISSUE-357: `check_engine_census` treats a folder holding only `__pycache__` as a live engine
-**Found:** 2026-09-18, while cherry-picking T3.2 onto `auto/roadmap-night`
-**Severity:** P3 (nice-to-fix)
-**Where:** `scripts/check_engine_census.py:199` (`engines_dir.iterdir()` / `is_dir()`)
-**Description:** Git deletes an engine's tracked files but leaves the untracked `__pycache__/` behind, so
-`engines/<name>/` still exists on disk. The census then reports it as unwired or dead and fails `make check`
-locally, although the clean tree is correct (a fresh clone passes). Hit with `faction_politics/` and `treaty/`.
-**Why deferred:** `scripts/check_engine_census.py` is a frozen gate path (`loop_gates.FROZEN_PATH_PREFIXES`);
-changing a gate needs owner review, not a drive-by edit.
-**To fix:** skip directories that contain no `*.py` outside `__pycache__` (the script already has
-`rglob("*.py")` at `:122`), with a test for a pycache-only directory.
-
 ## ISSUE-356: gossip tick still an outlier after T7.3 embedding-reconcile fix
 **Found:** 2026-09-18, during T7.4
 **Severity:** P1 (blocking — gossip tick is ~46× its neighbours)

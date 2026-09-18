@@ -114,6 +114,15 @@ def _tick_names_for(dir_name: str) -> list[str]:
     return DIR_TO_TICK_NAMES.get(dir_name, [dir_name])
 
 
+def _has_python_source(directory: Path) -> bool:
+    """Return True if directory holds any .py file outside __pycache__.
+
+    Git removes a deleted engine's tracked files but leaves the untracked
+    __pycache__/ behind, so the folder survives on disk (ISSUE-357).
+    """
+    return any("__pycache__" not in p.relative_to(directory).parts for p in directory.rglob("*.py"))
+
+
 def _read_py_tree(directory: Path) -> str:
     """Concatenate all .py files under directory; return empty string if absent."""
     if not directory.exists():
@@ -198,6 +207,8 @@ def check_census(root: Path) -> list[str]:
     violations: list[str] = []
     for entry in sorted(engines_dir.iterdir()):
         if not entry.is_dir() or entry.name.startswith("_"):
+            continue
+        if not _has_python_source(entry):
             continue
         dir_name = entry.name
         if dir_name in INFRA_EXEMPT_DIRS:

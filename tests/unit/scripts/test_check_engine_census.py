@@ -233,6 +233,21 @@ def test_dunder_dirs_are_skipped(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Leftover __pycache__-only dirs are ignored (ISSUE-357)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("dir_name", ["deception", "faction_politics"])
+def test_pycache_only_dir_is_ignored(tmp_path: Path, dir_name: str) -> None:
+    """A deleted engine leaves only untracked __pycache__/*.pyc; that is not an engine."""
+    root = _make_root(tmp_path, [], scheduler_text="")
+    pycache = tmp_path / "src" / "npc_engine" / "engines" / dir_name / "__pycache__"
+    pycache.mkdir(parents=True)
+    (pycache / "engine.cpython-314.pyc").write_bytes(b"\x00")
+    assert check_census(root) == []
+
+
+# ---------------------------------------------------------------------------
 # CLI exit codes
 # ---------------------------------------------------------------------------
 
