@@ -747,3 +747,39 @@ T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
 T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
     deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
 DEFERRED_TOTAL=2
+
+## 2026-09-18 15:37:57 — no status token from task T10.1
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/task-T10.1-1789738070.log
+
+## 2026-09-18 15:37:58 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
+
+## 2026-09-18 15:40:00 — live demo broke (make demo-run-live @ 77561674)
+
+no DEMO_LIVE verdict line (rc=127)
+
+Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/demo-run-live-20260918-153759.log
+
+  created edge UNLOCKS nessa_deliver_medicine→nessa_hear_confession
+  created edge UNLOCKS vex_gather_leverage→vex_broker_accord
+  created edge UNLOCKS garrick_deliver_warning→garrick_safe_passage
+[seed] Schedules + FOLLOWS_SCHEDULE edges
+  created Schedule/sched_captain_sorn
+  created edge FOLLOWS_SCHEDULE captain_sorn→sched_captain_sorn
+  created Schedule/sched_mira_innkeeper
+  created edge FOLLOWS_SCHEDULE mira_innkeeper→sched_mira_innkeeper
+  created Schedule/sched_lira_fence
+  created edge FOLLOWS_SCHEDULE lira_fence→sched_lira_fence
+  created Schedule/sched_old_henryk
+  created edge FOLLOWS_SCHEDULE old_henryk→sched_old_henryk
+[seed] Done — created=301 skipped=0
+Seed complete — created=301 skipped=0
+NPC_BASE_URL=http://localhost:8001 NPC_API_KEY=local_dev_secret_change_this_2026 .venv/Scripts/python.exe scripts/demo_run_live.py --base-url http://localhost:8001 --expect-sha 77561674
