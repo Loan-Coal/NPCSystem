@@ -135,7 +135,7 @@ def test_advance_clock_success(mock_http: MagicMock, make_response) -> None:
     mock_http.post.assert_called_once_with(
         "/v1/clock/advance",
         json={"delta_ticks": 2, "game_time_seconds": 60},
-        timeout=15.0,
+        timeout=120.0,
     )
 
 
@@ -144,6 +144,20 @@ def test_advance_clock_includes_time_field_when_given(mock_http: MagicMock, make
     _client(mock_http).advance_clock(advance_time_field="day")
     _, kwargs = mock_http.post.call_args
     assert kwargs["json"]["advance_time_field"] == "day"
+
+
+def test_advance_clock_uses_the_llm_class_timeout(mock_http: MagicMock, make_response) -> None:
+    """A clock advance runs the LLM-backed tick engines (quest triggers, chapter), so it gets
+    the dialogue timeout, not the graph-read one. Regression: once T5.2 revived
+    need_quest_trigger, tick 1 took 16.3 s and the 15 s graph timeout killed the live demo
+    in ACT 1 (demo-run-live @ 68d76b85)."""
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    client = EngineClient(
+        "http://test", "secret", dialogue_timeout=120.0, graph_timeout=15.0, _http_client=mock_http
+    )
+    client.advance_clock()
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["timeout"] == 120.0
 
 
 def test_advance_clock_raises_on_http_error(mock_http: MagicMock, make_response) -> None:

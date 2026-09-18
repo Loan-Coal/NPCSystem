@@ -30,7 +30,8 @@ class EngineClient:
     Args:
         base_url: Engine base URL, e.g. http://localhost:8000.
         api_key: Bearer token for authentication.
-        dialogue_timeout: Stall-detection timeout for LLM-backed calls (seconds).
+        dialogue_timeout: Stall-detection timeout for LLM-backed calls (seconds), including
+            clock/advance, which runs the LLM-backed tick engines.
         graph_timeout: Stall-detection timeout for graph/clock read calls (seconds).
         _http_client: Injected httpx.Client for testing — do not use in production.
     """
@@ -288,6 +289,9 @@ class EngineClient:
     ) -> dict:
         """Advance the game clock and trigger all due engine ticks.
 
+        Uses the dialogue (LLM-class) timeout: the tick runs LLM-backed engines — quest
+        triggers and chapter labelling — so it is not a graph read.
+
         Args:
             delta_ticks: Number of ticks to advance (1–1000).
             game_time_seconds: Simulated seconds per tick delta.
@@ -303,7 +307,7 @@ class EngineClient:
         body: dict = {"delta_ticks": delta_ticks, "game_time_seconds": game_time_seconds}
         if advance_time_field is not None:
             body["advance_time_field"] = advance_time_field
-        resp = self._client.post("/v1/clock/advance", json=body, timeout=self._graph_timeout)
+        resp = self._client.post("/v1/clock/advance", json=body, timeout=self._dialogue_timeout)
         self._raise_for_status(resp, "POST /v1/clock/advance")
         return resp.json()
 
