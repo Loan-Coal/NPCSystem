@@ -203,6 +203,11 @@ preflight_worktree() {
 preflight() {
   compat_force_utf8
   export ROADMAP_FILE
+  # 2026-09-17: the ECC plugin's session:start hook injected the interactive session's summary
+  # ("Worktree: ...\NPCSystem, Branch: remediation-2026-08") into T3.2, which cd'd there and
+  # committed into the primary checkout. Silence it for task sessions, and silence
+  # stop:session-end so loop sessions stop writing the summaries interactive sessions read.
+  export ECC_DISABLED_HOOKS="${ECC_DISABLED_HOOKS:+$ECC_DISABLED_HOOKS,}session:start,stop:session-end"
   mkdir -p "$LOOP_LOG_DIR" "$LOOP_STATE_DIR"
   SESSION_LOG="$LOOP_LOG_DIR/loop-$(date '+%Y%m%d-%H%M%S').log"
   : > "$SESSION_LOG"
@@ -704,10 +709,24 @@ run_one_task() {
   local tasklog="$LOOP_LOG_DIR/task-$task-$(date +%s).log"
   local rc token
 
+  local wt_before="$LOOP_STATE_DIR/worktrees-before-$task.json" leaks
   log "--- task $task (phase $phase) -> $tasklog"
+  $PY_RUN "$REPO_ROOT/scripts/worktree_guard.py" snapshot > "$wt_before" 2>>"$SESSION_LOG" \
+    || log "WARNING: worktree snapshot failed — this task runs without the leak guard"
   run_claude_session "$tasklog" "$CLAUDE_TIMEOUT" "$MODEL" \
     "/expand-linear-next --auto --single-task --phase $phase --task $task"
   rc=$?
+
+  # A task that writes into ANOTHER worktree (the 2026-09-17 T3.2 leak) halts the run. This
+  # also trips on your own interactive commits/edits in another worktree during the task.
+  if [ -s "$wt_before" ] && ! leaks="$($PY_RUN "$REPO_ROOT/scripts/worktree_guard.py" check "$wt_before")"; then
+    flag_for_human "task $task changed another worktree" \
+      "$leaks
+If that was your own interactive work, restart the loop. Otherwise the task leaked: its
+changes are NOT on $(git rev-parse --abbrev-ref HEAD) — reconcile before resuming."
+    log "HALT: task $task changed another worktree"
+    return 2
+  fi
 
   if [ "$rc" -eq 124 ]; then
     flag_for_human "task $task timed out" "Killed after ${CLAUDE_TIMEOUT}s; tree reaped."

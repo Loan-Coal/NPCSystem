@@ -10174,3 +10174,28 @@ tripwire widened from `--cov-fail-under` to `--(cov-)?fail-under` so a loop diff
 **Decision (Step 3):** Add `record_llm_calls(count: int, *, now: float | None = None)` to `TickBudgetGuard`. The method appends `count` timestamps so each LLM backend call costs one slot. `record_llm_tick()` is kept as a backward-compatible shim that delegates to `record_llm_calls(1)`. `TickScheduler._record_budget_calls()` snapshots `llm_backend_calls_total` before and after the tick body (using `utils.metrics.get_metric_total()`), computes the delta, and records that many slots. `TICK_LLM_CALLS_PER_MINUTE_MAX` already named the unit correctly (`CALLS`); only the guard's docstring required updating from "activations" to "calls".
 
 **What this changes for callers:** `TickScheduler.__init__()` gains an optional `budget_guard` parameter; all existing callers that omit it get the previous behaviour (no budget ceiling). `TickAutopilot.__init__()` is unchanged — it still accepts `budget_guard` for the `should_skip_llm()` check — but `advance_once()` no longer calls `record_llm_tick()`.
+
+## DEC-286: Loop task sessions run without the ECC session-summary hooks, behind a worktree leak guard
+
+**Date:** 2026-09-18 · **Status:** ✅ ACCEPTED (owner, 2026-09-18) · **Drives:** `scripts/expand_loop.sh`, `scripts/worktree_guard.py`
+
+**Context:** on 2026-09-17 the first task of the night (T3.2) committed `11275ee8` into the primary
+checkout (`remediation-2026-08`) instead of the loop worktree. Its transcript shows the cause: the
+everything-claude-code plugin's `session:start` hook injected the latest session summary from
+`~/.claude/session-data/`, written by the owner's interactive session in the primary checkout
+(`**Worktree:** ...\NPCSystem`, `**Branch:** remediation-2026-08`, absolute file paths). The unattended
+session `cd`'d there for every command, including the commit. Later tasks read summaries written by loop
+sessions and stayed put, so only the first task leaked. It also leaks the other way: interactive sessions
+start with the loop's summary. The loop branch then carried T3.2's tick (from T3.3) without the deletion,
+and nothing noticed until the morning review; `preflight_worktree` only checks where the loop *starts*.
+
+**Decision:** (1) `preflight` exports `ECC_DISABLED_HOOKS=...,session:start,stop:session-end` (the
+plugin's documented switch), so task sessions neither read nor write session summaries. (2)
+`run_one_task` snapshots HEAD and a `git status` fingerprint of every *other* worktree before the
+session (`worktree_guard.py snapshot`) and compares after it (`check`). Any change flags for a human
+and HALTs the run.
+
+**Trade-off accepted:** the guard cannot tell a leak from the owner's own interactive commit or edit in
+another worktree during a task, so interactive work in the primary checkout while the loop runs will
+halt it. The flag text says so; restarting the loop is the remedy. Chosen over detection-only and
+issue-only (owner, 2026-09-18).
