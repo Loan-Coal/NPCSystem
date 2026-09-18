@@ -16,6 +16,14 @@ Rules:
 
 ## Open
 
+## ISSUE-356: gossip tick still an outlier after T7.3 embedding-reconcile fix
+**Found:** 2026-09-18, during T7.4
+**Severity:** P1 (blocking — gossip tick is ~46× its neighbours)
+**Where:** `src/npc_engine/engines/gossip/gossip_handler.py`, gossip tick path (SEV-07)
+**Description:** T7.3 hoisted the embedding reconcile from O(N) per pair to O(1) per tick, reducing the gossip tick from 22,484 ms to 19,797 ms on the 301-node seed (~12% improvement, same world both trees). Neighbours run in 77–425 ms; gossip is still >46× the slowest non-LLM neighbour. The T7.3 fix addressed the corpus-reconciliation component; the dominant cost lies elsewhere in the gossip handler.
+**Why deferred:** Identifying the remaining bottleneck requires profiling the gossip handler with a running stack, which is outside T7.4's scope (measurement only). A new fix task is needed.
+**To fix:** Profile the gossip tick against the eval stack to find the dominant remaining bottleneck; implement a targeted fix; re-run T7.4's measurement protocol to confirm the outlier is resolved.
+
 ## ISSUE-355: `demo_game/client.py` docstring says `delta_ticks` accepts "1–1000" after the cap was lowered to 10
 **Found:** 2026-09-18, during T6.1
 **Severity:** P3 (nice-to-fix)

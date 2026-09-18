@@ -1301,6 +1301,10 @@ Validation: both measurements on the isolated stack, then rebuild it from HEAD a
 Done when: the tick note states the gossip tick duration before and after, each alongside its
 neighbours, on the same seed. If the after figure is still an outlier, do not tick — log it in
 `ISSUES.md` against SEV-07. SEV-07.
+📊 Measured 2026-09-18 (301-node seed, GOSSIP_TICK_INTERVAL=10, same world both trees):
+before (68735025): gossip 22,484 ms — neighbours goal_formation 436 ms, chapter 135 ms, need_decay 109 ms, faction_politics 100 ms, routine 73 ms (>50×);
+after (c190952d): gossip 19,797 ms — neighbours goal_formation 425 ms, chapter 90 ms, faction_politics 104 ms, need_decay 109 ms, routine 77 ms (>46×).
+T7.3 reduced the gossip tick by ~12% (embedding-reconcile O(N)→O(1)). Gossip is still a severe outlier. Logged as ISSUE-356; task not ticked.
 
 ### Phase T8
 
