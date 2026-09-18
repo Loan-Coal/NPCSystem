@@ -200,6 +200,11 @@ class Settings(BaseSettings):
     # first real player request arrives. Measured cold-load cost: 10.3s on qwen2.5:7b.
     # Fails soft — Ollama being down at boot does not prevent startup (Finding L9-04, SEV-05).
     LLM_WARMUP_ON_STARTUP: bool = True
+    # Load the sentence-transformers encoder at boot to avoid a ~21 s cold load on the
+    # first request that needs an embedding (typically the first gossip tick; ISSUE-356).
+    # Fails soft — any exception is logged as a warning and boot continues with lazy load.
+    # Accepts a slower boot in exchange for a fast first gossip tick.
+    EMBEDDING_WARMUP_ON_STARTUP: bool = True
     # Pair the handlers' existing invalidate with the insert it has always implied
     # (DEC-210 Decision 1). ON for the product, which needs a corpus that tracks the
     # graph; OFF for an eval run, which needs one that cannot move — paired_arms

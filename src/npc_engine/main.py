@@ -51,6 +51,7 @@ from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
 from npc_engine.setup.llm_warmup import warm_up_llm
+from npc_engine.retrieval.embedding.sentence_encoder import warm_up_encoder
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
@@ -177,6 +178,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if not await _dialogue_probe_adapter.health_check():
             _logger.warning("LLM backend health check failed — starting degraded")
         await warm_up_llm(_dialogue_probe_adapter, enabled=settings.LLM_WARMUP_ON_STARTUP)
+        await asyncio.to_thread(
+            warm_up_encoder, settings.EMBEDDING_MODEL, enabled=settings.EMBEDDING_WARMUP_ON_STARTUP
+        )
         if settings.DISTRIBUTED_TICK_LEASE_ENABLED:
             async with graph_db.get_session() as session:
                 lease_repo = TickLeaseRepository(

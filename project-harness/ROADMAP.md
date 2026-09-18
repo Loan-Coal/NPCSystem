@@ -1281,7 +1281,7 @@ Done when: the test passes and `make check` is green. **Do not attempt the live 
 before/after tick duration needs a running stack built from each tree, and that is T7.4 alone (split
 2026-09-17). SEV-07, brief at `review-fixes/FIX-SEV-07.md`. ✅ AUTO (T7.3, 2026-09-18)
 
-- [ ] **T7.5** Load the embedding encoder at boot — the "slow gossip tick" is a one-time cold load
+- [x] **T7.5** Load the embedding encoder at boot — the "slow gossip tick" is a one-time cold load
 Files: `src/npc_engine/retrieval/embedding/sentence_encoder.py` (a warm-up function beside
 `get_encoder`), `src/npc_engine/main.py` (call it in `lifespan`, after `warm_up_llm`),
 `src/npc_engine/config.py` (new `EMBEDDING_WARMUP_ON_STARTUP: bool = True`, mirroring
@@ -1316,7 +1316,7 @@ Do NOT run the integration suite for this: it writes to the live Neo4j (ISSUE-27
 Done when: the unit test passes, `make check` is green, `eval_stack_at.sh` still reports
 `EVAL_STACK_SHA` (so the compose healthcheck window — `start_period: 30s`, 5 × 15 s — still covers
 the slower boot), and on the live stack the **first** gossip tick after boot is within 2× the second.
-Record boot time and both gossip ticks in the tick note. ISSUE-356, SEV-07.
+Record boot time and both gossip ticks in the tick note. ISSUE-356, SEV-07. ✅ AUTO (T7.5, 2026-09-18)
 
 - [ ] **T7.4** Measure the gossip tick before and after T7.3 on a running stack
 Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if the tick did not improve)

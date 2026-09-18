@@ -47,6 +47,32 @@ def get_encoder(model_name: str) -> Any:
     return SentenceTransformer(model_name, device=device)
 
 
+def warm_up_encoder(model_name: str, *, enabled: bool) -> None:
+    """Force the lru_cache for get_encoder to populate at boot.
+
+    Intended for call via asyncio.to_thread from the application lifespan so the
+    ~21 s cold load (torch import + model init) happens before the first request
+    that needs an embedding (ISSUE-356, SEV-07).
+
+    Fails soft — any exception is logged as a warning and swallowed so a failed
+    warm-up never prevents boot; the lazy path in get_encoder still works.
+
+    Args:
+        model_name: HuggingFace model identifier (e.g. "all-MiniLM-L6-v2").
+        enabled: When False, returns immediately without loading anything.
+    """
+    if not enabled:
+        return
+    try:
+        get_encoder(model_name)
+        _logger.info("embedding.warmup_complete model=%s", model_name)
+    except Exception:
+        _logger.warning(
+            "embedding.warmup_failed model=%s — boot continues with lazy encoder load",
+            model_name,
+        )
+
+
 def embed(text: str, model_name: str) -> list[float]:
     """Return a normalized float vector for text using model_name.
 
