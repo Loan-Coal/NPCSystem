@@ -1,12 +1,18 @@
 """
 Module: quest_generation_port
 Layer: engines
-Purpose: Structural Protocols for the quest-generation graph domain — context assembly,
-         quest persistence, slot validation, and trigger reads. Engines import these ports
-         and hold no Neo4j session; the adapters in graph/repositories/ own sessions.
+Purpose: Structural Protocols for the quest-generation graph domain split by consumer
+         role — context assembly / quest persistence for QuestGenerationEngine, slot
+         validation reads for SlotValidator, and trigger reads for the three trigger
+         classes. Engines import these ports and hold no Neo4j session; the adapters
+         in graph/repositories/ own sessions.
 Does NOT: open sessions, run Cypher, call LLMs, or contain engine logic.
 Dependencies injected: none (pure interface).
-Used by: npc_engine.engines.quest_generation.*, npc_engine.engines.quest_generation.slot_validator.
+Used by: npc_engine.engines.quest_generation.quest_generation_engine (QuestContextGraphPort),
+         npc_engine.engines.quest_generation.slot_validator (SlotValidationGraphPort),
+         npc_engine.engines.quest_generation.event_quest_trigger (EventTriggerGraphPort),
+         npc_engine.engines.quest_generation.world_state_quest_trigger (EventTriggerGraphPort),
+         npc_engine.engines.quest_generation.need_quest_trigger (NeedTriggerGraphPort).
 """
 
 from __future__ import annotations
@@ -14,8 +20,8 @@ from __future__ import annotations
 from typing import Protocol, Any
 
 
-class QuestGenerationGraphPort(Protocol):
-    """All graph reads/writes needed by QuestGenerationEngine and SlotValidator."""
+class QuestContextGraphPort(Protocol):
+    """Graph reads and writes used directly by QuestGenerationEngine."""
 
     async def get_world_state_day_and_rate(
         self, *, world_id: str = "world"
@@ -57,6 +63,10 @@ class QuestGenerationGraphPort(Protocol):
     ) -> None:
         """Write a CAUSED_BY edge from effect to cause event."""
         ...
+
+
+class SlotValidationGraphPort(Protocol):
+    """Graph reads used by SlotValidator to check node existence and skill thresholds."""
 
     async def check_node_labels(self, *, node_id: str) -> list[str] | None:
         """Return labels for a node ID, or None if the node does not exist."""

@@ -151,6 +151,7 @@ def _make_engine(
         templates=templates,
         prompts_dir=prompts_dir,
         quest_gen_repo=quest_gen_repo,
+        slot_validation_repo=quest_gen_repo,
     )
 
 

@@ -140,11 +140,13 @@ async def test_three_triggers_respect_shared_llm_budget() -> None:
     """
     call_counter: list[int] = [0]
     mock_llm = _make_llm_mock(call_counter)
+    repo = _make_quest_gen_repo()
     gen_engine = QuestGenerationEngine(
         llm_client=mock_llm,
         templates=[_make_template()],
         prompts_dir=_PROMPTS_DIR,
-        quest_gen_repo=_make_quest_gen_repo(),
+        quest_gen_repo=repo,
+        slot_validation_repo=repo,
     )
 
     # All three triggers share the same budget — this is what the test verifies.

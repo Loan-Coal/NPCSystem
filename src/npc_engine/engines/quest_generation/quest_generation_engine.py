@@ -8,7 +8,7 @@ Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
 Dependencies: engines.quest_generation.slot_models, engines.quest_generation.slot_validator,
               engines.quest_generation.template_loader, engines.llm.protocols,
               engines.ports.quest_generation_port, graph.generic_graph_utils (pure util).
-Dependencies injected: LLMStructuredProtocol, QuestGenerationGraphPort,
+Dependencies injected: LLMStructuredProtocol, QuestContextGraphPort, SlotValidationGraphPort,
     list[QuestTemplateRecord] (via __init__).
 Used by: npc_engine.api.routes.quest_generation
 
@@ -33,7 +33,7 @@ from pydantic import ValidationError
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMStructuredProtocol
-from npc_engine.engines.ports.quest_generation_port import QuestGenerationGraphPort
+from npc_engine.engines.ports.quest_generation_port import QuestContextGraphPort, SlotValidationGraphPort
 from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
     QuestTemplateRecord,
@@ -81,7 +81,8 @@ class QuestGenerationEngine:
         templates: list[QuestTemplateRecord],
         prompts_dir: Path,
         max_tokens: int = 256,
-        quest_gen_repo: QuestGenerationGraphPort | None = None,
+        quest_gen_repo: QuestContextGraphPort | None = None,
+        slot_validation_repo: SlotValidationGraphPort | None = None,
     ) -> None:
         """Initialise the quest generation engine.
 
@@ -90,19 +91,23 @@ class QuestGenerationEngine:
             templates: Pre-loaded quest template records.
             prompts_dir: Path to the quest_generation prompts directory.
             max_tokens: Maximum tokens to generate in LLM calls (sourced from llm_config.yaml).
-            quest_gen_repo: Graph port for quest generation reads/writes (DEC-122 / SEV-24); required.
+            quest_gen_repo: Graph port for quest context reads and writes (DEC-122 / SEV-24); required.
+            slot_validation_repo: Graph port for slot node-label and skill-threshold reads; required.
 
         Raises:
-            ValueError: If quest_gen_repo is None.
+            ValueError: If quest_gen_repo or slot_validation_repo is None.
         """
         if quest_gen_repo is None:
-            raise ValueError("QuestGenerationEngine requires a QuestGenerationGraphPort injected via __init__")
+            raise ValueError("QuestGenerationEngine requires a QuestContextGraphPort injected via __init__")
+        if slot_validation_repo is None:
+            raise ValueError("QuestGenerationEngine requires a SlotValidationGraphPort injected via __init__")
         self._llm = llm_client
         self._templates = templates
         self._max_tokens = max_tokens
         self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v2.yaml")
         self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v2.yaml")
         self._quest_gen_repo = quest_gen_repo
+        self._slot_validation_repo = slot_validation_repo
 
     async def generate(
         self,
@@ -142,7 +147,7 @@ class QuestGenerationEngine:
             "world_state": world_state_context,
         }
         template = self._select_template(archetype, rng=rng)
-        validator = SlotValidator(quest_gen_repo=self._quest_gen_repo)
+        validator = SlotValidator(quest_gen_repo=self._slot_validation_repo)
 
         fills_raw, fills = await self._fill_slots(template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context, rng=rng)
         description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template, giver_context)

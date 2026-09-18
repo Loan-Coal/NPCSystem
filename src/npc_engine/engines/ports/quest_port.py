@@ -18,12 +18,49 @@ from npc_engine.config import Settings
 from npc_engine.world.world_state import WorldState
 
 
-class QuestLifecycleGraphPort(Protocol):
-    """Read quest state, atomically persist state+event, and update node status."""
+# ---------------------------------------------------------------------------
+# Shared mixin protocols — single declaration for methods used by ≥2 siblings.
+# Inheriting from a mixin is the canonical fix for redeclared-method drift.
+# ---------------------------------------------------------------------------
+
+class _QuestStateMixin(Protocol):
+    """get_quest_state used by QuestLifecycleGraphPort and QuestRewardGraphPort."""
 
     async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
         """Return the persisted QuestState dict[str, Any] or None if absent."""
         ...
+
+
+class _QuestNodeStatusMixin(Protocol):
+    """update_quest_node_status used by QuestLifecycleGraphPort and QuestOfferGraphPort."""
+
+    async def update_quest_node_status(self, *, quest_id: str, status: str) -> None:
+        """Update the Quest node's status field."""
+        ...
+
+
+class _QuestEventMixin(Protocol):
+    """emit_lifecycle_event used by QuestLifecycleGraphPort and QuestRewardGraphPort."""
+
+    async def emit_lifecycle_event(self, *, event_node: dict[str, Any]) -> None:
+        """Atomically write one quest lifecycle event node."""
+        ...
+
+
+class _QuestReadMixin(Protocol):
+    """get_quest used by QuestOfferGraphPort and QuestChainGraphPort."""
+
+    async def get_quest(self, *, quest_id: str) -> dict[str, Any] | None:
+        """Return the Quest node dict[str, Any] or None."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Public protocols — inherit shared mixins; declare only role-specific methods.
+# ---------------------------------------------------------------------------
+
+class QuestLifecycleGraphPort(_QuestStateMixin, _QuestEventMixin, _QuestNodeStatusMixin, Protocol):
+    """Read quest state, atomically persist state+event, and update node status."""
 
     async def persist_state_and_event(
         self,
@@ -36,29 +73,13 @@ class QuestLifecycleGraphPort(Protocol):
         """Atomically upsert quest state and emit a lifecycle event; return stored state."""
         ...
 
-    async def emit_lifecycle_event(self, *, event_node: dict[str, Any]) -> None:
-        """Atomically write one quest lifecycle event node."""
-        ...
-
-    async def update_quest_node_status(self, *, quest_id: str, status: str) -> None:
-        """Update the Quest node's status field (non-atomic, called after persist)."""
-        ...
-
     async def get_world_state(self, *, world_id: str = "world") -> WorldState:
         """Return the singleton WorldState (used for commitment-memory TimePoint)."""
         ...
 
 
-class QuestOfferGraphPort(Protocol):
+class QuestOfferGraphPort(_QuestReadMixin, _QuestNodeStatusMixin, Protocol):
     """Quest node reads, status updates, and atomic offer creation."""
-
-    async def get_quest(self, *, quest_id: str) -> dict[str, Any] | None:
-        """Return the Quest node dict[str, Any] or None."""
-        ...
-
-    async def update_quest_node_status(self, *, quest_id: str, status: str) -> None:
-        """Update the Quest node's status field."""
-        ...
 
     async def offer_quest_atomic(
         self,
@@ -72,19 +93,11 @@ class QuestOfferGraphPort(Protocol):
         ...
 
 
-class QuestRewardGraphPort(Protocol):
+class QuestRewardGraphPort(_QuestStateMixin, _QuestEventMixin, Protocol):
     """Quest state reads, balance check, and atomic reward application."""
-
-    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
-        """Return the persisted QuestState dict[str, Any] or None if absent."""
-        ...
 
     async def get_character_balance(self, *, character_id: str) -> int | None:
         """Return the character's current currency balance, or None if not found."""
-        ...
-
-    async def emit_lifecycle_event(self, *, event_node: dict[str, Any]) -> None:
-        """Atomically write one quest lifecycle event node (idempotent path)."""
         ...
 
     async def apply_rewards_atomic(
@@ -107,12 +120,8 @@ class QuestRewardGraphPort(Protocol):
         ...
 
 
-class QuestChainGraphPort(Protocol):
+class QuestChainGraphPort(_QuestReadMixin, Protocol):
     """Quest chain reads — UNLOCKS edges and Quest node lookup for chain resolution."""
-
-    async def get_quest(self, *, quest_id: str) -> dict[str, Any] | None:
-        """Return the Quest node dict[str, Any] or None."""
-        ...
 
     async def get_unlocked_quests(self, *, quest_id: str, outcome: str) -> list[str]:
         """Return IDs of quests unlocked by quest_id at the given outcome."""

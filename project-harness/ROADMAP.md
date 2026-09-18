@@ -1509,7 +1509,7 @@ do not treat it as a prerequisite — write a throwaway counting script for the 
 gate confirm the result afterwards. Do not block on a tool that does not exist yet.
 Findings L2-01, L2-02, L2-03, L7-05, DEC-275, rule 4. ✅ AUTO (T9.1d, 2026-09-18)
 
-- [ ] **T9.2** Fix the two god-ports and the ports that leak graph-owned types
+- [x] **T9.2** Fix the two god-ports and the ports that leak graph-owned types
 Pre-approved: public-interface · owner 2026-09-08 · DEC-275
 Files: `src/npc_engine/engines/ports/chapter_port.py`,
 `src/npc_engine/engines/ports/quest_generation_port.py`,
@@ -1542,7 +1542,7 @@ RED anchor: `grep -n "from npc_engine.graph" src/npc_engine/engines/ports/*.py` 
 count, drive it to zero for private (underscore-prefixed) types, keep `make check` green.
 Validation: `make check`, then `make test-demo`.
 Done when: no surviving port imports a private graph type, no god-port remains, LOC delta reported.
-Findings L2-03, L2-04, L2-05.
+Findings L2-03, L2-04, L2-05. ✅ AUTO (T9.2, 2026-09-18)
 
 ### Phase T10
 

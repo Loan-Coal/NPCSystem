@@ -138,12 +138,14 @@ def get_quest_generation_engine() -> QuestGenerationEngine:
     prompts_dir = Path(__file__).resolve().parent.parent.parent / "prompts" / "quest_generation"
     templates_dir = prompts_dir / "templates"
     templates = load_templates(templates_dir)
+    repo = Neo4jQuestGenerationRepository(get_graph_db())
     return QuestGenerationEngine(
         llm_client=llm_client,
         templates=templates,
         prompts_dir=prompts_dir,
         max_tokens=engine_config.llm.max_tokens,
-        quest_gen_repo=Neo4jQuestGenerationRepository(get_graph_db()),
+        quest_gen_repo=repo,
+        slot_validation_repo=repo,
     )
 
 

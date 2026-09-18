@@ -5,21 +5,21 @@ Purpose: Validates proposed slot fills against the graph by checking node existe
          and character skill thresholds for slots with REQUIRES_SKILL constraints.
 Does NOT: call LLMs or write to the graph.
     Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
-Dependencies: engines.ports.quest_generation_port (QuestGenerationGraphPort).
-Dependencies injected: QuestGenerationGraphPort (graph reader port).
+Dependencies: engines.ports.quest_generation_port (SlotValidationGraphPort).
+Dependencies injected: SlotValidationGraphPort (graph reader port).
 Used by: npc_engine.engines.quest_generation.quest_generation_engine
 """
 
 from __future__ import annotations
 
-from npc_engine.engines.ports.quest_generation_port import QuestGenerationGraphPort
+from npc_engine.engines.ports.quest_generation_port import SlotValidationGraphPort
 from npc_engine.engines.quest_generation.slot_models import SlotDefinition, SlotFill
 
 
 class SlotValidator:
     """Validates slot fills by querying the graph for node existence and type."""
 
-    def __init__(self, quest_gen_repo: QuestGenerationGraphPort) -> None:
+    def __init__(self, quest_gen_repo: SlotValidationGraphPort) -> None:
         """Initialise the validator with an injected graph port.
 
         Args:
