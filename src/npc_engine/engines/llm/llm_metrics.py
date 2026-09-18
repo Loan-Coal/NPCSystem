@@ -30,6 +30,7 @@ from npc_engine.utils.metrics import increment_metric, observe_metric
 LLM_BACKEND_CALLS_METRIC = "llm_backend_calls_total"
 LLM_BACKEND_LATENCY_METRIC = "llm_backend_latency_seconds"
 LLM_BACKEND_LOAD_LATENCY_METRIC = "llm_backend_load_latency_seconds"
+LLM_BACKEND_QUEUE_WAIT_METRIC = "llm_backend_queue_wait_seconds"
 
 OLLAMA_BACKEND_LABEL = "ollama"
 

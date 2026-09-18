@@ -1357,7 +1357,7 @@ T7.3 reduced warm gossip by 48% (2,568 ms → 1,322 ms). Warm gossip is not an o
 
 Arbitrate what remains.
 
-- [ ] **T8.1** Add two-class admission control in front of the single resident model
+- [x] **T8.1** Add two-class admission control in front of the single resident model
 Pre-approved: public-interface · owner 2026-09-17
 Files: `src/npc_engine/engines/llm/` (adapter and factory),
 `src/npc_engine/engines/llm/llm_metrics.py`, `src/npc_engine/config.py`, new test
@@ -1385,7 +1385,7 @@ for both classes. All fail today.
 Validation: `pytest tests/unit/llm/ -v`, then `make check`.
 Done when: tests pass and `make check` is green. Finding L13-06, SEV-04.
 Note (owner, 2026-09-18, ISSUE-358): out of scope here, but if a hard per-minute cap on background calls
-is ever wanted, it belongs in this gate, which sees every backend call, not in the scheduler.
+is ever wanted, it belongs in this gate, which sees every backend call, not in the scheduler. ✅ AUTO (T8.1, 2026-09-18)
 
 - [ ] **T8.2** Wire the per-engine timeouts that four of five engines declare and nobody reads
 Pre-approved: public-interface · owner 2026-09-08

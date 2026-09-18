@@ -7,6 +7,7 @@ Dependencies injected: None.
 """
 
 from npc_engine.config import Settings
+from npc_engine.engines.llm.admission_control import GatedLLMAdapter, reset_default_gate
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm.mock_adapter import MockLLMAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
@@ -18,6 +19,10 @@ from npc_engine.engines.llm_config_models import (
     EnginePromptRef,
     EngineTimeoutsMs,
 )
+
+
+def setup_function() -> None:
+    reset_default_gate()
 
 
 def _base_settings() -> dict:
@@ -51,14 +56,16 @@ def test_factory_returns_mock_adapter_for_mock_backend() -> None:
     settings = Settings(**_base_settings())
     engine_config = _make_engine_config(backend="mock")
     client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
-    assert isinstance(client, MockLLMAdapter)
+    assert isinstance(client, GatedLLMAdapter)
+    assert isinstance(client._inner, MockLLMAdapter)
 
 
 def test_factory_returns_ollama_adapter_for_ollama_backend() -> None:
     settings = Settings(**_base_settings())
     engine_config = _make_engine_config(backend="ollama", model="mixtral:8x7b")
     client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
-    assert isinstance(client, OllamaAdapter)
+    assert isinstance(client, GatedLLMAdapter)
+    assert isinstance(client._inner, OllamaAdapter)
 
 
 def test_factory_requires_non_empty_ollama_url() -> None:
@@ -75,7 +82,8 @@ def test_factory_uses_per_engine_model_name_for_ollama() -> None:
     settings = Settings(**_base_settings())
     engine_config = _make_engine_config(backend="ollama", model="llama3:70b")
     client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
-    assert isinstance(client, OllamaAdapter)
+    assert isinstance(client, GatedLLMAdapter)
+    assert isinstance(client._inner, OllamaAdapter)
     assert client.model_name() == "llama3:70b"
 
 
@@ -83,7 +91,8 @@ def test_factory_returns_openai_adapter_for_openai_backend() -> None:
     settings = Settings(**{**_base_settings(), "OPENAI_API_KEY": "sk-test"})
     engine_config = _make_engine_config(backend="openai", model="gpt-4o-mini")
     client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
-    assert isinstance(client, OpenAICompatibleAdapter)
+    assert isinstance(client, GatedLLMAdapter)
+    assert isinstance(client._inner, OpenAICompatibleAdapter)
     assert client.model_name() == "gpt-4o-mini"
 
 

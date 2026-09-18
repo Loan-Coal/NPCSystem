@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from npc_engine.config import Settings
+from npc_engine.engines.llm.admission_control import GatedLLMAdapter, get_default_gate
 from npc_engine.engines.llm.mock_adapter import MockLLMAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
 from npc_engine.engines.llm.openai_adapter import OpenAICompatibleAdapter
@@ -72,7 +73,9 @@ def create_llm_client_for_engine(
     constructor = _REGISTRY.get(backend)
     if constructor is None:
         raise ValueError(f"Unsupported LLM backend: {backend!r}")
-    return constructor(engine_config=engine_config, settings=settings)
+    inner = constructor(engine_config=engine_config, settings=settings)
+    gate = get_default_gate(max_concurrent=settings.LLM_ADMISSION_MAX_CONCURRENT)
+    return GatedLLMAdapter(inner=inner, gate=gate, engine_name=engine_config.engine)
 
 
 def _build_mock(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:

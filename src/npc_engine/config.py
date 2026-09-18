@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     REDIS_CONNECT_TIMEOUT_SECONDS: float = 1.0
 
     LLM_TIMEOUT_SECONDS: float = 10.0
+    # Total LLM backend slots including the one reserved for interactive (dialogue, proactive).
+    # Background calls (tick-originated) may hold at most LLM_ADMISSION_MAX_CONCURRENT - 1 slots.
+    # Must be >= 2. Raise if more background concurrency is needed once T8.2 per-engine timeouts
+    # are in place — longer background timeouts are only safe after shedding is wired (T8.1).
+    LLM_ADMISSION_MAX_CONCURRENT: int = 2
     LLM_CACHE_ENABLED: bool = False
     LLM_FALLBACK_PATH: str = "data/fallback_responses.json"
     CANNED_RESPONSES_DIR: str = "prompts/canned"
