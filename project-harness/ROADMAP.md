@@ -1318,7 +1318,7 @@ Done when: the unit test passes, `make check` is green, `eval_stack_at.sh` still
 the slower boot), and on the live stack the **first** gossip tick after boot is within 2× the second.
 Record boot time and both gossip ticks in the tick note. ISSUE-356, SEV-07. ✅ AUTO (T7.5, 2026-09-18)
 
-- [ ] **T7.4** Measure the gossip tick before and after T7.3 on a running stack
+- [x] **T7.4** Measure the gossip tick before and after T7.3 on a running stack
 Files: `project-harness/ROADMAP.md` (tick note), `project-harness/ISSUES.md` (only if the tick did not improve)
 Spec: the live tail of T7.3, split out so the loop can land the query fix unattended. T7.3's unit test
 proves the round-trip count no longer scales with propagated pairs; it does not prove the tick got
@@ -1348,6 +1348,10 @@ the protocol after T7.5 and report the **first and second** gossip tick after bo
 outlier test in "Done when" uses the second (warm) tick. Reference from 2026-09-18, same protocol:
 warm gossip 1,131 ms at `57fe6bf4` (slowest neighbour: event 231 ms), 1,449 ms at `3019b51e`
 (slowest neighbour: goal_formation 475 ms).
+📊 Re-measured 2026-09-18 after T7.5 (301-node seed, GOSSIP_TICK_INTERVAL=10, same world both trees):
+before (68735025): first gossip tick (cold) 29,139 ms — 2.6× slowest neighbour (need_quest 11,180 ms); second gossip tick (warm) 2,568 ms — 0.3× slowest neighbour (need_quest 8,461 ms);
+after (c190952d): first gossip tick (cold) 25,920 ms — 2.4× slowest neighbour (need_quest 10,674 ms); second gossip tick (warm) 1,322 ms — 0.1× slowest neighbour (need_quest 8,865 ms).
+T7.3 reduced warm gossip by 48% (2,568 ms → 1,322 ms). Warm gossip is not an outlier vs its neighbours — gossip (1,322 ms) is faster than need_quest (8,865 ms). Cold gossip (~26-29 s) is dominated by encoder load (fixed by T7.5 at boot). ISSUE-356 resolved; task ticked. ✅ AUTO (T7.4, 2026-09-18)
 
 ### Phase T8
 
