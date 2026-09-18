@@ -31,6 +31,10 @@ commit and the demo timeout).
 **To fix:** `pip install -r demo_game/requirements.txt` into `NPCSystem-loop/.venv`; make `test-demo`
 set a dummy `NPC_API_KEY` (or the test set its own); consider a loop preflight that fails when
 `import pygame` fails.
+**PLAN 2026-09-18 (owner, adjusted by review):** install `demo_game/requirements.txt` into the loop
+venv; add `pygame` to `preflight_worktree`'s import check **and** its provisioning message and
+OVERNIGHT_LOOP.md's quick start; set `NPC_API_KEY` with `monkeypatch.setenv` inside
+`test_run_dry_run_encoding.py`, not as a Makefile default.
 
 ## ISSUE-359: demo faction board is never fed, and would render every standing as 0 if it were
 **Found:** 2026-09-18, while analysing ISSUE-354
@@ -47,6 +51,8 @@ FACTION panel is dead wiring. It also expects three incompatible shapes: the cli
 ISSUE-354 decision.
 **To fix:** after ISSUE-354 fixes the response shape, either wire the panel (fetch on tab open, render
 the inner `standings` list) or delete the dead client method and widget.
+**PLAN 2026-09-18 (owner):** handed to **T13.1**, which rules on unused demo panels (like TREATY/OATH).
+No code before that ruling; if kept, feed it on tab open via `RightPanelRenderer`, no poller.
 
 ## ISSUE-358: the per-minute LLM ceiling only admits ticks; one admitted tick made 12 calls against a limit of 6
 **Found:** 2026-09-18, while analysing the demo-run-live failure
@@ -61,6 +67,9 @@ in DEC-285.
 **Why deferred:** a design question about T7.1's semantics, not part of fixing the demo timeout.
 **To fix:** decide whether the ceiling is an admission gate or a hard cap. If a hard cap, pass the guard's
 remaining budget into the quest triggers' `TickLLMBudget` for the tick. Either way, state it in DEC-285.
+**PLAN 2026-09-18 (owner):** it's an admission gate. Amend DEC-285 and the setting's comment in
+`config.py` to say so, then close this issue. A note in T8.1 (added) says any future hard per-minute
+cap belongs in T8.1's LLM-layer gate.
 
 ## ISSUE-357: `check_engine_census` treats a folder holding only `__pycache__` as a live engine
 **Found:** 2026-09-18, while cherry-picking T3.2 onto `auto/roadmap-night`
@@ -3497,3 +3506,5 @@ asserts decay by the `faction_politics` engine deleted in T3.2, so it is obsolet
 client and faction board expect `src_id`/`dst_id` rows and are never called (ISSUE-359). After T3.2
 no tick engine mutates standings. Other readers: the chapter engine reads a top-5 summary internally
 (`get_faction_standings_summary`); this GET is the dedicated per-faction HTTP read.
+**PLAN 2026-09-18 (owner, after adversarial review):** fix additively — keep `target: str`, add
+`target_name: str`; no API-contract re-record. Scheduled as ROADMAP **T15.4**.

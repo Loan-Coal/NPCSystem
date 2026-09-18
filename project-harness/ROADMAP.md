@@ -1380,6 +1380,8 @@ call active a background call is **shed** rather than queued, and that the new m
 for both classes. All fail today.
 Validation: `pytest tests/unit/llm/ -v`, then `make check`.
 Done when: tests pass and `make check` is green. Finding L13-06, SEV-04.
+Note (owner, 2026-09-18, ISSUE-358): out of scope here, but if a hard per-minute cap on background calls
+is ever wanted, it belongs in this gate, which sees every backend call, not in the scheduler.
 
 - [ ] **T8.2** Wire the per-engine timeouts that four of five engines declare and nobody reads
 Pre-approved: public-interface · owner 2026-09-08
@@ -1907,6 +1909,9 @@ any more (`demo_game/pollers/treaty_poller.py`, `demo_game/ui/panels/treaty_pane
 controls in `game_window.py`), and `grep -in "treaty" docs/DEMO_SCRIPT.md demo_game/runners/run.py`
 returns nothing — so they are not part of the scripted 12-act path and are known deletion
 candidates. Confirm they reach a verdict rather than being silently skipped.
+Rule on the FACTION tab the same way (ISSUE-359, added 2026-09-18): it's never fed, isn't in the scripted
+path, and its data changes only by admin PUT or pledge break. If kept, feed it on tab open through
+`RightPanelRenderer`, not a poller, and fix `FactionBoard` to read the inner `standings` rows.
 RED anchor: none — this is a measurement task. Its output gates T13.2, which must not start without
 it.
 Validation: the census table exists and covers every module under `demo_game/`.
@@ -2121,6 +2126,32 @@ is refused. All three fail today.
 Validation: `pytest tests/unit/api/test_api_boundary_hardening.py -v`, then `make check`.
 Done when: all three tests pass, `make check` is green, and ISSUE-301, ISSUE-302 and ISSUE-303 are
 closed and archived. Findings ISSUE-301, ISSUE-302, ISSUE-303.
+
+- [ ] **T15.4** Fix the `/standings` 500 by adding `target_name`, not by changing `target`
+Pre-approved: file-deletion · owner 2026-09-18
+Files: `src/npc_engine/graph/faction/faction_queries.py` (`CYPHER_LIST_STANDINGS`, `list_standings`),
+`src/npc_engine/api/routes/faction_politics/factions.py` (`FactionStandingRow`),
+`tests/unit/graph/test_faction_queries.py`, new test `tests/unit/api/test_faction_standings_route.py`,
+delete `e2e/scenarios/scenario_faction_politics.py`, `docs/API.md`, `docs/DATA_MODELS.md`
+Spec: ISSUE-354. `GET /v1/admin/factions/{id}/standings` has 500'd on every call since `87038812`
+(2026-06-15): the query returns `properties(b) AS target` (a node dict) and `FactionStandingRow`
+declares `target: str`. Owner decision 2026-09-18, after an adversarial review: fix it **additively**:
+the query returns `b.id AS target, b.name AS target_name`, and `FactionStandingRow` gains
+`target_name: str`. Do NOT change `target`'s type: a string-to-object change is a
+`RESPONSE_FIELD_TYPE_CHANGED` break in `scripts/api_contract_differ.py`, and no surviving consumer needs
+more than id and name (`e2e/scripts/faction_setup.py:153-157` reads only `standing`). Delete
+`e2e/scenarios/scenario_faction_politics.py`: its only assertion is decay by the `faction_politics`
+engine deleted in T3.2, and it is the sole reader of `target["id"]`. Update `list_standings`'s docstring
+and the two docs' row shape. The demo's FACTION panel is **out of scope** (ISSUE-359, owned by T13.1).
+RED anchor: the new route test drives the endpoint with a service returning the query's real row shape and
+expects 200 with `target` a string and `target_name` present; it fails today with a response-validation 500.
+Validation: `pytest tests/unit/api/test_faction_standings_route.py tests/unit/graph/test_faction_queries.py -v`,
+then `make check`. `make check-api-contract` must pass **without** `--update`: needing a re-record means
+the change is not additive and the task is wrong. Live: rebuild the eval stack
+(`bash scripts/eval_stack_at.sh HEAD --reset`), `make eval-stack-seed`, and `GET` one seeded faction's
+standings: expect 200 and non-empty rows.
+Done when: both tests pass, `make check` is green with no contract re-record, the live GET returns rows,
+and ISSUE-354 is closed and archived. ISSUE-354.
 
 ### Phase T16
 
