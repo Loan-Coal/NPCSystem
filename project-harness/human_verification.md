@@ -727,3 +727,13 @@ Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-lo
   ACT 5 battle event: no
 DEMO_LIVE=FAIL acts_reached=1/12 empty_beats=1 act5_battle=no
 make: *** [Makefile:858: demo-run-live] Error 1
+
+## 2026-09-18 10:07:02 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
