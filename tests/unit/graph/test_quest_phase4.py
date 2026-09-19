@@ -23,6 +23,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from npc_engine.api.schemas import QuestObjectiveBody
 from npc_engine.engines.quest.models import QuestObjectiveInput
@@ -94,8 +95,7 @@ class TestQuestObjectiveInputFields(unittest.TestCase):
 
     def test_frozen(self) -> None:
         obj = QuestObjectiveInput(objective_id="o1", target_count=1)
-        # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="Instance is frozen"):
             obj.objective_id = "changed"  # type: ignore[misc]
 
 

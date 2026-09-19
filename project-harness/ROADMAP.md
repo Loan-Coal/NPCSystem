@@ -1674,7 +1674,7 @@ Validation: `make test`, then `make check`.
 Done when: zero NO_ASSERTION findings with waivers ignored, `make check` green, and the LOC and
 coverage deltas reported. ✅ AUTO (T11.1a, 2026-09-19)
 
-- [ ] **T11.1b** Resolve the waived BARE_EXCEPTION_RAISES findings
+- [x] **T11.1b** Resolve the waived BARE_EXCEPTION_RAISES findings
 Pre-approved: file-deletion · owner 2026-09-08
 Files: the `tests/` files carrying these findings, `project-harness/ISSUES.md`
 Spec: rule 5, part 2 of 3 — shared notes after T11.1c. Same method as T11.1a for the
@@ -1685,7 +1685,7 @@ RED anchor: the waiver-ignored BARE_EXCEPTION_RAISES count going to zero; `make 
 before and after, dropping by exactly the tests deleted.
 Validation: `make test`, then `make check`.
 Done when: zero BARE_EXCEPTION_RAISES findings with waivers ignored, `make check` green, LOC and
-coverage deltas reported.
+coverage deltas reported. ✅ AUTO (T11.1b, 2026-09-19)
 
 - [ ] **T11.1c** Resolve the vacuous-mock findings, delete existence-only and constant tests, close ISSUE-234
 Pre-approved: file-deletion · owner 2026-09-08

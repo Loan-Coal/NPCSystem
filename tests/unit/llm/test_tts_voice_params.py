@@ -38,6 +38,5 @@ def test_voice_params_pitch_bounds():
 
 def test_voice_params_is_frozen():
     vp = VoiceParams()
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         vp.voice_id = "new"  # type: ignore[misc]

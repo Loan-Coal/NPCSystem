@@ -136,30 +136,26 @@ def test_round_trip_preserves_reset_receipt() -> None:
 def test_sequence_run_is_frozen() -> None:
     """SequenceRun is immutable — attribute assignment raises."""
     run = _make_run()
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         run.k = 99  # type: ignore[misc]
 
 
 def test_repetition_is_frozen() -> None:
     """Repetition is immutable — attribute assignment raises."""
     rep = _make_repetition(0)
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         rep.index = 99  # type: ignore[misc]
 
 
 def test_turn_is_frozen() -> None:
     """Turn is immutable — attribute assignment raises."""
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         _TURN.tick = 99  # type: ignore[misc]
 
 
 def test_reset_receipt_is_frozen() -> None:
     """ResetReceipt is immutable — attribute assignment raises."""
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         _RECEIPT.duration_ms = 0  # type: ignore[misc]
 
 

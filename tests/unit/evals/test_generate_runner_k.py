@@ -18,7 +18,7 @@ import pytest
 
 from generate_runner import run
 from generation_collection import collect_records
-from run_config import RunConfig, resolve_run_config
+from run_config import ModelDigestUnavailableError, RunConfig, resolve_run_config
 
 
 
@@ -157,8 +157,7 @@ def test_gen_dir_run_resolves_config_before_generating(
     spent before the run dies on a bad judge model or an empty cases dir.
     """
     client = _make_mock_client()
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ModelDigestUnavailableError):
         run(
             yaml_cases=[_make_yaml_case()],
             ah_cases=[],

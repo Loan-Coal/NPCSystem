@@ -13,6 +13,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from deterministic_pass import DeterministicPassResult, RecordScore, score_transcript
 from entity_scorer import AliasTable
@@ -184,6 +185,5 @@ def test_deterministic_pass_result_is_frozen() -> None:
         event_vocabulary=_EVENT_VOCAB,
         npc_known_events={},
     )
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         result.record_count = 99  # type: ignore[misc]

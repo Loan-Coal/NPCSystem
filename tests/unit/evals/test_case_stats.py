@@ -10,6 +10,7 @@ Used by: pytest (make test / make check)
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from case_stats import CaseStat, aggregate, classify
 from eval_records import JudgedRecord
@@ -142,6 +143,5 @@ def test_case_stat_is_frozen() -> None:
         ci_high=1.0,
         classification="stable_pass",
     )
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         stat.passes = 0  # type: ignore[misc]

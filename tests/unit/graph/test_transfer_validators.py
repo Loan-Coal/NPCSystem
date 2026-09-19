@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from npc_engine.graph.infra.transfer_validators import (
     CURRENCY_ERR_AMOUNT_INVALID,
@@ -68,8 +69,7 @@ def test_currency_happy_path_returns_command():
 
 def test_currency_command_is_frozen():
     cmd = _currency_cmd()
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         cmd.amount = 999  # type: ignore[misc]
 
 
@@ -166,8 +166,7 @@ def test_item_command_is_frozen():
         reason="test",
         transfer_kind="trade",
     )
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         cmd.quantity = 99  # type: ignore[misc]
 
 

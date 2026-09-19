@@ -11,6 +11,7 @@ Used by: pytest (make test / make check)
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from sequence_records import ResetReceipt
 from sequence_runner import RepetitionRecord, SequenceResult, run_sequence
@@ -174,8 +175,7 @@ def test_sequence_result_k_field() -> None:
 def test_sequence_result_is_immutable() -> None:
     """SequenceResult is frozen — attribute assignment raises TypeError."""
     result = run_sequence("scenario_x", lambda: True, _reset_fn(), k=1)
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         result.k = 99  # type: ignore[misc]
 
 

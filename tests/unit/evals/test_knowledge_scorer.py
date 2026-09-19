@@ -10,6 +10,7 @@ Used by: pytest (make test / make check)
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from knowledge_scorer import KnowledgeScore, unpropagated_references
 
@@ -156,6 +157,5 @@ def test_multiple_occurrences_each_counted() -> None:
 def test_knowledge_score_is_frozen() -> None:
     """KnowledgeScore is immutable after construction."""
     score = KnowledgeScore(references=1, violations=0, rate=0.0)
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         score.references = 99  # type: ignore[misc]

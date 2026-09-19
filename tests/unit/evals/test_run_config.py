@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from engine_adapter import structured_output_temperature
 from run_config import (
@@ -108,8 +109,7 @@ def test_git_sha_is_seven_chars() -> None:
 def test_run_config_is_frozen(tmp_llm_config: Path) -> None:
     """RunConfig is immutable — setattr raises ValidationError (Pydantic frozen model)."""
     config = resolve_run_config(config_path=tmp_llm_config, **_offline_probes())
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         setattr(config, "generation_model", "other")
 
 

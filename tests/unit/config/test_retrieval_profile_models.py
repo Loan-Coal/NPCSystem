@@ -17,6 +17,7 @@ eval programme exists to catch, so it is pinned here rather than left to review.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from npc_engine.schema.retrieval_profile_models import (
     DEFAULT_RETRIEVAL_PROFILE_NAME,
@@ -41,8 +42,7 @@ def _profile(**overrides: object) -> RetrievalProfile:
 
 
 def test_profile_is_frozen() -> None:
-    # quality-ok: pydantic v2 frozen models raise ValidationError; the assertion is "any mutation is rejected"
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         _profile().rag_top_k = 99  # type: ignore[misc]
 
 
@@ -115,15 +115,13 @@ def test_the_three_top_k_fields_are_independent() -> None:
 @pytest.mark.parametrize("field", ["rag_top_k", "graph_rag_top_k", "events_limit"])
 def test_top_k_fields_reject_non_positive_values(field: str) -> None:
     """build_serialized_context already raises on RAG_TOP_K <= 0; the profile refuses earlier."""
-    # quality-ok: pydantic v2 raises ValidationError; the assertion is "the value is rejected"
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _profile(**{field: 0})
 
 
 def test_profile_rejects_unknown_fields() -> None:
     """extra='forbid' so a mistyped YAML key is a startup error, not a silently ignored knob."""
-    # quality-ok: pydantic v2 raises ValidationError; the assertion is "the key is rejected"
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _profile(cross_encodr_enabled=True)
 
 

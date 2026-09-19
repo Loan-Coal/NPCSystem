@@ -11,6 +11,7 @@ Used by: pytest (make test / make check)
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from entity_scorer import AliasTable, EntityScore, load_aliases, unsupported_entity_rate
 from graph_vocabulary import GraphVocabulary
@@ -132,8 +133,7 @@ def test_multi_word_alias_not_double_counted() -> None:
 def test_entity_score_is_frozen() -> None:
     """EntityScore is immutable after construction."""
     score = EntityScore(mentions=1, unsupported=0, rate=0.0)
-    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Instance is frozen"):
         score.mentions = 99  # type: ignore[misc]
 
 
