@@ -1576,7 +1576,7 @@ optional: it is the designed escape hatch, and an unattended repair session that
 `scan_fix_diff.py:9-14` describes for `rules_baseline.txt`. Append the entries in the same commit as
 the gate (see T4.2). Rule 4. ✅ AUTO (T10.1, 2026-09-19)
 
-- [ ] **T10.2a** Gate dead surface, and delete what it finds
+- [x] **T10.2a** Gate dead surface, and delete what it finds
 Pre-approved: file-deletion, public-interface · owner 2026-09-08
 Files: new `scripts/check_dead_surface.py`, new `tests/unit/scripts/test_check_dead_surface.py`,
 `Makefile`, `scripts/loop_gates.py`, `src/npc_engine/config.py`, delete two prompt YAMLs,
@@ -1604,7 +1604,7 @@ Validation: `python scripts/check_dead_surface.py`, then `make check`.
 Done when: the gate is in `make check` and green, the 11 dead items are deleted, and the gate is
 registered in `scripts/loop_gates.py` — appended to `AUTOFIX_CHECK_SPECS`, with the script appended
 to `FROZEN_PATH_PREFIXES`, in the same commit (see T4.2). Findings L10 dead-surface sweep, L12-15,
-ISSUE-332, rule 3.
+ISSUE-332, rule 3. ✅ AUTO (T10.2a, 2026-09-19)
 
 - [ ] **T10.2b** Install the reverse LOC ratchet
 Files: new `scripts/check_loc_ratchet.py`, new `scripts/loc_baseline.txt`, new

@@ -7,8 +7,8 @@ llm:
   top_p: 0.9
   stop_sequences: []
 prompt:
-  name: slot_fill_v1
-  version: "1"
+  name: slot_fill_v2
+  version: "2"
 output_schema_ref: quest_generation_response_v1
 fallback:
   policy: graceful_degradation

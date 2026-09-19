@@ -124,11 +124,8 @@ class Settings(BaseSettings):
     # Must be >= 2. Raise if more background concurrency is needed once T8.2 per-engine timeouts
     # are in place — longer background timeouts are only safe after shedding is wired (T8.1).
     LLM_ADMISSION_MAX_CONCURRENT: int = 2
-    LLM_CACHE_ENABLED: bool = False
     LLM_FALLBACK_PATH: str = "data/fallback_responses.json"
     CANNED_RESPONSES_DIR: str = "prompts/canned"
-    MISTRAL_API_URL: str | None = None
-    LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
     # SHIP-02 / DEC-126: BYO-API-key path. OpenAI-compatible /chat/completions base URL
     # (provider choice = base_url: OpenAI, OpenRouter, Groq, Together, LM Studio, …).
@@ -184,8 +181,6 @@ class Settings(BaseSettings):
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
-    QDRANT_URL: str | None = None
-    EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
     # AWAIT the corpus sweep during boot, before the app serves (DEC-208 Decision 3).
     # Hydration is a LATENCY optimisation, not a correctness requirement: since
@@ -245,8 +240,6 @@ class Settings(BaseSettings):
     REPUTATION_CONTEXT_THRESHOLD: int = 20
 
     GOSSIP_DISTORTION_BASE: float = 0.3
-    GOSSIP_DISTORTION_MAX: float = 0.9
-    GOSSIP_PERSONALITY_FIELDS_ENABLED: bool = True
     GOSSIP_TICK_INTERVAL: int = 10
 
     EVENT_POOL_PATH: str = "data/event_pool.json"
@@ -279,7 +272,6 @@ class Settings(BaseSettings):
     MEMORY_DECAY_TICK_INTERVAL: int = 10
 
     CONSOLIDATION_TURN_THRESHOLD: int = 10
-    CONSOLIDATION_CLEAR_TURNS: bool = False
 
     STRUCTURED_OUTPUT_TEMPERATURE: float = 0.1
 
@@ -310,12 +302,6 @@ class Settings(BaseSettings):
 
     WITNESSED_MAX_PER_EVENT: int = 10
     CLIQUE_FORMATION_TICK_INTERVAL: int = 10
-    # Clique formation thresholds (SEV-12): min bidirectional affection to form a
-    # clique, initial group cohesion, and the age (ticks) past which a clique decays.
-    CLIQUE_AFFECTION_THRESHOLD: int = 70
-    CLIQUE_INITIAL_COHESION: int = 10
-    CLIQUE_STALE_AGE_TICKS: int = 50
-    TREATY_LLM_EVAL_ENABLED: bool = False
     CROSS_ENCODER_ENABLED: bool = False
     GRAPH_RAG_ENABLED: bool = False
     RUMOR_DISTORTION_THRESHOLD: int = 50
@@ -327,9 +313,6 @@ class Settings(BaseSettings):
     # Salience is computed from vividness (40 %), emotional_charge (40 %), and
     # recall_count (20 %). A value of 20 means low-activity memories are prunable.
     MEMORY_FORGET_THRESHOLD: float = Field(default=20.0, ge=0.0, le=100.0)
-
-    # EXP-229: max concurrent active schemes a single NPC may run (covert-goal cap, DEC-104).
-    MAX_ACTIVE_SCHEMES_PER_NPC: int = Field(default=2, ge=1, le=20)
 
     # F1.6 / DEC-107 (Option A): scheme auto-advance cadence + caps.
     # Advance active schemes once every N ticks (self-gated in SchemeAdvanceTick).
@@ -356,7 +339,6 @@ class Settings(BaseSettings):
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False
     ENV: Literal["dev", "staging", "prod"] = "dev"
-    GOSSIP_RNG_SEED: int | None = None
     EVENT_RNG_SEED: int | None = None
 
     # Intent formation engine config (Phase 14)
