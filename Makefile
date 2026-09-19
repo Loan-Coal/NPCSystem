@@ -356,6 +356,12 @@ check-dead-keywords-update:
 check-dead-surface:
 	$(PYTHON) scripts/check_dead_surface.py
 
+# check-loc-ratchet: fail if total non-test Python LOC across src/npc_engine/, scripts/,
+# evals/ and demo_game/ exceeds scripts/loc_baseline.txt. Raising the baseline is a
+# deliberate edit with a reason in the commit message (T10.2b, rules 1 and 6).
+check-loc-ratchet:
+	$(PYTHON) scripts/check_loc_ratchet.py
+
 # check-base-rate: the guard battery's pass base rate against the [0.55, 0.85] target
 # band (EVAL-P25.3), ratcheted by R2.3 against scripts/base_rate_baseline.json.
 # Ratchet, not advisory: advisory's promotion criterion named EVAL-P26, a phase DEC-233
@@ -475,7 +481,10 @@ check-engine-logs:
 #         Protocol needs 2+ implementors OR 3+ callers; below-threshold needs DEC waiver.
 # T10.2a: check-dead-surface added, 22 -> 23. Reports dead Settings fields, dead prompt
 #          YAMLs, orphaned engine contracts, and unreachable graph modules.
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface
+# T10.2b: check-loc-ratchet added, 23 -> 24. Reverse LOC ratchet covering src/npc_engine/,
+#          scripts/, evals/ and demo_game/ — fails if total non-test Python LOC rises above
+#          scripts/loc_baseline.txt. Rules 1 and 6.
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

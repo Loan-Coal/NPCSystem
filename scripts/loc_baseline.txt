@@ -1,0 +1,11 @@
+# LOC ratchet baseline — do not edit by hand.
+# Raise the total with a reason in the commit message.
+# Budgeted allowance: +700 LOC for T12.1 (~400 scripts gate script),
+#   T15.1 (~200 src/npc_engine scheduler+metrics), T16.2 (~100 src metrics).
+# T15.1 and T16.2 list this file in their Files: and will bump it when they land.
+#
+src/npc_engine: 65092
+scripts: 11360
+evals: 23060
+demo_game: 21577
+total: 121771

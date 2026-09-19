@@ -1606,7 +1606,7 @@ registered in `scripts/loop_gates.py` — appended to `AUTOFIX_CHECK_SPECS`, wit
 to `FROZEN_PATH_PREFIXES`, in the same commit (see T4.2). Findings L10 dead-surface sweep, L12-15,
 ISSUE-332, rule 3. ✅ AUTO (T10.2a, 2026-09-19)
 
-- [ ] **T10.2b** Install the reverse LOC ratchet
+- [x] **T10.2b** Install the reverse LOC ratchet
 Files: new `scripts/check_loc_ratchet.py`, new `scripts/loc_baseline.txt`, new
 `tests/unit/scripts/test_check_loc_ratchet.py`, `Makefile`, `scripts/loop_gates.py`
 Spec: rules 1 and 6. `check_loc_ratchet.py` counts non-test LOC across **`src/npc_engine/`,
@@ -1629,7 +1629,7 @@ Done when: the gate is in `make check` and green, registered in `scripts/loop_ga
 commit — appended to `AUTOFIX_CHECK_SPECS`, with the script, `scripts/loc_baseline.txt` and the four
 surfaces above appended to `FROZEN_PATH_PREFIXES` — and the completion note records the combined wall
 time of T10.1, T10.2a and T10.2b's gates; if it exceeds 60s, say so — the ratchet must not become the
-reason the gate stops being run. Findings L10 dead-surface sweep, rules 1, 6.
+reason the gate stops being run. Findings L10 dead-surface sweep, rules 1, 6. ✅ AUTO (T10.2b, 2026-09-19)
 
 - [ ] **T10.2c** Write the nine programme rules into `project-harness/CLAUDE.md`
 Files: `project-harness/CLAUDE.md`
