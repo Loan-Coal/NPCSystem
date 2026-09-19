@@ -4131,3 +4131,12 @@ report first and second ticks.
 **Why deferred:** The file is needed by T9.1b, T9.1c, and T9.1d.
 **To fix:** Delete `project-harness/ports_census.md` at the end of T9.1d (end of Sprint 5).
 **Fixed:** 2026-09-18, in T9.1d
+
+## [FIXED] ISSUE-307: CLAUDE.md's inline layer diagram omits `observability/` and `setup/`
+**Found:** 2026-09-07, during full-review (L2-06)
+**Severity:** P3
+**Where:** `project-harness/CLAUDE.md` (Architecture section); `scripts/check_layers.py:28-49`
+**Description:** `LAYER_RANK` ranks `observability` and `setup` at rank 1 (`:45-49`, SHIP-03/DEC-127). The CLAUDE.md diagram — billed as "the one rule this file states in full" — lists 16 packages and omits both. DEC-249 says layer lists should be pointers precisely because inline copies rot; this one already has, for 2 of 18 ranked packages.
+**Why deferred:** Both are leaf rank-1 dirs; no live impact.
+**To fix:** Add the two rows, or replace the diagram with a pointer to `LAYER_RANK`.
+**Fixed:** 2026-09-19, in T10.2c

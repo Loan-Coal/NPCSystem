@@ -71,6 +71,8 @@ common/      → zero-dep shared utilities           [config peer, rank 1]
 type_registry/ → node/edge type contract system   [config peer, rank 1]
 schema/      → game schema loader                  [config peer, rank 1]
 utils/       → error hierarchy + structured logging [config peer, rank 1]
+observability/ → monitoring artefacts (Prometheus rules, Grafana dashboard) [config peer, rank 1]
+setup/         → first-run bootstrap utilities           [config peer, rank 1]
 ```
 
 A layer may import from any layer of **lower** rank, never higher, never sideways except
@@ -129,6 +131,17 @@ Each line is binding. The skill named after it holds the detail and the rational
 - Prompt token budget enforced; structured LLM output validated through Pydantic;
   `build_prompt` is a pure function of its inputs.
 - Input caps at the API boundary. Auth on every route except `GET /health`.
+
+**Programme rules (T programme)** — nine rules bound by the 2026-09-07 review. Each names its gate, or says it has none. A green `make check` says nothing about ungated rules; they are enforced by review only (DEC-249).
+- **Rule 1 — Reverse LOC ratchet.** Non-test LOC across `src/npc_engine/`, `scripts/`, `evals/` and `demo_game/` may only go down in total. Raising the baseline requires an explicit bump with a stated reason. **Gate: `make check-loc-ratchet`** (T10.2b).
+- **Rule 2 — Delete before you abstract.** If a fix can be "add an abstraction" or "remove the feature", remove the feature. Record the removal in `DECISIONS.md` if it was ever documented. **No gate — enforced by review.**
+- **Rule 3 — No config, prompt or contract without a live reader.** Every `Settings` field, prompt YAML and contract YAML needs a reader outside its own module and its own tests. Dead public functions are covered by review, not the gate. **Gate: `make check-dead-surface`** (T10.2a).
+- **Rule 4 — Abstraction requires two.** A Protocol needs 2+ implementors or 3+ callers. Below that, inject the concrete class. **Gate: `make check-dip-threshold`** (T10.1).
+- **Rule 5 — A test must be able to fail.** No existence-only assertions (`hasattr`, `iscoroutinefunction`), no asserting a constant equals its own literal. **No gate on this tree** — gated from T12.1 when it lands.
+- **Rule 6 — Config must be read.** Part of rule 3; declared settings with no reader outside the module are a build failure. **Gate: `make check-dead-surface`** (T10.2a).
+- **Rule 7 — One path per concept.** Never two implementations of one domain concept. Pick one; delete the other. **No gate — enforced by review.**
+- **Rule 8 — Prefer deterministic over model.** A model call is a budget item, not a default. `engines/gossip/` is the in-repo precedent. **No gate — enforced by review.**
+- **Rule 9 — Net-negative phases.** The same four-directory non-test count that rule 1 ratchets must decrease each phase. A phase adding to `tests/` states the delta but is not blocked by it. **No gate — enforced by review.**
 
 ---
 

@@ -1631,7 +1631,7 @@ surfaces above appended to `FROZEN_PATH_PREFIXES` — and the completion note re
 time of T10.1, T10.2a and T10.2b's gates; if it exceeds 60s, say so — the ratchet must not become the
 reason the gate stops being run. Findings L10 dead-surface sweep, rules 1, 6. ✅ AUTO (T10.2b, 2026-09-19)
 
-- [ ] **T10.2c** Write the nine programme rules into `project-harness/CLAUDE.md`
+- [x] **T10.2c** Write the nine programme rules into `project-harness/CLAUDE.md`
 Files: `project-harness/CLAUDE.md`
 Spec: add the nine rules from this roadmap's preamble to `project-harness/CLAUDE.md` under "The
 strict rules", so the rules survive an unloaded skill — that file's own stated design principle.
@@ -1646,7 +1646,7 @@ phrase and record the zero; all nine present, each stating its gate or "no gate 
 review", is the anchor.
 Validation: `make check-harness`, then `make check`.
 Done when: all nine rules are in `project-harness/CLAUDE.md` with their gate status, and ISSUE-307 is
-closed or re-logged with the reason. Rules 1-9.
+closed or re-logged with the reason. Rules 1-9. ✅ AUTO (T10.2c, 2026-09-19)
 
 ---
 
