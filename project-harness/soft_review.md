@@ -134,3 +134,23 @@ Looking at the T9 roadmap phase commits, here are 5 concrete findings:
 
 ### 5. **Confusing parameter wiring at callsite**
 `quest_generation_engine.py:147` — Passes `self._slot_validation_repo` with parameter name `quest_gen_repo`. While the type is correct, the naming mismatch at the callsite obscures what's happening. Parameter name in SlotValidator should match the semantic role.
+
+## 2026-09-19 21:21:14 — phase T10
+
+**REVIEW FINDINGS (T10 Phase Commits)**
+
+Based on diff analysis of the 4 T10 commits (`617b094b`, `ffd0ca7f`, `6e4019b0`, `b7cb101c`), here are the concrete findings:
+
+---
+
+1. **Graph module reachability uses substring-only matching**: `_compute_alive_graph_modules()` in `check_dead_surface.py:366` detects imports via `stem in text` (line 360, 367). This is vulnerable to false positives if a module stem appears in comments, docstrings, or string literals. Example: a comment `# graph_edit_validator is no longer used` would mark the module alive. **Severity: Low** — unlikely in practice, but correctness issue.
+
+2. **LOC ratchet baseline budget already spent**: `loc_baseline.txt:3–4` reserves +700 LOC for T12.1, T15.1, T16.2. T10 added ~1058 LOC in three gate scripts, spending `1058 - 682 headroom = 376 of the 700` budget in one phase. No violation yet, but only 324 LOC remains for three future phases. **Severity: Planning** — not a rule break, but tight.
+
+3. **DIP threshold waivers require DEC-NNN but do not validate it exists**: `check_dip_threshold.py:238` enforces the pattern is present, not that the DEC citation is real or open. A typo like `DEC-99999` passes the gate. **Severity: Low** — waiver entries are human-reviewed before commit anyway.
+
+4. **No gate on Rule 5 (test must fail)**: CLAUDE.md line 140 lists Rule 5 as `"No gate on this tree"`. The new tests for the three gate scripts don't explicitly verify they'd fail on malformed input (e.g., baseline file with syntax error). **Severity: Process** — low priority, since AUTOFIX gates skip harness tests per loop_gates.py:62–66.
+
+5. **Settings field reader detection is regex-based**: `check_dead_surface.py:123` finds readers via word-boundary regex on field names. A field appearing in a quoted string outside the config layer (e.g., in a CLI help string or error message) marks it alive. **Severity: Low** — rare in practice, but could mask genuinely dead config.
+
+**Summary**: No rule violations of CLAUDE.md's strict rules. All three gate scripts are <800 lines, all functions <40 lines, docstrings present, tests comprehensive. The three tools are frozen in `loop_gates.py`. LOC ratchet is green (+682 headroom). No blocking issues.
