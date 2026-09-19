@@ -133,7 +133,7 @@ async def test_emit_skips_reputation_when_no_faction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_emit_swallows_reputation_not_found() -> None:  # quality-ok: emit_event_atomic must absorb ReputationNotFoundError, not propagate it
+async def test_emit_swallows_reputation_not_found() -> None:
     """ReputationNotFoundError from a single character is caught and logged."""
     session = AsyncMock()
     with patch(f"{_SVC}.run_in_tx", new=AsyncMock(side_effect=_run_work)), \
@@ -142,7 +142,7 @@ async def test_emit_swallows_reputation_not_found() -> None:  # quality-ok: emit
          patch(f"{_SVC}.get_characters_at_location", new=AsyncMock(return_value=["char-1"])), \
          patch(f"{_SVC}.adjust_reputation_for_event", new=AsyncMock(
              side_effect=ReputationNotFoundError(character_id="char-1", faction_id="phantom"))):
-        await emit_event_atomic(
+        result = await emit_event_atomic(
             session,
             event=MagicMock(),
             event_id="evt-1",
@@ -154,7 +154,7 @@ async def test_emit_swallows_reputation_not_found() -> None:  # quality-ok: emit
             world_condition_event_type=None,
             world_id="world",
         )
-    # No exception escapes — swallowed inside the loop.
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

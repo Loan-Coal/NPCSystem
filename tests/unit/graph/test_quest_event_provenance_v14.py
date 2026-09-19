@@ -44,7 +44,7 @@ def test_ensure_quest_event_provenance_rejects_missing_fields() -> None:
         ensure_quest_event_provenance(event=event)
 
 
-def test_ensure_quest_event_provenance_accepts_complete_payload() -> None:  # quality-ok: ensure_quest_event_provenance raises on an incomplete payload
+def test_ensure_quest_event_provenance_accepts_complete_payload() -> None:
     event = _base_event().model_copy(
         update={
             "producer": "quest_lifecycle_engine",
@@ -60,7 +60,7 @@ def test_ensure_quest_event_provenance_accepts_complete_payload() -> None:  # qu
         }
     )
 
-    ensure_quest_event_provenance(event=event)
+    assert ensure_quest_event_provenance(event=event) is None
 
 
 def test_ensure_quest_event_provenance_rejects_none_provenance_values() -> None:

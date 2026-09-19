@@ -19,9 +19,9 @@ _EVERYONE_BLOCKLIST: frozenset[str] = frozenset({"murder", "gore", "pornography"
 _PLAYER = "player_test"
 
 
-def test_check_passes_clean_message() -> None:  # quality-ok: check() raises ContentRatingViolationError on a blocked term
+def test_check_passes_clean_message() -> None:
     svc = InputModerationService(blocklist=_EVERYONE_BLOCKLIST, rating="everyone")
-    svc.check(player_message="Hello, how are you?", player_id=_PLAYER)
+    assert svc.check(player_message="Hello, how are you?", player_id=_PLAYER) is None
 
 
 def test_check_raises_on_blocked_term() -> None:
@@ -38,9 +38,9 @@ def test_check_is_case_insensitive() -> None:
         svc.check(player_message="I love GORE and violence", player_id=_PLAYER)
 
 
-def test_mature_rating_passes_anything() -> None:  # quality-ok: check() raises ContentRatingViolationError on a blocked term
+def test_mature_rating_passes_anything() -> None:
     svc = build_input_moderation_service("mature")
-    svc.check(player_message="murder gore pornography", player_id=_PLAYER)
+    assert svc.check(player_message="murder gore pornography", player_id=_PLAYER) is None
 
 
 def test_check_raises_422_via_route() -> None:

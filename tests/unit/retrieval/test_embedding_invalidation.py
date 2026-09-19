@@ -68,7 +68,7 @@ async def test_success_does_not_log_warning():
 
 
 @pytest.mark.asyncio
-async def test_exception_does_not_propagate():  # quality-ok: invalidate_embedding_safely must absorb the store error, not propagate it
+async def test_exception_does_not_propagate():
     index = _make_index(raises=RuntimeError("store unavailable"))
     logger = _make_logger()
 
@@ -78,6 +78,7 @@ async def test_exception_does_not_propagate():  # quality-ok: invalidate_embeddi
         logger=logger,
         entity_label="Character",
     )
+    logger.warning.assert_called_once()
 
 
 @pytest.mark.asyncio

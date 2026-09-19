@@ -1660,7 +1660,7 @@ something. Every surviving test can fail.
 Delete what cannot fail. Sprints 2-3 already removed the tests belonging to deleted engines, so
 this sprint works on what remains.
 
-- [ ] **T11.1a** Resolve the waived NO_ASSERTION findings
+- [x] **T11.1a** Resolve the waived NO_ASSERTION findings
 Pre-approved: file-deletion · owner 2026-09-08
 Files: the `tests/` files carrying these findings, `project-harness/ISSUES.md`
 Spec: rule 5, part 1 of 3 — read the shared notes after T11.1c first. Re-run the test-quality
@@ -1672,7 +1672,7 @@ going to zero is the anchor. Record the `make test` pass count before and after 
 exactly the number of tests deleted.
 Validation: `make test`, then `make check`.
 Done when: zero NO_ASSERTION findings with waivers ignored, `make check` green, and the LOC and
-coverage deltas reported.
+coverage deltas reported. ✅ AUTO (T11.1a, 2026-09-19)
 
 - [ ] **T11.1b** Resolve the waived BARE_EXCEPTION_RAISES findings
 Pre-approved: file-deletion · owner 2026-09-08

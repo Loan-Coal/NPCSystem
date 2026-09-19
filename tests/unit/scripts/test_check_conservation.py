@@ -245,11 +245,12 @@ def test_no_violation_exits_zero(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:  # quality-ok: main() raises UnicodeEncodeError on a cp1252 stdout if unguarded (ISSUE-151)
+def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
     """main() survives a cp1252 stdout — belt-and-suspenders guard from ISSUE-151."""
     from check_conservation import main  # noqa: E402
 
     cp1252_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
     monkeypatch.setattr(sys, "stdout", cp1252_stdout)
 
-    main(["--gen-dir", str(_GEN_DIR)])  # must not raise UnicodeEncodeError
+    exit_code = main(["--gen-dir", str(_GEN_DIR)])
+    assert exit_code == 0

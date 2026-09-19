@@ -78,7 +78,7 @@ async def test_session_round_trip_via_graph() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_swallows_graph_error() -> None:  # quality-ok: save_to_graph must swallow the graph error, not propagate it
+async def test_save_swallows_graph_error() -> None:
     """A graph error during save_to_graph must be logged and swallowed — must NOT raise."""
     store = SessionStore(ttl_seconds=3600, max_turns=50)
     await store.append_turns("player1", "npc2", ["turn1"])
@@ -87,6 +87,7 @@ async def test_save_swallows_graph_error() -> None:  # quality-ok: save_to_graph
     broken_session.run = AsyncMock(side_effect=RuntimeError("neo4j down"))
 
     await store.save_to_graph(session=broken_session, max_persisted_turns=20)
+    assert await store.get_turns("player1", "npc2") == ["turn1"]
 
 
 @pytest.mark.asyncio

@@ -393,7 +393,7 @@ async def test_handler_skips_engine_when_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_handler_skips_when_engine_none(monkeypatch):  # quality-ok: handle() raises AttributeError if it dereferences a None knowledge_engine
+async def test_handler_skips_when_engine_none(monkeypatch):
     """No AttributeError should occur when knowledge_engine=None."""
     from npc_engine.api.schemas import DialogueRequest
 
@@ -416,8 +416,7 @@ async def test_handler_skips_when_engine_none(monkeypatch):  # quality-ok: handl
         }
     )
 
-    # Must not raise
-    await handler.handle(
+    result = await handler.handle(
         DialogueRequest(
             player_id="player_1",
             npc_id="mira_innkeeper",
@@ -425,6 +424,7 @@ async def test_handler_skips_when_engine_none(monkeypatch):  # quality-ok: handl
             location_id="tavern",
         )
     )
+    assert result.npc_response == "Understood."
 
 
 # ---------------------------------------------------------------------------

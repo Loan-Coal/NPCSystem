@@ -232,7 +232,7 @@ def test_get_config_raises_misconfigured_on_io_error(tmp_path: Path, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-def test_validate_all_passes_when_all_llm_engines_have_configs(tmp_path: Path, monkeypatch) -> None:  # quality-ok: validate_all_engine_llm_configs raises on an invalid or missing config
+def test_validate_all_passes_when_all_llm_engines_have_configs(tmp_path: Path, monkeypatch) -> None:
     """No exception raised when every uses_llm=True contract has a valid config."""
 
     import npc_engine.engines.llm_runtime_config as loader_mod
@@ -244,7 +244,7 @@ def test_validate_all_passes_when_all_llm_engines_have_configs(tmp_path: Path, m
         _make_llm_contract("dialogue_engine", uses_llm=True),
         _make_llm_contract("quest_engine", uses_llm=False),
     ]
-    validate_all_engine_llm_configs(contracts=contracts)  # must not raise
+    assert validate_all_engine_llm_configs(contracts=contracts) is None
 
 
 def test_validate_all_raises_when_llm_engine_config_is_missing(tmp_path: Path, monkeypatch) -> None:
@@ -259,7 +259,7 @@ def test_validate_all_raises_when_llm_engine_config_is_missing(tmp_path: Path, m
         validate_all_engine_llm_configs(contracts=contracts)
 
 
-def test_validate_all_skips_non_llm_contracts(tmp_path: Path, monkeypatch) -> None:  # quality-ok: validate_all_engine_llm_configs raises if it inspects a non-LLM contract
+def test_validate_all_skips_non_llm_contracts(tmp_path: Path, monkeypatch) -> None:
     """Engines with uses_llm=False are skipped even if no config file exists."""
 
     import npc_engine.engines.llm_runtime_config as loader_mod
@@ -269,7 +269,7 @@ def test_validate_all_skips_non_llm_contracts(tmp_path: Path, monkeypatch) -> No
         _make_llm_contract("quest_engine", uses_llm=False),
         _make_llm_contract("currency_engine", uses_llm=False),
     ]
-    validate_all_engine_llm_configs(contracts=contracts)  # must not raise
+    assert validate_all_engine_llm_configs(contracts=contracts) is None
 
 
 def test_validate_all_raises_on_invalid_config_for_llm_engine(tmp_path: Path, monkeypatch) -> None:
