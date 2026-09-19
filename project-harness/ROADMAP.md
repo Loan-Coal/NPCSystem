@@ -1548,7 +1548,7 @@ Findings L2-03, L2-04, L2-05. ✅ AUTO (T9.2, 2026-09-18)
 
 Make the rules mechanical so none of this regrows.
 
-- [ ] **T10.1** Gate the DIP threshold — abstraction requires two
+- [x] **T10.1** Gate the DIP threshold — abstraction requires two
 Files: new `scripts/check_dip_threshold.py`, `Makefile`, `scripts/loop_gates.py`, new
 `tests/unit/scripts/test_check_dip_threshold.py`
 Spec: rule 4. The script walks `src/npc_engine/engines/ports/`, and for each Protocol class counts
@@ -1574,7 +1574,7 @@ in `scripts/loop_gates.py`** — appended to `AUTOFIX_CHECK_SPECS`, with `check_
 optional: it is the designed escape hatch, and an unattended repair session that can append a
 `DEC-NNN` line to it turns the gate green having fixed nothing — the same laundering
 `scan_fix_diff.py:9-14` describes for `rules_baseline.txt`. Append the entries in the same commit as
-the gate (see T4.2). Rule 4.
+the gate (see T4.2). Rule 4. ✅ AUTO (T10.1, 2026-09-19)
 
 - [ ] **T10.2a** Gate dead surface, and delete what it finds
 Pre-approved: file-deletion, public-interface · owner 2026-09-08

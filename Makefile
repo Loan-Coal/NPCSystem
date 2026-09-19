@@ -304,6 +304,11 @@ check-layers:
 check-engine-census:
 	$(PYTHON) scripts/check_engine_census.py
 
+# check-dip-threshold: gate the DIP threshold — every Protocol in engines/ports/ must
+# have 2+ implementors OR 3+ callers; below-threshold ones need a DEC-NNN waiver (T10.1).
+check-dip-threshold:
+	$(PYTHON) scripts/check_dip_threshold.py
+
 # roadmap-verify: grammar doctor for the overnight loop's ROADMAP queue fence.
 # Run after ANY hand edit to project-harness/ROADMAP.md — a marker that does not
 # parse back is invisible to the cursor, and its task gets implemented twice.
@@ -460,7 +465,10 @@ check-engine-logs:
 #        short-circuit the run (the R1.4 ordering fix, applied to the new gate too).
 # R4.6: check-engine-census added, 20 -> 21. Placed beside check-layers (both assert
 #        structure, not behaviour). Gate added by T4.2 (finding L10-03, rules 3+7).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
+# T10.1: check-dip-threshold added, 21 -> 22. Placed beside check-engine-census (both
+#         assert structural rules for engines/ports/). Gate enforces DIP threshold: every
+#         Protocol needs 2+ implementors OR 3+ callers; below-threshold needs DEC waiver.
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

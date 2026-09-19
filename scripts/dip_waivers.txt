@@ -1,0 +1,19 @@
+# DIP threshold waivers — each line must cite a DEC-NNN decision.
+# Format: ProtocolName  DEC-NNN  reason
+#
+# Target state: empty (no waivers needed). Current entries cover ports that were
+# split for ISP compliance in T9.2 (DEC-275), producing below-threshold sub-ports
+# as an intentional side-effect of role segregation. Remove a waiver once the
+# protocol gains a second implementor or a third caller.
+#
+# Gate: check_dip_threshold.py  Frozen: scripts/loop_gates.py FROZEN_PATH_PREFIXES.
+# Do NOT append a line here to make the gate green — fix the code instead.
+
+EventTriggerGraphPort    DEC-275  ISP split of QuestGenerationGraphPort (T9.2); 2 callers, 1 implementor — intentionally below threshold pending second backend or additional consumer
+NeedTriggerGraphPort     DEC-275  ISP split of QuestGenerationGraphPort (T9.2); 1 caller, 1 implementor — intentionally below threshold pending second backend or additional consumer
+QuestChainGraphPort      DEC-275  ISP split of QuestGraphPort (T9.2); 2 callers, 1 implementor — intentionally below threshold pending second backend or additional consumer
+QuestContextGraphPort    DEC-275  ISP split of QuestGenerationGraphPort (T9.2); 1 caller, 1 implementor — intentionally below threshold pending second backend or additional consumer
+QuestLifecycleGraphPort  DEC-275  ISP split of QuestGraphPort (T9.2); 1 caller, 1 implementor — intentionally below threshold pending second backend or additional consumer
+QuestOfferGraphPort      DEC-275  ISP split of QuestGraphPort (T9.2); 1 caller, 1 implementor — intentionally below threshold pending second backend or additional consumer
+QuestRewardGraphPort     DEC-275  ISP split of QuestGraphPort (T9.2); 1 caller, 1 implementor — intentionally below threshold pending second backend or additional consumer
+SlotValidationGraphPort  DEC-275  ISP split of QuestGenerationGraphPort (T9.2); 2 callers, 1 implementor — intentionally below threshold pending second backend or additional consumer
