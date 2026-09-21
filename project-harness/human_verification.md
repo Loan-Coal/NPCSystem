@@ -783,3 +783,23 @@ Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-lo
 [seed] Done — created=301 skipped=0
 Seed complete — created=301 skipped=0
 NPC_BASE_URL=http://localhost:8001 NPC_API_KEY=local_dev_secret_change_this_2026 .venv/Scripts/python.exe scripts/demo_run_live.py --base-url http://localhost:8001 --expect-sha 77561674
+
+## 2026-09-21 14:52:23 — gate baseline GREW at phase T12
+
+0 -> 4 already-failing tests. Everything newly in the baseline is treated
+as pre-existing debt from the next phase onward and is never charged to a task again.
+Review before the next run: python scripts/gate_baseline.py --show
+
+## 2026-09-21 14:53:00 — no status token from task T14.1
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/task-T14.1-1789995165.log
+
+## 2026-09-21 14:53:01 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
