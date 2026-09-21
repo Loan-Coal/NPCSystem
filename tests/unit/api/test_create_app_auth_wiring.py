@@ -12,6 +12,7 @@ Used by: make test (pytest discovery)
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -25,6 +26,10 @@ from npc_engine.config import Settings
 
 _TEST_KEY = "local_dev_secret_change_this_2026"
 _AUTH_HEADER = {"Authorization": f"Bearer {_TEST_KEY}"}
+
+# The dev-env public HTTP surface, pinned so that widening is_public_path cannot silently
+# drop a route out of the 401 test below. /setup/* is public in dev only (ISSUE-227).
+_EXPECTED_PUBLIC = frozenset({"/health", "/readiness", "/setup/config", "/setup/validate"})
 
 
 @contextmanager
@@ -65,6 +70,21 @@ def _non_public_http_routes(app: object) -> list[tuple[str, str]]:
     return sampled
 
 
+def _all_protected_http_routes(app: object) -> list[tuple[str, str]]:
+    """Return (path, method) for EVERY non-public HTTP route, path params filled with 'x'.
+
+    The middleware rejects before routing resolves parameters, so a filled path is a
+    faithful probe of the auth gate for parameterised routes too.
+    """
+    return [
+        (re.sub(r"\{[^}]+\}", "x", route.path), sorted(route.methods)[0])
+        for route in app.routes  # type: ignore[attr-defined]
+        if isinstance(route, APIRoute)
+        and route.methods
+        and not is_public_path(route.path, env="dev")
+    ]
+
+
 @pytest.fixture(scope="module")
 def _app() -> object:
     with _stubbed_create_app() as app:
@@ -95,13 +115,21 @@ def test_health_accessible_without_credentials(_app: object) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_protected_routes_return_401_without_credentials(
-    _app: object, _protected_routes: list[tuple[str, str]]
-) -> None:
-    """Every non-public route group rejects requests that carry no API key."""
+def test_public_route_set_is_pinned(_app: object) -> None:
+    """Exactly the pinned paths are exempt — a new exemption must be a deliberate edit here."""
+    public = {
+        route.path
+        for route in _app.routes  # type: ignore[attr-defined]
+        if isinstance(route, APIRoute) and is_public_path(route.path, env="dev")
+    }
+    assert public == _EXPECTED_PUBLIC
+
+
+def test_protected_routes_return_401_without_credentials(_app: object) -> None:
+    """Every non-public HTTP route, parameterised ones included, rejects a missing API key."""
     client = TestClient(_app, raise_server_exceptions=False)
     failures: list[str] = []
-    for path, method in _protected_routes:
+    for path, method in _all_protected_http_routes(_app):
         response = client.request(method, path)
         if response.status_code != 401:
             failures.append(f"{method} {path} → {response.status_code} (expected 401)")
@@ -137,27 +165,3 @@ def test_401_carries_error_envelope_not_data_payload(
     body = response.json()
     assert "error" in body, f"401 body missing 'error' key: {body}"
     assert body.get("data") is None, f"401 body must not carry 'data': {body}"
-
-
-# ---------------------------------------------------------------------------
-# Admin surface — a sampled /v1/admin route requires credentials
-# ---------------------------------------------------------------------------
-
-
-def test_admin_routes_require_auth(_app: object) -> None:
-    """Admin routes under /v1/admin/ reject requests without credentials."""
-    admin_routes = [
-        (route.path, next(iter(route.methods)))
-        for route in _app.routes  # type: ignore[attr-defined]
-        if isinstance(route, APIRoute)
-        and route.methods
-        and route.path.startswith("/v1/admin/")
-        and "{" not in route.path
-    ]
-    assert admin_routes, "No /v1/admin/ routes found — check register_routers"
-    client = TestClient(_app, raise_server_exceptions=False)
-    path, method = admin_routes[0]
-    response = client.request(method, path)
-    assert response.status_code == 401, (
-        f"Admin route {method} {path} returned {response.status_code} without credentials"
-    )
