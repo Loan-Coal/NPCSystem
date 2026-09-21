@@ -40,6 +40,23 @@ def _make_graph_db(session: AsyncMock) -> MagicMock:
 
 
 @pytest.mark.asyncio
+async def test_fetch_known_node_ids_delegates() -> None:
+    """fetch_known_node_ids must delegate and return node id set."""
+    session = AsyncMock()
+    repo = Neo4jGossipRepository(_make_graph_db(session))
+    expected: set[str] = {"event-1", "event-2"}
+
+    with patch(
+        "npc_engine.graph.repositories.gossip_repository.fetch_known_node_ids",
+        new=AsyncMock(return_value=expected),
+    ) as mock_fn:
+        result = await repo.fetch_known_node_ids("npc1")
+
+    mock_fn.assert_called_once_with(session, character_id="npc1")
+    assert result == expected
+
+
+@pytest.mark.asyncio
 async def test_select_batch_event_trust_delegates() -> None:
     """select_batch_event_trust must delegate with the pairs list."""
     session = AsyncMock()

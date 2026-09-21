@@ -37,9 +37,7 @@ async def test_get_current_chapter_returns_caller_shape():
     with patch(f"{_MOD}.get_current_chapter", new=AsyncMock(return_value=row)) as mock_fn:
         result = await repo.get_current_chapter()
 
-    assert isinstance(result, dict), "must return a dict (caller indexes into it)"
-    assert result["id"] == "ch_1"
-    assert result["status"] == "open"
+    assert result == row
     assert db.connect_calls == 1
     mock_fn.assert_awaited_once_with(session)
 
@@ -72,10 +70,7 @@ async def test_get_recent_events_for_chapter_returns_list():
     ) as mock_fn:
         result = await repo.get_recent_events_for_chapter(since_tick=5, limit=3)
 
-    assert isinstance(result, list), "must return a list not None"
-    assert len(result) == 1
-    assert result[0]["id"] == "e1"
-    assert result[0]["tick_id"] == 5
+    assert result == rows
     mock_fn.assert_awaited_once_with(session, since_tick=5, limit=3)
 
 
@@ -92,9 +87,7 @@ async def test_get_faction_standings_summary_returns_list():
     ) as mock_fn:
         result = await repo.get_faction_standings_summary(limit=5)
 
-    assert isinstance(result, list), "must return a list not None"
-    assert result[0]["name"] == "Crown"
-    assert result[0]["power_score"] == 90
+    assert result == rows
     mock_fn.assert_awaited_once_with(session, limit=5)
 
 

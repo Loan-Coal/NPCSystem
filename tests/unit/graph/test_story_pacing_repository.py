@@ -37,10 +37,7 @@ async def test_get_active_high_severity_quests_returns_caller_shape():
     with patch(f"{_MOD}.get_active_high_severity_quests", new=AsyncMock(return_value=rows)) as mock_fn:
         result = await repo.get_active_high_severity_quests(threshold=70)
 
-    assert isinstance(result, list), "must return a list not a single dict or None"
-    assert len(result) == 2
-    assert result[0]["quest_id"] == "q1"
-    assert result[0]["severity"] == 80
+    assert result == rows
     assert db.connect_calls == 1
     mock_fn.assert_awaited_once_with(session, 70)
 
@@ -56,8 +53,5 @@ async def test_get_recent_major_events_returns_caller_shape():
     with patch(f"{_MOD}.get_recent_major_events", new=AsyncMock(return_value=rows)) as mock_fn:
         result = await repo.get_recent_major_events(min_tick_id=5, floor=60)
 
-    assert isinstance(result, list), "must return a list not None"
-    assert len(result) == 1
-    assert result[0]["event_id"] == "e1"
-    assert result[0]["tick_id"] == 5
+    assert result == rows
     mock_fn.assert_awaited_once_with(session, 5, 60)
