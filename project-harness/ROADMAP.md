@@ -1776,7 +1776,7 @@ Findings L4-05, CR-L14-02, ISSUE-309. ✅ AUTO (T11.3, 2026-09-21)
 
 Make it stick, and close the two test gaps the review called out by name.
 
-- [ ] **T12.1** Gate that a test can fail, and test the auth wiring that nothing tests
+- [x] **T12.1** Gate that a test can fail, and test the auth wiring that nothing tests
 Files: new `scripts/check_test_quality_can_fail.py` or an extension of the existing
 `scripts/check_test_quality.py`, `Makefile`, `scripts/loop_gates.py`,
 `tests/unit/scripts/test_check_test_quality.py`, new `scripts/check_test_quality_demo_baseline.txt`,
@@ -1828,7 +1828,7 @@ experiment was observed red, **and the gate is registered in `scripts/loop_gates
 `AUTOFIX_CHECK_SPECS`, with its script and both baselines in `FROZEN_PATH_PREFIXES`. Note
 `tests/unit/api/test_create_app_auth_wiring.py` is a **product** test and stays where it is; it must
 not move into `tests/unit/scripts/`, which T0.3 routes to skip-and-log. Append the `loop_gates.py`
-entries in the same commit as the gate (see T4.2). Findings L4-02, L4-06, SEV-11, rule 5.
+entries in the same commit as the gate (see T4.2). Findings L4-02, L4-06, SEV-11, rule 5. ✅ AUTO (T12.1, 2026-09-21)
 
 - [ ] **T12.2** Cover the measurement tool, and re-baseline coverage after the prune
 Files: new `tests/unit/evals/test_arm_probe*.py`, `Makefile`, `project-harness/DECISIONS.md`,

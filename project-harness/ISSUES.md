@@ -3427,3 +3427,21 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 **Why deferred:** The feature was never finished (no concrete implementor existed); removing the dead stub was the DIP-threshold collapse rule. Re-introducing it requires design work beyond T9.1d's scope.
 **To fix:** Introduce a concrete `Neo4jTraitReadRepository` that reads trait constants from the graph, re-add `TraitModulatedEmotionModel` as a new file, re-wire `EmotionUpdater` to accept it optionally, and register it in `emotion_model_factory`. Also requires seed data for NPC trait constants.
 
+
+## ISSUE-364: demo_game/tests/ baseline seeded at 48 — drive to zero
+**Found:** 2026-09-21, during T12.1
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/tests/` — 40 NO_ASSERTION findings + 8 EXISTENCE_ONLY_ASSERTION findings
+**Description:** T12.1 seeded `scripts/check_test_quality_demo_baseline.txt` at 48 (the count
+the new Rule-5 detectors reported on first run). The 48 consists of 40 NO_ASSERTION tests
+(UI draw tests that call SUT without asserting anything) and 8 EXISTENCE_ONLY_ASSERTION tests
+(`assert hasattr(...)` in core and UI tests). Neither category can be waived — the waiver
+mechanism was removed in T12.1. The demo baseline ratchets up on regression but does not block
+on existing debt; it will not drive itself to zero.
+**Why deferred:** The 40 NO_ASSERTION tests are UI draw tests that verifying "no crash" — each
+requires a meaningful assertion about output or side effects. The 8 hasattr tests need value
+checks. None of this is blocking T12.1 or T12.2.
+**To fix:** For each NO_ASSERTION test, add an assertion about the rendered output, return value,
+or a side effect. For each EXISTENCE_ONLY_ASSERTION, replace `assert hasattr(x, y)` with
+`assert x.y == <expected_value>` or `assert callable(getattr(x, y))`. Lower the baseline as
+findings are fixed. Target: baseline 0, same as `tests/`.

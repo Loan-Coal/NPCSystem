@@ -41,9 +41,9 @@ def test_package_reexports_all_factories() -> None:
     """The dependencies_advanced package must re-export every public factory."""
 
     pkg = importlib.import_module("npc_engine.api.dependencies_advanced")
-    for name in EXPECTED_FACTORIES:
-        assert hasattr(pkg, name), f"missing re-export: {name}"
     assert set(pkg.__all__) == EXPECTED_FACTORIES
+    for name in EXPECTED_FACTORIES:
+        assert callable(getattr(pkg, name)), f"re-exported {name!r} is not callable"
 
 
 @pytest.mark.parametrize("module_name, factories", SUBMODULE_FACTORIES.items())

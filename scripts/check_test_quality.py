@@ -4,11 +4,13 @@ Layer: scripts (dev tooling)
 Purpose: Static scan of tests/** flagging anti-vacuous-test patterns found in the
          2026-08-10 audit: bare Exception raises, self-referential sum assertions,
          vacuous mock-not-called checks, parametrized tests with no SUT calls,
-         completely empty test bodies, and tests that call the SUT but assert nothing
-         (R1.8 — absorbed from the separate check_dead_tests gate, which duplicated
-         this scanner). Ratchet-style gate: exits 1 when findings exceed the count
-         recorded in check_test_quality_baseline.txt (R1.2).
-         Each flagged item must be fixed or inline-suppressed with '# quality-ok: <reason>'.
+         completely empty test bodies, tests that call the SUT but assert nothing
+         (R1.8), existence-only assertions (hasattr, iscoroutinefunction), and
+         constant-equals-literal assertions (T12.1 — Rule 5 gate).
+         Ratchet-style gate: exits 1 when findings exceed the count recorded in
+         check_test_quality_baseline.txt (tests/) or check_test_quality_demo_baseline.txt
+         (demo_game/tests/). Both roots are scanned by default; pass --tests-dir to
+         scan a single root (used by unit tests of this script).
 Dependencies: argparse, ast, pathlib, sys, pydantic
 Used by: make check-test-quality, tests/unit/scripts/test_check_test_quality.py
 """
@@ -29,10 +31,16 @@ VACUOUS_MOCK_NOT_CALLED = "VACUOUS_MOCK_NOT_CALLED"
 PARAMETRIZE_NO_SUT_CALL = "PARAMETRIZE_NO_SUT_CALL"
 EMPTY_TEST_BODY = "EMPTY_TEST_BODY"
 NO_ASSERTION = "NO_ASSERTION"
+EXISTENCE_ONLY_ASSERTION = "EXISTENCE_ONLY_ASSERTION"
+CONSTANT_EQ_LITERAL = "CONSTANT_EQ_LITERAL"
 
-_WAIVER_MARKER = "# quality-ok:"
-_TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_TESTS_ROOT = _REPO_ROOT / "tests"
+_DEMO_TESTS_ROOT = _REPO_ROOT / "demo_game" / "tests"
 _BASELINE_PATH = Path(__file__).resolve().parent / "check_test_quality_baseline.txt"
+_DEMO_BASELINE_PATH = Path(__file__).resolve().parent / "check_test_quality_demo_baseline.txt"
+
+_EXISTENCE_ONLY_FUNCS: frozenset[str] = frozenset({"hasattr", "iscoroutinefunction"})
 
 
 class Finding(BaseModel):
@@ -75,14 +83,6 @@ def _has_assertion(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         if name in _ASSERTION_CALL_NAMES or name.startswith("assert"):
             return True
     return False
-
-
-def _is_waived(lines: list[str], lineno: int) -> bool:
-    """True if the source line or preceding line contains the quality-ok marker."""
-    idx = lineno - 1
-    if idx < len(lines) and _WAIVER_MARKER in lines[idx]:
-        return True
-    return idx > 0 and _WAIVER_MARKER in lines[idx - 1]
 
 
 def _collect_attr_roots(node: ast.expr) -> set[str]:
@@ -174,6 +174,28 @@ def _not_called_lineno(body: list[ast.stmt], alias: str) -> int | None:
     return None
 
 
+def _is_existence_only_call(node: ast.expr) -> bool:
+    """True when node is a bare call to an existence-only function (hasattr, iscoroutinefunction)."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _EXISTENCE_ONLY_FUNCS
+    )
+
+
+def _is_constant_eq_literal(assert_node: ast.Assert) -> bool:
+    """True when assert compares two constants: assert 1 == 1 or assert 'a' == 'a'."""
+    test = assert_node.test
+    return (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.Eq)
+        and isinstance(test.left, ast.Constant)
+        and len(test.comparators) == 1
+        and isinstance(test.comparators[0], ast.Constant)
+    )
+
+
 def _scan_fn(
     fn: ast.FunctionDef | ast.AsyncFunctionDef,
     lines: list[str],
@@ -187,7 +209,7 @@ def _scan_fn(
     for node in ast.walk(fn):
         if isinstance(node, ast.With):
             ln = _is_raises_exception(node)
-            if ln and not _is_waived(lines, ln):
+            if ln:
                 findings.append(Finding(
                     file=relpath, test=name, line=ln,
                     pattern=BARE_EXCEPTION_RAISES,
@@ -197,7 +219,7 @@ def _scan_fn(
     # Pattern 2: self-referential sum assertion
     for stmt in fn.body:
         if isinstance(stmt, ast.Assert) and isinstance(stmt.test, ast.Compare):
-            if _is_self_referential(stmt.test) and not _is_waived(lines, stmt.lineno):
+            if _is_self_referential(stmt.test):
                 findings.append(Finding(
                     file=relpath, test=name, line=stmt.lineno,
                     pattern=SELF_REFERENTIAL_SUM,
@@ -207,7 +229,7 @@ def _scan_fn(
     # Pattern 3: patch() + assert mock not called
     for alias in _patch_aliases(fn.body):
         ln = _not_called_lineno(fn.body, alias)
-        if ln and not _is_waived(lines, ln):
+        if ln:
             findings.append(Finding(
                 file=relpath, test=name, line=ln,
                 pattern=VACUOUS_MOCK_NOT_CALLED,
@@ -224,7 +246,7 @@ def _scan_fn(
         and d.func.attr == "parametrize"
         for d in fn.decorator_list
     )
-    if has_parametrize and not _is_waived(lines, fn.lineno):
+    if has_parametrize:
         has_calls = any(
             isinstance(node, ast.Call)
             for stmt in fn.body
@@ -237,10 +259,35 @@ def _scan_fn(
                 detail="@pytest.mark.parametrize test makes no function calls in its body",
             ))
 
+    # Pattern 7: existence-only assertion (hasattr, iscoroutinefunction)
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assert) and _is_existence_only_call(node.test):
+            func_name = node.test.func.id  # type: ignore[attr-defined]
+            findings.append(Finding(
+                file=relpath, test=name, line=node.lineno,
+                pattern=EXISTENCE_ONLY_ASSERTION,
+                detail=(
+                    f"assert {func_name}(...) only checks existence — "
+                    "assert the actual value instead"
+                ),
+            ))
+
+    # Pattern 8: constant-equals-literal (assert 1 == 1)
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assert) and _is_constant_eq_literal(node):
+            findings.append(Finding(
+                file=relpath, test=name, line=node.lineno,
+                pattern=CONSTANT_EQ_LITERAL,
+                detail=(
+                    "assert <constant> == <constant> — "
+                    "this can never fail; assert a computed value"
+                ),
+            ))
+
     # Patterns 5 and 6: the test asserts nothing, so it can only fail by raising.
     # The two partition on whether the body does anything at all, so a test is
     # reported once, never twice.
-    if not _is_waived(lines, fn.lineno) and not _has_assertion(fn):
+    if not _has_assertion(fn):
         body_has_call = any(
             isinstance(node, ast.Call)
             for stmt in fn.body
@@ -260,7 +307,7 @@ def _scan_fn(
 
 
 def scan_file(path: Path) -> list[Finding]:
-    """Parse a test file and return all unwaived anti-vacuous findings."""
+    """Parse a test file and return all anti-vacuous findings."""
     source = path.read_text(encoding="utf-8")
     try:
         tree = ast.parse(source, filename=str(path))
@@ -279,6 +326,8 @@ def scan_file(path: Path) -> list[Finding]:
 
 def scan_directory(root: Path) -> list[Finding]:
     """Scan all test_*.py files under root recursively."""
+    if not root.exists():
+        return []
     findings: list[Finding] = []
     for path in sorted(root.rglob("test_*.py")):
         findings.extend(scan_file(path))
@@ -298,7 +347,7 @@ def format_findings(findings: list[Finding]) -> str:
         for item in items:
             out.append(f"    {item.file}::{item.test}:{item.line}  {item.detail}")
         out.append("")
-    out.append("Each item must be fixed or suppressed with '# quality-ok: <reason>'.")
+    out.append("Each item must be fixed; the '# quality-ok:' waiver is removed (T12.1, Rule 5).")
     return "\n".join(out)
 
 
@@ -310,31 +359,52 @@ def _read_baseline(path: Path) -> int:
         return 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Scan tests for anti-vacuous patterns. Exits 1 when findings exceed baseline (R1.2)."""
-    parser = argparse.ArgumentParser(
-        description="Anti-vacuous test quality scan. Ratchet-style: exits 1 above baseline."
-    )
-    parser.add_argument(
-        "--tests-dir", type=Path, default=_TESTS_ROOT,
-        help="Root of the test tree to scan.",
-    )
-    parser.add_argument(
-        "--baseline-file", type=Path, default=_BASELINE_PATH,
-        help="Path to the baseline count file (single integer).",
-    )
-    args = parser.parse_args(argv)
-    findings = scan_directory(args.tests_dir)
-    print(format_findings(findings))
-    baseline = _read_baseline(args.baseline_file)
+def _check_one(tests_dir: Path, baseline_file: Path, label: str) -> int:
+    """Scan one test tree, print findings, and return 1 if count exceeds baseline.
+
+    Args:
+        tests_dir: Root of the test tree to scan.
+        baseline_file: Path to the baseline count file (single integer).
+        label: Short label for display (empty string for the main tree).
+    Returns:
+        0 when findings are within baseline, 1 when they exceed it.
+    """
+    findings = scan_directory(tests_dir)
+    prefix = f"[{label}] " if label else ""
+    print(format_findings(findings).replace("check-test-quality:", f"{prefix}check-test-quality:"))
+    baseline = _read_baseline(baseline_file)
     count = len(findings)
     if count > baseline:
         print(
-            f"check-test-quality: {count} finding(s) exceed baseline of {baseline} — gate RED.",
+            f"{prefix}check-test-quality: {count} finding(s) exceed baseline of {baseline} — gate RED.",
             file=sys.stderr,
         )
         return 1
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Scan tests for anti-vacuous patterns. Exits 1 above baseline (R1.2, T12.1)."""
+    parser = argparse.ArgumentParser(
+        description="Anti-vacuous test quality scan. Ratchet-style: exits 1 above baseline."
+    )
+    parser.add_argument(
+        "--tests-dir", type=Path, default=None,
+        help="Root of a single test tree to scan (overrides default dual-root scan).",
+    )
+    parser.add_argument(
+        "--baseline-file", type=Path, default=None,
+        help="Path to the baseline count file (single integer).",
+    )
+    args = parser.parse_args(argv)
+
+    if args.tests_dir is not None:
+        baseline_file = args.baseline_file or _BASELINE_PATH
+        return _check_one(args.tests_dir, baseline_file, "")
+
+    exit_main = _check_one(_TESTS_ROOT, _BASELINE_PATH, "")
+    exit_demo = _check_one(_DEMO_TESTS_ROOT, _DEMO_BASELINE_PATH, "demo_game/tests")
+    return max(exit_main, exit_demo)
 
 
 if __name__ == "__main__":

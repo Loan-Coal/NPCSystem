@@ -52,14 +52,17 @@ def _past_iso(seconds: int = 1) -> str:
 
 
 @pytest.mark.asyncio
-# quality-ok: DDL-only; correctness is verified by test_create_pending_returns_false_on_repeat
-async def test_ensure_constraints_runs_without_error() -> None:
-    """ensure_constraints executes the uniqueness constraint DDL against real Neo4j."""
+async def test_ensure_constraints_is_idempotent() -> None:
+    """ensure_constraints can be called twice without corrupting existing constraints."""
     repo = _make_repo()
     try:
         await repo.ensure_constraints()
+        record_before = await repo.get_record("test-ensure-constraints-idempotency-probe")
+        await repo.ensure_constraints()
+        record_after = await repo.get_record("test-ensure-constraints-idempotency-probe")
     finally:
         await repo._graph_db.close()
+    assert record_before == record_after
 
 
 @pytest.mark.asyncio

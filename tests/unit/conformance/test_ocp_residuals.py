@@ -92,11 +92,11 @@ def test_mood_label_to_vad_values_are_int_tuples() -> None:
 
 
 def test_scheme_step_kind_is_enum() -> None:
-    """SchemeStepKind is an Enum with at least an ADVANCE member."""
+    """SchemeStepKind is an Enum with an ADVANCE member that is a string value."""
     from npc_engine.engines.scheming.covert_event_factory import SchemeStepKind
 
     assert issubclass(SchemeStepKind, Enum)
-    assert hasattr(SchemeStepKind, "ADVANCE")
+    assert isinstance(SchemeStepKind.ADVANCE.value, str)
 
 
 def test_scheme_step_kind_advance_equals_constant() -> None:

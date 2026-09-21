@@ -77,6 +77,8 @@ AUTOFIX_CHECK_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check-docstrings", ("make", "check-docstrings")),
     ("type", ("make", "type")),
     ("check-harness", ("make", "check-harness")),
+    # T12.1: Rule-5 gate — a test must be able to fail; scans both test roots.
+    ("check-test-quality", ("make", "check-test-quality")),
 )
 
 # Run only when a task touched demo_game/ (the project's own rule).
@@ -132,6 +134,7 @@ FROZEN_PATH_PREFIXES: tuple[str, ...] = (
     "scripts/loc_baseline.txt",
     "scripts/check_test_quality.py",
     "scripts/check_test_quality_baseline.txt",
+    "scripts/check_test_quality_demo_baseline.txt",
     "scripts/evals_baseline.txt",
     "scripts/engine_logs_baseline.txt",
     "Makefile",

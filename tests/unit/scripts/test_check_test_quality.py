@@ -1,10 +1,11 @@
 """
 Module: tests.unit.scripts.test_check_test_quality
 Layer: tests
-Purpose: Unit tests for scripts/check_test_quality.py — verifies all 4 anti-vacuous
-         patterns are detected and that '# quality-ok: <reason>' waivers suppress findings.
-         Also pins that the real test tree stays clean AND that its cleanliness comes from
-         deliberate waivers rather than from a scanner that has stopped detecting.
+Purpose: Unit tests for scripts/check_test_quality.py — verifies all 8 anti-vacuous
+         patterns are detected. The '# quality-ok:' waiver mechanism was removed in T12.1
+         (Rule 5: a test must be able to fail with no waiver clause). Also pins that the
+         real test tree stays clean and that its cleanliness comes from real fixes,
+         not from a scanner that has stopped detecting.
 Dependencies: pathlib, sys, pytest, check_test_quality
 Used by: make test (pytest discovery)
 """
@@ -21,14 +22,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from check_test_quality import (  # noqa: E402
     BARE_EXCEPTION_RAISES,
+    CONSTANT_EQ_LITERAL,
     EMPTY_TEST_BODY,
+    EXISTENCE_ONLY_ASSERTION,
     NO_ASSERTION,
-    format_findings,
-    main,
     PARAMETRIZE_NO_SUT_CALL,
     SELF_REFERENTIAL_SUM,
     VACUOUS_MOCK_NOT_CALLED,
     Finding,
+    format_findings,
+    main,
     scan_directory,
     scan_file,
 )
@@ -108,21 +111,8 @@ def test_specific_exception_type_not_flagged(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pattern 2: SELF_REFERENTIAL_SUM — waiver
+# Pattern 2: SELF_REFERENTIAL_SUM
 # ---------------------------------------------------------------------------
-
-
-def test_self_referential_sum_waiver_suppresses_finding(tmp_path: Path) -> None:
-    """A '# quality-ok:' comment on the assert line suppresses SELF_REFERENTIAL_SUM."""
-    f = _write(
-        tmp_path,
-        "test_waived.py",
-        "def test_sum_ok():\n"
-        "    # quality-ok: annotated_count is an independent counter, not derived\n"
-        "    assert r.a + r.b == r.total\n",
-    )
-    findings = scan_file(f)
-    assert SELF_REFERENTIAL_SUM not in _patterns(findings)
 
 
 def test_cross_object_sum_not_flagged(tmp_path: Path) -> None:
@@ -227,39 +217,26 @@ def test_clean_file_has_no_findings(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Validation pins — the real tree is clean, and provably so
+# Validation pins — the real tree is clean
 # ---------------------------------------------------------------------------
 
 
 def test_real_suite_is_clean() -> None:
     """The real suite carries no unaddressed anti-vacuous findings.
 
-    Replaces three earlier tests that asserted specific findings were STILL PRESENT
-    (a self-referential sum in test_retrieval_join, a vacuous mock in
-    test_deterministic_pass, and >=7 bare-Exception frozen-model raises). Those pinned
-    the unfixed state, so they went red the moment the findings were addressed on
-    2026-08-20 — a snapshot of debt cannot double as a gate. Every pattern the scanner
-    detects already has synthetic coverage above; what the real tree adds is this, which
-    is exactly what `make check-test-quality` enforces.
-
-    NO_ASSERTION is excluded here and pinned separately below: it arrived in R1.8 with
-    25 pre-existing findings, so it is ratcheted rather than waived. Blanket-waiving 25
-    sites would buy conformance, not quality (CR-L05-03). The other five patterns keep
-    the stronger zero-findings invariant they have always had.
+    All eight patterns are enforced at zero — waivers were removed in T12.1.
+    This replaces the earlier test that excluded NO_ASSERTION from the invariant;
+    after T11.1a-c cleared all prior findings, the zero invariant applies to all.
     """
-    findings = [f for f in scan_directory(_TESTS_ROOT) if f.pattern != NO_ASSERTION]
-
+    findings = scan_directory(_TESTS_ROOT)
     assert findings == [], "unaddressed test-quality findings:\n" + format_findings(findings)
 
 
-def test_real_suite_waivers_are_load_bearing() -> None:
+def test_real_suite_scanner_is_not_a_nop() -> None:
     """The scanner is not a no-op: a synthetic probe triggers VACUOUS_MOCK_NOT_CALLED.
 
-    Without this, `test_real_suite_is_clean` would also pass if the scanner silently
-    stopped detecting anything — a green gate from a broken instrument, which is the
-    precise failure class this whole harness exists to catch. T11.1c resolved all
-    quality-ok waivers by fixing the findings, so the proof no longer comes from
-    stripping real-suite waivers but from a synthetic probe the scanner must flag.
+    Without this, test_real_suite_is_clean would also pass if the scanner silently
+    stopped detecting anything — a green gate from a broken instrument.
     """
     with tempfile.TemporaryDirectory() as tmp:
         probe = Path(tmp) / "test_probe.py"
@@ -340,7 +317,7 @@ def test_main_exits_zero_at_or_below_baseline(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pattern 6: NO_ASSERTION (R1.8 — absorbed from the deleted check_dead_tests gate)
+# Pattern 6: NO_ASSERTION (R1.8)
 # ---------------------------------------------------------------------------
 
 
@@ -357,29 +334,27 @@ def test_pytest_raises_counts_as_an_assertion(tmp_path: Path) -> None:
 
 
 def test_a_mock_assert_method_counts_as_an_assertion(tmp_path: Path) -> None:
+    """mock.assert_called_once_with(...) counts as an assertion."""
     body = "def test_x():\n    m.assert_called_once_with(1)\n"
     assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
 
 
 def test_a_unittest_assert_method_counts_as_an_assertion(tmp_path: Path) -> None:
+    """self.assertEqual counts as an assertion."""
     body = "def test_x(self):\n    self.assertEqual(a(), 1)\n"
     assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
 
 
 def test_pytest_fail_counts_as_an_assertion(tmp_path: Path) -> None:
+    """pytest.fail() counts as an assertion."""
     body = "def test_x():\n    if run():\n        pytest.fail('nope')\n"
     assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
 
 
 def test_an_assertion_nested_in_a_loop_counts(tmp_path: Path) -> None:
+    """An assertion inside a for loop counts."""
     body = "def test_x():\n    for v in items():\n        assert v\n"
     assert NO_ASSERTION not in _patterns(scan_file(_write(tmp_path, "test_x.py", body)))
-
-
-def test_a_no_assertion_finding_is_waivable(tmp_path: Path) -> None:
-    """The gate shares one waiver marker with the other five patterns."""
-    body = "# quality-ok: proves the call does not raise\ndef test_x():\n    build_thing(1)\n"
-    assert scan_file(_write(tmp_path, "test_x.py", body)) == []
 
 
 def test_a_test_is_reported_once_not_twice(tmp_path: Path) -> None:
@@ -390,18 +365,99 @@ def test_a_test_is_reported_once_not_twice(tmp_path: Path) -> None:
     assert _patterns(scan_file(calls)) == [NO_ASSERTION]
 
 
-def test_real_suite_no_assertion_findings_match_the_baseline() -> None:
-    """Pins the ratchet in both directions.
+# ---------------------------------------------------------------------------
+# Pattern 7: EXISTENCE_ONLY_ASSERTION (T12.1, Rule 5)
+# ---------------------------------------------------------------------------
 
-    Growth means an assertion-free test slipped in. Shrinkage means findings were fixed
-    without re-recording, which would leave the gate looser than the tree it guards.
-    """
-    recorded = int(
-        (_REPO_ROOT / "scripts" / "check_test_quality_baseline.txt")
-        .read_text(encoding="utf-8").strip()
+
+def test_hasattr_assertion_is_flagged(tmp_path: Path) -> None:
+    """assert hasattr(obj, 'attr') is flagged as EXISTENCE_ONLY_ASSERTION."""
+    f = _write(
+        tmp_path,
+        "test_hasattr.py",
+        "def test_module_attr():\n"
+        "    assert hasattr(pkg, 'factory')\n",
     )
-    actual = [f for f in scan_directory(_TESTS_ROOT) if f.pattern == NO_ASSERTION]
-    assert len(actual) == recorded, (
-        f"{len(actual)} NO_ASSERTION findings vs baseline {recorded} — fix them, waive "
-        "them with '# quality-ok: <reason>', or re-record the baseline"
+    findings = scan_file(f)
+    assert EXISTENCE_ONLY_ASSERTION in _patterns(findings)
+
+
+def test_iscoroutinefunction_assertion_is_flagged(tmp_path: Path) -> None:
+    """assert iscoroutinefunction(fn) is flagged as EXISTENCE_ONLY_ASSERTION."""
+    f = _write(
+        tmp_path,
+        "test_coro.py",
+        "from inspect import iscoroutinefunction\n"
+        "def test_is_async():\n"
+        "    assert iscoroutinefunction(my_func)\n",
     )
+    findings = scan_file(f)
+    assert EXISTENCE_ONLY_ASSERTION in _patterns(findings)
+
+
+def test_callable_check_not_flagged_as_existence_only(tmp_path: Path) -> None:
+    """assert callable(getattr(pkg, name)) is NOT flagged (checks a value, not existence)."""
+    f = _write(
+        tmp_path,
+        "test_callable.py",
+        "def test_factory_is_callable():\n"
+        "    assert callable(getattr(pkg, 'factory'))\n",
+    )
+    findings = scan_file(f)
+    assert EXISTENCE_ONLY_ASSERTION not in _patterns(findings)
+
+
+def test_value_assertion_after_hasattr_pattern_not_double_flagged(tmp_path: Path) -> None:
+    """A function with assert hasattr(...) gets EXISTENCE_ONLY, not also flagged for other issues."""
+    f = _write(
+        tmp_path,
+        "test_mixed.py",
+        "def test_has_attr_and_value():\n"
+        "    assert hasattr(pkg, 'factory')\n"
+        "    assert pkg.factory() is not None\n",
+    )
+    patterns = _patterns(scan_file(f))
+    assert EXISTENCE_ONLY_ASSERTION in patterns
+    assert EMPTY_TEST_BODY not in patterns
+    assert NO_ASSERTION not in patterns
+
+
+# ---------------------------------------------------------------------------
+# Pattern 8: CONSTANT_EQ_LITERAL (T12.1, Rule 5)
+# ---------------------------------------------------------------------------
+
+
+def test_constant_equals_constant_is_flagged(tmp_path: Path) -> None:
+    """assert 1 == 1 is flagged as CONSTANT_EQ_LITERAL."""
+    f = _write(
+        tmp_path,
+        "test_const.py",
+        "def test_trivial():\n"
+        "    assert 1 == 1\n",
+    )
+    findings = scan_file(f)
+    assert CONSTANT_EQ_LITERAL in _patterns(findings)
+
+
+def test_string_constant_eq_literal_is_flagged(tmp_path: Path) -> None:
+    """assert 'foo' == 'foo' is flagged as CONSTANT_EQ_LITERAL."""
+    f = _write(
+        tmp_path,
+        "test_strconst.py",
+        "def test_string_identity():\n"
+        "    assert 'status' == 'status'\n",
+    )
+    findings = scan_file(f)
+    assert CONSTANT_EQ_LITERAL in _patterns(findings)
+
+
+def test_variable_compared_to_constant_not_flagged(tmp_path: Path) -> None:
+    """assert result == 'ok' is NOT flagged (left side is a variable)."""
+    f = _write(
+        tmp_path,
+        "test_var.py",
+        "def test_result():\n"
+        "    assert result == 'ok'\n",
+    )
+    findings = scan_file(f)
+    assert CONSTANT_EQ_LITERAL not in _patterns(findings)
