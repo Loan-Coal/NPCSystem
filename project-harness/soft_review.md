@@ -176,3 +176,27 @@ Now reviewing the T11 phase diffs. Looking at commits 902f34bd (T11.3), ed2a64f0
 ---
 
 **Summary:** Integration tests risk false-green on env-var-only gating; relation reader coverage may be incomplete; otherwise T11 phase execution is sound (narrowed exceptions, deleted vacuous tests, added 56 real integration tests).
+
+## 2026-09-21 14:07:24 — phase T12
+
+Looking at the T12 diff, here are 5 concrete findings:
+
+**1. Vacuous idempotency test** (correctness)  
+`test_ensure_constraints_is_idempotent()` at `tests/integration/test_idempotency_repository_integration.py:535` asserts `record_before == record_after`, but `ensure_constraints()` is DDL-only and never creates test records. Both `get_record()` calls return `None`, so the assertion is `None == None` — vacuous. The test name claims idempotency but doesn't prove it. Should create an actual record, run the constraint operation twice, and verify the record is unchanged.
+
+**2. sys.path.insert() violates npc-code-style rule**  
+Three test files use `sys.path.insert()` to import from sibling `evals/` directory:
+- `tests/unit/evals/test_arm_probe_client.py:768`
+- `tests/unit/evals/test_arm_probe_report.py:980`  
+- `tests/unit/evals/test_arm_probe_run.py:1123`
+
+Coding-style rule forbids non-standard imports (`from __future__ import annotations` required, "no `from ..x import y`"). Should use proper packaging or configure `PYTHONPATH` in Makefile instead.
+
+**3. Demo test baseline (48) ratchets up, never down**  
+`scripts/check_test_quality_demo_baseline.txt` is seeded at 48 findings (ISSUE-364: 40 NO_ASSERTION + 8 EXISTENCE_ONLY). The baseline gate only prevents regression, not improvement. The 40 assertion-free UI tests will accumulate silently since the bar can only rise.
+
+**4. CONSTANT_EQ_LITERAL may over-flag** (edge case)  
+Pattern flags `assert 'expected' == 'expected'` same as `assert 1 == 1`, but comparing string constants could be intentional (testing serialization/identity). Rule 5 doesn't distinguish trivial literals from potentially meaningful ones.
+
+**5. auth_wiring test samples routes** (edge case)  
+`test_protected_routes_return_401_without_credentials()` samples one route per prefix group. A new unprotected endpoint added to an already-tested group would escape detection.
