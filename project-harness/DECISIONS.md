@@ -10220,10 +10220,16 @@ Neo4j (bolt://localhost:7688, `npcsystem-eval` compose project), which already e
 and is wiped with `--reset`.
 
 **Decision:** Integration tests for repository methods use the eval-stack Neo4j exclusively, identified
-by `NEO4J_URI=bolt://localhost:7688`. Tests guard this with `pytest.skip` when the URI env var is absent
-or points to the default port (7687), keeping the default `make check` CI run free of Neo4j I/O.
-The `make check-integration-baseline` gate enforces a floor of 34 executed tests to prevent silent
-all-skip passes. T12.2 records whether the CI `integration-tests` job gates merge.
+by `NEO4J_URI=bolt://localhost:7688`. Tests skip when any of `NEO4J_URI`/`NEO4J_USER`/`NEO4J_PASSWORD`
+is **unset** — there is no port guard, so `make check` is free of Neo4j I/O only because it runs without
+those exports. The `make check-integration-baseline` gate enforces a floor of executed tests (100 since
+2026-09-21) to prevent silent all-skip passes. T12.2 records whether the CI `integration-tests` job gates merge.
+
+**Corrected 2026-09-21 (post-loop review):** the original text claimed a skip when the URI "points to the
+default port (7687)". No such guard exists, and none is added: CI's `integration-tests` job runs these
+tests against its own compose Neo4j on 7687. Exporting `NEO4J_*` at the developer's live database and
+running `make check` or `make test-integration` writes to it — the pre-existing, suite-wide ISSUE-277
+hazard. Point the exports at the eval stack only.
 
 **Trade-off accepted:** the eval stack must be built before integration tests run, adding ~3-5 minutes
 to the setup. The alternative (mocking Neo4j) was rejected because mocks cannot detect Cypher regressions,
@@ -10239,4 +10245,10 @@ which is the entire point of these tests (T11.2/T11.3 motivation).
 
 **Rationale:** Making the job required closes the gap: a Cypher regression in a repository method now fails CI before merge, not silently after deployment. The `make check` shortcut (no Neo4j, fast CI path) remains available in the `check` target itself; only the additional `integration-tests` job is required.
 
-**What this does NOT change:** `make check` still runs without Neo4j. The integration tests remain in `tests/integration/` and are skipped unless `NEO4J_URI=bolt://localhost:7688` is set. Any CI runner that builds and starts the eval stack can run `make test-integration` to exercise them.
+**What this does NOT change:** `make check` still runs without Neo4j. The integration tests remain in `tests/integration/` and are skipped unless `NEO4J_*` are set.
+
+**Corrected 2026-09-21 (post-loop review):** the original text said the tests skip unless the URI is the eval
+stack's 7688. They skip only when `NEO4J_*` is unset, which is why the gap is closed: the CI job sets
+`NEO4J_URI=bolt://localhost:7687` against its own compose Neo4j (`.github/workflows/ci.yml`), so T11.3's
+tests do run in CI. Its `check-integration-baseline` is still a ratchet over a known-failing allowlist,
+not a zero-failure gate.

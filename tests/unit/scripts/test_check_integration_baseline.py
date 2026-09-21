@@ -49,25 +49,25 @@ def _run_output(failed: list[str], passed: int, skipped: int = 0) -> str:
 
 def test_a_new_failure_reds() -> None:
     """A node id absent from the allowlist is a regression."""
-    output = _run_output([_NODE_A, _NODE_NEW], passed=41)
+    output = _run_output([_NODE_A, _NODE_NEW], passed=105)
     assert evaluate(output, {_NODE_A, _NODE_B}) == 1
 
 
 def test_the_new_failure_is_named(capsys) -> None:
     """The gate must say which test regressed, or it cannot be acted on."""
-    evaluate(_run_output([_NODE_NEW], passed=42), {_NODE_A})
+    evaluate(_run_output([_NODE_NEW], passed=106), {_NODE_A})
     assert _NODE_NEW in capsys.readouterr().out
 
 
 def test_the_recorded_failures_pass() -> None:
     """Exactly the known-failing set is the steady state, not a failure."""
-    output = _run_output([_NODE_A, _NODE_B], passed=41)
+    output = _run_output([_NODE_A, _NODE_B], passed=105)
     assert evaluate(output, {_NODE_A, _NODE_B}) == 0
 
 
 def test_a_resolved_failure_nags_but_does_not_red(capsys) -> None:
     """A known-failing test that starts passing is good news, not a build break."""
-    output = _run_output([_NODE_A], passed=42)
+    output = _run_output([_NODE_A], passed=106)
     assert evaluate(output, {_NODE_A, _NODE_B}) == 0
     out = capsys.readouterr().out
     assert "now passing" in out and _NODE_B in out
@@ -75,7 +75,7 @@ def test_a_resolved_failure_nags_but_does_not_red(capsys) -> None:
 
 def test_an_all_skip_run_cannot_pass(capsys) -> None:
     """The vacuity guard: no failures but nothing executed must FAIL, not pass green."""
-    output = _run_output([], passed=9, skipped=34)
+    output = _run_output([], passed=9, skipped=98)
     assert evaluate(output, {_NODE_A, _NODE_B}) == 1
     assert "executed" in capsys.readouterr().out
 
@@ -86,7 +86,7 @@ def test_a_count_only_ratchet_would_have_missed_this() -> None:
     This is why the baseline is a node-id set rather than an integer like every other
     ratchet in the repo.
     """
-    output = _run_output([_NODE_A, _NODE_NEW], passed=41)
+    output = _run_output([_NODE_A, _NODE_NEW], passed=105)
     current = failing_node_ids(output)
     baseline = {_NODE_A, _NODE_B}
     assert len(current) == len(baseline)
@@ -144,5 +144,5 @@ def test_the_committed_baseline_matches_the_measured_failures() -> None:
 
 
 def test_the_executed_floor_is_below_the_real_run_and_above_an_all_skip() -> None:
-    """34 sits between the 9 that run without Neo4j and the 43 that run with it."""
-    assert 9 < MIN_EXECUTED_TESTS <= 43
+    """100 sits between the 9 that run without Neo4j and the 107 that run with it."""
+    assert 9 < MIN_EXECUTED_TESTS <= 107

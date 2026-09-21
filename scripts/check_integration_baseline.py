@@ -34,10 +34,10 @@ BASELINE_PATH = REPO_ROOT / "scripts" / "integration_baseline.txt"
 INTEGRATION_PATH = "tests/integration"
 
 # Minimum tests that must actually execute (pass or fail) for the run to count as real.
-# Measured 2026-09-01 against a live neo4j:5: 43 collected, 43 executed, 8 failed, 0 skipped.
-# Without NEO4J_* set, only 9 execute and the other 34 skip. A floor of 34 therefore fails
-# a silent all-skip environment while leaving headroom below the 43 that really run.
-MIN_EXECUTED_TESTS = 34
+# Measured 2026-09-21 on the eval-stack Neo4j after T11.3: 107 executed. Without NEO4J_* set,
+# only 9 execute. A floor of 100 fails an all-skip run, and also a partial one that silently
+# skips T11.3's 56 repository tests, while leaving headroom below the 107 that really run.
+MIN_EXECUTED_TESTS = 100
 
 # pytest's short-summary lines: "FAILED path::test - reason" / "ERROR path::test".
 _FAILED_LINE_RE = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.MULTILINE)

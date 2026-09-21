@@ -53,16 +53,23 @@ def _past_iso(seconds: int = 1) -> str:
 
 @pytest.mark.asyncio
 async def test_ensure_constraints_is_idempotent() -> None:
-    """ensure_constraints can be called twice without corrupting existing constraints."""
+    """ensure_constraints run twice leaves exactly one idempotency uniqueness constraint."""
     repo = _make_repo()
     try:
+        # The app creates this constraint at boot, so drop it first or the test cannot fail.
+        await repo._graph_db.connect()
+        async with repo._graph_db.get_session() as session:
+            await session.run("DROP CONSTRAINT idempotency_record_key IF EXISTS")
         await repo.ensure_constraints()
-        record_before = await repo.get_record("test-ensure-constraints-idempotency-probe")
         await repo.ensure_constraints()
-        record_after = await repo.get_record("test-ensure-constraints-idempotency-probe")
+        async with repo._graph_db.get_session() as session:
+            result = await session.run(
+                "SHOW CONSTRAINTS YIELD name WHERE name = 'idempotency_record_key' RETURN name"
+            )
+            names = [record["name"] async for record in result]
     finally:
         await repo._graph_db.close()
-    assert record_before == record_after
+    assert names == ["idempotency_record_key"]
 
 
 @pytest.mark.asyncio
