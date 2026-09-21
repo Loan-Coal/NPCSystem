@@ -1400,14 +1400,6 @@ hallucination guards remain unaffected (separate axis).
 **Why deferred:** Cosmetic noise.
 **To fix:** Prune resolved entries and make the ratchet remove them automatically.
 
-## ISSUE-321: `BASELINE_2026-08-28.md` no longer matches the tree
-**Found:** 2026-09-07, during full-review (L9-09)
-**Severity:** P2
-**Where:** `project-harness/review-2026-08/BASELINE_2026-08-28.md`
-**Description:** Measured at HEAD `8d30a3e1`: `make test` is 4,571 passed / 41 skipped (baseline records 4,048 / 36); coverage 88.13% (baseline 87.86%). The file's stated purpose is that "a number that moved without an explanation is a finding" — but it is a point-in-time record that must not be edited, so "no delta" can no longer be used as a check against it.
-**Why deferred:** The file is deliberately immutable.
-**To fix:** Capture a new dated baseline for the post-review cycle and point `/fix-next` at it, leaving the 2026-08-28 file as history.
-
 ## ISSUE-322: the `stream`/`stream_text` call site is dead in the production dialogue path
 **Found:** 2026-09-07, during full-review (L11-01)
 **Severity:** P2
@@ -3445,3 +3437,20 @@ checks. None of this is blocking T12.1 or T12.2.
 or a side effect. For each EXISTENCE_ONLY_ASSERTION, replace `assert hasattr(x, y)` with
 `assert x.y == <expected_value>` or `assert callable(getattr(x, y))`. Lower the baseline as
 findings are fixed. Target: baseline 0, same as `tests/`.
+
+## ISSUE-365: no per-module coverage floor for `evals/` — aggregate can hide a zero
+**Found:** 2026-09-21, during T12.2
+**Severity:** P2 (annoying)
+**Where:** `Makefile:test-cov-evals`, `scripts/` (no per-module coverage gate exists)
+**Description:** `make test-cov-evals` enforces a single aggregate floor (75%) over all of
+`evals/`. A module at 0% is invisible as long as well-tested modules keep the aggregate above
+the floor. T12.2 found `evals/arm_probe.py` and `evals/arm_probe_report.py` both at 0% while
+the aggregate was 82.79% — the floor was passing. T12.2 wrote tests bringing both to near-100%,
+but the structural gap remains: the next new eval module ships at 0% and nothing catches it.
+**Why deferred:** The harness has no per-module coverage mechanism and building one is out of
+scope for T12.2 (spec: "if the harness has no per-module mechanism, log an issue rather than
+building one here").
+**To fix:** Add a per-module floor check to `make test-cov-evals` (or a sibling target). One
+approach: use `coverage report --include="evals/arm_probe*.py" --fail-under=NNN` for the
+P9 measurement modules specifically, or write a script that fails if any single `evals/*.py`
+module drops below a per-file threshold (e.g., 50%). Register the gate in `scripts/loop_gates.py`.

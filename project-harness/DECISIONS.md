@@ -10228,3 +10228,15 @@ all-skip passes. T12.2 records whether the CI `integration-tests` job gates merg
 **Trade-off accepted:** the eval stack must be built before integration tests run, adding ~3-5 minutes
 to the setup. The alternative (mocking Neo4j) was rejected because mocks cannot detect Cypher regressions,
 which is the entire point of these tests (T11.2/T11.3 motivation).
+
+## DEC-288: `integration-tests` CI job is a required status check for merge on `main`
+
+**Date:** 2026-09-21 · **Status:** ✅ ACCEPTED (owner, 2026-09-17) · **Drives:** `.github/` (branch-protection — applied by owner, not a repo file), `tests/integration/`
+
+**Context:** T11.3 added 56 integration tests that execute real Cypher against the eval-stack Neo4j (`bolt://localhost:7688`). These tests skip silently under the default `make check` (which runs without Neo4j) and are only exercised when the eval stack is running. The question for T12.2 is whether the tests ever run in CI and whether a failing integration test can block a merge — i.e., whether "no real Cypher in `make check`" is a local-only gap or a permanent blind spot.
+
+**Decision:** The owner made the `integration-tests` CI job a **required** status check for merges to `main` on 2026-09-17. That is a GitHub branch-protection setting applied by hand and not tracked in any repo file. T12.2 records it here so future maintainers can answer the question "does CI enforce Cypher correctness?" without checking the GitHub branch-protection UI.
+
+**Rationale:** Making the job required closes the gap: a Cypher regression in a repository method now fails CI before merge, not silently after deployment. The `make check` shortcut (no Neo4j, fast CI path) remains available in the `check` target itself; only the additional `integration-tests` job is required.
+
+**What this does NOT change:** `make check` still runs without Neo4j. The integration tests remain in `tests/integration/` and are skipped unless `NEO4J_URI=bolt://localhost:7688` is set. Any CI runner that builds and starts the eval stack can run `make test-integration` to exercise them.

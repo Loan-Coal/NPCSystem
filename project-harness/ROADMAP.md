@@ -1830,7 +1830,7 @@ experiment was observed red, **and the gate is registered in `scripts/loop_gates
 not move into `tests/unit/scripts/`, which T0.3 routes to skip-and-log. Append the `loop_gates.py`
 entries in the same commit as the gate (see T4.2). Findings L4-02, L4-06, SEV-11, rule 5. ✅ AUTO (T12.1, 2026-09-21)
 
-- [ ] **T12.2** Cover the measurement tool, and re-baseline coverage after the prune
+- [x] **T12.2** Cover the measurement tool, and re-baseline coverage after the prune
 Files: new `tests/unit/evals/test_arm_probe*.py`, `Makefile`, `project-harness/DECISIONS.md`,
 new `project-harness/BASELINE_2026-09.md`
 Spec: three loose ends this sprint must close.
@@ -1870,7 +1870,7 @@ both; do not quote the aggregate as if it were the point.
 Validation: `pytest tests/unit/evals/ -v`, `make test-cov-evals`, `make check`.
 Done when: the three modules are covered, the CI decision is recorded in `DECISIONS.md`, the new
 baseline file exists, and ISSUE-321 is closed and archived.
-Findings L4-01, L4-03, L9-09, ISSUE-321, SEV-14.
+Findings L4-01, L4-03, L9-09, ISSUE-321, SEV-14. ✅ AUTO (T12.2, 2026-09-21)
 
 ---
 

@@ -4197,3 +4197,11 @@ Methods (54 total across 15 repository classes):
 **To fix:** T11.3 — add integration tests for each method listed above against the eval-stack Neo4j
 (`bash scripts/eval_stack_at.sh HEAD --reset`, then `NEO4J_URI=bolt://localhost:7688`). Start with
 the methods called by the highest-traffic engine paths (quest lifecycle, routine tick, intent).
+## [FIXED] ISSUE-321: `BASELINE_2026-08-28.md` no longer matches the tree
+**Found:** 2026-09-07, during full-review (L9-09)
+**Severity:** P2
+**Where:** `project-harness/review-2026-08/BASELINE_2026-08-28.md`
+**Description:** Measured at HEAD `8d30a3e1`: `make test` is 4,571 passed / 41 skipped (baseline records 4,048 / 36); coverage 88.13% (baseline 87.86%). The file's stated purpose is that "a number that moved without an explanation is a finding" — but it is a point-in-time record that must not be edited, so "no delta" can no longer be used as a check against it.
+**Why deferred:** The file is deliberately immutable.
+**To fix:** Capture a new dated baseline for the post-review cycle and point `/fix-next` at it, leaving the 2026-08-28 file as history.
+**Fixed:** 2026-09-21, in T12.2 — `project-harness/BASELINE_2026-09.md` supersedes this.
