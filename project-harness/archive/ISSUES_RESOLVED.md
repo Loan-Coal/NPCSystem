@@ -4153,9 +4153,9 @@ Some are legitimate does-not-raise tests (`test_exact_fit_is_accepted`,
 `# quality-ok: <reason>` waiver naming what they prove. Others are probably genuinely weak
 and want a real assertion. Which is which is a per-test judgment.
 **Why deferred:** R1.8's task was to build the gate, not to spend its findings. Blanket-waiving
-all 25 with a generic reason would buy conformance rather than quality — the exact effect
+all 21 with a generic reason would buy conformance rather than quality — the exact effect
 CR-L05-03 measured, and the reason R1.5 was told not to mass-edit.
-**To fix:** triage the 25. Each either gains an assertion or a waiver with a specific reason.
+**To fix:** triage the 21. Each either gains an assertion or a waiver with a specific reason.
 Then `printf '0' > scripts/check_test_quality_baseline.txt` and update
 `test_real_suite_is_clean` to drop the NO_ASSERTION exclusion, restoring the
 zero-findings-plus-explicit-waivers invariant the other five patterns hold.
@@ -4197,6 +4197,7 @@ Methods (54 total across 15 repository classes):
 **To fix:** T11.3 — add integration tests for each method listed above against the eval-stack Neo4j
 (`bash scripts/eval_stack_at.sh HEAD --reset`, then `NEO4J_URI=bolt://localhost:7688`). Start with
 the methods called by the highest-traffic engine paths (quest lifecycle, routine tick, intent).
+
 ## [FIXED] ISSUE-321: `BASELINE_2026-08-28.md` no longer matches the tree
 **Found:** 2026-09-07, during full-review (L9-09)
 **Severity:** P2

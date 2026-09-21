@@ -3459,3 +3459,78 @@ building one here").
 approach: use `coverage report --include="evals/arm_probe*.py" --fail-under=NNN` for the
 P9 measurement modules specifically, or write a script that fails if any single `evals/*.py`
 module drops below a per-file threshold (e.g., 50%). Register the gate in `scripts/loop_gates.py`.
+
+## ISSUE-366: ~33 of T11.3's 54 repository methods are integration-tested only on the empty path
+**Found:** 2026-09-21, during post-loop review of T11.3
+**Severity:** P2 (annoying)
+**Where:** `tests/integration/test_*_repository_integration.py` (the six files T11.3 added)
+**Description:** About 21 of the 54 ISSUE-363 methods get a write-then-read-back check. The rest
+are exercised only against absent ids, or asserted only by `isinstance(result, list)` / key
+presence — e.g. all six intent-file tests, `get_quest`, `get_unlocked_quests`,
+`get_candidate_ids_by_label`, `get_unprocessed_trigger_events`. Gutting one of these to return
+`[]`/`None`/`0` stays green. They do still catch Cypher syntax and schema errors. T11.3's
+five-method counterfactual sampled only methods with positive assertions, which is why it
+caught all five.
+**Why deferred:** Post-loop review scope was repairs only; ~33 positive-path tests is new work.
+**To fix:** For each method, seed the minimal nodes and assert the returned values. Re-run the
+counterfactual on the **first five methods in ISSUE-363 list order**, not a chosen sample.
+
+## ISSUE-367: ~110 mock-echo delegate tests in tests/unit/graph/ were never strengthened
+**Found:** 2026-09-21, during post-loop review of T11.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `tests/unit/graph/test_*_repository.py` (61 tests still named `*_delegates`, plus others)
+**Description:** T11.2's spec asked to strengthen every delegate test without integration
+coverage. T11.2 changed 5 (the minimum its RED anchor needed) and deleted 10. The rest assert that
+a mock returned what the test gave it. They do fail when a method is gutted, so they are weak,
+not vacuous.
+**Why deferred:** Rewriting ~110 tests is churn for little gain while ISSUE-366 is open. The
+integration tests are the real protection.
+**To fix:** Delete each delegate test once ISSUE-366 gives its method a positive-path
+integration test. Do not rewrite them.
+
+## ISSUE-368: `/readiness` is unauthenticated, contrary to "auth on every route except GET /health"
+**Found:** 2026-09-21, during post-loop review of T12.1
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/auth/middleware_helpers.py` (`is_public_path`: `HEALTH_PATH, READINESS_PATH`)
+**Description:** CLAUDE.md's strict rules and T12.1's spec both say only `GET /health` is public.
+`/readiness` is hard-coded public in every env. T12.1 neither tested nor logged the conflict;
+`test_public_route_set_is_pinned` now records it as the current surface.
+**Why deferred:** Changing the public surface is an interface change (ask-first). Orchestrator
+probes may depend on it.
+**To fix:** Owner decides: gate `/readiness`, or amend the rule and record a DEC. Then update
+`_EXPECTED_PUBLIC` in `tests/unit/api/test_create_app_auth_wiring.py`.
+
+## ISSUE-369: `arm_probe._finish([])` reports PASS when no gate ran
+**Found:** 2026-09-21, during post-loop review of T12.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/arm_probe.py` `_finish`; locked in by `tests/unit/evals/test_arm_probe_run.py::test_finish_with_empty_results_returns_0`
+**Description:** Zero gate results exit 0 with "PASS". For the measurement-integrity tool, a run
+that measured nothing should not read as a pass. That is the vacuous green rule 5 exists to stop.
+**Why deferred:** It is unclear whether any caller legitimately reaches `_finish` with an empty
+list. That is the owner's call, not a review fix.
+**To fix:** If no caller does, make `_finish([])` exit 1 and flip the test.
+
+## ISSUE-370: the overnight loop halts on a bare CLI `Execution error` instead of retrying once
+**Found:** 2026-09-21, during post-loop review (T14.1 halt)
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/expand_loop.sh` (`looks_like_usage_limit`, no-status-token halt)
+**Description:** T14.1's session printed only `Execution error` and exited after 14 s. That does not
+match the usage-limit pattern, so the loop halted the night. The 400 s headroom sleep before it
+also returned after ~22 s (cause unknown).
+**Why deferred:** The halt is the safe failure. A retry path needs guards like the usage-restart ones.
+**To fix:** Treat a log that holds only `Execution error` as transient: retry the task once after
+a short sleep, then halt as today.
+
+## ISSUE-371: `test_revived_engines_do_work` is flaky on a freshly seeded eval stack
+**Found:** 2026-09-21, during post-loop review (integration run for the ensure_constraints fix)
+**Severity:** P2 (annoying)
+**Where:** `tests/integration/test_revived_engines_do_work.py::test_routine_and_need_decay_do_work`
+**Description:** After `eval_stack_at.sh --reset`, both tests fail because nothing is seeded (the
+test does not seed; `make eval-stack-seed` is a manual step). Once seeded, the routine test failed
+on the first run (`routine.moved=0 across 3 ticks`) and passed on the next without any change. The
+result depends on the world clock's phase, and `check-integration-baseline` treats it as a new
+failure when it lands wrong. CI's required `integration-tests` job can red on this at random.
+**Why deferred:** Not caused by the review fixes. Making it deterministic needs a fixed clock
+start, which is test-design work.
+**To fix:** Have the test set the clock to a known pre-transition time before advancing, and seed
+(or skip with a clear reason) when `FOLLOWS_SCHEDULE` edges are absent.

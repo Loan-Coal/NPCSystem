@@ -8,6 +8,17 @@ A number that moves without an explanation relative to this file is a finding.
 
 ---
 
+## `make check` timing
+
+| Run | Wall time | Source |
+|---|---:|---|
+| Loop phase gate after T11 | 3m26s | `.loop-logs/gate-T11-1789984268.log` (11:51:08 → 11:54:34) |
+| Loop phase gate after T12 | 3m38s | `.loop-logs/gate-T12-1789992105.log` (14:01:45 → 14:05:23) |
+
+Added 2026-09-21 (post-loop review): T12.2 omitted this figure, which its spec required.
+
+---
+
 ## Test counts
 
 | Suite | Passed | Skipped | Command |
@@ -81,9 +92,26 @@ From `make check-loc-ratchet` at T12.2:
 | `demo_game/` | 21,577 |
 | **total** | **121,162** |
 
-Ratchet baseline: 121,162 (609 LOC headroom from the ratchet gate). The ratchet
-permits only decreases; any task increasing this total must bump the baseline with
-a stated reason.
+Ratchet baseline (`scripts/loc_baseline.txt`): **121,771**. Measured 121,162, which
+leaves 609 LOC headroom. *Corrected 2026-09-21: T12.2 printed the measured count as the
+baseline.* The ratchet fails when the measured total exceeds the baseline; any task that
+raises the baseline must give a reason.
+
+### All areas, in the ROADMAP preamble's format
+
+Measured 2026-09-21 at `5599e50e` (after the post-loop review fixes; `scripts/` is +80
+over T12.2 from the rule-5 scanner widening). Counts every `*.py` line, including tests,
+the same way the preamble's 2026-09-08 table does.
+
+| Area | LOC | Files |
+|---|---:|---:|
+| `tests/` | 91,331 | 617 |
+| `src/npc_engine/` | 65,092 | 572 |
+| `demo_game/` | 38,046 | 193 |
+| `evals/` | 23,060 | 123 |
+| `scripts/` | 11,513 | 61 |
+| `e2e/` | 7,605 | 51 |
+| **total** | **236,647** | **1,617** |
 
 ---
 
