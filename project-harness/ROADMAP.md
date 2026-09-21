@@ -1751,7 +1751,7 @@ delta reported, **and the coverage delta reported — if it drops more than 3pp,
 more than delegate tests.** Measure coverage by hand, as in T11.1's shared notes.
 Findings L4-05, CR-L14-02, ISSUE-309. ✅ AUTO (T11.2, 2026-09-21)
 
-- [ ] **T11.3** Add integration tests for the uncovered repository methods, on the eval stack's Neo4j
+- [x] **T11.3** Add integration tests for the uncovered repository methods, on the eval stack's Neo4j
 Files: `tests/integration/`, `project-harness/ISSUES.md`, `project-harness/DECISIONS.md`
 Spec: the integration half of T11.2. For each method in the uncovered list T11.2 logged, add an
 integration test against real Cypher. Run them **only** against the eval stack's disposable Neo4j —
@@ -1770,7 +1770,7 @@ Validation: the integration run above, `make check-integration-baseline` with th
 `make check`.
 Done when: every listed method has an integration test that ran against the eval Neo4j, the sample
 counterfactual catches all five, the `DECISIONS.md` note is written, and the issue is closed.
-Findings L4-05, CR-L14-02, ISSUE-309.
+Findings L4-05, CR-L14-02, ISSUE-309. ✅ AUTO (T11.3, 2026-09-21)
 
 ### Phase T12
 

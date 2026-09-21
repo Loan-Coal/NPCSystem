@@ -3427,34 +3427,3 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 **Why deferred:** The feature was never finished (no concrete implementor existed); removing the dead stub was the DIP-threshold collapse rule. Re-introducing it requires design work beyond T9.1d's scope.
 **To fix:** Introduce a concrete `Neo4jTraitReadRepository` that reads trait constants from the graph, re-add `TraitModulatedEmotionModel` as a new file, re-wire `EmotionUpdater` to accept it optionally, and register it in `emotion_model_factory`. Also requires seed data for NPC trait constants.
 
-## ISSUE-363: repository methods with no unit or integration coverage — input list for T11.3
-**Found:** 2026-09-21, during T11.2
-**Severity:** P2 (annoying)
-**Where:** `src/npc_engine/graph/repositories/` — public methods with no unit test and no integration-test path
-**Description:** T11.2 strengthened delegate tests and deleted those superseded by integration tests. The
-following repository methods were found with neither a unit test that can fail nor a path through
-`tests/integration/`. T11.3 must add integration tests against the eval-stack Neo4j for each one.
-
-Methods (54 total across 15 repository classes):
-- `Neo4jChapterRepository`: `get_completed_quests_since_tick`, `get_max_beat_intensity_in_chapter`
-- `Neo4jEmotionBootstrapRepository`: `get_emotion_fields`
-- `Neo4jIdempotencyRepository`: `ensure_constraints`, `get_record`, `create_pending_if_absent`, `upsert_pending`, `mark_completed`, `mark_failed_terminal`, `delete_expired`
-- `Neo4jIntentRepository`: `get_player_location`, `get_unmet_needs`, `get_unresolved_goals`
-- `Neo4jInteractionRepository`: `count_player_was_at`
-- `Neo4jInvestigationRepository`: `get_suspects_for_event`, `get_witnesses_of_event`
-- `Neo4jPoliticalRepository`: `get_agenda_votes`, `get_expired_open_agendas`, `set_agenda_status`
-- `Neo4jProactiveMemoryReadRepository`: `get_unshared_memories`
-- `Neo4jQuestGenerationRepository`: `get_world_state_day_and_rate`, `get_world_state_context`, `get_character_info`, `get_giver_context`, `get_candidate_ids_by_label`, `create_quest`, `record_causation`, `check_node_labels`, `get_template_skill_requirements`, `check_skill_threshold`
-- `Neo4jEventTriggerRepository`: `get_unprocessed_trigger_events`, `get_military_npc_at_location`, `get_any_military_npc`, `has_draft_quest`
-- `Neo4jNeedTriggerRepository`: `get_all_needs_below_threshold`, `has_draft_quest`
-- `Neo4jQuestLifecycleRepository`: `get_quest_state`, `persist_state_and_event`, `emit_lifecycle_event`, `update_quest_node_status`, `get_world_state`
-- `Neo4jQuestOfferRepository`: `get_quest`, `update_quest_node_status`, `offer_quest_atomic`
-- `Neo4jQuestChainRepository`: `get_quest`, `get_unlocked_quests`, `get_choice_unlocked_quest`
-- `Neo4jQuestRewardRepository`: `get_quest_state`, `get_character_balance`, `emit_lifecycle_event`, `apply_rewards_atomic`
-- `Neo4jRoutineRepository`: `clear_routine_override`
-- `Neo4jWorldStateRepository`: `get_world_state`, `upsert_world_state`
-
-**Why deferred:** T11.2 is the unit-side only (spec split 2026-09-17). T11.3 owns the integration half.
-**To fix:** T11.3 — add integration tests for each method listed above against the eval-stack Neo4j
-(`bash scripts/eval_stack_at.sh HEAD --reset`, then `NEO4J_URI=bolt://localhost:7688`). Start with
-the methods called by the highest-traffic engine paths (quest lifecycle, routine tick, intent).

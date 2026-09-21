@@ -10208,3 +10208,23 @@ and HALTs the run.
 another worktree during a task, so interactive work in the primary checkout while the loop runs will
 halt it. The flag text says so; restarting the loop is the remedy. Chosen over detection-only and
 issue-only (owner, 2026-09-18).
+
+## DEC-287: Integration tests for uncovered repository methods run against the eval-stack Neo4j
+
+**Date:** 2026-09-21 · **Status:** ✅ ACCEPTED (T11.3) · **Drives:** `tests/integration/test_*_repository_integration.py`
+
+**Context:** T11.2 identified 54 repository methods with no unit test that can fail and no integration-test
+path. T11.3's spec requires integration tests run against a real, disposable Neo4j — not the developer's
+live database (ISSUE-277). Two options existed: (1) a separate test database, or (2) the eval stack's
+Neo4j (bolt://localhost:7688, `npcsystem-eval` compose project), which already exists for live checks
+and is wiped with `--reset`.
+
+**Decision:** Integration tests for repository methods use the eval-stack Neo4j exclusively, identified
+by `NEO4J_URI=bolt://localhost:7688`. Tests guard this with `pytest.skip` when the URI env var is absent
+or points to the default port (7687), keeping the default `make check` CI run free of Neo4j I/O.
+The `make check-integration-baseline` gate enforces a floor of 34 executed tests to prevent silent
+all-skip passes. T12.2 records whether the CI `integration-tests` job gates merge.
+
+**Trade-off accepted:** the eval stack must be built before integration tests run, adding ~3-5 minutes
+to the setup. The alternative (mocking Neo4j) was rejected because mocks cannot detect Cypher regressions,
+which is the entire point of these tests (T11.2/T11.3 motivation).
