@@ -8,7 +8,6 @@ correct cumulative results (no lost updates under asyncio.gather).
 from __future__ import annotations
 
 import asyncio
-import inspect
 
 import pytest
 
@@ -27,16 +26,6 @@ def test_emotion_store_has_lock():
     """EmotionStore must expose an asyncio.Lock as _lock."""
     store = EmotionStore()
     assert isinstance(store._lock, asyncio.Lock)
-
-
-def test_emotion_store_set_is_coroutine():
-    """EmotionStore.set must be a coroutine function."""
-    assert inspect.iscoroutinefunction(EmotionStore.set)
-
-
-def test_emotion_store_get_is_coroutine():
-    """EmotionStore.get must be a coroutine function."""
-    assert inspect.iscoroutinefunction(EmotionStore.get)
 
 
 @pytest.mark.asyncio
@@ -90,16 +79,6 @@ def test_session_store_has_lock():
     """SessionStore must expose an asyncio.Lock as _lock."""
     store = SessionStore(ttl_seconds=3600, max_turns=20)
     assert isinstance(store._lock, asyncio.Lock)
-
-
-def test_session_store_append_turns_is_coroutine():
-    """SessionStore.append_turns must be a coroutine function."""
-    assert inspect.iscoroutinefunction(SessionStore.append_turns)
-
-
-def test_session_store_get_turns_is_coroutine():
-    """SessionStore.get_turns must be a coroutine function."""
-    assert inspect.iscoroutinefunction(SessionStore.get_turns)
 
 
 @pytest.mark.asyncio

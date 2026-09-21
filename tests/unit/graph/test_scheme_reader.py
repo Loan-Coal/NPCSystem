@@ -190,14 +190,6 @@ async def test_schemes_with_steps_filters_null_step_placeholders() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_scheme_status_literal_exists_in_reader_module() -> None:
-    """SEV-03: scheme_reader must export SchemeStatus as a Literal type."""
-    from npc_engine.graph.intrigue import scheme_reader
-    assert hasattr(scheme_reader, "SchemeStatus"), (
-        "scheme_reader must export SchemeStatus Literal for typed status fields"
-    )
-
-
 def test_scheme_record_status_is_literal_typed() -> None:
     """SEV-03: SchemeRecord.status field annotation must reference SchemeStatus."""
     import typing

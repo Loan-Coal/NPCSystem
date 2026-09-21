@@ -1687,7 +1687,7 @@ Validation: `make test`, then `make check`.
 Done when: zero BARE_EXCEPTION_RAISES findings with waivers ignored, `make check` green, LOC and
 coverage deltas reported. ✅ AUTO (T11.1b, 2026-09-19)
 
-- [ ] **T11.1c** Resolve the vacuous-mock findings, delete existence-only and constant tests, close ISSUE-234
+- [x] **T11.1c** Resolve the vacuous-mock findings, delete existence-only and constant tests, close ISSUE-234
 Pre-approved: file-deletion · owner 2026-09-08
 Files: across `tests/`, `project-harness/ISSUES.md`, `project-harness/archive/ISSUES_RESOLVED.md`
 Spec: rule 5, part 3 of 3 — shared notes below. (1) The **VACUOUS_MOCK_NOT_CALLED** findings (8
@@ -1727,7 +1727,7 @@ form gate (`check-test-quality`, `check-rules`) reds, fix it in the same session
 produces zero failing node ids and would be ticked. Record `make test-cov | tail -3` before and after
 and put both numbers in the completion note. **If coverage falls below 80, stop and do not tick** —
 the floor move is T12.2's job. (Calibration: headroom is 1,486 statements at 88.13%.)
-Findings L4-06, ISSUE-234, ISSUE-310, rule 5.
+Findings L4-06, ISSUE-234, ISSUE-310, rule 5. ✅ AUTO (T11.1c, 2026-09-21)
 
 - [ ] **T11.2** Strengthen the mock-echo delegate tests, and list what nothing covers
 Pre-approved: file-deletion · owner 2026-09-08

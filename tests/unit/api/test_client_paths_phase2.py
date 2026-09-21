@@ -159,11 +159,17 @@ def test_post_quest_accept_uses_singular_quest_path() -> None:
 # post_quest_offer is a seed-helper on EngineClient (added back in Phase 4)
 # ---------------------------------------------------------------------------
 
-def test_post_quest_offer_is_seed_helper() -> None:
-    # Phase 4: post_quest_offer re-added as a seeder convenience for
-    # deterministic quest creation in seed.py. It posts to /v1/quest/offer
-    # with required idempotency headers.
-    client = EngineClient(base_url="http://localhost:8000", api_key="test")
-    assert hasattr(client, "post_quest_offer"), (
-        "post_quest_offer must exist — it is used by seed.py for deterministic quest seeding"
+def test_post_quest_offer_posts_to_correct_path() -> None:
+    """post_quest_offer must POST to /v1/quest/offer — used by seed.py for deterministic quest seeding."""
+    recorded: list[httpx.Request] = []
+    client = _make_client(recorded)
+    client.post_quest_offer(
+        quest_id="q_seed_test",
+        player_id="player1",
+        title="Seed Test Quest",
+        objectives=[{"objective_id": "obj_1", "target_count": 1, "objective_type": "collect", "target_id": "item_1"}],
+        item_rewards=[],
+        currency_reward=None,
     )
+    assert len(recorded) == 1
+    assert recorded[0].url.path == "/v1/quest/offer"

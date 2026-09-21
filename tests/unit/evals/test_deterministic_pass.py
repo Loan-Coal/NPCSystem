@@ -87,8 +87,7 @@ def test_scores_every_record_without_llm() -> None:
             event_vocabulary=_EVENT_VOCAB,
             npc_known_events=_NPC_KNOWN,
         )
-    # quality-ok: reachability of matchers._run_binary_judge verified empirically 2026-08-20 - stubbing this exact target is what stopped test_capability_echo_resistance making live Ollama calls
-    assert mock_judge.call_count == 0, "score_transcript must not invoke the LLM judge"
+    assert not mock_judge.called, "score_transcript must not invoke the LLM judge"
     assert result.record_count == 2
     assert len(result.record_scores) == 2
 

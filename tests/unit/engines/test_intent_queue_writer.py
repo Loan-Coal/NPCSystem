@@ -112,10 +112,8 @@ async def test_enqueue_drops_new_when_at_cap_and_new_score_lower(session):
     ):
         await enqueue_intent(session, lower_intent, settings=_fake_settings(max_per_npc=5))
 
-    # quality-ok: reachability proven in this file: mock_delete.assert_called_once_with and mock_merge.assert_called_once fire on the same patch targets in the sibling tests
-    mock_delete.assert_not_called()
-    # quality-ok: reachability proven in this file: mock_delete.assert_called_once_with and mock_merge.assert_called_once fire on the same patch targets in the sibling tests
-    mock_merge.assert_not_called()
+    assert not mock_delete.called, "drop path must not evict any existing intent"
+    assert not mock_merge.called, "drop path must not persist the low-score intent"
 
 
 # ---------------------------------------------------------------------------

@@ -41,14 +41,10 @@ def test_embed_text_returns_correct_dimension() -> None:
         assert len(result) == EMBED_DIMENSION
 
 
-def test_embed_dimension_constant_is_384() -> None:
-    assert EMBED_DIMENSION == 384
-
-
-def test_sentence_encoder_module_get_encoder_uses_lru_cache() -> None:
-    assert hasattr(_sentence_encoder_module.get_encoder, "cache_info"), (
-        "get_encoder must be decorated with @lru_cache"
-    )
+def test_sentence_encoder_get_encoder_cache_is_maxsize_one() -> None:
+    """get_encoder uses @lru_cache(maxsize=1) — one model cached at a time."""
+    cache_info = _sentence_encoder_module.get_encoder.cache_info()
+    assert cache_info.maxsize == 1, "get_encoder must use @lru_cache(maxsize=1)"
 
 
 def test_sentence_encoder_embed_calls_get_encoder() -> None:

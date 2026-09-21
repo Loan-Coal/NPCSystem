@@ -253,28 +253,29 @@ def test_real_suite_is_clean() -> None:
 
 
 def test_real_suite_waivers_are_load_bearing() -> None:
-    """Strip the waivers from a real file and the finding must come back.
+    """The scanner is not a no-op: a synthetic probe triggers VACUOUS_MOCK_NOT_CALLED.
 
     Without this, `test_real_suite_is_clean` would also pass if the scanner silently
     stopped detecting anything — a green gate from a broken instrument, which is the
-    precise failure class this whole harness exists to catch. Proving the clean result
-    is produced by deliberate waivers rather than by a no-op scanner keeps it honest.
+    precise failure class this whole harness exists to catch. T11.1c resolved all
+    quality-ok waivers by fixing the findings, so the proof no longer comes from
+    stripping real-suite waivers but from a synthetic probe the scanner must flag.
     """
-    target = _TESTS_ROOT / "unit" / "evals" / "test_deterministic_pass.py"
-    assert not scan_file(target), "precondition: this file is expected to be waived clean"
-
-    without_waivers = "\n".join(
-        line for line in target.read_text(encoding="utf-8").splitlines()
-        if "# quality-ok:" not in line
-    )
     with tempfile.TemporaryDirectory() as tmp:
-        probe = Path(tmp) / target.name  # same basename so reported test ids match
-        probe.write_text(without_waivers, encoding="utf-8")
+        probe = Path(tmp) / "test_probe.py"
+        probe.write_text(
+            "from unittest.mock import patch\n"
+            "def test_never_calls_llm():\n"
+            "    with patch('module.llm') as mock_llm:\n"
+            "        do_work()\n"
+            "    assert mock_llm.call_count == 0\n",
+            encoding="utf-8",
+        )
         findings = scan_file(probe)
 
     assert any(f.pattern == VACUOUS_MOCK_NOT_CALLED for f in findings), (
-        "removing the quality-ok waivers did not re-surface the VACUOUS_MOCK_NOT_CALLED "
-        "finding — the scanner, not the suite, may be what is clean"
+        "synthetic probe did not trigger VACUOUS_MOCK_NOT_CALLED "
+        "— the scanner may be broken or the detection pattern changed"
     )
 
 

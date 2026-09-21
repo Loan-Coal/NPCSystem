@@ -35,11 +35,13 @@ def test_quest_generation_god_port_removed() -> None:
     )
 
 
-def test_quest_context_and_slot_validation_protocols_present() -> None:
-    """QuestContextGraphPort and SlotValidationGraphPort must be present after the split."""
+def test_quest_context_and_slot_validation_protocols_have_methods() -> None:
+    """QuestContextGraphPort and SlotValidationGraphPort must define at least one public method each."""
     mod = importlib.import_module("npc_engine.engines.ports.quest_generation_port")
-    assert hasattr(mod, "QuestContextGraphPort"), "QuestContextGraphPort missing from quest_generation_port"
-    assert hasattr(mod, "SlotValidationGraphPort"), "SlotValidationGraphPort missing from quest_generation_port"
+    for name in ("QuestContextGraphPort", "SlotValidationGraphPort"):
+        cls = getattr(mod, name)
+        public_methods = [m for m in vars(cls) if not m.startswith("_") and callable(getattr(cls, m, None))]
+        assert public_methods, f"{name} has no public methods — T9.2 split may be incomplete"
 
 
 # ---------------------------------------------------------------------------

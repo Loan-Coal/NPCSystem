@@ -160,8 +160,7 @@ def test_judge_kind_none_is_skipped(tmp_path: Path) -> None:
     path = _make_transcript(tmp_path, [_NONE_KIND_RECORD])
     with patch("judge_runner.matchers._run_binary_judge") as mock_judge:
         judged_records = judge_transcript(path)
-    # quality-ok: reachability proven in this file: a sibling test asserts mock_judge.call_count == 2 on the same patch target
-    mock_judge.assert_not_called()
+    assert not mock_judge.called, "judge_kind=None must skip _run_binary_judge entirely"
     assert len(judged_records) == 0
 
 

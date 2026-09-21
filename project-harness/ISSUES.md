@@ -564,24 +564,6 @@ defect. Then confirm the loop's baseline drops from 3 entries to 2.
 
 ---
 
-## ISSUE-234: 25 tests call the SUT and assert nothing
-**Found:** 2026-08-31, during R1.8
-**Severity:** P2 (annoying)
-**Where:** 18 files under `tests/unit/`; `make check-test-quality` lists them all
-**Description:** `check_test_quality`'s NO_ASSERTION pattern, added in R1.8, found 25 tests
-that exercise the system under test and then check nothing. They can only fail by raising.
-Some are legitimate does-not-raise tests (`test_exact_fit_is_accepted`,
-`test_no_op_when_already_utf8`, `test_exception_does_not_propagate`) and want a
-`# quality-ok: <reason>` waiver naming what they prove. Others are probably genuinely weak
-and want a real assertion. Which is which is a per-test judgment.
-**Why deferred:** R1.8's task was to build the gate, not to spend its findings. Blanket-waiving
-all 25 with a generic reason would buy conformance rather than quality — the exact effect
-CR-L05-03 measured, and the reason R1.5 was told not to mass-edit.
-**To fix:** triage the 25. Each either gains an assertion or a waiver with a specific reason.
-Then `printf '0' > scripts/check_test_quality_baseline.txt` and update
-`test_real_suite_is_clean` to drop the NO_ASSERTION exclusion, restoring the
-zero-findings-plus-explicit-waivers invariant the other five patterns hold.
-
 ## ISSUE-235: 42 of 59 engine logger.info calls omit duration_ms
 **Found:** 2026-08-31, during R1.8
 **Severity:** P3 (nice-to-fix)

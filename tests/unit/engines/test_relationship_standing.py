@@ -8,11 +8,6 @@ from __future__ import annotations
 import pytest
 
 from npc_engine.engines.relationship.standing import (
-    ALLIED_MIN,
-    FRIENDLY_MIN,
-    HOSTILE_MAX,
-    NEUTRAL_MAX,
-    NEUTRAL_MIN,
     Standing,
     derive_standing,
 )
@@ -71,11 +66,3 @@ def test_derive_standing_clamp_lower() -> None:
     assert derive_standing(trust=0, fear=100, affection=0) == Standing.HOSTILE
 
 
-def test_band_constants_no_magic_numbers() -> None:
-    """Band cutoffs must be exposed as named module constants (not magic numbers)."""
-    # Verify the constants exist and have the expected values from the spec.
-    assert HOSTILE_MAX == -50
-    assert NEUTRAL_MIN == -15
-    assert NEUTRAL_MAX == 15
-    assert FRIENDLY_MIN == 15
-    assert ALLIED_MIN == 50

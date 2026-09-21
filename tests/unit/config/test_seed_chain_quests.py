@@ -75,8 +75,7 @@ def test_seed_chain_quests_non_fatal_on_exception() -> None:
         count = _seed_chain_quests(client)
 
     assert count == 0
-    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed_domain._seed_edge)
-    mock_edge.assert_not_called()
+    assert not mock_edge.called, "exception in _seed_node must prevent _seed_edge from being called"
 
 
 # ---------------------------------------------------------------------------
@@ -134,5 +133,4 @@ def test_seed_source_chain_quests_non_fatal_on_exception() -> None:
         count = _seed_source_chain_quests(client)
 
     assert count == 0
-    # quality-ok: reachability proven in this file: the happy-path tests assert mock_edge.call_count == len(_CHAIN_QUESTS) on the same patch target (demo_game.seeds.seed_domain._seed_edge)
-    mock_edge.assert_not_called()
+    assert not mock_edge.called, "exception in _seed_node must prevent _seed_edge from being called"

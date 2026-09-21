@@ -160,42 +160,6 @@ def test_reset_receipt_is_frozen() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Field presence: no field the harness cannot populate
-# ---------------------------------------------------------------------------
-
-
-def test_turn_fields_are_present() -> None:
-    """Turn carries all required fields from the schema specification."""
-    turn = _TURN
-    assert hasattr(turn, "index")
-    assert hasattr(turn, "actor")
-    assert hasattr(turn, "message")
-    assert hasattr(turn, "response")
-    assert hasattr(turn, "world_epoch")
-    assert hasattr(turn, "tick")
-    assert hasattr(turn, "retrieved_context")
-    assert hasattr(turn, "duration_ms")
-
-
-def test_repetition_fields_are_present() -> None:
-    """Repetition carries all required fields from the schema specification."""
-    rep = _make_repetition(0)
-    assert hasattr(rep, "index")
-    assert hasattr(rep, "reset_receipt")
-    assert hasattr(rep, "turns")
-
-
-def test_sequence_run_fields_are_present() -> None:
-    """SequenceRun carries all required fields from the schema specification."""
-    run = _make_run()
-    assert hasattr(run, "run_id")
-    assert hasattr(run, "scenario_id")
-    assert hasattr(run, "k")
-    assert hasattr(run, "config")
-    assert hasattr(run, "repetitions")
-
-
-# ---------------------------------------------------------------------------
 # reset_receipt independence evidence
 # ---------------------------------------------------------------------------
 
