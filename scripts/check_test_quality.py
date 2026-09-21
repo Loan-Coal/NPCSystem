@@ -127,9 +127,9 @@ def _is_raises_exception(with_node: ast.With) -> int | None:
     return None
 
 
-def _patch_aliases(body: list[ast.stmt]) -> dict[str, int]:
-    """Map alias_name → lineno for 'with patch(...) as alias:' at body top level."""
-    aliases: dict[str, int] = {}
+def _patch_aliases(body: list[ast.stmt]) -> dict[str, str]:
+    """Map alias_name → patch target source for 'with patch(...) as alias:' at body top level."""
+    aliases: dict[str, str] = {}
     for stmt in body:
         if not isinstance(stmt, ast.With):
             continue
@@ -140,15 +140,85 @@ def _patch_aliases(body: list[ast.stmt]) -> dict[str, int]:
                 or (isinstance(ce.func, ast.Attribute) and ce.func.attr == "patch")
             )
             if is_patch and isinstance(item.optional_vars, ast.Name):
-                aliases[item.optional_vars.id] = stmt.lineno
+                target = ce.args[0] if isinstance(ce, ast.Call) and ce.args else None
+                aliases[item.optional_vars.id] = ast.unparse(target) if target else ""
     return aliases
 
 
+def _is_alias_attr(node: ast.expr, alias: str, attr: str) -> bool:
+    """True when node is the attribute access `alias.attr`."""
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == alias
+        and node.attr == attr
+    )
+
+
+def _asserts_called(fn: ast.FunctionDef | ast.AsyncFunctionDef, alias: str) -> bool:
+    """True when fn asserts the mock `alias` WAS called: assert_called*/assert_awaited*,
+    `assert alias.called`, or `assert alias.call_count == N` with N non-zero."""
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == alias
+            and node.func.attr.startswith(("assert_called", "assert_awaited", "assert_any_call"))
+        ):
+            return True
+        if not isinstance(node, ast.Assert):
+            continue
+        t = node.test
+        if _is_alias_attr(t, alias, "called"):
+            return True
+        if (
+            isinstance(t, ast.Compare)
+            and _is_alias_attr(t.left, alias, "call_count")
+            and isinstance(t.comparators[0], ast.Constant)
+            and t.comparators[0].value != 0
+        ):
+            return True
+    return False
+
+
+def _reachable_targets(tree: ast.AST) -> frozenset[str]:
+    """Patch targets that some test in the file proves the SUT reaches.
+
+    A not-called check on such a target is not vacuous: a sibling test shows the
+    patched symbol sits on a real code path, so "not called" is a real claim.
+    """
+    return frozenset(
+        target
+        for fn in ast.walk(tree)
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and fn.name.startswith("test_")
+        for alias, target in _patch_aliases(fn.body).items()
+        if target and _asserts_called(fn, alias)
+    )
+
+
+def _is_called_false(t: ast.expr, alias: str) -> bool:
+    """True for `not alias.called` or `alias.called is False`."""
+    if isinstance(t, ast.UnaryOp) and isinstance(t.op, ast.Not):
+        return _is_alias_attr(t.operand, alias, "called")
+    return (
+        isinstance(t, ast.Compare)
+        and _is_alias_attr(t.left, alias, "called")
+        and isinstance(t.ops[0], ast.Is)
+        and isinstance(t.comparators[0], ast.Constant)
+        and t.comparators[0].value is False
+    )
+
+
 def _not_called_lineno(body: list[ast.stmt], alias: str) -> int | None:
-    """Return lineno of 'assert alias.call_count==0' or 'alias.assert_not_called()' if found."""
+    """Return lineno of a not-called check on alias: 'assert alias.call_count == 0',
+    'alias.assert_not_called()', 'assert not alias.called' or 'assert alias.called is False'."""
     for stmt in body:
         if isinstance(stmt, ast.Assert):
             t = stmt.test
+            if _is_called_false(t, alias):
+                return stmt.lineno
             if (
                 isinstance(t, ast.Compare)
                 and isinstance(t.left, ast.Attribute)
@@ -175,30 +245,40 @@ def _not_called_lineno(body: list[ast.stmt], alias: str) -> int | None:
 
 
 def _is_existence_only_call(node: ast.expr) -> bool:
-    """True when node is a bare call to an existence-only function (hasattr, iscoroutinefunction)."""
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in _EXISTENCE_ONLY_FUNCS
-    )
+    """True when node calls an existence-only function (hasattr, iscoroutinefunction),
+    bare or module-qualified (inspect.iscoroutinefunction)."""
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+    return name in _EXISTENCE_ONLY_FUNCS
 
 
 def _is_constant_eq_literal(assert_node: ast.Assert) -> bool:
-    """True when assert compares two constants: assert 1 == 1 or assert 'a' == 'a'."""
+    """True when assert compares a literal to a literal or to a bare module constant:
+    `assert 1 == 1`, or `assert MAX_CHARS == 1000` (restates the source; T11.1c, rule 5)."""
     test = assert_node.test
-    return (
+    if not (
         isinstance(test, ast.Compare)
         and len(test.ops) == 1
         and isinstance(test.ops[0], ast.Eq)
-        and isinstance(test.left, ast.Constant)
         and len(test.comparators) == 1
-        and isinstance(test.comparators[0], ast.Constant)
+    ):
+        return False
+    sides = (test.left, test.comparators[0])
+    return any(isinstance(x, ast.Constant) for x in sides) and all(
+        isinstance(x, ast.Constant) or _is_module_constant(x) for x in sides
     )
+
+
+def _is_module_constant(node: ast.expr) -> bool:
+    """True for a bare UPPER_SNAKE name such as MAX_PLAYER_MESSAGE_CHARS."""
+    return isinstance(node, ast.Name) and node.id.lstrip("_").isupper()
 
 
 def _scan_fn(
     fn: ast.FunctionDef | ast.AsyncFunctionDef,
-    lines: list[str],
+    reachable: frozenset[str],
     relpath: str,
 ) -> list[Finding]:
     """Scan a single test function for every anti-vacuous pattern."""
@@ -227,15 +307,15 @@ def _scan_fn(
                 ))
 
     # Pattern 3: patch() + assert mock not called
-    for alias in _patch_aliases(fn.body):
+    for alias, target in _patch_aliases(fn.body).items():
         ln = _not_called_lineno(fn.body, alias)
-        if ln:
+        if ln and target not in reachable:
             findings.append(Finding(
                 file=relpath, test=name, line=ln,
                 pattern=VACUOUS_MOCK_NOT_CALLED,
                 detail=(
                     f"assert {alias}.call_count == 0 — "
-                    "verify the patched symbol is reachable by the SUT"
+                    "no test in this file asserts the patched symbol IS called"
                 ),
             ))
 
@@ -262,7 +342,7 @@ def _scan_fn(
     # Pattern 7: existence-only assertion (hasattr, iscoroutinefunction)
     for node in ast.walk(fn):
         if isinstance(node, ast.Assert) and _is_existence_only_call(node.test):
-            func_name = node.test.func.id  # type: ignore[attr-defined]
+            func_name = ast.unparse(node.test.func)  # type: ignore[attr-defined]
             findings.append(Finding(
                 file=relpath, test=name, line=node.lineno,
                 pattern=EXISTENCE_ONLY_ASSERTION,
@@ -272,15 +352,15 @@ def _scan_fn(
                 ),
             ))
 
-    # Pattern 8: constant-equals-literal (assert 1 == 1)
+    # Pattern 8: constant-equals-literal (assert 1 == 1, assert MAX_CHARS == 1000)
     for node in ast.walk(fn):
         if isinstance(node, ast.Assert) and _is_constant_eq_literal(node):
             findings.append(Finding(
                 file=relpath, test=name, line=node.lineno,
                 pattern=CONSTANT_EQ_LITERAL,
                 detail=(
-                    "assert <constant> == <constant> — "
-                    "this can never fail; assert a computed value"
+                    "assert <literal or MODULE_CONSTANT> == <literal> — "
+                    "restates the source; assert a computed value"
                 ),
             ))
 
@@ -313,14 +393,14 @@ def scan_file(path: Path) -> list[Finding]:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
         return []
-    lines = source.splitlines()
+    reachable = _reachable_targets(tree)
     relpath = str(path)
     return [
         finding
         for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name.startswith("test_")
-        for finding in _scan_fn(node, lines, relpath)
+        for finding in _scan_fn(node, reachable, relpath)
     ]
 
 

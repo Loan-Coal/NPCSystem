@@ -3420,10 +3420,11 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 **To fix:** Introduce a concrete `Neo4jTraitReadRepository` that reads trait constants from the graph, re-add `TraitModulatedEmotionModel` as a new file, re-wire `EmotionUpdater` to accept it optionally, and register it in `emotion_model_factory`. Also requires seed data for NPC trait constants.
 
 
-## ISSUE-364: demo_game/tests/ baseline seeded at 48 — drive to zero
+## ISSUE-364: demo_game/tests/ baseline seeded at 48 (re-seeded 50) — drive to zero
 **Found:** 2026-09-21, during T12.1
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/tests/` — 40 NO_ASSERTION findings + 8 EXISTENCE_ONLY_ASSERTION findings
++ 2 CONSTANT_EQ_LITERAL findings
 **Description:** T12.1 seeded `scripts/check_test_quality_demo_baseline.txt` at 48 (the count
 the new Rule-5 detectors reported on first run). The 48 consists of 40 NO_ASSERTION tests
 (UI draw tests that call SUT without asserting anything) and 8 EXISTENCE_ONLY_ASSERTION tests
@@ -3433,9 +3434,13 @@ on existing debt; it will not drive itself to zero.
 **Why deferred:** The 40 NO_ASSERTION tests are UI draw tests that verifying "no crash" — each
 requires a meaningful assertion about output or side effects. The 8 hasattr tests need value
 checks. None of this is blocking T12.1 or T12.2.
+Re-seeded 48 → 50 on 2026-09-21 (post-loop review): CONSTANT_EQ_LITERAL was widened to catch
+`MODULE_CONSTANT == literal`, surfacing `test_branch_node.py::test_garrick_branch_id_constant` and
+`test_sev11_game_end.py::test_lose_location_is_guard_barracks`. The rise is a detector change, not a regression.
 **To fix:** For each NO_ASSERTION test, add an assertion about the rendered output, return value,
-or a side effect. For each EXISTENCE_ONLY_ASSERTION, replace `assert hasattr(x, y)` with
-`assert x.y == <expected_value>` or `assert callable(getattr(x, y))`. Lower the baseline as
+or a side effect. For each EXISTENCE_ONLY_ASSERTION or CONSTANT_EQ_LITERAL, assert behaviour that
+uses the value, or delete the test — do not restate the value (`x.y == <literal>`) or swap in
+`callable(getattr(x, y))`, which are the same check in a form the scanner misses. Lower the baseline as
 findings are fixed. Target: baseline 0, same as `tests/`.
 
 ## ISSUE-365: no per-module coverage floor for `evals/` — aggregate can hide a zero

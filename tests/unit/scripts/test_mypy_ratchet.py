@@ -21,9 +21,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 from mypy_ratchet import (  # noqa: E402
-    DEFAULT_BASELINE,
-    DEFAULT_LABEL,
-    DEFAULT_TARGET,
     compare,
     read_baseline,
 )
@@ -65,13 +62,6 @@ def test_baseline_is_read_as_a_bare_integer(tmp_path: Path) -> None:
     path = tmp_path / ".mypy_baseline_demo"
     path.write_text("256\n", encoding="utf-8")
     assert read_baseline(path) == 256
-
-
-def test_defaults_still_target_src() -> None:
-    """`make type-ratchet` must keep its original behaviour after parameterisation."""
-    assert DEFAULT_TARGET == "src/"
-    assert DEFAULT_BASELINE == ".mypy_baseline"
-    assert DEFAULT_LABEL == "mypy-ratchet"
 
 
 def test_the_demo_baseline_file_holds_an_integer() -> None:

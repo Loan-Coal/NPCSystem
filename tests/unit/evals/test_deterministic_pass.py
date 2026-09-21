@@ -3,14 +3,12 @@ Module: test_deterministic_pass
 Layer: test (unit)
 Purpose: Tests for evals/deterministic_pass.py — wires entity and knowledge scorers
          over a GenerationRecord sequence with no LLM calls.
-Dependencies: pytest, unittest.mock, deterministic_pass, entity_scorer,
+Dependencies: pytest, deterministic_pass, entity_scorer,
               graph_vocabulary, eval_records
 Used by: pytest (make test / make check)
 """
 
 from __future__ import annotations
-
-from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -77,17 +75,19 @@ _RECORDS = [
 # ---------------------------------------------------------------------------
 
 
-def test_scores_every_record_without_llm() -> None:
-    """score_transcript scores all records and never invokes matchers._run_binary_judge."""
-    with patch("matchers._run_binary_judge") as mock_judge:
-        result = score_transcript(
-            _RECORDS,
-            vocabulary=_VOCAB,
-            aliases=_ALIASES,
-            event_vocabulary=_EVENT_VOCAB,
-            npc_known_events=_NPC_KNOWN,
-        )
-    assert not mock_judge.called, "score_transcript must not invoke the LLM judge"
+def test_scores_every_record() -> None:
+    """score_transcript scores all records.
+
+    "No LLM" is structural, not asserted here: deterministic_pass imports no module that
+    reaches matchers._run_binary_judge, so a mock on it could never be called (T11.1c review).
+    """
+    result = score_transcript(
+        _RECORDS,
+        vocabulary=_VOCAB,
+        aliases=_ALIASES,
+        event_vocabulary=_EVENT_VOCAB,
+        npc_known_events=_NPC_KNOWN,
+    )
     assert result.record_count == 2
     assert len(result.record_scores) == 2
 

@@ -20,7 +20,6 @@ import pytest
 # evals/ is on pytest's pythonpath via pyproject.
 import judge_config
 from judge_config import (
-    DEFAULT_JUDGE_MODEL,
     JudgeModelCollisionError,
     discover_generation_models,
     resolve_judge_model,
@@ -31,7 +30,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def test_default_judge_model_is_mixtral() -> None:
     """With no env and a qwen-only generation set, the judge defaults to mixtral:8x7b."""
-    assert DEFAULT_JUDGE_MODEL == "mixtral:8x7b"
     resolved = resolve_judge_model(requested=None, generation_models=("qwen2.5:14b",))
     assert resolved == "mixtral:8x7b"
 

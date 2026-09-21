@@ -11,15 +11,9 @@ from __future__ import annotations
 from typing import get_args
 
 from npc_engine.common.knowledge_types import (
-    KNOWLEDGE_STATE_KNOWS,
     KNOWLEDGE_STATE_RUMOR,
     KnowledgeState,
 )
-
-
-def test_constants_have_expected_values() -> None:
-    assert KNOWLEDGE_STATE_KNOWS == "knows"
-    assert KNOWLEDGE_STATE_RUMOR == "rumor"
 
 
 def test_literal_members_are_exactly_knows_and_rumor() -> None:

@@ -29,6 +29,3 @@ def test_message_over_max_length_rejected() -> None:
     with pytest.raises(ValidationError):
         _make_request(player_message=msg)
 
-
-def test_max_player_message_chars_is_1000() -> None:
-    assert MAX_PLAYER_MESSAGE_CHARS == 1000

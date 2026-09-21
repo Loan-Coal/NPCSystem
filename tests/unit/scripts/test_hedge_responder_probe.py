@@ -24,7 +24,6 @@ sys.path.insert(0, str(REPO_ROOT / "evals"))
 
 from hedge_responder_probe import (  # noqa: E402
     CANNED_HEDGE,
-    HEDGE_GATE_THRESHOLD,
     NotACapabilityCaseError,
     load_capability_cases,
     probe,
@@ -203,10 +202,6 @@ def test_an_empty_case_set_never_reports_a_met_gate() -> None:
     result = probe([])
     assert result.null_rate is None
     assert result.meets_gate is False
-
-
-def test_the_default_threshold_is_the_roadmap_gate() -> None:
-    assert HEDGE_GATE_THRESHOLD == 0.30
 
 
 # ---------------------------------------------------------------------------

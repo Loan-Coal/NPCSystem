@@ -12,6 +12,7 @@ Used by: make test (pytest discovery)
 
 from __future__ import annotations
 
+import ast
 import sys
 import tempfile
 from pathlib import Path
@@ -162,6 +163,42 @@ def test_assert_not_called_is_flagged(tmp_path: Path) -> None:
     assert VACUOUS_MOCK_NOT_CALLED in _patterns(findings)
 
 
+def test_not_called_attribute_forms_are_flagged(tmp_path: Path) -> None:
+    """`assert not m.called` and `assert m.called is False` are the same claim — both flagged."""
+    f = _write(
+        tmp_path,
+        "test_not_called_attr.py",
+        "from unittest.mock import patch\n"
+        "def test_a():\n"
+        "    with patch('module.func') as m:\n"
+        "        do_work()\n"
+        "    assert not m.called\n"
+        "def test_b():\n"
+        "    with patch('module.func') as m:\n"
+        "        do_work()\n"
+        "    assert m.called is False\n",
+    )
+    assert _patterns(scan_file(f)).count(VACUOUS_MOCK_NOT_CALLED) == 2
+
+
+def test_not_called_is_real_when_a_sibling_proves_the_target_is_reached(tmp_path: Path) -> None:
+    """A sibling asserting the same patch target IS called makes "not called" a real claim."""
+    f = _write(
+        tmp_path,
+        "test_sibling.py",
+        "from unittest.mock import patch\n"
+        "def test_skip_path():\n"
+        "    with patch('module.func') as m:\n"
+        "        do_work(skip=True)\n"
+        "    assert not m.called\n"
+        "def test_normal_path():\n"
+        "    with patch('module.func') as m:\n"
+        "        do_work(skip=False)\n"
+        "    m.assert_called_once()\n",
+    )
+    assert VACUOUS_MOCK_NOT_CALLED not in _patterns(scan_file(f))
+
+
 # ---------------------------------------------------------------------------
 # Pattern 4: PARAMETRIZE_NO_SUT_CALL
 # ---------------------------------------------------------------------------
@@ -232,27 +269,31 @@ def test_real_suite_is_clean() -> None:
     assert findings == [], "unaddressed test-quality findings:\n" + format_findings(findings)
 
 
-def test_real_suite_scanner_is_not_a_nop() -> None:
-    """The scanner is not a no-op: a synthetic probe triggers VACUOUS_MOCK_NOT_CALLED.
+def test_real_suite_clean_result_comes_from_proven_reachability() -> None:
+    """Remove a real file's sibling proof and its not-called finding must come back.
 
     Without this, test_real_suite_is_clean would also pass if the scanner silently
-    stopped detecting anything — a green gate from a broken instrument.
+    stopped detecting anything — a green gate from a broken instrument. The real
+    test_judge_runner.py is clean only because a sibling test asserts the patched
+    judge IS called; keeping just the not-called test must re-surface the finding.
     """
+    target = _TESTS_ROOT / "unit" / "test_judge_runner.py"
+    assert not scan_file(target), "precondition: this file is expected to be clean"
+
+    tree = ast.parse(target.read_text(encoding="utf-8"))
+    tree.body = [
+        node for node in tree.body
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        or node.name == "test_judge_kind_none_is_skipped"
+    ]
     with tempfile.TemporaryDirectory() as tmp:
-        probe = Path(tmp) / "test_probe.py"
-        probe.write_text(
-            "from unittest.mock import patch\n"
-            "def test_never_calls_llm():\n"
-            "    with patch('module.llm') as mock_llm:\n"
-            "        do_work()\n"
-            "    assert mock_llm.call_count == 0\n",
-            encoding="utf-8",
-        )
+        probe = Path(tmp) / target.name
+        probe.write_text(ast.unparse(tree), encoding="utf-8")
         findings = scan_file(probe)
 
-    assert any(f.pattern == VACUOUS_MOCK_NOT_CALLED for f in findings), (
-        "synthetic probe did not trigger VACUOUS_MOCK_NOT_CALLED "
-        "— the scanner may be broken or the detection pattern changed"
+    assert VACUOUS_MOCK_NOT_CALLED in _patterns(findings), (
+        "removing the sibling reachability proof did not re-surface the finding "
+        "— the scanner, not the suite, may be what is clean"
     )
 
 
@@ -395,6 +436,18 @@ def test_iscoroutinefunction_assertion_is_flagged(tmp_path: Path) -> None:
     assert EXISTENCE_ONLY_ASSERTION in _patterns(findings)
 
 
+def test_module_qualified_iscoroutinefunction_is_flagged(tmp_path: Path) -> None:
+    """assert inspect.iscoroutinefunction(fn) is the same existence check — flagged."""
+    f = _write(
+        tmp_path,
+        "test_coro_qualified.py",
+        "import inspect\n"
+        "def test_is_async():\n"
+        "    assert inspect.iscoroutinefunction(my_func)\n",
+    )
+    assert EXISTENCE_ONLY_ASSERTION in _patterns(scan_file(f))
+
+
 def test_callable_check_not_flagged_as_existence_only(tmp_path: Path) -> None:
     """assert callable(getattr(pkg, name)) is NOT flagged (checks a value, not existence)."""
     f = _write(
@@ -449,6 +502,20 @@ def test_string_constant_eq_literal_is_flagged(tmp_path: Path) -> None:
     )
     findings = scan_file(f)
     assert CONSTANT_EQ_LITERAL in _patterns(findings)
+
+
+def test_module_constant_eq_literal_is_flagged(tmp_path: Path) -> None:
+    """assert MAX_CHARS == 1000 restates the source — flagged; settings.MAX_CHARS is not."""
+    f = _write(
+        tmp_path,
+        "test_module_const.py",
+        "def test_pin():\n"
+        "    assert MAX_CHARS == 1000\n"
+        "def test_setting():\n"
+        "    assert settings.MAX_CHARS == 1000\n",
+    )
+    findings = scan_file(f)
+    assert [x.test for x in findings if x.pattern == CONSTANT_EQ_LITERAL] == ["test_pin"]
 
 
 def test_variable_compared_to_constant_not_flagged(tmp_path: Path) -> None:

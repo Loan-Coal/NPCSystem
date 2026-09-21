@@ -8,7 +8,6 @@ Covers:
 - Multiple NPCs with low needs → one quest per NPC
 - Same NPC appears twice in need list → only one quest generated
 - generate() raises ValueError (pacing suppression) → graceful skip
-- DEFAULT_NEED_THRESHOLD constant value
 - Custom threshold accepted by constructor
 """
 
@@ -19,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from npc_engine.engines.quest_generation.need_quest_trigger import (
-    DEFAULT_NEED_THRESHOLD,
     NeedQuestTrigger,
 )
 
@@ -224,10 +222,6 @@ async def test_run_tick_mixed_draft_and_fresh_npc() -> None:
 # ---------------------------------------------------------------------------
 # Constants and constructor
 # ---------------------------------------------------------------------------
-
-
-def test_default_need_threshold_is_reasonable() -> None:
-    assert DEFAULT_NEED_THRESHOLD == 30
 
 
 def test_constructor_accepts_custom_threshold() -> None:

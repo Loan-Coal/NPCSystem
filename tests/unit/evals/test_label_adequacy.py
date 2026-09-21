@@ -18,12 +18,7 @@ from pathlib import Path
 import pytest
 
 from calibration_records import CalibrationLabel, read_calibration_labels
-from label_adequacy import (
-    MIN_CASE_CLUSTERS,
-    MIN_MINORITY_LABELS,
-    AdequacyRefusal,
-    check_label_adequacy,
-)
+from label_adequacy import AdequacyRefusal, check_label_adequacy
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LABELS_PATH = _REPO_ROOT / "evals" / "calibration" / "labels_v1.jsonl"
@@ -153,8 +148,3 @@ def test_unadjudicated_rows_do_not_count() -> None:
     refusal = check_label_adequacy("tone_judge", rows + [pending])
     assert refusal is None  # the pending row neither helps nor hurts either floor
 
-
-def test_the_named_constants_are_the_measured_v1_floor() -> None:
-    """The floor is declared, not inline — pin the values DEC-260 records."""
-    assert MIN_MINORITY_LABELS == 25
-    assert MIN_CASE_CLUSTERS == 10

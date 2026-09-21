@@ -44,7 +44,6 @@ def test_props_contain_every_required_event_field():
 
 def test_event_type_is_dedicated_covert_type():
     assert _build().event_type == COVERT_SCHEME_EVENT_TYPE
-    assert COVERT_SCHEME_EVENT_TYPE == "scheme_advance"
 
 
 def test_covert_event_is_not_public():

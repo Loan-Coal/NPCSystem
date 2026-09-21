@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from npc_engine.config import DEFAULT_OLLAMA_KEEP_ALIVE, Settings
+from npc_engine.config import Settings
 
 
 def _base_settings() -> dict:
@@ -32,7 +32,6 @@ def _base_settings() -> dict:
 
 def test_keep_alive_defaults_to_thirty_minutes() -> None:
     """The shipped default spans a play session without pinning VRAM overnight."""
-    assert DEFAULT_OLLAMA_KEEP_ALIVE == "30m"
     assert Settings(**_base_settings()).OLLAMA_KEEP_ALIVE == "30m"
 
 
