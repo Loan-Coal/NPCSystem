@@ -27,16 +27,19 @@ class _FakeGraphDB:
 
 
 @pytest.mark.asyncio
-async def test_get_current_chapter_delegates():
+async def test_get_current_chapter_returns_caller_shape():
+    """Caller receives a dict with at least an 'id' and 'status' field."""
     session = object()
     db = _FakeGraphDB(session)
     repo = Neo4jChapterRepository(db)  # type: ignore[arg-type]
-    row = {"id": "ch_1"}
+    row = {"id": "ch_1", "name": "Act One", "status": "open"}
 
     with patch(f"{_MOD}.get_current_chapter", new=AsyncMock(return_value=row)) as mock_fn:
         result = await repo.get_current_chapter()
 
-    assert result == row
+    assert isinstance(result, dict), "must return a dict (caller indexes into it)"
+    assert result["id"] == "ch_1"
+    assert result["status"] == "open"
     assert db.connect_calls == 1
     mock_fn.assert_awaited_once_with(session)
 
@@ -57,34 +60,41 @@ async def test_count_completed_quests_delegates():
 
 
 @pytest.mark.asyncio
-async def test_get_recent_events_delegates():
+async def test_get_recent_events_for_chapter_returns_list():
+    """Caller receives a list of event dicts with at least an 'id' field."""
     session = object()
     db = _FakeGraphDB(session)
     repo = Neo4jChapterRepository(db)  # type: ignore[arg-type]
-    rows = [{"id": "e1"}]
+    rows = [{"id": "e1", "tick_id": 5, "severity": 60}]
 
     with patch(
         f"{_MOD}.get_recent_events_for_chapter", new=AsyncMock(return_value=rows)
     ) as mock_fn:
         result = await repo.get_recent_events_for_chapter(since_tick=5, limit=3)
 
-    assert result == rows
+    assert isinstance(result, list), "must return a list not None"
+    assert len(result) == 1
+    assert result[0]["id"] == "e1"
+    assert result[0]["tick_id"] == 5
     mock_fn.assert_awaited_once_with(session, since_tick=5, limit=3)
 
 
 @pytest.mark.asyncio
-async def test_get_faction_standings_delegates():
+async def test_get_faction_standings_summary_returns_list():
+    """Caller receives a list of faction dicts with name and power_score fields."""
     session = object()
     db = _FakeGraphDB(session)
     repo = Neo4jChapterRepository(db)  # type: ignore[arg-type]
-    rows = [{"name": "Crown", "power_score": 90}]
+    rows = [{"name": "Crown", "power_score": 90}, {"name": "Guild", "power_score": 60}]
 
     with patch(
         f"{_MOD}.get_faction_standings_summary", new=AsyncMock(return_value=rows)
     ) as mock_fn:
         result = await repo.get_faction_standings_summary(limit=5)
 
-    assert result == rows
+    assert isinstance(result, list), "must return a list not None"
+    assert result[0]["name"] == "Crown"
+    assert result[0]["power_score"] == 90
     mock_fn.assert_awaited_once_with(session, limit=5)
 
 

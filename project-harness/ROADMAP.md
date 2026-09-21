@@ -1729,7 +1729,7 @@ and put both numbers in the completion note. **If coverage falls below 80, stop 
 the floor move is T12.2's job. (Calibration: headroom is 1,486 statements at 88.13%.)
 Findings L4-06, ISSUE-234, ISSUE-310, rule 5. ✅ AUTO (T11.1c, 2026-09-21)
 
-- [ ] **T11.2** Strengthen the mock-echo delegate tests, and list what nothing covers
+- [x] **T11.2** Strengthen the mock-echo delegate tests, and list what nothing covers
 Pre-approved: file-deletion · owner 2026-09-08
 Files: `tests/unit/graph/`, `project-harness/ISSUES.md`
 Spec: 127 delegate tests only prove a mock echoed itself. The review ran the counterfactual:
@@ -1749,7 +1749,7 @@ Validation: `make test`, then `make check`.
 Done when: the five-method counterfactual is observed red, the uncovered-method list is logged, LOC
 delta reported, **and the coverage delta reported — if it drops more than 3pp, stop: you deleted
 more than delegate tests.** Measure coverage by hand, as in T11.1's shared notes.
-Findings L4-05, CR-L14-02, ISSUE-309.
+Findings L4-05, CR-L14-02, ISSUE-309. ✅ AUTO (T11.2, 2026-09-21)
 
 - [ ] **T11.3** Add integration tests for the uncovered repository methods, on the eval stack's Neo4j
 Files: `tests/integration/`, `project-harness/ISSUES.md`, `project-harness/DECISIONS.md`

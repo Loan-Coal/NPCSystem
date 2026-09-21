@@ -27,27 +27,37 @@ class _FakeGraphDB:
 
 
 @pytest.mark.asyncio
-async def test_get_active_high_severity_quests_delegates_positional():
+async def test_get_active_high_severity_quests_returns_caller_shape():
+    """Caller receives a list of quest dicts with quest_id and severity fields."""
     session = object()
     db = _FakeGraphDB(session)
     repo = Neo4jStoryPacingRepository(db)  # type: ignore[arg-type]
-    rows = [{"quest_id": "q1", "severity": 80}]
+    rows = [{"quest_id": "q1", "severity": 80}, {"quest_id": "q2", "severity": 75}]
 
     with patch(f"{_MOD}.get_active_high_severity_quests", new=AsyncMock(return_value=rows)) as mock_fn:
         result = await repo.get_active_high_severity_quests(threshold=70)
 
-    assert result == rows
+    assert isinstance(result, list), "must return a list not a single dict or None"
+    assert len(result) == 2
+    assert result[0]["quest_id"] == "q1"
+    assert result[0]["severity"] == 80
     assert db.connect_calls == 1
     mock_fn.assert_awaited_once_with(session, 70)
 
 
 @pytest.mark.asyncio
-async def test_get_recent_major_events_delegates_positional():
+async def test_get_recent_major_events_returns_caller_shape():
+    """Caller receives a list of event dicts with event_id and tick_id fields."""
     session = object()
     db = _FakeGraphDB(session)
     repo = Neo4jStoryPacingRepository(db)  # type: ignore[arg-type]
+    rows = [{"event_id": "e1", "severity": 70, "tick_id": 5}]
 
-    with patch(f"{_MOD}.get_recent_major_events", new=AsyncMock(return_value=[])) as mock_fn:
-        await repo.get_recent_major_events(min_tick_id=5, floor=60)
+    with patch(f"{_MOD}.get_recent_major_events", new=AsyncMock(return_value=rows)) as mock_fn:
+        result = await repo.get_recent_major_events(min_tick_id=5, floor=60)
 
+    assert isinstance(result, list), "must return a list not None"
+    assert len(result) == 1
+    assert result[0]["event_id"] == "e1"
+    assert result[0]["tick_id"] == 5
     mock_fn.assert_awaited_once_with(session, 5, 60)

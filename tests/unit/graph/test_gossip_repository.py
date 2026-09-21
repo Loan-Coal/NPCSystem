@@ -40,57 +40,6 @@ def _make_graph_db(session: AsyncMock) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_fetch_gossip_pairs_delegates() -> None:
-    """fetch_gossip_pairs must call graph fetch_gossip_pairs and return its result."""
-    session = AsyncMock()
-    repo = Neo4jGossipRepository(_make_graph_db(session))
-    expected = [{"a": {"id": "npc1"}, "b": {"id": "npc2"}}]
-
-    with patch(
-        "npc_engine.graph.repositories.gossip_repository.fetch_gossip_pairs",
-        new=AsyncMock(return_value=expected),
-    ) as mock_fetch:
-        result = await repo.fetch_gossip_pairs()
-
-    mock_fetch.assert_called_once_with(session)
-    assert result == expected
-
-
-@pytest.mark.asyncio
-async def test_get_goals_for_character_delegates() -> None:
-    """get_goals_for_character must delegate to graph layer with correct kwargs."""
-    session = AsyncMock()
-    repo = Neo4jGossipRepository(_make_graph_db(session))
-    expected = [{"id": "g1", "target_id": "npc2"}]
-
-    with patch(
-        "npc_engine.graph.repositories.gossip_repository.get_goals_for_character",
-        new=AsyncMock(return_value=expected),
-    ) as mock_goals:
-        result = await repo.get_goals_for_character("npc1", k=10, status_filter="active")
-
-    mock_goals.assert_called_once_with(session, character_id="npc1", k=10, status_filter="active")
-    assert result == expected
-
-
-@pytest.mark.asyncio
-async def test_fetch_known_node_ids_delegates() -> None:
-    """fetch_known_node_ids must delegate and return node id set."""
-    session = AsyncMock()
-    repo = Neo4jGossipRepository(_make_graph_db(session))
-    expected: set[str] = {"event-1", "event-2"}
-
-    with patch(
-        "npc_engine.graph.repositories.gossip_repository.fetch_known_node_ids",
-        new=AsyncMock(return_value=expected),
-    ) as mock_fn:
-        result = await repo.fetch_known_node_ids("npc1")
-
-    mock_fn.assert_called_once_with(session, character_id="npc1")
-    assert result == expected
-
-
-@pytest.mark.asyncio
 async def test_select_batch_event_trust_delegates() -> None:
     """select_batch_event_trust must delegate with the pairs list."""
     session = AsyncMock()

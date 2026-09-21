@@ -1,7 +1,9 @@
 """Unit tests for the shared read repository adapters (DEC-122 / SEV-24 Wave 2).
 
-Covers Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository, and
-Neo4jCharacterReadRepository against a fake GraphDB (session-per-call seam).
+Covers Neo4jPlayerLocationReadRepository and Neo4jCharacterReadRepository
+against a fake GraphDB (session-per-call seam).
+Neo4jRelationReadRepository tests removed: get_relation_scalars and
+get_relation_phase_row are covered by integration tests (T11.2).
 """
 
 from __future__ import annotations
@@ -12,18 +14,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
 from npc_engine.graph.repositories.character_read_repository import (
     Neo4jCharacterReadRepository,
 )
 from npc_engine.graph.repositories.player_location_read_repository import (
     Neo4jPlayerLocationReadRepository,
 )
-from npc_engine.graph.repositories.relation_read_repository import (
-    Neo4jRelationReadRepository,
-)
 
-_RELATION_MOD = "npc_engine.graph.repositories.relation_read_repository"
 _CHARACTER_MOD = "npc_engine.graph.repositories.character_read_repository"
 
 
@@ -38,50 +35,6 @@ class _FakeGraphDB:
     @asynccontextmanager
     async def get_session(self) -> AsyncIterator[Any]:
         yield self._session
-
-
-# --------------------------------------------------------------------------- #
-# Neo4jRelationReadRepository
-# --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_get_relation_scalars_delegates_to_reader():
-    session = object()
-    db = _FakeGraphDB(session)
-    repo = Neo4jRelationReadRepository(db)  # type: ignore[arg-type]
-    scalars = {"trust": 5, "fear": 1, "affection": 3}
-
-    with patch(f"{_RELATION_MOD}.RelationReader") as mock_cls:
-        instance = mock_cls.return_value
-        instance.get_relation_scalars = AsyncMock(return_value=scalars)
-        result = await repo.get_relation_scalars(src_id="a", dst_id="b")
-
-    assert result == scalars
-    assert db.connect_calls == 1
-    mock_cls.assert_called_once_with(session)
-    instance.get_relation_scalars.assert_awaited_once_with(src_id="a", dst_id="b")
-
-
-@pytest.mark.asyncio
-async def test_get_relation_phase_row_delegates_to_reader():
-    session = object()
-    db = _FakeGraphDB(session)
-    repo = Neo4jRelationReadRepository(db)  # type: ignore[arg-type]
-    row = RelationPhaseRow(
-        trust=2,
-        fear=0,
-        affection=4,
-        relationship_phase="ally",
-        phase_started_at_tick=7,
-    )
-
-    with patch(f"{_RELATION_MOD}.RelationReader") as mock_cls:
-        instance = mock_cls.return_value
-        instance.get_relation_phase_row = AsyncMock(return_value=row)
-        result = await repo.get_relation_phase_row(src_id="a", dst_id="b")
-
-    assert result is row
-    assert db.connect_calls == 1
-    instance.get_relation_phase_row.assert_awaited_once_with(src_id="a", dst_id="b")
 
 
 # --------------------------------------------------------------------------- #

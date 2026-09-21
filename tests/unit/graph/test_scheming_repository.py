@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
-from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress, SchemeRecord
+from npc_engine.graph.intrigue.scheme_reader import SchemeRecord
 
 
 # ---------------------------------------------------------------------------
@@ -69,37 +69,6 @@ async def test_upsert_scheme_delegates() -> None:
         await repo.upsert_scheme(scheme_id="s1", npc_id="lira", goal="rob", tick=5)
 
     mock_fn.assert_called_once_with(session=db.session, scheme_id="s1", npc_id="lira", goal="rob", tick=5)
-
-
-@pytest.mark.asyncio
-async def test_get_all_active_schemes_with_steps_delegates() -> None:
-    db = _FakeGraphDB()
-    repo = Neo4jSchemingRepository(graph_db=db)
-    expected = [ActiveSchemeProgress(scheme_id="s1", npc_id="lira", goal="rob", step_count=2)]
-
-    with patch(
-        "npc_engine.graph.repositories.scheming_repository.get_all_active_schemes_with_steps",
-        new=AsyncMock(return_value=expected),
-    ) as mock_fn:
-        result = await repo.get_all_active_schemes_with_steps()
-
-    assert result == expected
-    mock_fn.assert_called_once_with(db.session)
-
-
-@pytest.mark.asyncio
-async def test_get_npc_location_id_delegates() -> None:
-    db = _FakeGraphDB()
-    repo = Neo4jSchemingRepository(graph_db=db)
-
-    with patch(
-        "npc_engine.graph.repositories.scheming_repository.get_npc_location_id",
-        new=AsyncMock(return_value="tavern"),
-    ) as mock_fn:
-        result = await repo.get_npc_location_id("lira")
-
-    assert result == "tavern"
-    mock_fn.assert_called_once_with(db.session, "lira")
 
 
 @pytest.mark.asyncio

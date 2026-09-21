@@ -67,19 +67,6 @@ async def test_create_memory_delegates_keyword_args():
 
 
 @pytest.mark.asyncio
-async def test_decay_all_vividness_delegates():
-    db = _FakeGraphDB(object())
-    repo = Neo4jMemoryRepository(db)  # type: ignore[arg-type]
-
-    with patch(f"{_MOD}.decay_all_vividness", new=AsyncMock(return_value=7)) as fn:
-        result = await repo.decay_all_vividness()
-
-    assert result == 7
-    assert db.connect_calls == 1
-    fn.assert_awaited_once_with(db._session)
-
-
-@pytest.mark.asyncio
 async def test_decay_all_vividness_weighted_delegates():
     db = _FakeGraphDB(object())
     repo = Neo4jMemoryRepository(db)  # type: ignore[arg-type]
