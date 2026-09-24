@@ -4231,3 +4231,18 @@ probes may depend on it.
 **To fix:** Owner decides: gate `/readiness`, or amend the rule and record a DEC. Then update
 `_EXPECTED_PUBLIC` in `tests/unit/api/test_create_app_auth_wiring.py`.
 **Fixed:** 2026-09-24, in DEC-289 — owner kept `/readiness` public; the auth rule in `project-harness/CLAUDE.md` now names `GET /health` and `GET /readiness`. No code change (`_EXPECTED_PUBLIC` already held both).
+
+## [FIXED] ISSUE-371: `test_revived_engines_do_work` is flaky on a freshly seeded eval stack
+**Found:** 2026-09-21, during post-loop review (integration run for the ensure_constraints fix)
+**Severity:** P2 (annoying)
+**Where:** `tests/integration/test_revived_engines_do_work.py::test_routine_and_need_decay_do_work`
+**Description:** After `eval_stack_at.sh --reset`, both tests fail because nothing is seeded (the
+test does not seed; `make eval-stack-seed` is a manual step). Once seeded, the routine test failed
+on the first run (`routine.moved=0 across 3 ticks`) and passed on the next without any change. The
+result depends on the world clock's phase, and `check-integration-baseline` treats it as a new
+failure when it lands wrong. CI's required `integration-tests` job can red on this at random.
+**Why deferred:** Not caused by the review fixes. Making it deterministic needs a fixed clock
+start, which is test-design work.
+**To fix:** Have the test set the clock to a known pre-transition time before advancing, and seed
+(or skip with a clear reason) when `FOLLOWS_SCHEDULE` edges are absent.
+**Fixed:** 2026-09-24, in the ISSUE-371 commit — the test now pins `WorldState.time_of_day` to `morning` before advancing (a slot where every seeded routine NPC has a different target than the next one, so a move is guaranteed whatever the prior state) and skips with a reason when `FOLLOWS_SCHEDULE` edges or the `WorldState` node are absent. Verified against the eval stack (:7688): unseeded run skips; seeded, 3 of 3 runs pass. The original one-off `moved=0` was not reproduced on demand. `test_npc_top_need_is_populated` is unchanged, since its job is to detect missing HAS_NEED edges. See ISSUE-373 for why `moved` is a weak signal.

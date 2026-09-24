@@ -10,8 +10,15 @@ RED anchor (against tree before T5.1, commit da96cde6):
     needs_updated=0 (no HAS_NEED edges). This test therefore failed. That failure
     is the evidence the T5.x sprint was needed.
 
-Does NOT: run without the eval stack; writes nothing to the graph; seed the world.
-Dependencies: httpx (HTTP clock advance), neo4j async driver (unmet-need check).
+Determinism (ISSUE-371): the world clock persists in the eval graph, so its phase used to
+depend on how many runs came before. The routine test now pins ``WorldState.time_of_day``
+to a known pre-transition slot before advancing, and skips (rather than fails) when the
+stack has no FOLLOWS_SCHEDULE edges or no WorldState node, i.e. it was never seeded.
+
+Does NOT: run without the eval stack; seed the world (run ``make eval-stack-seed``). It DOES
+write to the eval graph: it resets ``time_of_day`` and each clock advance persists state.
+Dependencies: httpx (HTTP clock advance), neo4j async driver (clock pin, seed check,
+unmet-need check).
 Used by: T6.3 validation (eval stack only, not make test-integration).
 """
 
@@ -37,9 +44,23 @@ _EVAL_NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
 # Mirrors NEED_UNMET_LEVEL_THRESHOLD in context_need_models.py.
 _NEED_UNMET_THRESHOLD: int = 50
 
-# Number of ticks to advance. Two ticks guarantees a time_of_day transition
-# so routine sees a new slot and must re-place characters.
+# Number of ticks to advance. /clock/advance runs the engines against the world state read
+# BEFORE it moves time_of_day, so with 3 ticks routine sees the pinned slot twice and the
+# next slot once.
 _ADVANCE_TICKS: int = 3
+
+# Known pre-transition slot the clock is reset to before advancing. Every seeded routine
+# NPC has a different target in "morning" than in "midday" (seed_world_data._SCHEDULES),
+# so routine must move at least one of them across ticks 1-3 whatever they stood on before.
+_PINNED_TIME_OF_DAY: str = "morning"
+_EVAL_WORLD_ID: str = os.getenv("EVAL_WORLD_ID", "world")
+
+_CYPHER_COUNT_SCHEDULE_EDGES = "MATCH ()-[r:FOLLOWS_SCHEDULE]->() RETURN count(r) AS n"
+_CYPHER_PIN_CLOCK = (
+    "MATCH (w:WorldState {id: $world_id}) "
+    "SET w.time_of_day = $slot "
+    "RETURN count(w) AS n"
+)
 
 # Cypher: find any Need whose level is below the unmet threshold.
 _CYPHER_UNMET_NEED = (
@@ -86,6 +107,33 @@ def _skip_if_no_eval_stack() -> None:
         pytest.skip(f"eval stack not reachable at {_EVAL_BASE_URL}: {exc}")
 
 
+async def _pin_clock_or_skip() -> None:
+    """Reset the world clock to _PINNED_TIME_OF_DAY, or skip if the stack is unseeded.
+
+    Skips with a reason when there are no FOLLOWS_SCHEDULE edges or no WorldState node,
+    since routine has nothing to move and there is no clock to pin.
+    """
+    driver = AsyncGraphDatabase.driver(
+        _EVAL_NEO4J_URI, auth=(_EVAL_NEO4J_USER, _EVAL_NEO4J_PASSWORD)
+    )
+    try:
+        async with driver.session() as session:
+            edges = await (await session.run(_CYPHER_COUNT_SCHEDULE_EDGES)).single()
+            if edges is None or edges["n"] == 0:
+                pytest.skip("no FOLLOWS_SCHEDULE edges: run `make eval-stack-seed` first")
+            pinned = await (
+                await session.run(
+                    _CYPHER_PIN_CLOCK, world_id=_EVAL_WORLD_ID, slot=_PINNED_TIME_OF_DAY
+                )
+            ).single()
+            if pinned is None or pinned["n"] == 0:
+                pytest.skip(
+                    f"no WorldState node with id={_EVAL_WORLD_ID!r}: run `make eval-stack-seed` first"
+                )
+    finally:
+        await driver.close()
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -103,12 +151,16 @@ async def test_routine_and_need_decay_do_work() -> None:
     - need_decay.needs_updated sum > 0 (at least one need level changed).
     - GET /v1/admin/system/engines shows tick_count > 0 for both engines.
 
+    The clock is first pinned to _PINNED_TIME_OF_DAY so the outcome no longer depends on
+    where earlier runs left it (ISSUE-371). Skips when the stack was never seeded.
+
     A zero with visible LLM timeout errors in the response is a Sprint-4
     ordering artifact (need_quest_trigger amplification before admission
     control lands), NOT evidence T5.2 failed. A zero with a clean log is
     the real regression signal.
     """
     _skip_if_no_eval_stack()
+    await _pin_clock_or_skip()
 
     total_moved = 0
     total_needs_updated = 0
