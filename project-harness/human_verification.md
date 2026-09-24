@@ -803,3 +803,17 @@ T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
 T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
     deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
 DEFERRED_TOTAL=2
+
+## 2026-09-24 15:50:35 — no status token from task T15.1
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/task-T15.1-1790256623.log
+
+## 2026-09-24 15:50:37 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
