@@ -108,6 +108,8 @@ CONSECUTIVE_BLOCKED_PHASES=0
 LAST_TASK_ID=""
 SAME_TASK_REPEATS=0
 MAX_SAME_TASK_REPEATS="${MAX_SAME_TASK_REPEATS:-2}"
+# ISSUE-370: the one task already retried after a bare "Execution error" (one retry each).
+TRANSIENT_RETRIED_TASK=""
 SKIPPED_PHASES=""
 START_BRANCH=""
 SESSION_LOG=""
@@ -417,6 +419,12 @@ looks_like_usage_limit() {
   grep -qaiE 'usage limit reached|approaching your usage limit|resets at|rate.?limit exceeded' "$1" 2>/dev/null
 }
 
+# ISSUE-370: a session whose whole log is the CLI's "Execution error" did no work and is
+# transient. Anything else in the log (a traceback, partial output) is not.
+is_bare_execution_error() {
+  [ "$(tr -d '[:space:]' < "$1" 2>/dev/null)" = "Executionerror" ]
+}
+
 # ======================================================================================
 # usage-limit auto-restart, with the four runaway guards (scar 6.3)
 # ======================================================================================
@@ -707,8 +715,9 @@ handle_task_result() {
 }
 
 run_one_task() {
-  local phase="$1" task="$2"
-  local tasklog="$LOOP_LOG_DIR/task-$task-$(date +%s).log"
+  # Usage: run_one_task <phase> <task> [<log-suffix>]  (the suffix marks the retry's log)
+  local phase="$1" task="$2" suffix="${3:-}"
+  local tasklog="$LOOP_LOG_DIR/task-$task$suffix-$(date +%s).log"
   local rc token
 
   local wt_before="$LOOP_STATE_DIR/worktrees-before-$task.json" leaks
@@ -742,6 +751,15 @@ changes are NOT on $(git rev-parse --abbrev-ref HEAD) — reconcile before resum
 
   token="$(read_status_token "$tasklog")"
   log "status token: '${token:-<none>}'"
+
+  # ISSUE-370: retry a bare "Execution error" once per task, then halt as before.
+  if [ -z "$token" ] && [ "$TRANSIENT_RETRIED_TASK" != "$task" ] && is_bare_execution_error "$tasklog"; then
+    TRANSIENT_RETRIED_TASK="$task"
+    log "task $task: session printed only 'Execution error'; retrying once in ${TRANSIENT_RETRY_SLEEP_SECS}s"
+    sleep "$TRANSIENT_RETRY_SLEEP_SECS"
+    run_one_task "$phase" "$task" "-retry"
+    return $?
+  fi
   handle_task_result "$phase" "$task" "$token" "$tasklog"
 }
 
@@ -854,4 +872,7 @@ be committed. Inspect the last task log before re-running."
   return 0
 }
 
-main
+# Run only when executed, so tests can `source` this file and call its functions.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main
+fi

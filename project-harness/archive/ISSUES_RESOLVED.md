@@ -4206,3 +4206,15 @@ the methods called by the highest-traffic engine paths (quest lifecycle, routine
 **Why deferred:** The file is deliberately immutable.
 **To fix:** Capture a new dated baseline for the post-review cycle and point `/fix-next` at it, leaving the 2026-08-28 file as history.
 **Fixed:** 2026-09-21, in T12.2 — `project-harness/BASELINE_2026-09.md` supersedes this.
+
+## [FIXED] ISSUE-370: the overnight loop halts on a bare CLI `Execution error` instead of retrying once
+**Found:** 2026-09-21, during post-loop review (T14.1 halt)
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/expand_loop.sh` (`looks_like_usage_limit`, no-status-token halt)
+**Description:** T14.1's session printed only `Execution error` and exited after 14 s. That does not
+match the usage-limit pattern, so the loop halted the night. The 400 s headroom sleep before it
+also returned after ~22 s (cause unknown).
+**Why deferred:** The halt is the safe failure. A retry path needs guards like the usage-restart ones.
+**To fix:** Treat a log that holds only `Execution error` as transient: retry the task once after
+a short sleep, then halt as today.
+**Fixed:** 2026-09-24, in the ISSUE-370 loop-retry commit — `run_one_task` retries a bare `Execution error` once after `TRANSIENT_RETRY_SLEEP_SECS`; pinned by `tests/unit/scripts/test_expand_loop_execution_error.py`.

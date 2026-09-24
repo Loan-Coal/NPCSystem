@@ -3510,17 +3510,6 @@ that measured nothing should not read as a pass. That is the vacuous green rule 
 list. That is the owner's call, not a review fix.
 **To fix:** If no caller does, make `_finish([])` exit 1 and flip the test.
 
-## ISSUE-370: the overnight loop halts on a bare CLI `Execution error` instead of retrying once
-**Found:** 2026-09-21, during post-loop review (T14.1 halt)
-**Severity:** P3 (nice-to-fix)
-**Where:** `scripts/expand_loop.sh` (`looks_like_usage_limit`, no-status-token halt)
-**Description:** T14.1's session printed only `Execution error` and exited after 14 s. That does not
-match the usage-limit pattern, so the loop halted the night. The 400 s headroom sleep before it
-also returned after ~22 s (cause unknown).
-**Why deferred:** The halt is the safe failure. A retry path needs guards like the usage-restart ones.
-**To fix:** Treat a log that holds only `Execution error` as transient: retry the task once after
-a short sleep, then halt as today.
-
 ## ISSUE-371: `test_revived_engines_do_work` is flaky on a freshly seeded eval stack
 **Found:** 2026-09-21, during post-loop review (integration run for the ensure_constraints fix)
 **Severity:** P2 (annoying)

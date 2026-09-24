@@ -57,6 +57,8 @@ REVIEW_SESSION_TIMEOUT="${REVIEW_SESSION_TIMEOUT:-600}"
 PHASE_SLEEP_SECS="${PHASE_SLEEP_SECS:-400}"
 # Short breather between tasks.
 TASK_SLEEP_SECS="${TASK_SLEEP_SECS:-20}"
+# Wait before the single retry of a session that printed only "Execution error" (ISSUE-370).
+TRANSIENT_RETRY_SLEEP_SECS="${TRANSIENT_RETRY_SLEEP_SECS:-60}"
 
 # ── models ────────────────────────────────────────────────────────────────────────────
 # Decided 2026-07-31: pin implementation sessions to Sonnet. Roadmap tasks carry
