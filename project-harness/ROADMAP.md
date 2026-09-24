@@ -1958,7 +1958,7 @@ Findings L6-03, ISSUE-204, ISSUE-311, CR-L07-03.
 
 Gate what survives.
 
-- [ ] **T14.1** Bring `demo_game/` under mypy
+- [x] **T14.1** Bring `demo_game/` under mypy
 Files: `Makefile`, `scripts/harness_status.py`, `scripts/check_harness_honesty.py`,
 `project-harness/ISSUES.md` — **not** `demo_game/`
 Spec: **`demo_game/` is ratcheted but not gated — the ratchet you would build already exists.**
@@ -1994,7 +1994,7 @@ Validation: `make type-demo`, `python -m mypy demo_game`, then `make check`.
 Done when: `type-demo` is in `make check`'s target list, no second ratchet was created, no file under
 `demo_game/` was edited, the `.mypy_baseline_demo` count is recorded, and the drive-to-zero issue is
 logged with T13.2 as its prerequisite. Baseline finding from
-`review-2026-08/BASELINE_2026-08-28.md`.
+`review-2026-08/BASELINE_2026-08-28.md`. ✅ AUTO (T14.1, 2026-09-24)
 
 - [ ] **T14.2** Make the rules baseline shrink, and correct the `game_window.py` waiver record
 Files: `scripts/check_rules.py`, `scripts/rules_baseline.txt`, `project-harness/DECISIONS.md`,

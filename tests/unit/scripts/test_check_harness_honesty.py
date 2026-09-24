@@ -50,6 +50,7 @@ def _run_main(
     lint_clean: bool,
     mypy_count: int,
     open_blocks: list[str],
+    mypy_demo_count: int = 0,
     strict: bool = False,
 ) -> int:
     """Run main() with mocked infrastructure helpers."""
@@ -57,6 +58,7 @@ def _run_main(
     with (
         patch.object(check_harness_honesty, "_lint_clean", return_value=lint_clean),
         patch.object(check_harness_honesty, "_mypy_baseline_count", return_value=mypy_count),
+        patch.object(check_harness_honesty, "_mypy_demo_baseline_count", return_value=mypy_demo_count),
         patch.object(check_harness_honesty, "_open_issue_blocks", return_value=open_blocks),
         patch("subprocess.run") as mock_sub,
     ):
@@ -100,6 +102,25 @@ def test_h1_passes_when_lint_and_mypy_clean(
     """H1 exits 0 when lint is clean and mypy baseline is 0."""
     result = _run_main(lint_clean=True, mypy_count=0, open_blocks=[])
     assert result == 0
+
+
+def test_h1_fires_when_demo_mypy_nonzero_and_no_covering_issue(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """H1 exits 1 when demo_game/ mypy baseline > 0 and no open ISSUE mentions type-demo."""
+    result = _run_main(lint_clean=True, mypy_count=0, mypy_demo_count=256, open_blocks=[])
+    assert result == 1
+    assert "H1" in capsys.readouterr().out
+
+
+def test_h1_silent_when_demo_mypy_nonzero_but_issue_covers_it(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """H1 does not fire when demo mypy baseline > 0 but a ticket names type-demo."""
+    issue = "ISSUE-375: drive demo_game/ type-demo count to zero — waits on T13.2\n"
+    result = _run_main(lint_clean=True, mypy_count=0, mypy_demo_count=256, open_blocks=[issue])
+    assert result == 0
+    assert "H1" not in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

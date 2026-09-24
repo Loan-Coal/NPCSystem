@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ISSUES = REPO_ROOT / "project-harness" / "ISSUES.md"
 ROADMAP = REPO_ROOT / "project-harness" / "ROADMAP.md"
 MYPY_BASELINE = REPO_ROOT / ".mypy_baseline"
+MYPY_BASELINE_DEMO = REPO_ROOT / ".mypy_baseline_demo"
 
 
 def _read(path: Path) -> str:
@@ -50,6 +51,13 @@ def _mypy_baseline_count() -> int:
     if not MYPY_BASELINE.exists():
         return 0
     return int(MYPY_BASELINE.read_text(encoding="utf-8").strip() or "0")
+
+
+def _mypy_demo_baseline_count() -> int:
+    """Committed mypy-demo baseline error count for demo_game/ (0 if absent)."""
+    if not MYPY_BASELINE_DEMO.exists():
+        return 0
+    return int(MYPY_BASELINE_DEMO.read_text(encoding="utf-8").strip() or "0")
 
 
 def _open_issue_blocks() -> list[str]:
@@ -81,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
     mypy_count = _mypy_baseline_count()
     if mypy_count > 0 and not _covered(open_blocks, ("mypy", "type error", "type errors", "type gate")):
         gaps.append(f"{mypy_count} mypy errors (baseline) but no open ISSUE mentions mypy/type errors")
+    mypy_demo_count = _mypy_demo_baseline_count()
+    if mypy_demo_count > 0 and not _covered(open_blocks, ("mypy_baseline_demo", "type-demo", "demo_game/ mypy")):
+        gaps.append(f"{mypy_demo_count} demo_game mypy errors (baseline) but no open ISSUE mentions mypy_baseline_demo/type-demo")
     if gaps:
         print("check-harness: FAIL [H1] - known debt is not logged as a ticket in ISSUES.md:")
         for g in gaps:

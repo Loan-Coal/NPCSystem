@@ -484,7 +484,9 @@ check-engine-logs:
 # T10.2b: check-loc-ratchet added, 23 -> 24. Reverse LOC ratchet covering src/npc_engine/,
 #          scripts/, evals/ and demo_game/ — fails if total non-test Python LOC rises above
 #          scripts/loc_baseline.txt. Rules 1 and 6.
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
+# T14.1: type-demo added, 24 -> 25. demo_game/ was gated by nothing; 256 errors across 45
+#         files, invisible on every push (ISSUE-375 tracks the drive-to-zero, waits on T13.2).
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

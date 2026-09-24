@@ -3499,6 +3499,22 @@ list. That is the owner's call, not a review fix.
 **Why deferred:** Out of scope for ISSUE-371 (test determinism). Not investigated beyond the probes above.
 **To fix:** Find what rewrites `LOCATED_AT` to the seed default each tick (start with the planning and need-decay paths), then make the routine test assert the persisted `LOCATED_AT`, not `moved`.
 
+## ISSUE-375: drive `demo_game/` mypy error count from 256 to zero (waits on T13.2)
+**Found:** 2026-09-24, during T14.1
+**Severity:** P3 (nice-to-fix)
+**Where:** `.mypy_baseline_demo` (256 errors across 45 files in `demo_game/`; 255 at time of writing)
+**Description:** `make type-demo` ratchets mypy errors in `demo_game/` against `.mypy_baseline_demo`
+(baseline 256, now wired into `make check` via T14.1). The ratchet prevents the count from growing
+but does not require it to shrink. Reaching zero means the ratchet can be retired and `demo_game/`
+brought under the same hard `type` gate as `src/`. The target date for reaching zero is not gated —
+the owner decided 2026-09-09 that it is a promise rather than a mechanism.
+**Why deferred:** T13.2 is about to delete `demo_game/` modules flagged by the census. Fixing types
+in modules T13.2 will cut is wasted work. The split of `game_window.py` (per the issue logged during
+T14.2) also belongs first.
+**To fix:** After T13.2 completes and the census confirms surviving modules, run
+`make type-demo-update` to record the post-deletion baseline, then fix errors file by file.
+Remove `.mypy_baseline_demo` and the `type-demo` ratchet target when the count reaches zero.
+
 ## ISSUE-374: `get_giver_context` always returns `[""]` for goals — it reads `objective`, the query returns `description`
 **Found:** 2026-09-24, during ISSUE-366 (positive-path tests for the quest-generation repository)
 **Severity:** P2 (annoying)
