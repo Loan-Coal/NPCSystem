@@ -1996,7 +1996,7 @@ Done when: `type-demo` is in `make check`'s target list, no second ratchet was c
 logged with T13.2 as its prerequisite. Baseline finding from
 `review-2026-08/BASELINE_2026-08-28.md`. ✅ AUTO (T14.1, 2026-09-24)
 
-- [ ] **T14.2** Make the rules baseline shrink, and correct the `game_window.py` waiver record
+- [x] **T14.2** Make the rules baseline shrink, and correct the `game_window.py` waiver record
 Files: `scripts/check_rules.py`, `scripts/rules_baseline.txt`, `project-harness/DECISIONS.md`,
 `project-harness/ISSUES.md` — **not** `demo_game/`
 Spec: narrowed 2026-09-17 the same way as T14.1. `demo_game/ui/layout/game_window.py` is 925 lines,
@@ -2024,7 +2024,7 @@ from the file and the next run reports none.
 Validation: `python scripts/check_rules.py` twice (the second run reports no resolved entry),
 `make check`.
 Done when: ISSUE-320 is closed, `DEC-074`'s path and the waiver are corrected, the split issue is
-logged against T13.2, and no file under `demo_game/` was edited. Findings CR-L07-03, ISSUE-320.
+logged against T13.2, and no file under `demo_game/` was edited. Findings CR-L07-03, ISSUE-320. ✅ AUTO (T14.2, 2026-09-24)
 
 ---
 

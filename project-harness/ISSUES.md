@@ -1392,14 +1392,6 @@ hallucination guards remain unaffected (separate axis).
 **Why deferred:** DEC-273's instrumentation work just landed; this is the follow-on.
 **To fix:** Add histogram buckets sized around the 3–7s budget.
 
-## ISSUE-320: `check-rules` reports a resolved baseline entry on every run and never ratchets it down
-**Found:** 2026-09-07, during full-review (L9-07)
-**Severity:** P3
-**Where:** `scripts/rules_baseline.txt`, `scripts/check_rules.py`
-**Description:** A baseline entry whose underlying violation is resolved is still reported each run; the ratchet does not remove it. A baseline that cannot shrink stops being a ratchet.
-**Why deferred:** Cosmetic noise.
-**To fix:** Prune resolved entries and make the ratchet remove them automatically.
-
 ## ISSUE-322: the `stream`/`stream_text` call site is dead in the production dialogue path
 **Found:** 2026-09-07, during full-review (L11-01)
 **Severity:** P2
@@ -3522,3 +3514,11 @@ Remove `.mypy_baseline_demo` and the `type-demo` ratchet target when the count r
 **Description:** The goal rows carry the key `description`, so `get_giver_context` builds `"goals": [""]` for every giver with goals. An integration test asserting the seeded goal text failed with `[''] == ['Protect the forge']`, which confirms it. The quest-generation prompt therefore never sees the giver's goals. The test now asserts only the goal count, and says why in a comment.
 **Why deferred:** The task was test strengthening; a `src/` fix is out of scope.
 **To fix:** Read `description` (or align the query's alias), then assert the goal text in `test_get_giver_context_assembles_seeded_character`.
+
+## ISSUE-376: split `demo_game/ui/layout/game_window.py` by responsibility (waits on T13.2)
+**Found:** 2026-09-24, during T14.2
+**Severity:** P2 (annoying)
+**Where:** `demo_game/ui/layout/game_window.py` (925 lines, grandfathered at 925 in `scripts/rules_baseline.txt` per DEC-226; hard limit is 800)
+**Description:** `game_window.py` grew to 925 lines after DEC-032 declared the size problem resolved. The file mixes model wiring, pygame event handling, view routing, and rendering — clear SRP violation. The R001 baseline entry at 925 lines must be deleted once the file is split, not merely re-baselined. DEC-074 records the waiver history and the corrected path.
+**Why deferred:** T13.2 (the census pass) is expected to cut oath and treaty controls inside `game_window.py`. Splitting before the census splits code that may be deleted — wasted work. The drive-to-zero mypy task (ISSUE-375) also belongs after the split.
+**To fix:** After T13.2 completes — split `game_window.py` by responsibility into focused modules (e.g. `game_window_model.py`, `game_window_events.py`, `game_window_render.py`, thin `game_window.py` coordinator). Delete — do not re-baseline — the `R001|demo_game/ui/layout/game_window.py:925` entry from `scripts/rules_baseline.txt`. Check that any other `demo_game/` module over 800 lines is also addressed.

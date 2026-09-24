@@ -21,7 +21,6 @@ R006|src/npc_engine/api/routes/world/clock.py::advance_clock
 R006|src/npc_engine/api/routes/world/location_graph.py::connect_locations
 R006|src/npc_engine/engines/agenda/agenda_engine.py::AgendaEngine.run_tick
 R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine._label_chapter
-R006|src/npc_engine/engines/clique/clique_formation_engine.py::CliqueFormationEngine._run_formation
 R006|src/npc_engine/engines/dialogue/degradation.py::execute_with_degradation
 R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.__init__
 R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.handle
@@ -31,7 +30,6 @@ R006|src/npc_engine/engines/dialogue/relation_mutator.py::apply_dialogue_relatio
 R006|src/npc_engine/engines/economy/pricing_rules_loader.py::load_pricing_rules
 R006|src/npc_engine/engines/economy/trade_engine.py::TradeEngine.evaluate_offer
 R006|src/npc_engine/engines/events/event_handler.py::EventHandler.run_tick
-R006|src/npc_engine/engines/faction_politics/rules_loader.py::load_rules
 R006|src/npc_engine/engines/gossip/gossip_distort.py::gossip_distort
 R006|src/npc_engine/engines/gossip/gossip_handler.py::GossipHandler._build_write_params
 R006|src/npc_engine/engines/gossip/gossip_handler.py::GossipHandler._process_pairs

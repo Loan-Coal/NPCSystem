@@ -370,21 +370,19 @@ def _run_check(
 
     R001 uses line-count-aware comparison (_compare_r001); all other rules use
     exact-set difference. Soft advisories are printed but never affect the exit code.
+    When update_flag is True, prunes resolved entries from the baseline without
+    adding new violations (ratchet-down-only semantics — ISSUE-320).
 
     Args:
         current: Set of current violation signatures.
         baseline_path: Path to the baseline file.
         label: Human-readable label (e.g. "check-rules").
-        update_flag: If True, persist current as the new baseline and exit 0.
+        update_flag: If True, remove resolved entries from baseline and exit 0.
+                     New violations in ``current`` are NOT added to baseline.
         advisories: Optional set of R001-SOFT signatures to print as info.
     Returns:
         Exit code: 0 on pass, 1 on new violations.
     """
-    if update_flag:
-        _write_baseline(current, baseline_path)
-        print(f"{label}: baseline updated - {len(current)} grandfathered violation(s).")
-        return 0
-
     baseline = _load_baseline(baseline_path)
 
     current_r001 = {s for s in current if s.startswith("R001|")}
@@ -398,6 +396,12 @@ def _run_check(
 
     new = new_r001 | new_other
     resolved = resolved_r001 | resolved_other
+
+    if update_flag:
+        pruned = baseline - resolved
+        _write_baseline(pruned, baseline_path)
+        print(f"{label}: pruned {len(resolved)} resolved entry/entries; {len(pruned)} grandfathered remain.")
+        return 0
 
     if advisories:
         for sig in sorted(advisories):

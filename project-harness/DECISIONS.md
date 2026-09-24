@@ -466,13 +466,13 @@ tier-A overflow path. The file was ~290 lines before; it is now 323.
 
 ## DEC-074: game_window.py accepted at 350 lines (pre-existing 300-line exception)
 **Date:** 2026-06-05
-**Context:** `demo_game/ui/game_window.py` was already ~327 lines before EXP-80 (a pre-existing condition, no prior DECISIONS entry). EXP-80 added 23 lines (sandbox toggle + status line + DI param). The file is now 350 lines.
+**Context:** `demo_game/ui/layout/game_window.py` was already ~327 lines before EXP-80 (a pre-existing condition, no prior DECISIONS entry). EXP-80 added 23 lines (sandbox toggle + status line + DI param). The file was 350 lines at the time of this decision. The file has since grown to **925 lines** (grandfathered in `scripts/rules_baseline.txt` at that count per DEC-226), well past the 800-line hard limit. The split that would resolve the R001 waiver waits on T13.2 (the census that identifies which modules survive the deletion pass — splitting code T13.2 is expected to cut is wasted work). See ISSUE-376.
 **Options considered:**
   1. Extract sandbox-related methods into a `GameWindowSandboxMixin` — artificial; the toggle is 4 lines.
   2. Split into `game_window_input.py` + `game_window_render.py` — possible but would split a single coherent game loop across files, increasing coupling.
   3. Accept the overrun (demo file, cohesive single class).
 **Decision:** Option 3. `GameWindow` is a single pygame window class; splitting it is artificial. No further growth should be allowed without a real extraction (e.g. a dedicated `RenderLayer`).
-**Limit:** Do not grow this file further without extracting a cohesive subsystem (e.g. `demo_game/ui/poller_registry.py` for the 9 pollers).
+**Limit:** The file is grandfathered at 925 lines. It must not grow further. Split by responsibility (model, view wiring, event handling, rendering) per SRP after T13.2 completes — see ISSUE-376.
 
 Rules:
 - Append-only. Never delete entries.

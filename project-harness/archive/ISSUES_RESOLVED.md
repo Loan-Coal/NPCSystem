@@ -4262,3 +4262,12 @@ caught all five.
 **To fix:** For each method, seed the minimal nodes and assert the returned values. Re-run the
 counterfactual on the **first five methods in ISSUE-363 list order**, not a chosen sample.
 **Fixed:** 2026-09-24, in the ISSUE-366 commit — the four files that were empty-path-only (intent/interaction/investigation, chapter/political/emotion, quest, quest-generation) now seed minimal data and assert returned values (integration run: 107 -> 140 tests executed). The idempotency and world-state/routine files already had positive paths and are unchanged. Counterfactual on the first five methods in ISSUE-363 list order (`get_completed_quests_since_tick`, `get_max_beat_intensity_in_chapter`, `get_emotion_fields`, `ensure_constraints`, `get_record`): gutted one at a time, all five tests went red, restored. Five more spot checks (`get_unmet_needs`, `get_unlocked_quests`, `get_quest`, `get_candidate_ids_by_label`, `get_unprocessed_trigger_events`) also went red. `make check-integration-baseline` with `NEO4J_URI=bolt://localhost:7688`: OK, no new failures (3 known). Not covered: `apply_rewards_atomic` item rewards / delivery objectives (outside this issue), and the goal text in `get_giver_context` (ISSUE-374).
+
+## [FIXED] ISSUE-320: `check-rules` reports a resolved baseline entry on every run and never ratchets it down
+**Found:** 2026-09-07, during full-review (L9-07)
+**Severity:** P3
+**Where:** `scripts/rules_baseline.txt`, `scripts/check_rules.py`
+**Description:** A baseline entry whose underlying violation is resolved is still reported each run; the ratchet does not remove it. A baseline that cannot shrink stops being a ratchet.
+**Why deferred:** Cosmetic noise.
+**To fix:** Prune resolved entries and make the ratchet remove them automatically.
+**Fixed:** 2026-09-24, in T14.2. `_run_check` now loads the old baseline and prunes resolved entries (ratchet-down-only semantics) rather than replacing the baseline with the full current-violations set. Two stale R006 entries removed.
