@@ -130,7 +130,7 @@ Each line is binding. The skill named after it holds the detail and the rational
 - Structured logging via `utils/logging.py`. Never `print()`.
 - Prompt token budget enforced; structured LLM output validated through Pydantic;
   `build_prompt` is a pure function of its inputs.
-- Input caps at the API boundary. Auth on every route except `GET /health`.
+- Input caps at the API boundary. Auth on every route except `GET /health` and `GET /readiness`.
 
 **Programme rules (T programme)** — nine rules bound by the 2026-09-07 review. Each names its gate, or says it has none. A green `make check` says nothing about ungated rules; they are enforced by review only (DEC-249).
 - **Rule 1 — Reverse LOC ratchet.** Non-test LOC across `src/npc_engine/`, `scripts/`, `evals/` and `demo_game/` may only go down in total. Raising the baseline requires an explicit bump with a stated reason. **Gate: `make check-loc-ratchet`** (T10.2b).

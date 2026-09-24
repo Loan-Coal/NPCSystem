@@ -4218,3 +4218,16 @@ also returned after ~22 s (cause unknown).
 **To fix:** Treat a log that holds only `Execution error` as transient: retry the task once after
 a short sleep, then halt as today.
 **Fixed:** 2026-09-24, in the ISSUE-370 loop-retry commit — `run_one_task` retries a bare `Execution error` once after `TRANSIENT_RETRY_SLEEP_SECS`; pinned by `tests/unit/scripts/test_expand_loop_execution_error.py`.
+
+## [FIXED] ISSUE-368: `/readiness` is unauthenticated, contrary to "auth on every route except GET /health"
+**Found:** 2026-09-21, during post-loop review of T12.1
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/auth/middleware_helpers.py` (`is_public_path`: `HEALTH_PATH, READINESS_PATH`)
+**Description:** CLAUDE.md's strict rules and T12.1's spec both say only `GET /health` is public.
+`/readiness` is hard-coded public in every env. T12.1 neither tested nor logged the conflict;
+`test_public_route_set_is_pinned` now records it as the current surface.
+**Why deferred:** Changing the public surface is an interface change (ask-first). Orchestrator
+probes may depend on it.
+**To fix:** Owner decides: gate `/readiness`, or amend the rule and record a DEC. Then update
+`_EXPECTED_PUBLIC` in `tests/unit/api/test_create_app_auth_wiring.py`.
+**Fixed:** 2026-09-24, in DEC-289 — owner kept `/readiness` public; the auth rule in `project-harness/CLAUDE.md` now names `GET /health` and `GET /readiness`. No code change (`_EXPECTED_PUBLIC` already held both).

@@ -3488,18 +3488,6 @@ integration tests are the real protection.
 **To fix:** Delete each delegate test once ISSUE-366 gives its method a positive-path
 integration test. Do not rewrite them.
 
-## ISSUE-368: `/readiness` is unauthenticated, contrary to "auth on every route except GET /health"
-**Found:** 2026-09-21, during post-loop review of T12.1
-**Severity:** P2 (annoying)
-**Where:** `src/npc_engine/auth/middleware_helpers.py` (`is_public_path`: `HEALTH_PATH, READINESS_PATH`)
-**Description:** CLAUDE.md's strict rules and T12.1's spec both say only `GET /health` is public.
-`/readiness` is hard-coded public in every env. T12.1 neither tested nor logged the conflict;
-`test_public_route_set_is_pinned` now records it as the current surface.
-**Why deferred:** Changing the public surface is an interface change (ask-first). Orchestrator
-probes may depend on it.
-**To fix:** Owner decides: gate `/readiness`, or amend the rule and record a DEC. Then update
-`_EXPECTED_PUBLIC` in `tests/unit/api/test_create_app_auth_wiring.py`.
-
 ## ISSUE-369: `arm_probe._finish([])` reports PASS when no gate ran
 **Found:** 2026-09-21, during post-loop review of T12.2
 **Severity:** P3 (nice-to-fix)
@@ -3523,3 +3511,11 @@ failure when it lands wrong. CI's required `integration-tests` job can red on th
 start, which is test-design work.
 **To fix:** Have the test set the clock to a known pre-transition time before advancing, and seed
 (or skip with a clear reason) when `FOLLOWS_SCHEDULE` edges are absent.
+
+## ISSUE-372: five docs still say `/health` is the only public route
+**Found:** 2026-09-24, during DEC-289 (ISSUE-368)
+**Severity:** P3 (nice-to-fix)
+**Where:** `.claude/skills/npc-coding-principles/SKILL.md:119`, `.claude/commands/full-review.md:71`, `docs/BUSINESS_REQUIREMENTS.md:81`, `docs/INTEGRATION.md:37,86`, `docs/ARCHITECTURE.md:174`
+**Description:** DEC-289 amended the auth rule in `project-harness/CLAUDE.md` to name `GET /health` and `GET /readiness`. These files still state `/health` alone (`docs/API.md` and `docs/API_STABILITY.md` already list both). The live exempt set is wider still (CR-L05-06: `/setup/*`, `/docs`/`/redoc`/`/openapi.json`, `/dashboard/*`).
+**Why deferred:** DEC-289's task was the CLAUDE.md rule only; the skill is a rule source and the docs are integrator-facing, so each needs a look at the right wording.
+**To fix:** Align each to the public set in `tests/unit/api/test_create_app_auth_wiring.py` (`_EXPECTED_PUBLIC`) and the CR-L05-06 classes.

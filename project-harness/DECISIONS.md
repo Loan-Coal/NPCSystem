@@ -10252,3 +10252,15 @@ stack's 7688. They skip only when `NEO4J_*` is unset, which is why the gap is cl
 `NEO4J_URI=bolt://localhost:7687` against its own compose Neo4j (`.github/workflows/ci.yml`), so T11.3's
 tests do run in CI. Its `check-integration-baseline` is still a ratchet over a known-failing allowlist,
 not a zero-failure gate.
+
+## DEC-289: `GET /readiness` stays public alongside `GET /health`; the auth rule names both
+
+**Date:** 2026-09-24 · **Status:** ✅ ACCEPTED (owner, 2026-09-24) · **Drives:** `project-harness/CLAUDE.md` (auth rule), `src/npc_engine/auth/middleware_helpers.py` (`is_public_path`), `tests/unit/api/test_create_app_auth_wiring.py` (`_EXPECTED_PUBLIC`)
+
+**Context:** CLAUDE.md's strict rules said "Auth on every route except `GET /health`", and T12.1's spec said the same. The code has always exempted `/readiness` too (`is_public_path`), and `test_public_route_set_is_pinned` records both as the current public surface. The conflict was logged as ISSUE-368 with two ways out: gate `/readiness`, or amend the rule and record a DEC. Orchestrator probes may depend on it being reachable without a key.
+
+**Decision:** Keep `/readiness` public. The rule now reads "Auth on every route except `GET /health` and `GET /readiness`". No code changes; `_EXPECTED_PUBLIC` already holds both paths.
+
+**Rationale:** `/readiness` is the dependency-aware sibling of the liveness probe and returns only `{"status": "ready"|"degraded", "llm": "ok"|"unreachable"}`. An orchestrator needs it before it can hold a credential, and gating it would be a public-interface change for a route that leaks nothing beyond that.
+
+**What this does NOT change:** The other exempt classes CR-L05-06 lists (`/setup/*`, `/docs`/`/redoc`/`/openapi.json`, `/dashboard/*`) are untouched, as is the wording of the same rule in `docs/` and `.claude/skills/npc-coding-principles/SKILL.md` (ISSUE-372). ISSUE-369 stays open.
