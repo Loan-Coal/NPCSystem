@@ -285,3 +285,37 @@ PROBE_FACTORIES: dict[str, ProbeFactory] = {
 `SCENARIO_ADAPTER_FACTORIES` (EVAL-P12.4). **Applied again in:** `evals/probe_runner.py`
 merging all 6 `probe_<engine>.py` modules' `*_PROBE_FACTORIES` dicts into `PROBE_FACTORIES`
 (measurement-remediation Phase 4, DEC-271).
+
+## Pattern: integration tests seed with inline Cypher and clean up by id in a context manager
+
+A repository integration test needs real nodes in a Neo4j that other data already lives in
+(the eval stack holds the seeded demo world). Seed the minimum with inline Cypher inside an
+`@asynccontextmanager` that yields the `GraphDB`, and delete by id in its `finally`, so a
+failing test leaves no rows behind.
+
+Give every node the test creates a uuid-suffixed `id`, and pass those ids to the helper for
+cleanup. Assert on your own rows (present, with the right field values; a second seeded node
+that must not qualify is absent), never on whole-list equality, because global queries also
+see the demo data.
+**Why:** A test that only calls the method against absent ids stays green when the method is
+gutted to return `[]`/`None`/`0` (ISSUE-366). Seeding and asserting values catches that, and
+id-scoped cleanup keeps the shared graph usable for the next run.
+**Example:**
+```python
+@asynccontextmanager
+async def _seeded(cypher: str, ids: list[str], **params: Any) -> AsyncIterator[GraphDB]:
+    graph_db = _make_graph_db()
+    try:
+        await graph_db.connect()
+        async with graph_db.get_session() as session:
+            await session.run(cypher, **params)
+        yield graph_db
+    finally:
+        async with graph_db.get_session() as session:
+            await session.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=ids)
+        await graph_db.close()
+```
+**First applied in:** `tests/integration/test_intent_interaction_investigation_repository_integration.py`
+(ISSUE-366). **Applied again in:** `test_chapter_political_emotion_repository_integration.py`
+and `test_quest_generation_repository_integration.py` (the latter takes an `ids` dict and
+passes it as the query parameters).

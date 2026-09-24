@@ -10264,3 +10264,27 @@ not a zero-failure gate.
 **Rationale:** `/readiness` is the dependency-aware sibling of the liveness probe and returns only `{"status": "ready"|"degraded", "llm": "ok"|"unreachable"}`. An orchestrator needs it before it can hold a credential, and gating it would be a public-interface change for a route that leaks nothing beyond that.
 
 **What this does NOT change:** The other exempt classes CR-L05-06 lists (`/setup/*`, `/docs`/`/redoc`/`/openapi.json`, `/dashboard/*`) are untouched, as is the wording of the same rule in `docs/` and `.claude/skills/npc-coding-principles/SKILL.md` (ISSUE-372). ISSUE-369 stays open.
+
+## DEC-290: `expand_loop.sh` runs `main` only when executed, so tests can source it
+
+**Date:** 2026-09-24 · **Status:** ✅ ACCEPTED (owner, 2026-09-24) · **Drives:** `scripts/expand_loop.sh`, `tests/unit/scripts/test_expand_loop_execution_error.py`
+
+**Context:** ISSUE-370 needed a unit test for a change in `run_one_task`, but `expand_loop.sh` called `main` unconditionally on its last line, so sourcing it started the loop. Nothing in `tests/` covered the script before this.
+
+**Decision:** The final call is now `if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main; fi`. A test sources the script, stubs `run_claude_session`, `flag_for_human` and `log`, and calls `run_one_task` directly.
+
+**Rationale:** Behaviour is identical when the script is executed. Without the guard, the first test run started the real `main`; it stopped only because the new test file had left the tree dirty, so it was a near miss for an accidental live loop launch.
+
+**What this does NOT change:** the loop's preflight, gates, lock handling or frozen-path list (`scripts/expand_loop.sh` stays frozen for unattended sessions).
+
+## DEC-291: `test_revived_engines_do_work` pins the world clock with a direct Neo4j write
+
+**Date:** 2026-09-24 · **Status:** ✅ ACCEPTED (owner, 2026-09-24) · **Drives:** `tests/integration/test_revived_engines_do_work.py`
+
+**Context:** ISSUE-371: the routine test's outcome depended on where earlier runs left the persisted world clock. `POST /v1/clock/advance` only steps time forward, and no public route sets `time_of_day`.
+
+**Decision:** Before advancing, the test writes `WorldState.time_of_day = 'morning'` on the eval stack through the Neo4j driver, and skips with a reason when there are no `FOLLOWS_SCHEDULE` edges or no `WorldState` node. `morning` was chosen because every seeded routine NPC has a different target in the following slot, so at least one move is guaranteed whatever their prior placement.
+
+**Rationale:** The write is test-only and targets the eval stack (`bolt://localhost:7688`), never the default Neo4j (ISSUE-277). No production API is added for it.
+
+**What this does NOT change:** `src/` and the public API. `routine.moved` remains a weak signal, because scheduled NPCs are reset to `loc_temple` after every advance (ISSUE-373), so the test asserts a counter and not a persisted location.
