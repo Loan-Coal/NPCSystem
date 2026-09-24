@@ -200,3 +200,22 @@ Pattern flags `assert 'expected' == 'expected'` same as `assert 1 == 1`, but com
 
 **5. auth_wiring test samples routes** (edge case)  
 `test_protected_routes_return_401_without_credentials()` samples one route per prefix group. A new unprotected endpoint added to an already-tested group would escape detection.
+
+## 2026-09-24 15:15:41 — phase T14
+
+**T14 Review — 5 Concrete Findings:**
+
+1. **T14.1: Missing unit test for `_mypy_demo_baseline_count()` function.**  
+   New public function added to `check_harness_honesty.py` but tested only via mocks in H1 integration tests. No direct unit test validates file-read behavior (e.g., returns 0 when file absent, correctly parses integer from file). Consistent with `_mypy_baseline_count()` pattern, but is a gap.
+
+2. **T14.2: Missing edge case test in ratchet suite.**  
+   Test file covers "resolved entries pruned" and "all resolved" cases, but not "no resolved entries" (baseline unchanged). When `current == baseline`, the ratchet should write an identical file; this scenario should be tested.
+
+3. **T14.2: Removed R006 baseline entries lack explanatory link.**  
+   Two R006 violations auto-pruned from `rules_baseline.txt` (`clique_formation_engine._run_formation`, `faction_politics/rules_loader.load_rules`) but no DECISIONS or ISSUES entry explains why they were fixed. Ratchet is working correctly, but loss of context about the fixes. Consider logging in `archive/ISSUES_RESOLVED.md` if fixes are noteworthy.
+
+4. **T14.1: Inconsistent placement of type-demo in check target.**  
+   New `type-demo` inserted between `type-evals` and `check-human-gates`, but no comment explains ordering rationale. Given the comment style elsewhere in Makefile, a one-line note on why `type-demo` belongs after `type-evals` (or vice versa) would clarify intent.
+
+5. **Project rule compliance: All correct.**  
+   No files over 800 lines, no functions over 40 lines, all new functions have type annotations and docstrings, no demo_game/ files edited, ISSUE/DECISIONS entries properly logged. T14.1 and T14.2 both follow layer rules and SRP.
