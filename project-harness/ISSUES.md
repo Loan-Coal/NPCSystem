@@ -3460,21 +3460,6 @@ approach: use `coverage report --include="evals/arm_probe*.py" --fail-under=NNN`
 P9 measurement modules specifically, or write a script that fails if any single `evals/*.py`
 module drops below a per-file threshold (e.g., 50%). Register the gate in `scripts/loop_gates.py`.
 
-## ISSUE-366: ~33 of T11.3's 54 repository methods are integration-tested only on the empty path
-**Found:** 2026-09-21, during post-loop review of T11.3
-**Severity:** P2 (annoying)
-**Where:** `tests/integration/test_*_repository_integration.py` (the six files T11.3 added)
-**Description:** About 21 of the 54 ISSUE-363 methods get a write-then-read-back check. The rest
-are exercised only against absent ids, or asserted only by `isinstance(result, list)` / key
-presence — e.g. all six intent-file tests, `get_quest`, `get_unlocked_quests`,
-`get_candidate_ids_by_label`, `get_unprocessed_trigger_events`. Gutting one of these to return
-`[]`/`None`/`0` stays green. They do still catch Cypher syntax and schema errors. T11.3's
-five-method counterfactual sampled only methods with positive assertions, which is why it
-caught all five.
-**Why deferred:** Post-loop review scope was repairs only; ~33 positive-path tests is new work.
-**To fix:** For each method, seed the minimal nodes and assert the returned values. Re-run the
-counterfactual on the **first five methods in ISSUE-363 list order**, not a chosen sample.
-
 ## ISSUE-367: ~110 mock-echo delegate tests in tests/unit/graph/ were never strengthened
 **Found:** 2026-09-21, during post-loop review of T11.2
 **Severity:** P3 (nice-to-fix)
@@ -3513,3 +3498,11 @@ list. That is the owner's call, not a review fix.
 **Description:** On a seeded eval stack, `captain_sorn`, `mira_innkeeper`, `lira_fence` and `old_henryk` are always found at `loc_temple` with `arrived_at_tick=0` after an advance, though the routine engine reported `moved>0` and archived `WAS_AT` departures from `loc_temple` (61 by the fifth run). Calling `update_character_location` directly against the same graph does persist the move, and a second advance reports `moved=3` (Sorn was left at his target) yet all four are back at the temple afterwards. So `routine.moved` counts moves that do not stick, which is also why `test_revived_engines_do_work` asserts a counter and not a location. `Neo4jPlanningRepository` also calls `update_character_location`.
 **Why deferred:** Out of scope for ISSUE-371 (test determinism). Not investigated beyond the probes above.
 **To fix:** Find what rewrites `LOCATED_AT` to the seed default each tick (start with the planning and need-decay paths), then make the routine test assert the persisted `LOCATED_AT`, not `moved`.
+
+## ISSUE-374: `get_giver_context` always returns `[""]` for goals — it reads `objective`, the query returns `description`
+**Found:** 2026-09-24, during ISSUE-366 (positive-path tests for the quest-generation repository)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/graph/repositories/quest_generation_repository.py:88` (`g.get("objective", "")`); the query is `src/npc_engine/graph/needs_goals/goal_queries.py` (returns `g.description AS description`)
+**Description:** The goal rows carry the key `description`, so `get_giver_context` builds `"goals": [""]` for every giver with goals. An integration test asserting the seeded goal text failed with `[''] == ['Protect the forge']`, which confirms it. The quest-generation prompt therefore never sees the giver's goals. The test now asserts only the goal count, and says why in a comment.
+**Why deferred:** The task was test strengthening; a `src/` fix is out of scope.
+**To fix:** Read `description` (or align the query's alias), then assert the goal text in `test_get_giver_context_assembles_seeded_character`.

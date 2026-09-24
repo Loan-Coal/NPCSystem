@@ -4246,3 +4246,19 @@ start, which is test-design work.
 **To fix:** Have the test set the clock to a known pre-transition time before advancing, and seed
 (or skip with a clear reason) when `FOLLOWS_SCHEDULE` edges are absent.
 **Fixed:** 2026-09-24, in the ISSUE-371 commit — the test now pins `WorldState.time_of_day` to `morning` before advancing (a slot where every seeded routine NPC has a different target than the next one, so a move is guaranteed whatever the prior state) and skips with a reason when `FOLLOWS_SCHEDULE` edges or the `WorldState` node are absent. Verified against the eval stack (:7688): unseeded run skips; seeded, 3 of 3 runs pass. The original one-off `moved=0` was not reproduced on demand. `test_npc_top_need_is_populated` is unchanged, since its job is to detect missing HAS_NEED edges. See ISSUE-373 for why `moved` is a weak signal.
+
+## [FIXED] ISSUE-366: ~33 of T11.3's 54 repository methods are integration-tested only on the empty path
+**Found:** 2026-09-21, during post-loop review of T11.3
+**Severity:** P2 (annoying)
+**Where:** `tests/integration/test_*_repository_integration.py` (the six files T11.3 added)
+**Description:** About 21 of the 54 ISSUE-363 methods get a write-then-read-back check. The rest
+are exercised only against absent ids, or asserted only by `isinstance(result, list)` / key
+presence — e.g. all six intent-file tests, `get_quest`, `get_unlocked_quests`,
+`get_candidate_ids_by_label`, `get_unprocessed_trigger_events`. Gutting one of these to return
+`[]`/`None`/`0` stays green. They do still catch Cypher syntax and schema errors. T11.3's
+five-method counterfactual sampled only methods with positive assertions, which is why it
+caught all five.
+**Why deferred:** Post-loop review scope was repairs only; ~33 positive-path tests is new work.
+**To fix:** For each method, seed the minimal nodes and assert the returned values. Re-run the
+counterfactual on the **first five methods in ISSUE-363 list order**, not a chosen sample.
+**Fixed:** 2026-09-24, in the ISSUE-366 commit — the four files that were empty-path-only (intent/interaction/investigation, chapter/political/emotion, quest, quest-generation) now seed minimal data and assert returned values (integration run: 107 -> 140 tests executed). The idempotency and world-state/routine files already had positive paths and are unchanged. Counterfactual on the first five methods in ISSUE-363 list order (`get_completed_quests_since_tick`, `get_max_beat_intensity_in_chapter`, `get_emotion_fields`, `ensure_constraints`, `get_record`): gutted one at a time, all five tests went red, restored. Five more spot checks (`get_unmet_needs`, `get_unlocked_quests`, `get_quest`, `get_candidate_ids_by_label`, `get_unprocessed_trigger_events`) also went red. `make check-integration-baseline` with `NEO4J_URI=bolt://localhost:7688`: OK, no new failures (3 known). Not covered: `apply_rewards_atomic` item rewards / delivery objectives (outside this issue), and the goal text in `get_giver_context` (ISSUE-374).
