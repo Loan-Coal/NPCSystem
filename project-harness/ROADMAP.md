@@ -2099,7 +2099,7 @@ ISSUE-339 is **not** fixed here, per the task's own instruction to state that ex
 open, and `probe_runner.py`'s engine-name mapping fix must land separately before
 `working_set_size` is visible to the eval probes. ✅ AUTO (T15.1, 2026-10-20)
 
-- [ ] **T15.2** Assert the surviving portfolio actually works
+- [x] **T15.2** Assert the surviving portfolio actually works
 Files: new `tests/integration/test_engine_census_does_work.py` or a `make` target, `docs/ENGINES.md`
 Spec: T4.2 gated *reachability* statically; this gates *effect* dynamically, which is the half that
 needs a running stack. Bring a stack up, advance the clock several ticks against the seeded world,
@@ -2120,7 +2120,7 @@ current tree, after T5.1 and T5.2, they must pass. Get that old tree with
 rather than a `git worktree`, for the reasons T4.2 gives.
 Validation: run against a stack, then `make check`.
 Done when: the check exists, passes on this tree, and demonstrably fails before Sprint 3.
-Finding L13, census section.
+Finding L13, census section. ✅ AUTO (T15.2, 2026-10-20)
 
 - [ ] **T15.3** Close the three API-boundary security findings nothing scheduled
 Pre-approved: public-interface · owner 2026-09-09

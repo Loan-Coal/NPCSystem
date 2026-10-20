@@ -3478,6 +3478,14 @@ Remove `.mypy_baseline_demo` and the `type-demo` ratchet target when the count r
 **Why deferred:** The task was test strengthening; a `src/` fix is out of scope.
 **To fix:** Read `description` (or align the query's alias), then assert the goal text in `test_get_giver_context_assembles_seeded_character`.
 
+## ISSUE-377: `docs/ENGINES.md` capability catalog still lists engines deleted in T4.1
+**Found:** 2026-10-20, during T15.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `docs/ENGINES.md` — "Mood contagion" (l.122), "Clique formation" (l.131), "Deception" (l.138), "Currency" (l.153), "Skills & XP" (l.154) rows in the capability catalog
+**Description:** T4.1 deleted five engine directories (`mood_contagion`, `clique`, `skill`, `deception`, `currency`) but did not update the per-engine rows in `docs/ENGINES.md`. The ROADMAP spec for T15.2 states that T4.1 already updated those rows — it did not, leaving five stale entries describing engines that no longer exist.
+**Why deferred:** T15.2 owns the tick-order and dependency sections only; the description rows belong to the deleting task. Changing them here would mix responsibilities.
+**To fix:** Remove or annotate the five stale rows from `docs/ENGINES.md`, confirming each against the current `src/npc_engine/engines/` directory.
+
 ## ISSUE-376: split `demo_game/ui/layout/game_window.py` by responsibility (waits on T13.2)
 **Found:** 2026-09-24, during T14.2
 **Severity:** P2 (annoying)

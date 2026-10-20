@@ -46,10 +46,6 @@ within the same tick:
    `player_model`, `director`, `memory_decay`, `scheme_advance`, `scheme_detection`
 6. **Memory consolidation** *(advance-cadence, LLM)*
 
-> **Discrepancy note (T6.2, 2026-09-18):** the previous step 5 listed engines that were
-> removed in Sprints 1–2 (`clique`, `skill_progression`, `oath`, `mood_contagion`,
-> `succession`, `military`). The list above reflects the actual current implementation.
-
 Cadences are configurable. Gossip and event generation run every *N* ticks
 (`GOSSIP_TICK_INTERVAL`, `EVENT_TICK_INTERVAL`); several engines self-gate on their own
 interval and no-op on off-ticks. Each engine is run in isolation — an exception in one
@@ -77,9 +73,12 @@ gates every pair below.
 
 ### Observing engines
 
-- `GET /v1/admin/system/engines` — per-engine last-run tick, last error, and error count.
+- `GET /v1/admin/system/engines` — per-engine last-run tick, last error, error count, and
+  `working_set_size` (sum of work-count fields from the engine's last result; zero means the
+  engine ran but processed nothing; `null` means the engine has not yet reported a result).
 - `GET /v1/clock/state` — current tick plus next gossip/event tick.
-- `GET /v1/admin/system/metrics` — in-process request and engine metrics snapshot.
+- `GET /v1/admin/system/metrics` — in-process request and engine metrics snapshot; includes
+  `engine_error_count`, `engine_last_error_tick` and `engine_working_set_size` gauges.
 
 ### LLM usage
 
