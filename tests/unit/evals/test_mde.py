@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "evals"))
 from mde import (  # noqa: E402
     RECORDED_GUARD_FLOOR_PP,
     RECORDED_GUARD_N,
+    RECORDED_KAPPAS,
     JudgeCriterion,
     arm_pairing_mde,
     implied_discordance_rate,
@@ -148,3 +149,14 @@ def test_required_pairs_is_infinite_for_a_chance_level_judge() -> None:
     assert required_pairs_for(
         true_effect_pp=6.4, kappa=0.0, discordance_rate=0.04
     ) == float("inf")
+
+
+def test_recorded_kappas_names_only_surviving_scorers() -> None:
+    """RED anchor (T16.5): RECORDED_KAPPAS must not include retired refusal_judge
+    and must include commits_judge which DEC-269 split out from affirms_judge.
+
+    Fails today because refusal_judge is in RECORDED_KAPPAS and commits_judge is not.
+    """
+    names = {name for name, _ in RECORDED_KAPPAS}
+    assert "refusal_judge" not in names, "refusal_judge is retired (DEC-269)"
+    assert "commits_judge" in names, "commits_judge is missing from RECORDED_KAPPAS"

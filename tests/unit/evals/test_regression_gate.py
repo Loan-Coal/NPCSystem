@@ -23,13 +23,18 @@ from regression_gate import check_regression, format_regression_report
 from trend_store import RateWithCI, TrendRow
 
 
-def _row(gen_id: str, *, guard: RateWithCI | None = None, capability: RateWithCI | None = None,
-         inconclusive_rate: float | None = 0.0) -> TrendRow:
+def _row(
+    gen_id: str,
+    *,
+    guard_adversarial: RateWithCI | None = None,
+    capability: RateWithCI | None = None,
+    inconclusive_rate: float | None = 0.0,
+) -> TrendRow:
     return TrendRow(
         gen_id=gen_id,
         harness_version="v1",
         recorded_at="2026-08-17T00:00:00+00:00",
-        guard=guard,
+        guard_adversarial=guard_adversarial,
         capability=capability,
         inconclusive_rate=inconclusive_rate,
     )
@@ -57,8 +62,8 @@ def test_overlapping_intervals_do_not_trigger_a_regression() -> None:
     own point estimate — confirmed by re-running this exact comparison
     with identical before/after data and observing a false positive before
     the fix.)"""
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.87, ci_low=0.80, ci_high=0.93, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.87, ci_low=0.80, ci_high=0.93, n=94))
     # candidate.rate (0.87) < baseline.rate (0.90), but candidate's CI upper
     # bound (0.93) still reaches above baseline's point estimate — no fire.
     report = check_regression(candidate, baseline)
@@ -70,13 +75,13 @@ def test_real_drop_below_baseline_point_estimate_fires() -> None:
     """A genuine drop — candidate's entire CI below the baseline's point
     estimate — must fire, and the message must name the metric, both
     intervals, and n."""
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94))
     report = check_regression(candidate, baseline)
     assert report.regressed is True
     assert len(report.findings) == 1
     f = report.findings[0]
-    assert f.metric == "guard"
+    assert f.metric == "guard_adversarial"
     assert "0.70" in f.message  # candidate rate
     assert "0.90" in f.message  # baseline point estimate
     assert "94" in f.message    # n
@@ -88,16 +93,16 @@ def test_real_drop_below_baseline_point_estimate_fires() -> None:
 
 
 def test_mcnemar_worse_verdict_fires_regardless_of_rates() -> None:
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.95, ci_low=0.90, ci_high=0.98, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.95, ci_low=0.90, ci_high=0.98, n=94))
     report = check_regression(candidate, baseline, paired=_paired("worse"))
     assert report.regressed is True
     assert any(f.metric == "paired_mcnemar" for f in report.findings)
 
 
 def test_mcnemar_better_or_no_change_does_not_fire() -> None:
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.92, ci_low=0.91, ci_high=0.96, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.92, ci_low=0.91, ci_high=0.96, n=94))
     for verdict in ("better", "no_detectable_change"):
         report = check_regression(candidate, baseline, paired=_paired(verdict))
         assert report.regressed is False
@@ -120,8 +125,8 @@ def test_inconclusive_rate_at_threshold_does_not_fire() -> None:
 
 def test_missing_rate_on_either_side_is_not_a_regression_call() -> None:
     """An unmeasured rate is a validity problem, not this function's job to flag."""
-    baseline = _row("gen_base", guard=None)
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.5, ci_low=0.4, ci_high=0.6, n=10))
+    baseline = _row("gen_base", guard_adversarial=None)
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.5, ci_low=0.4, ci_high=0.6, n=10))
     report = check_regression(candidate, baseline)
     assert report.regressed is False
 
@@ -129,19 +134,19 @@ def test_missing_rate_on_either_side_is_not_a_regression_call() -> None:
 def test_multiple_findings_all_reported_together() -> None:
     baseline = _row(
         "gen_base",
-        guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94),
+        guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94),
         capability=RateWithCI(rate=0.80, ci_low=0.72, ci_high=0.87, n=48),
     )
     candidate = _row(
         "gen_new",
-        guard=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94),
+        guard_adversarial=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94),
         capability=RateWithCI(rate=0.60, ci_low=0.50, ci_high=0.68, n=48),
         inconclusive_rate=0.5,
     )
     report = check_regression(candidate, baseline, paired=_paired("worse"))
     assert len(report.findings) == 4
     assert {f.metric for f in report.findings} == {
-        "guard", "capability", "paired_mcnemar", "inconclusive_rate",
+        "guard_adversarial", "capability", "paired_mcnemar", "inconclusive_rate",
     }
 
 
@@ -151,19 +156,19 @@ def test_multiple_findings_all_reported_together() -> None:
 
 
 def test_format_no_regression() -> None:
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.92, ci_low=0.91, ci_high=0.96, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.92, ci_low=0.91, ci_high=0.96, n=94))
     report = check_regression(candidate, baseline)
     assert format_regression_report(report) == "NO REGRESSION DETECTED"
 
 
 def test_format_lists_every_finding() -> None:
-    baseline = _row("gen_base", guard=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
-    candidate = _row("gen_new", guard=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94))
+    baseline = _row("gen_base", guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=94))
+    candidate = _row("gen_new", guard_adversarial=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=94))
     report = check_regression(candidate, baseline)
     text = format_regression_report(report)
     assert "REGRESSION DETECTED" in text
-    assert "[guard]" in text
+    assert "[guard_adversarial]" in text
 
 
 # ---------------------------------------------------------------------------
@@ -198,10 +203,30 @@ def test_a_perfect_run_never_regresses_against_itself_at_any_n() -> None:
         perfect = RateWithCI(rate=1.0, ci_low=low, ci_high=high, n=n)
         row = TrendRow(
             gen_id="same", harness_version="v1", recorded_at="2026-08-25T00:00:00+00:00",
-            guard=perfect, capability=perfect, inconclusive_rate=0.0,
+            guard_adversarial=perfect, capability=perfect, inconclusive_rate=0.0,
         )
         report = check_regression(row, row)
         assert report.regressed is False, f"perfect run self-fired at n={n}: {report.findings}"
+
+def test_guard_adversarial_regression_fires() -> None:
+    """RED anchor (T16.5): guard_adversarial must trigger check_regression.
+
+    Before T16.5 check_regression reads the retired .guard field, which is None
+    on every row written since DEC-243 — so _rate_regressed returns False and this
+    check is a structural no-op. Fails today because regressed=False is returned.
+    """
+    baseline = TrendRow(
+        gen_id="base", harness_version="v1", recorded_at="2026-10-20T00:00:00+00:00",
+        guard_adversarial=RateWithCI(rate=0.90, ci_low=0.85, ci_high=0.95, n=111),
+    )
+    candidate = TrendRow(
+        gen_id="new", harness_version="v1", recorded_at="2026-10-20T00:00:00+00:00",
+        guard_adversarial=RateWithCI(rate=0.70, ci_low=0.60, ci_high=0.78, n=111),
+    )
+    report = check_regression(candidate, baseline)
+    assert report.regressed is True
+    assert any(f.metric == "guard_adversarial" for f in report.findings)
+
 
 def test_a_perfect_battery_never_regresses_against_itself_at_any_k() -> None:
     """The corrected-interval twin of the sweep above (R2.6b).
@@ -225,7 +250,7 @@ def test_a_perfect_battery_never_regresses_against_itself_at_any_k() -> None:
                                  n=br.n_records)
             row = TrendRow(
                 gen_id="same", harness_version="v1", recorded_at="2026-08-25T00:00:00+00:00",
-                guard=perfect, capability=perfect, inconclusive_rate=0.0,
+                guard_adversarial=perfect, capability=perfect, inconclusive_rate=0.0,
             )
             report = check_regression(row, row)
             assert report.regressed is False, (

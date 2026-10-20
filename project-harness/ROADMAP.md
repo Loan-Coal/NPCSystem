@@ -2309,7 +2309,7 @@ Done when: both fields are recorded, the stale-image case is demonstrated to dif
 rule 9 as the attribution the A/B rests on.
 DEC-281 (c). ✅ AUTO (T16.4, 2026-10-20)
 
-- [ ] **T16.5** Correct the two measurement constants that name retired things
+- [x] **T16.5** Correct the two measurement constants that name retired things
 Pre-approved: file-deletion · owner 2026-09-08 · DEC-281
 Files: `evals/regression_gate.py`, `evals/mde.py`, `tests/unit/evals/test_regression_gate.py`,
 `tests/unit/evals/test_mde.py`
@@ -2333,7 +2333,7 @@ the surviving scorers — it names `refusal_judge` today. Both fail.
 Verify: `pytest tests/unit/evals/test_regression_gate.py tests/unit/evals/test_mde.py -v`, then
 `make check-evals-rules`, `make type-evals`, `make test-cov-evals`, then `make check`.
 Done when: both anchors are green and the LOC delta is reported — this one should be negative or flat.
-DEC-281, "Found while auditing".
+DEC-281, "Found while auditing". ✅ AUTO (T16.5, 2026-10-20)
 
 - [ ] **T16.6** Stop the eval harness recording `None` model digests from live-network defaults
 Pre-approved: public-interface · owner 2026-09-09

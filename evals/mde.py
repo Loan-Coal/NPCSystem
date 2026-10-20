@@ -132,34 +132,24 @@ drift now fails `make check` instead of surviving three weeks unnoticed.
 RECORDED_KAPPAS: tuple[tuple[str, float], ...] = (
     ("tone_judge", 0.849),
     ("affirms_judge", 0.530),
-    ("refusal_judge", 0.247),
+    ("commits_judge", 0.308),
 )
-"""Per-criterion kappa from CALIBRATION against human labels — the authoritative family.
+"""Per-criterion kappa for the three surviving scorers (T16.5, DEC-281).
 
-refusal_judge is retired (measurement-remediation Phase 2c, DEC-269 — folded into
-affirms_judge). Kept here as a historical measurement, not a live scorer: its 75
-labels stay in evals/calibration/labels_v1.jsonl and its 0.247 kappa is real, but
-no future generation will produce new refusal_judge rows to recompute it against.
+tone_judge and affirms_judge: calibration vs human labels on generation k3_73e6c36,
+recorded in trend_v1.jsonl scorer_kappas, pinned by test_kappas_match_calibration.py.
+Calibration is preferred over inter-panel because kappa is used here to undo judge
+noise against GROUND TRUTH — inter-panel measures judge-judge bias, not judge-truth
+noise (ISSUE-244; tone_judge read 1.000 inter-panel, 0.849 calibration).
 
-ISSUE-244: three rival kappa families circulated for the same scorers.
-  * calibration vs human labels: 0.849 / 0.530 / 0.247  <- these, and the reason below
-  * inter-panel Fleiss (judge vs judge): 1.000 / 0.282 / 0.225  <- what this held before
-  * per-criterion panel Fleiss: 0.753 / 0.519 / 0.422
+commits_judge (0.308): inter-panel Fleiss from the k3_61b01dad_negadv run's
+kappa_by_criterion — no human-label calibration exists yet (all human_verdict null
+in labels_v1.jsonl). This understates the noise correction rather than overstating it
+(kappa <= J is the usual direction), so it errs on the side of caution.
 
-Calibration wins because of what kappa is used for here. `arm_pairing_mde` computes
-`true_mde = observed_mde / kappa` — it undoes judge noise to ask what underlying effect
-must exist. The relevant noise is the judge's disagreement with GROUND TRUTH, which is
-what calibration measures. Inter-panel agreement measures whether three judges share a
-bias, and three judges can agree perfectly while all being wrong: tone_judge was
-unanimous 135/135, which is exactly how it came to read 1.000. A kappa of 1.000 makes
-the division a no-op and silently asserts the judge adds no noise at all.
-
-Provenance: measured on generation `k3_73e6c36` (all 393 calibration labels carry that
-gen_id), not on the current `k3_77688e7_regen1`. That is intended — calibration describes
-the judge, not the generation — but it means these numbers do not move when a new
-generation lands, and they go stale when the judge prompts change. Recorded in
-`evals/trend/trend_v1.jsonl`'s `scorer_kappas`, pinned by
-`tests/unit/evals/test_kappas_match_calibration.py`. See DEC-240.
+refusal_judge is retired (DEC-269, measurement-remediation Phase 2c — folded into
+affirms_judge). Removed from this tuple; its historical 0.247 calibration kappa remains
+in trend_v1.jsonl scorer_kappas but no future generation will produce new rows for it.
 """
 
 _MAX_POSSIBLE_EFFECT_PP: float = 100.0

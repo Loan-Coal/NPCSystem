@@ -38,7 +38,8 @@ class RegressionFinding(BaseModel):
     """One reason a candidate run was flagged as a regression.
 
     Attributes:
-        metric: Which metric fired ('guard', 'capability', 'paired_mcnemar',
+        metric: Which metric fired ('guard_adversarial',
+            'guard_anti_hallucination', 'capability', 'paired_mcnemar',
             'inconclusive_rate').
         message: Human-readable explanation naming the metric, both
             intervals (or values), and n — never a bare "regressed".
@@ -131,6 +132,18 @@ def _inconclusive_finding(rate: float, threshold: float) -> RegressionFinding:
     )
 
 
+def _append_rate_finding(
+    findings: list[RegressionFinding],
+    metric: str,
+    candidate_rate: RateWithCI | None,
+    baseline_rate: RateWithCI | None,
+) -> None:
+    """Append a rate finding when the candidate regresses on this metric."""
+    if _rate_regressed(candidate_rate, baseline_rate):
+        assert candidate_rate is not None and baseline_rate is not None
+        findings.append(_rate_finding(metric, candidate_rate, baseline_rate))
+
+
 def check_regression(
     candidate: TrendRow,
     baseline: TrendRow,
@@ -156,15 +169,10 @@ def check_regression(
     """
     findings: list[RegressionFinding] = []
 
-    if _rate_regressed(candidate.guard, baseline.guard):
-        # _rate_regressed already returned True, which is only possible when
-        # both sides are non-None (see its own None-guards) — asserting here
-        # narrows the type for the call below instead of silencing mypy.
-        assert candidate.guard is not None and baseline.guard is not None
-        findings.append(_rate_finding("guard", candidate.guard, baseline.guard))
-    if _rate_regressed(candidate.capability, baseline.capability):
-        assert candidate.capability is not None and baseline.capability is not None
-        findings.append(_rate_finding("capability", candidate.capability, baseline.capability))
+    # guard was retired (DEC-243); its two successors are checked separately.
+    _append_rate_finding(findings, "guard_adversarial", candidate.guard_adversarial, baseline.guard_adversarial)
+    _append_rate_finding(findings, "guard_anti_hallucination", candidate.guard_anti_hallucination, baseline.guard_anti_hallucination)
+    _append_rate_finding(findings, "capability", candidate.capability, baseline.capability)
     if paired is not None and paired.verdict == "worse":
         findings.append(_paired_finding(paired))
     if candidate.inconclusive_rate is not None and candidate.inconclusive_rate > max_inconclusive_rate:
