@@ -59,7 +59,7 @@ def _rate_with_ci(rate: float | None, ci_low: float | None, ci_high: float | Non
 
 
 def _harness_version(gen_dir: Path) -> str:
-    """Read harness_version from a gen_dir's meta.json, or a sentinel if absent."""
+    """Read harness_version from a gen_dir's transcript config, or a sentinel if absent."""
     transcript = read_transcript(gen_dir / TRANSCRIPT_FILENAME)
     if transcript.config is None:
         return _UNKNOWN_HARNESS_VERSION
@@ -67,6 +67,22 @@ def _harness_version(gen_dir: Path) -> str:
     # otherwise) — the same type-checker gap regression_gate._rate_regressed
     # documents, not a real runtime ambiguity.
     return str(transcript.config.harness_version)
+
+
+def _case_set_version(gen_dir: Path) -> str:
+    """Read case_set_version from a gen_dir's transcript config, or '' if absent."""
+    transcript = read_transcript(gen_dir / TRANSCRIPT_FILENAME)
+    if transcript.config is None:
+        return ""
+    return str(transcript.config.case_set_version or "")
+
+
+def _harness_fields(gen_dir: Path) -> dict[str, str]:
+    """Instrument and case-set version fields for a TrendRow (T16.3 split)."""
+    return {
+        "harness_version": _harness_version(gen_dir),
+        "case_set_version": _case_set_version(gen_dir),
+    }
 
 
 def _receipt_token_budget(gen_dir: Path) -> int | None:
@@ -239,7 +255,7 @@ def build_trend_row(
     status = _panel_status(gen_dir, status_path)
     return TrendRow(
         gen_id=gen_id,
-        harness_version=_harness_version(gen_dir),
+        **_harness_fields(gen_dir),
         recorded_at=recorded_at or datetime.now(timezone.utc).isoformat(),
         inconclusive_rate=_inconclusive_rate(eval_summary),
         prompt_token_budget=_receipt_token_budget(gen_dir),  # the engine's, not meta.json's

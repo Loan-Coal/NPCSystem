@@ -2242,7 +2242,7 @@ T10.2b seeded the ratchet — if the delta is positive, bump `scripts/loc_baseli
 commit with the reason, per rule 1 (T10.2b is instructed to budget it, so a bump should not be needed).
 Findings L9-05, L9-06, ISSUE-318, ISSUE-319. ✅ AUTO (T16.2, 2026-10-20)
 
-- [ ] **T16.3** Split `harness_version` so a case edit stops orphaning every prior run
+- [x] **T16.3** Split `harness_version` so a case edit stops orphaning every prior run
 Pre-approved: public-interface · owner 2026-09-08 · DEC-281
 Files: `evals/_run_config_hashing.py`, `evals/run_config.py`, `evals/comparability.py`,
 `evals/trend_store.py`, `evals/trend_row_builder.py`, `docs/REGRESSION_POLICY.md`, new test
@@ -2279,7 +2279,7 @@ Done when: the test is green, `docs/REGRESSION_POLICY.md` matches the code, the 
 `DECISIONS.md`, and the two existing trend rows are either comparable or documented as legitimately
 not. LOC delta is positive (about +15) — state in the completion note that this buys the
 comparability the whole eval layer rests on, per rule 9.
-DEC-281 (b).
+DEC-281 (b). ✅ AUTO (T16.3, 2026-10-20)
 
 - [ ] **T16.4** Record the engine's build sha, not the client's working tree
 Pre-approved: public-interface · owner 2026-09-08 · DEC-281

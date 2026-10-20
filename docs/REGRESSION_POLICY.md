@@ -24,8 +24,10 @@ The baseline is the most recently recorded trend row **comparable with the candi
 both dimensions of `ComparabilityKey`** (`evals/comparability.py`, applied by
 `trend_store.latest_comparable_row` and narrated by `evals/baseline_selection.py`):
 
-1. **`harness_version`** — hashes `evals/cases/`, `prompts/eval/` and `matchers.py`, so
-   editing a case or a judge criterion changes what is being measured.
+1. **`harness_version`** — hashes `prompts/eval/` and `matchers.py` (the instrument only,
+   T16.3). Editing a judge criterion or matcher changes what is being measured. A case
+   edit changes `case_set_version` on the row but NOT this key; case-set drift is handled
+   by `compare.py`'s case-intersection refusal.
 2. **`judge_identity`** — the instrument that actually scored the run (`panel:<sorted
    roster>` or a single model name), resolved from `run_status.json` exactly as
    `compare.py` resolves it (DEC-190). An **empty** judge identity matches nothing: an
@@ -136,11 +138,12 @@ to `regression_gate.py` ever reintroduces `ci_low` here, that same self-comparis
 
 ```python
 from baseline_selection import format_baseline_choice, select_baseline
+from comparability import key_for
 from instrument_gate import check_instrument, format_instrument_report
 from regression_gate import check_regression, format_regression_report
 from trend_store import read_trend_rows
 
-choice = select_baseline(candidate_row.harness_version, read_trend_rows())
+choice = select_baseline(key_for(candidate_row), read_trend_rows())
 print(format_baseline_choice(choice, candidate_row.recorded_at))
 if choice.row is None:
     sys.exit(2)  # nothing comparable — refuse rather than guess

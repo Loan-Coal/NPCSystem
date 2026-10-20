@@ -36,6 +36,7 @@ from _run_config_corpus import corpus_fields
 from _run_config_hashing import (
     GoldenSetVersionError,
     hash_dialogue_prompts as _hash_dialogue_prompts,
+    resolve_case_set_version,
     resolve_golden_set_version,
     resolve_harness_version,
 )
@@ -182,11 +183,15 @@ class RunConfig(BaseModel):
         git_sha: Short (7-char) git commit hash at the time resolve_run_config() ran.
         golden_set_version: First 12 hex chars of a SHA-256 digest over sorted case file
             names and bytes — changes on any content edit, stable across mtime-only changes.
-        harness_version: First 12 hex chars of a SHA-256 digest covering all comparability
-            inputs: recursive .yaml case files, prompts/eval/*.yaml judge criteria, and
-            evals/matchers.py (which encodes judge sampling options). Replaces
-            golden_set_version as the comparability key — two runs are comparable only
-            when their harness_version values match.
+        harness_version: First 12 hex chars of a SHA-256 digest covering the eval
+            instrument: prompts/eval/*.yaml judge criteria and evals/matchers.py (which
+            encodes judge sampling options). T16.3: case files are no longer included —
+            they are tracked by case_set_version so editing a case does not orphan every
+            prior run. Two runs are comparable when their harness_version values match.
+        case_set_version: First 12 hex chars of a SHA-256 digest over recursive
+            .yaml case files under evals/cases/. Changes on any case edit; does NOT
+            affect ComparabilityKey or baseline selection (case-set drift is handled
+            by compare.py's case-intersection refusal).
         dialogue_prompt_hash: First 12 hex chars of a SHA-256 digest over all YAML files
             under src/npc_engine/prompts/ — changes when any runtime LLM prompt changes.
         corpus_item_count: Entries the vector store held when this run started. None
@@ -224,6 +229,7 @@ class RunConfig(BaseModel):
     git_sha: str
     golden_set_version: str
     harness_version: str
+    case_set_version: str = ""
     dialogue_prompt_hash: str = ""
     corpus_item_count: int | None = None
     corpus_embedding_model: str = ""
@@ -373,10 +379,10 @@ def resolve_run_config(
         git_sha=_resolve_git_sha(),
         golden_set_version=resolve_golden_set_version(resolved_cases_dir),
         harness_version=resolve_harness_version(
-            cases_dir=resolved_cases_dir,
             prompts_eval_dir=prompts_eval_dir or _EVAL_PROMPTS_DIR,
             matchers_path=matchers_path or _MATCHERS_FILE,
         ),
+        case_set_version=resolve_case_set_version(resolved_cases_dir),
         dialogue_prompt_hash=_hash_dialogue_prompts(resolved_prompts_dir),
         **corpus_fields(fetch_corpus_fingerprint),
     )

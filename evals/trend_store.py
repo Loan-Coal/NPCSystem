@@ -177,6 +177,9 @@ class TrendRow(BaseModel):
         repeat_flips: Unanimous-vs-solo verdict flips across the k repetitions —
             the engine-noise / judge-noise split that bounds what an A/B
             comparison can resolve.
+        case_set_version: Content hash of evals/cases/ at run time (T16.3). Does
+            NOT affect ComparabilityKey — case-set drift is handled by compare.py's
+            case-intersection refusal. Rows written before T16.3 carry '' (default).
     """
 
     model_config = ConfigDict(frozen=True, extra="allow")
@@ -206,6 +209,7 @@ class TrendRow(BaseModel):
     mean_precision_at_k: float | None = None
     latency_p50_ms: float | None = None
     latency_p95_ms: float | None = None
+    case_set_version: str = ""
     # --- Labels provenance: WHICH labels produced scorer_kappas ----------------
     labels_gen_id: str | None = None
     labels_n: int | None = None

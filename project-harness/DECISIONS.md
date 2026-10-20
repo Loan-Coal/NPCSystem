@@ -10310,3 +10310,14 @@ not a zero-failure gate.
 2. **Latency histogram (ISSUE-319).** `llm_backend_latency_seconds` moves from `observe_metric` (summary) to `observe_histogram_metric` (histogram) with `LATENCY_BUDGET_BUCKETS = (0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 30.0)`. Boundaries straddle the 3 s and 7 s budget points so a breach is visible at `le="5.0"` without arithmetic. `llm_backend_load_latency_seconds` stays a summary — its signal is `min` (the eviction detector), not a percentile.
 
 **What this does NOT change:** the load-latency metric, the Prometheus export format (in-process only), or the public API. Downstream callers reading `"observations"."llm_backend_latency_seconds"` will find nothing; they must read `"histograms"."llm_backend_latency_seconds"` instead.
+
+## DEC-293: `harness_version` split — instrument hash only; `case_set_version` tracks the subject
+**Date:** 2026-10-20 · **Status:** ✅ ACCEPTED (owner pre-approved T16.3, DEC-281 (b)) · **Drives:** `evals/_run_config_hashing.py`, `evals/run_config.py`, `evals/comparability.py`, `evals/trend_store.py`, `evals/trend_row_builder.py`, `docs/REGRESSION_POLICY.md`
+
+**Context.** `resolve_harness_version` hashed `evals/cases/**/*.yaml` + `prompts/eval/*.yaml` + `evals/matchers.py` into one value, and `ComparabilityKey = (harness_version, judge_identity)` compared for equality. Editing one case file therefore made every prior run incomparable. The two rows in `evals/trend/trend_v1.jsonl` carry `f22f61a5d877` and `014abac09947` — the trend store has never held a comparable pair and the regression gate has never had a baseline to select. This is the T16.3 delivery of DEC-281 (b).
+
+**Decision.** `harness_version` is narrowed to the *instrument* only: `prompts/eval/*.yaml` + `matchers.py`. A new `resolve_case_set_version(cases_dir)` hashes `evals/cases/` and its result is stored in `RunConfig.case_set_version` and `TrendRow.case_set_version`. `ComparabilityKey` is unchanged in shape (`harness_version` + `judge_identity`), keying on the instrument because an instrument change is what genuinely invalidates a comparison. Case-set drift is already handled by `compare.py`'s case-intersection refusal.
+
+**Migration cost.** Existing recorded hashes will not reproduce under the narrower scope: the two pre-existing rows (`f22f61a5d877`, `014abac09947`) were generated with cases folded into `harness_version` and are therefore incomparable with any run generated after this change. This is the same one-time cost DEC-281 (b) noted T20.1 accepts for `dialogue_prompt_hash`. Both existing rows were already mutually incomparable before this change (different harness_version), so the net loss is zero comparable pairs.
+
+**What this does NOT change.** `ComparabilityKey`'s shape and fields. The `select_baseline` and `is_comparable` logic. The case-intersection check in `compare.py`. `TrendRow` serialisation — `case_set_version` defaults to `""` so old rows still parse.

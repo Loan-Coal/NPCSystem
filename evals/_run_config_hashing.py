@@ -2,8 +2,10 @@
 Module: _run_config_hashing
 Layer: evals (eval harness — not part of src/)
 Purpose: Content-hash helpers for run_config — golden_set_version, harness_version,
-         and dialogue_prompt_hash. Extracted from run_config.py to keep that module
-         within the 300-line limit (EVAL-P18.2).
+         case_set_version, and dialogue_prompt_hash. Extracted from run_config.py to
+         keep that module within the 300-line limit (EVAL-P18.2).
+         T16.3: harness_version covers only the instrument (matchers + prompts/eval/);
+         case_set_version covers only the subject (evals/cases/).
 Dependencies: hashlib, logging, pathlib (stdlib only).
 Used by: evals/run_config.py
 """
@@ -18,6 +20,7 @@ _logger = logging.getLogger(__name__)
 
 _GOLDEN_SET_HEX_CHARS = 12
 _HARNESS_VERSION_HEX_CHARS = 12
+_CASE_SET_VERSION_HEX_CHARS = 12
 _DIALOGUE_PROMPT_HEX_CHARS = 12
 _CASE_YAML_GLOB = "*.yaml"
 
@@ -95,19 +98,40 @@ def _feed_prompt_yamls(digest: "hashlib._Hash", prompts_eval_dir: Path) -> None:
         digest.update(f.read_bytes())
 
 
-def resolve_harness_version(
-    *,
-    cases_dir: Path,
-    prompts_eval_dir: Path,
-    matchers_path: Path,
-) -> str:
-    """Compute a content-stable harness version covering all comparability inputs.
+def resolve_case_set_version(cases_dir: Path) -> str:
+    """Compute a content-stable version hash from the eval case files only.
 
-    Hashes recursive .yaml case files, judge prompt .yaml files, and matchers.py.
-    Non-yaml files (e.g. README.md) in cases_dir are excluded intentionally.
+    Hashes recursive .yaml case files under cases_dir in sorted path order.
+    Changing, adding, or removing a case file changes this hash; changing the
+    instrument (matchers.py or prompts/eval/) does not.
+
+    T16.3: split from resolve_harness_version so a case edit does not orphan
+    every prior run. ComparabilityKey keys on the instrument (harness_version),
+    not on the subject (case_set_version) — case drift is already handled by
+    compare.py's case-intersection refusal.
 
     Args:
         cases_dir: Root directory of eval cases; .yaml files discovered recursively.
+    Returns:
+        12-hex-char content hash string, or '' when cases_dir is empty or missing.
+    """
+    digest = hashlib.sha256()
+    _feed_case_files(digest, cases_dir)
+    return digest.hexdigest()[:_CASE_SET_VERSION_HEX_CHARS]
+
+
+def resolve_harness_version(
+    *,
+    prompts_eval_dir: Path,
+    matchers_path: Path,
+) -> str:
+    """Compute a content-stable harness version covering the eval instrument only.
+
+    Hashes judge prompt .yaml files and matchers.py. Case files are excluded
+    (T16.3): they are tracked separately by resolve_case_set_version so editing
+    a case no longer orphans every prior run.
+
+    Args:
         prompts_eval_dir: Directory containing judge criteria .yaml files.
         matchers_path: Path to evals/matchers.py (encodes judge sampling options).
     Returns:
@@ -116,7 +140,6 @@ def resolve_harness_version(
         FileNotFoundError: If matchers_path does not exist.
     """
     digest = hashlib.sha256()
-    _feed_case_files(digest, cases_dir)
     _feed_prompt_yamls(digest, prompts_eval_dir)
     digest.update(matchers_path.read_bytes())
     return digest.hexdigest()[:_HARNESS_VERSION_HEX_CHARS]

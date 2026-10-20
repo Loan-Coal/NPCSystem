@@ -33,8 +33,10 @@ class ComparabilityKey(BaseModel):
 
     Two dimensions, both load-bearing and for different reasons:
 
-    - `harness_version` hashes evals/cases/, prompts/eval/ and matchers.py, so a
-      case or judge-criterion edit changes what is being measured.
+    - `harness_version` hashes prompts/eval/ and matchers.py — the instrument only
+      (T16.3). A judge-criterion or matcher edit changes what is being measured.
+      Case edits change `case_set_version` on the row but NOT this key; case-set
+      drift is handled by compare.py's case-intersection refusal.
     - `judge_identity` is the instrument that actually scored the run. compare.py
       has refused cross-instrument pairs since DEC-190, but the trend gate — which
       Run-EvalHarness.ps1 declares AUTHORITATIVE over compare — checked only the
