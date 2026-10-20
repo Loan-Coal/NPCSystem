@@ -2122,7 +2122,7 @@ Validation: run against a stack, then `make check`.
 Done when: the check exists, passes on this tree, and demonstrably fails before Sprint 3.
 Finding L13, census section. ✅ AUTO (T15.2, 2026-10-20)
 
-- [ ] **T15.3** Close the three API-boundary security findings nothing scheduled
+- [x] **T15.3** Close the three API-boundary security findings nothing scheduled
 Pre-approved: public-interface · owner 2026-09-09
 Files: `src/npc_engine/config.py`, `src/npc_engine/auth/`, the admin route models under
 `src/npc_engine/api/routes/admin/`, the `/setup` route, new
@@ -2145,7 +2145,7 @@ RED anchor: the new test asserts a weak `API_KEY_ADMIN` is rejected at startup, 
 is refused. All three fail today.
 Validation: `pytest tests/unit/api/test_api_boundary_hardening.py -v`, then `make check`.
 Done when: all three tests pass, `make check` is green, and ISSUE-301, ISSUE-302 and ISSUE-303 are
-closed and archived. Findings ISSUE-301, ISSUE-302, ISSUE-303.
+closed and archived. Findings ISSUE-301, ISSUE-302, ISSUE-303. ✅ AUTO (T15.3, 2026-10-20)
 
 - [ ] **T15.4** Fix the `/standings` 500 by adding `target_name`, not by changing `target`
 Pre-approved: file-deletion · owner 2026-09-18

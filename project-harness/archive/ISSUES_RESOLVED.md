@@ -4311,3 +4311,30 @@ option (a) above. Verified: `:Quest` node count held at 18 across 6 tick advance
 **Why deferred:** Cosmetic noise.
 **To fix:** Prune resolved entries and make the ratchet remove them automatically.
 **Fixed:** 2026-09-24, in T14.2. `_run_check` now loads the old baseline and prunes resolved entries (ratchet-down-only semantics) rather than replacing the baseline with the full current-violations set. Two stale R006 entries removed.
+
+## [FIXED] ISSUE-301: `API_KEY_GRAPH_WRITE`/`API_KEY_GRAPH_ADMIN` have no weak-secret validation
+**Found:** 2026-09-07, during full-review (L1-02)
+**Severity:** P2
+**Where:** `src/npc_engine/config_validators.py`, `src/npc_engine/config.py`
+**Description:** `API_KEY_SECRET` has a weak-secret validator rejecting shipped defaults in staging/prod. The two higher-privilege scopes, `API_KEY_GRAPH_WRITE` and `API_KEY_GRAPH_ADMIN`, have none — so the keys granting write and admin access can ship with a dev default while the lowest-privilege key cannot.
+**Why deferred:** Not exploitable on the default loopback-bound deployment; the review's five CRITICALs took the slot.
+**To fix:** Extend the existing validator to cover both fields. Non-breaking, internal.
+**Fixed:** 2026-10-20, in T15.3. Added `check_optional_api_key_secret` to `config_validators.py` and a `_validate_optional_api_keys` model_validator to `Settings` that rejects weak values when either optional key is explicitly set.
+
+## [FIXED] ISSUE-302: admin-scoped `npc_ids`/`location_ids` request lists have no upper bound
+**Found:** 2026-09-07, during full-review (L1-03)
+**Severity:** P3
+**Where:** `src/npc_engine/api/routes/admin/batch.py`, `graph_admin.py`
+**Description:** Batch admin endpoints accept unbounded `npc_ids`/`location_ids` lists. CLAUDE.md requires input caps at the API boundary; these have none.
+**Why deferred:** Admin-auth gated, so the blast radius is an authenticated operator only.
+**To fix:** Add a `max_length` to the list fields, sized from realistic batch use.
+**Fixed:** 2026-10-20, in T15.3. Added `ADMIN_ID_LIST_MAX_LENGTH = 200` constant and `max_length=ADMIN_ID_LIST_MAX_LENGTH` to `npc_ids` in `GossipTickRequest` and `ReindexRequest`, and to `location_ids` in `EventTickRequest`. Over-cap requests now return 422.
+
+## [FIXED] ISSUE-303: `is_public_path` treats `/setup` as a prefix match, not a route allow-list
+**Found:** 2026-09-07, during full-review (L1-04)
+**Severity:** P3
+**Where:** `src/npc_engine/auth/middleware_helpers.py:71-72`
+**Description:** The public-path check appears to prefix-match `/setup` rather than matching an explicit route allow-list, so a future route beginning with that prefix would be public by accident. Graded **Suspected** — not confirmed by a live request.
+**Why deferred:** Unconfirmed, and the `/setup/*` surface is already env-gated and loopback-bound (CR-L05-11 fixed).
+**To fix:** Confirm by adding a route under the prefix and asserting it is NOT public; then convert the check to an exact allow-list.
+**Fixed:** 2026-10-20, in T15.3. Replaced `SETUP_PATH_PREFIX = "/setup"` + `path.startswith(...)` with `SETUP_PATHS = frozenset({"/setup/validate", "/setup/config"})` + `path in SETUP_PATHS`. Confirmed the defect was real: `/setupmalicious` and `/setup-evil` were treated as public in dev before the fix.

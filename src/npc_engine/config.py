@@ -33,6 +33,7 @@ from npc_engine.config_validators import (
     check_llm_config_path,
     check_ollama_keep_alive,
     check_neo4j_password,
+    check_optional_api_key_secret,
     check_package_data_path,
     check_positive_idempotency_value,
     check_redis_connect_timeout,
@@ -413,6 +414,17 @@ class Settings(BaseSettings):
         """
         check_api_key_secret(self.API_KEY_SECRET, env=self.ENV)
         check_idempotency_enforced(self.IDEMPOTENCY_ENFORCE_HEADER, env=self.ENV)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_optional_api_keys(self) -> "Settings":
+        """Reject weak API_KEY_GRAPH_WRITE or API_KEY_GRAPH_ADMIN when set (ISSUE-301).
+
+        These keys are optional (None = not configured) but must not be short or
+        placeholder when explicitly provided, since they grant higher-privilege scopes.
+        """
+        check_optional_api_key_secret(self.API_KEY_GRAPH_WRITE, env=self.ENV)
+        check_optional_api_key_secret(self.API_KEY_GRAPH_ADMIN, env=self.ENV)
         return self
 
     @field_validator("API_KEY_SECRET")

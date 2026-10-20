@@ -50,6 +50,27 @@ def check_api_key_secret(value: str, env: str = "dev") -> str:
     return stripped
 
 
+def check_optional_api_key_secret(value: str | None, env: str = "dev") -> str | None:
+    """Reject weak optional API keys when set; pass through None unchanged.
+
+    Applied to API_KEY_GRAPH_WRITE and API_KEY_GRAPH_ADMIN, which are optional
+    (None = not configured) but must not be weak when explicitly provided (ISSUE-301).
+
+    Args:
+        value: Raw optional API key value, or None when unset.
+        env: Current ENV value ("dev", "staging", or "prod").
+
+    Returns:
+        None when value is None; stripped, validated key string otherwise.
+
+    Raises:
+        ValueError: Delegated from check_api_key_secret when the key is weak.
+    """
+    if value is None:
+        return None
+    return check_api_key_secret(value, env=env)
+
+
 def check_idempotency_enforced(enabled: bool, env: str) -> bool:
     """Require IDEMPOTENCY_ENFORCE_HEADER outside dev (DEC-111); off = replay-able mutations.
 

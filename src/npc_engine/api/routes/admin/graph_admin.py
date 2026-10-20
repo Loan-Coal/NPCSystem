@@ -21,6 +21,9 @@ from npc_engine.retrieval.graph_rag.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.utils.errors import NodeNotFoundError
 
+# Upper bound on the npc_ids list accepted by the reindex endpoint (ISSUE-302).
+ADMIN_ID_LIST_MAX_LENGTH: int = 200
+
 
 class AbsoluteRelationRequest(BaseModel):
     """Admin absolute relation set request."""
@@ -49,7 +52,7 @@ class DeltaRelationRequest(BaseModel):
 class ReindexRequest(BaseModel):
     """Admin reindex submission request."""
 
-    npc_ids: list[str] = Field(default_factory=list)
+    npc_ids: list[str] = Field(default_factory=list, max_length=ADMIN_ID_LIST_MAX_LENGTH)
 
     model_config = ConfigDict(frozen=True)
 

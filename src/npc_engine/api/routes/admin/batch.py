@@ -28,11 +28,15 @@ logger = get_logger(__name__)
 # Bounds on a caller-named event template id (pool ids look like "evt_21_iron_legion_advance").
 TEMPLATE_ID_MAX_LENGTH: int = 64
 
+# Upper bound on id lists accepted by admin batch endpoints (ISSUE-302).
+# An unbounded list is an amplification vector into the graph for authenticated admins.
+ADMIN_ID_LIST_MAX_LENGTH: int = 200
+
 
 class GossipTickRequest(BaseModel):
     """Request payload for direct gossip tick execution."""
 
-    npc_ids: list[str] = Field(default_factory=list)
+    npc_ids: list[str] = Field(default_factory=list, max_length=ADMIN_ID_LIST_MAX_LENGTH)
     tick_override: int | None = Field(default=None, ge=0)
     max_pairs: int = Field(default=20, ge=1, le=500)
 
@@ -42,7 +46,7 @@ class GossipTickRequest(BaseModel):
 class EventTickRequest(BaseModel):
     """Request payload for direct event tick execution."""
 
-    location_ids: list[str] = Field(default_factory=list)
+    location_ids: list[str] = Field(default_factory=list, max_length=ADMIN_ID_LIST_MAX_LENGTH)
     tick_override: int | None = Field(default=None, ge=0)
     template_id: str | None = Field(default=None, min_length=1, max_length=TEMPLATE_ID_MAX_LENGTH)
 

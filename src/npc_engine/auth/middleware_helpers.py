@@ -23,7 +23,9 @@ from npc_engine.utils.errors import IdempotencyKeyInvalidError, IdempotencyKeyRe
 
 HEALTH_PATH = "/health"
 READINESS_PATH = "/readiness"
-SETUP_PATH_PREFIX = "/setup"
+# Explicit allow-list rather than a prefix match (ISSUE-303): a prefix would silently
+# exempt any future route whose name begins with "/setup".
+SETUP_PATHS = frozenset({"/setup/validate", "/setup/config"})
 DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
 DASHBOARD_PATH_PREFIX = "/dashboard"
 OPTIONS_METHOD = "OPTIONS"
@@ -48,12 +50,14 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
 
     Rules:
     - /health and /readiness are always public (process-manager probes).
-    - /setup/* is public only when ENV == "dev". Used by the Unity wizard on first
-      launch before an engine API key is configured. DEC-131 made it public in every
-      env on the premise that a 127.0.0.1 bind was the trust boundary; docker-compose
-      published "8000:8000", which binds 0.0.0.0, so that premise was false and
-      GET /setup/config was an unauthenticated remote read of a stored plaintext API
-      key (ISSUE-227). The bind is now loopback AND the exemption is env-gated.
+    - The two /setup routes (/setup/validate, /setup/config) are public only when
+      ENV == "dev". Used by the Unity wizard on first launch before an engine API key
+      is configured. DEC-131 made /setup/* public in every env on the premise that a
+      127.0.0.1 bind was the trust boundary; docker-compose published "8000:8000",
+      which binds 0.0.0.0, so that premise was false and GET /setup/config was an
+      unauthenticated remote read of a stored plaintext API key (ISSUE-227). The bind
+      is now loopback AND the exemption is env-gated to an explicit allow-list
+      rather than a prefix (ISSUE-303).
     - /docs, /redoc, /openapi.json are public only when ENV == "dev" so that
       the full API surface is not enumerable in staging/prod.
     - Dashboard assets are public in dev only (they supply their own Bearer tokens).
@@ -68,7 +72,7 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
     """
     if path in (HEALTH_PATH, READINESS_PATH):
         return True
-    if path.startswith(SETUP_PATH_PREFIX):
+    if path in SETUP_PATHS:
         return env == "dev"
     if path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX):
         return env == "dev"
