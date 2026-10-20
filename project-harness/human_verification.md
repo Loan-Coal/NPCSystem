@@ -846,3 +846,13 @@ Traceback (most recent call last):
   File "<frozen importlib._bootstrap_external>", line 888, in get_code
   File "<frozen importlib._bootstrap_external>", line 511, in _compile_bytecode
 KeyboardInterrupt
+
+## 2026-10-20 17:19:59 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
+    deferred: - [ ] **T13.1** Census what the demo actually exercises ⏸️
+T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
+    deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
+DEFERRED_TOTAL=2
