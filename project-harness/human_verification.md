@@ -817,3 +817,32 @@ T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
 T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
     deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
 DEFERRED_TOTAL=2
+
+## 2026-10-20 10:53:35 — phase T15 skipped
+
+blocked-prerequisite eval-stack Docker daemon not running — pipe dockerDesktopLinuxEngine not found
+
+## 2026-10-20 12:10:14 — no status token from task T16.1
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem-loop/project-harness/.loop-logs/task-T16.1-retry-1792491012.log
+
+## 2026-10-20 12:10:15 — deferred tasks the loop skipped (standing debt)
+
+Run `make roadmap-audit` to see the line that raised each flag.
+
+Traceback (most recent call last):
+  File "C:\Users\lohan\Documents\hackathons\NPCSystem-loop\scripts\roadmap_cursor.py", line 28, in <module>
+    import argparse
+  File "C:\Python314\Lib\argparse.py", line 91, in <module>
+    import re as _re
+  File "C:\Python314\Lib\re\__init__.py", line 127, in <module>
+    import functools
+  File "C:\Python314\Lib\functools.py", line 18, in <module>
+    from collections import namedtuple
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 888, in get_code
+  File "<frozen importlib._bootstrap_external>", line 511, in _compile_bytecode
+KeyboardInterrupt
