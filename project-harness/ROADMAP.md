@@ -2218,7 +2218,7 @@ This task's own session hung on the network outage covering 10:53-12:10 and was 
 automatically (ISSUE-370 path); its file edits were already complete and correct, verified and
 committed by hand rather than discarded. ✅ AUTO (T16.1, 2026-10-20)
 
-- [ ] **T16.2** Fix the instrumentation that cannot express its own budget
+- [x] **T16.2** Fix the instrumentation that cannot express its own budget
 Pre-approved: public-interface · owner 2026-09-08
 Files: `src/npc_engine/engines/llm/llm_metrics.py`, `scripts/loc_baseline.txt`, new
 `tests/unit/llm/test_llm_metrics_buckets.py`, `project-harness/ISSUES.md`
@@ -2240,7 +2240,7 @@ against a running stack that `GET /v1/admin/system/metrics` exposes the buckets.
 Done when: buckets exist, token counting is correct, both issues closed. This task adds src LOC after
 T10.2b seeded the ratchet — if the delta is positive, bump `scripts/loc_baseline.txt` in the same
 commit with the reason, per rule 1 (T10.2b is instructed to budget it, so a bump should not be needed).
-Findings L9-05, L9-06, ISSUE-318, ISSUE-319.
+Findings L9-05, L9-06, ISSUE-318, ISSUE-319. ✅ AUTO (T16.2, 2026-10-20)
 
 - [ ] **T16.3** Split `harness_version` so a case edit stops orphaning every prior run
 Pre-approved: public-interface · owner 2026-09-08 · DEC-281

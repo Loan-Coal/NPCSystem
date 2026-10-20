@@ -1352,21 +1352,6 @@ hallucination guards remain unaffected (separate axis).
 **Why deferred:** Docs-only.
 **To fix:** Correct the docstring.
 
-## ISSUE-318: `llm_tokens_in_total` excludes the system channel and under-counts input tokens 4.3×
-**Found:** 2026-09-07, during full-review (L9-05)
-**Severity:** P2
-**Where:** `src/npc_engine/engines/llm/llm_metrics.py`
-**Description:** Measured live: the counter omits the system channel, so real input tokens are ~4.3× the reported figure. Any prompt-budget reasoning done from this metric is wrong by that factor — directly relevant given the ~4,245-token static system prompt.
-**Why deferred:** Observability defect, not a runtime failure.
-**To fix:** Include the system channel, and state the change in DECISIONS since it moves a published number.
-
-## ISSUE-319: the latency instrumentation cannot express the budget it exists to defend
-**Found:** 2026-09-07, during full-review (L9-06)
-**Severity:** P2
-**Where:** `src/npc_engine/engines/llm/llm_metrics.py:12-14`
-**Description:** `llm_backend_latency_seconds` is a count/sum/min/max summary with **no buckets**, so no p50/p95 is derivable from the metrics endpoint. The 3–7s dialogue budget is a percentile claim that the shipped instrumentation cannot evaluate.
-**Why deferred:** DEC-273's instrumentation work just landed; this is the follow-on.
-**To fix:** Add histogram buckets sized around the 3–7s budget.
 
 ## ISSUE-322: the `stream`/`stream_text` call site is dead in the production dialogue path
 **Found:** 2026-09-07, during full-review (L11-01)

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from npc_engine.engines.dialogue.dialogue_models import DialogueGeneration
 from pydantic import ValidationError
+from npc_engine.engines.llm.llm_metrics import record_llm_input_tokens
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.retrieval.context import estimate_tokens
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
@@ -23,7 +24,6 @@ from npc_engine.utils.metrics import increment_metric
 
 
 LLM_CALLS_METRIC = "llm_calls_total"
-LLM_TOKENS_IN_METRIC = "llm_tokens_in_total"
 LLM_TOKENS_OUT_METRIC = "llm_tokens_out_total"
 LLM_ENGINE_LABEL = "dialogue"
 
@@ -93,7 +93,7 @@ class DialogueLLMClient:
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
-        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
+        record_llm_input_tokens(prompt=prompt, system=system, labels=labels)
 
         if self._log_prompts:
             logger.debug("llm_prompt", extra={"system": system, "prompt": prompt})
@@ -226,7 +226,7 @@ class DialogueLLMClient:
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "stream"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
-        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
+        record_llm_input_tokens(prompt=prompt, system=system, labels=labels)
 
         if self._log_prompts:
             logger.debug("llm_prompt_stream", extra={"system": system, "prompt": prompt})

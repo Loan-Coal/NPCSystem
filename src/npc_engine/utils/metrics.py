@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from threading import Lock
-from typing import Mapping
+from typing import Any, Mapping
 
 
 LABEL_MAX_LENGTH = 64
@@ -89,11 +89,12 @@ class MetricsRegistry:
     """Thread-safe in-memory metrics registry for counters, observations, and gauges."""
 
     def __init__(self) -> None:
-        """Initialise empty counters, observations, and gauges with a threading lock."""
+        """Initialise empty counters, observations, gauges, and histograms with a threading lock."""
         self._lock: Lock = Lock()
         self._counters: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
         self._observations: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, float]] = {}
         self._gauges: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+        self._histograms: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]] = {}
 
     def increment(self, metric: str, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
         """Increment a counter metric by amount."""
@@ -122,6 +123,36 @@ class MetricsRegistry:
                 "sum": current["sum"] + value,
                 "min": min(current["min"], value),
                 "max": max(current["max"], value),
+            }
+
+    def observe_histogram(
+        self,
+        metric: str,
+        value: float,
+        buckets: tuple[float, ...],
+        labels: Mapping[str, str] | None = None,
+    ) -> None:
+        """Record one observation with histogram bucket tracking.
+
+        Args:
+            metric: Metric name.
+            value: Observed value.
+            buckets: Sorted upper-boundary values (le) for the histogram.
+            labels: Optional label mapping.
+        """
+        key = (metric, _normalize_labels(labels))
+        with self._lock:
+            current = self._histograms.get(key)
+            if current is None:
+                bucket_counts: dict[str, float] = {str(b): 0.0 for b in sorted(buckets)}
+                current = {"count": 0.0, "sum": 0.0, "min": value, "max": value, "buckets": bucket_counts}
+            new_buckets = {b: current["buckets"][b] + (1.0 if value <= float(b) else 0.0) for b in current["buckets"]}
+            self._histograms[key] = {
+                "count": current["count"] + 1.0,
+                "sum": current["sum"] + value,
+                "min": min(current["min"], value),
+                "max": max(current["max"], value),
+                "buckets": new_buckets,
             }
 
     def set_gauge(self, metric: str, value: float, labels: Mapping[str, str] | None = None) -> None:
@@ -162,8 +193,8 @@ class MetricsRegistry:
         with self._lock:
             return sum(v for (m, _), v in self._counters.items() if m == metric)
 
-    def snapshot(self) -> dict[str, dict[str, float | dict[str, float]]]:
-        """Return immutable snapshot of counters, observations, and gauges."""
+    def snapshot(self) -> dict[str, dict[str, Any]]:
+        """Return immutable snapshot of counters, observations, gauges, and histograms."""
 
         with self._lock:
             return {
@@ -173,6 +204,16 @@ class MetricsRegistry:
                     for key, values in self._observations.items()
                 },
                 "gauges": {_serialize_key(key): value for key, value in self._gauges.items()},
+                "histograms": {
+                    _serialize_key(key): {
+                        "count": h["count"],
+                        "sum": h["sum"],
+                        "min": h["min"],
+                        "max": h["max"],
+                        "buckets": dict(h["buckets"]),
+                    }
+                    for key, h in self._histograms.items()
+                },
             }
 
     def reset(self) -> None:
@@ -182,6 +223,7 @@ class MetricsRegistry:
             self._counters = {}
             self._observations = {}
             self._gauges = {}
+            self._histograms = {}
 
 
 def _serialize_key(key: tuple[str, tuple[tuple[str, str], ...]]) -> str:
@@ -210,6 +252,17 @@ def observe_metric(metric: str, value: float, labels: Mapping[str, str] | None =
     """Record observation in the default registry."""
 
     get_metrics_registry().observe(metric=metric, value=value, labels=labels)
+
+
+def observe_histogram_metric(
+    metric: str,
+    value: float,
+    buckets: tuple[float, ...],
+    labels: Mapping[str, str] | None = None,
+) -> None:
+    """Record histogram observation in the default registry."""
+
+    get_metrics_registry().observe_histogram(metric=metric, value=value, buckets=buckets, labels=labels)
 
 
 def set_gauge_metric(metric: str, value: float, labels: Mapping[str, str] | None = None) -> None:

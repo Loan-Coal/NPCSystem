@@ -10296,3 +10296,17 @@ not a zero-failure gate.
 **Rationale:** The write is test-only and targets the eval stack (`bolt://localhost:7688`), never the default Neo4j (ISSUE-277). No production API is added for it.
 
 **What this does NOT change:** `src/` and the public API. `routine.moved` remains a weak signal, because scheduled NPCs are reset to `loc_temple` after every advance (ISSUE-373), so the test asserts a counter and not a persisted location.
+
+## DEC-292: `llm_tokens_in_total` now counts the system channel; `llm_backend_latency_seconds` is a histogram
+
+**Date:** 2026-10-20 · **Status:** ✅ ACCEPTED (owner pre-approved, T16.2) · **Closes:** ISSUE-318, ISSUE-319 · **Drives:** `llm_metrics.py`, `llm_client.py`, `utils/metrics.py`
+
+**Context:** DEC-273 introduced `llm_tokens_in_total` and `llm_backend_latency_seconds`. Two defects surfaced in the L9 review: (1) `llm_tokens_in_total` counted only the user/human prompt channel, omitting the ~4,245-token static system prompt — a 4.3× under-count that makes every prompt-budget calculation wrong. (2) `llm_backend_latency_seconds` was a count/sum/min/max summary with no histogram buckets, so no p50/p95 was derivable — the 3–7 s dialogue budget is a percentile claim the metric could not evaluate.
+
+**Decisions:**
+
+1. **Token counting change (ISSUE-318).** `llm_tokens_in_total` is redefined to count **both the prompt and the system channel**. A new `record_llm_input_tokens(prompt, system, labels)` function in `llm_metrics.py` owns this; `DialogueLLMClient` calls it for both `generate_response` and `stream_text`. Callers that read historical `llm_tokens_in_total` values will see a step-change upward; no migration of stored metric snapshots is attempted — in-process metrics reset on restart.
+
+2. **Latency histogram (ISSUE-319).** `llm_backend_latency_seconds` moves from `observe_metric` (summary) to `observe_histogram_metric` (histogram) with `LATENCY_BUDGET_BUCKETS = (0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 30.0)`. Boundaries straddle the 3 s and 7 s budget points so a breach is visible at `le="5.0"` without arithmetic. `llm_backend_load_latency_seconds` stays a summary — its signal is `min` (the eviction detector), not a percentile.
+
+**What this does NOT change:** the load-latency metric, the Prometheus export format (in-process only), or the public API. Downstream callers reading `"observations"."llm_backend_latency_seconds"` will find nothing; they must read `"histograms"."llm_backend_latency_seconds"` instead.

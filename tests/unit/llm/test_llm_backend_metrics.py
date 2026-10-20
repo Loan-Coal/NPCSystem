@@ -97,6 +97,10 @@ def _observations() -> dict[str, Any]:
     return get_metrics_registry().snapshot()["observations"]
 
 
+def _histograms() -> dict[str, Any]:
+    return get_metrics_registry().snapshot()["histograms"]
+
+
 @pytest.mark.asyncio
 async def test_generate_increments_the_backend_call_counter(
     monkeypatch: pytest.MonkeyPatch,
@@ -141,9 +145,10 @@ async def test_backend_latency_is_observed_in_seconds(monkeypatch: pytest.Monkey
 
     await adapter.generate(prompt="p", max_tokens=64, temperature=0.5)
 
-    observed = _observations()["llm_backend_latency_seconds" + _GENERATE_KEY_SUFFIX]
-    assert observed["count"] == 1.0
-    assert 0.0 <= observed["sum"] < 5.0
+    # latency is now a histogram (ISSUE-319 fix) — read from histograms, not observations
+    hist = _histograms()["llm_backend_latency_seconds" + _GENERATE_KEY_SUFFIX]
+    assert hist["count"] == 1.0
+    assert 0.0 <= hist["sum"] < 5.0
 
 
 @pytest.mark.asyncio

@@ -4357,3 +4357,21 @@ no tick engine mutates standings. Other readers: the chapter engine reads a top-
 **PLAN 2026-09-18 (owner, after adversarial review):** fix additively — keep `target: str`, add
 `target_name: str`; no API-contract re-record. Scheduled as ROADMAP **T15.4**.
 **Fixed:** 2026-10-20, in T15.4. Changed `CYPHER_LIST_STANDINGS` to `RETURN b.id AS target, b.name AS target_name, r.standing AS standing`; updated `list_standings` to map the flat columns; added `target_name: str` to `FactionStandingRow`. Deleted `e2e/scenarios/scenario_faction_politics.py` (its sole assertion was decay by `faction_politics` engine removed in T3.2). No API-contract re-record needed — change is additive.
+
+## [FIXED] ISSUE-318: `llm_tokens_in_total` excludes the system channel and under-counts input tokens 4.3×
+**Found:** 2026-09-07, during full-review (L9-05)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/llm/llm_metrics.py`
+**Description:** Measured live: the counter omits the system channel, so real input tokens are ~4.3× the reported figure. Any prompt-budget reasoning done from this metric is wrong by that factor — directly relevant given the ~4,245-token static system prompt.
+**Why deferred:** Observability defect, not a runtime failure.
+**To fix:** Include the system channel, and state the change in DECISIONS since it moves a published number.
+**Fixed:** 2026-10-20, in T16.2. Added `record_llm_input_tokens` to `llm_metrics.py`; updated `DialogueLLMClient` to call it, counting both prompt and system channels. See DEC-292.
+
+## [FIXED] ISSUE-319: the latency instrumentation cannot express the budget it exists to defend
+**Found:** 2026-09-07, during full-review (L9-06)
+**Severity:** P2
+**Where:** `src/npc_engine/engines/llm/llm_metrics.py:12-14`
+**Description:** `llm_backend_latency_seconds` is a count/sum/min/max summary with **no buckets**, so no p50/p95 is derivable from the metrics endpoint. The 3–7s dialogue budget is a percentile claim that the shipped instrumentation cannot evaluate.
+**Why deferred:** DEC-273's instrumentation work just landed; this is the follow-on.
+**To fix:** Add histogram buckets sized around the 3–7s budget.
+**Fixed:** 2026-10-20, in T16.2. Added `observe_histogram` / `observe_histogram_metric` to `MetricsRegistry`; `record_llm_backend_metrics` now uses a histogram with `LATENCY_BUDGET_BUCKETS = (0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 30.0)`.
