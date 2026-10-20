@@ -28,14 +28,18 @@ def _offline_resolve(**kwargs: object) -> RunConfig:
     Unit tests do no network I/O (tests/unit/conftest.py), and a None digest is fatal
     since R2.1 — so the probes are injected while everything else about the resolution
     stays real.
+
+    T16.6: generate_runner.run() now passes fetch_generation_digest et al. explicitly;
+    the caller's kwargs may already carry them. Build a merged dict so these stubs
+    take precedence over whatever the caller supplied, with no duplicate-key error.
     """
-    return resolve_run_config(
-        fetch_generation_digest=lambda *_: "sha256:stub-generation",
-        fetch_judge_digest=lambda *_: "sha256:stub-judge",
-        fetch_ollama_version_fn=lambda _: None,
-        fetch_corpus_fingerprint=lambda: None,
-        **kwargs,  # type: ignore[arg-type]
-    )
+    _stubs: dict = {
+        "fetch_generation_digest": lambda *_: "sha256:stub-generation",
+        "fetch_judge_digest": lambda *_: "sha256:stub-judge",
+        "fetch_ollama_version_fn": lambda _: None,
+        "fetch_corpus_fingerprint": lambda: None,
+    }
+    return resolve_run_config(**{**kwargs, **_stubs})  # type: ignore[arg-type]
 
 
 def _make_yaml_case(case_id: str = "tc001") -> dict:

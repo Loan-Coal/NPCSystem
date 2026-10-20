@@ -65,11 +65,22 @@ _EVAL_PROMPTS_DIR = _REPO_ROOT / "prompts" / "eval"
 _MATCHERS_FILE = _REPO_ROOT / "evals" / "matchers.py"
 _DIALOGUE_PROMPTS_DIR = _REPO_ROOT / "src" / "npc_engine" / "prompts"
 
+UNKNOWN_DIGEST: str = "UNKNOWN_DIGEST"
+"""Sentinel recorded when no digest injector is provided and no backend is reachable.
+
+Distinct from None: None means the field was never populated (old rows); UNKNOWN_DIGEST
+means the digest was explicitly not fetched — a deliberate choice, not a silent omission.
+Production callers (generate_runner, paired_arms) inject engine_adapter.fetch_model_digest
+explicitly; this sentinel is reached only when no injector is provided (unit tests, CI
+without Ollama). See DEC-295.
+"""
+
 # Re-export for callers that import from run_config (e.g. test_run_config.py).
 __all__ = [
     "GoldenSetVersionError",
     "ModelDigestUnavailableError",
     "RunConfig",
+    "UNKNOWN_DIGEST",
     "resolve_golden_set_version",
     "resolve_run_config",
 ]
@@ -119,6 +130,23 @@ class ModelDigestUnavailableError(RuntimeError):
             f"without a digest is not attributable. Start Ollama and pull the "
             f"model, or inject an explicit digest fetcher."
         )
+
+
+def _sentinel_digest(model: str, ollama_url: str) -> str:
+    """Return UNKNOWN_DIGEST when no digest injector is provided (no network call).
+
+    Used as the default for fetch_generation_digest and fetch_judge_digest in
+    resolve_run_config. Production callers inject engine_adapter.fetch_model_digest
+    explicitly; this sentinel is the no-network fallback for unit tests and CI
+    contexts where Ollama is not present. See DEC-295.
+
+    Args:
+        model: Ollama model tag (ignored — no call is made).
+        ollama_url: Ollama base URL (ignored — no call is made).
+    Returns:
+        UNKNOWN_DIGEST sentinel string.
+    """
+    return UNKNOWN_DIGEST
 
 
 def _require_digest(
@@ -320,13 +348,18 @@ def resolve_run_config(
         dialogue_prompts_dir: Override path to runtime prompt tree (for testing);
             defaults to src/npc_engine/prompts/.
         fetch_generation_digest: Callable(model, url) -> digest; defaults to
-            engine_adapter.fetch_model_digest. Injectable for tests. Returning None
-            raises ModelDigestUnavailableError.
+            _sentinel_digest (returns UNKNOWN_DIGEST, no network call). Production
+            callers inject engine_adapter.fetch_model_digest explicitly. An explicit
+            injector returning None raises ModelDigestUnavailableError (R2.1). See
+            DEC-295.
         fetch_judge_digest: Callable(model, url) -> digest; defaults to
-            engine_adapter.fetch_model_digest. Injectable for tests. Returning None
-            raises ModelDigestUnavailableError.
-        fetch_ollama_version_fn: Callable(url) -> version; defaults to
-            engine_adapter.fetch_ollama_version. Injectable for tests.
+            _sentinel_digest (returns UNKNOWN_DIGEST, no network call). Production
+            callers inject engine_adapter.fetch_model_digest explicitly. An explicit
+            injector returning None raises ModelDigestUnavailableError (R2.1). See
+            DEC-295.
+        fetch_ollama_version_fn: Callable(url) -> version; defaults to a no-op
+            returning None (no network call). Production callers inject
+            engine_adapter.fetch_ollama_version explicitly. See DEC-295.
         judge_temperature: Sampling temperature used by the binary judge; defaults to
             judge_config.resolve_judge_temperature() — the same value matchers.py
             uses for its Ollama request options, so the two can never drift apart.
@@ -342,8 +375,9 @@ def resolve_run_config(
         Frozen RunConfig instance.
     Raises:
         JudgeModelCollisionError: If the resolved judge model equals the generation model.
-        ModelDigestUnavailableError: If either digest fetcher returns None (R2.1) — a run
-            whose model identity is unknown is not recorded, it is refused.
+        ModelDigestUnavailableError: If either *explicit* digest fetcher returns None
+            (R2.1). The default sentinel never returns None; only an explicitly-injected
+            fetcher that returns None triggers this. See DEC-295.
         GoldenSetVersionError: If cases_dir is empty or missing.
         RuntimeError: If git rev-parse fails.
         FileNotFoundError: If llm_config.yaml or matchers_path cannot be found.
@@ -365,9 +399,17 @@ def resolve_run_config(
         else _judge_config.resolve_judge_temperature()
     )
 
-    gen_digest_fn = fetch_generation_digest or _engine_adapter.fetch_model_digest
-    judge_digest_fn = fetch_judge_digest or _engine_adapter.fetch_model_digest
-    version_fn = fetch_ollama_version_fn or _engine_adapter.fetch_ollama_version
+    gen_digest_fn = (
+        fetch_generation_digest if fetch_generation_digest is not None else _sentinel_digest
+    )
+    judge_digest_fn = (
+        fetch_judge_digest if fetch_judge_digest is not None else _sentinel_digest
+    )
+    version_fn = (
+        fetch_ollama_version_fn
+        if fetch_ollama_version_fn is not None
+        else lambda _u: None
+    )
     _engine_base_url = os.environ.get(_ENGINE_BASE_URL_ENV, _DEFAULT_ENGINE_BASE_URL)
     _api_key = os.environ.get("API_KEY_SECRET", "")
     build_sha_fn = fetch_build_sha_fn or (

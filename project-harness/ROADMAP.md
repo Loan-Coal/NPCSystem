@@ -2335,7 +2335,7 @@ Verify: `pytest tests/unit/evals/test_regression_gate.py tests/unit/evals/test_m
 Done when: both anchors are green and the LOC delta is reported — this one should be negative or flat.
 DEC-281, "Found while auditing". ✅ AUTO (T16.5, 2026-10-20)
 
-- [ ] **T16.6** Stop the eval harness recording `None` model digests from live-network defaults
+- [x] **T16.6** Stop the eval harness recording `None` model digests from live-network defaults
 Pre-approved: public-interface · owner 2026-09-09
 Files: `evals/run_config.py`, `tests/unit/evals/` (the call sites that exercise it),
 `project-harness/DECISIONS.md`
@@ -2366,7 +2366,7 @@ Validation: `pytest tests/unit/evals/ -v`, then `make check-evals-rules`, `make 
 `make test-cov-evals`, then `make check`.
 Done when: no uninjected live-network default remains in `resolve_run_config`'s digest path, the
 `DECISIONS.md` note is written, and the completion note records that CR-L15-01 is closed.
-Finding CR-L15-01 (`review-2026-08/TRIAGE.md`).
+Finding CR-L15-01 (`review-2026-08/TRIAGE.md`). ✅ AUTO (T16.6, 2026-10-20)
 
 <!-- LOOP:QUEUE end -->
 

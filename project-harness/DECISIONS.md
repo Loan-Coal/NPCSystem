@@ -10334,3 +10334,20 @@ not a zero-failure gate.
 **Downstream consumers.** `git_sha` is read by `_variant_fields` (trend row, attribution). `engine_build_sha` is also read by `_variant_fields` (same path) and written into `TrendRow` for the same attribution purpose. No comparability logic reads either field; ComparabilityKey is unchanged.
 
 **What this does NOT change.** `ComparabilityKey`. The `select_baseline` and `is_comparable` logic. The case-intersection check in `compare.py`. LOC delta: +10 non-test lines in `evals/`; justified as the attribution the A/B rests on (rule 9).
+
+## DEC-295: `resolve_run_config` digest defaults changed from live-network to explicit sentinel
+**Date:** 2026-10-20 · **Status:** ✅ ACCEPTED (owner pre-approved T16.6) · **Closes:** CR-L15-01 · **Drives:** `evals/run_config.py`, `evals/generate_runner.py`, `evals/paired_arms.py`
+
+**Context.** `run_config.py:368-370` defaulted `fetch_generation_digest`, `fetch_judge_digest`, and `fetch_ollama_version_fn` to live network calls via `engine_adapter` when no injector was provided. Unit tests and CI that omit these injectors therefore attempted a real socket connect; `tests/unit/conftest.py` blocked the connect, `fetch_model_digest` swallowed the `NetworkAccessInUnitTestError` and returned None, and `_require_digest` raised `ModelDigestUnavailableError`. A run config could never be resolved in a unit test without explicit injection. This is CR-L15-01 from the 2026-08 review, re-verified live on 2026-09-08.
+
+**Decision.**
+
+1. **Sentinel instead of live network.** The defaults for `fetch_generation_digest` and `fetch_judge_digest` are changed to `_sentinel_digest` — a module-level function that returns `UNKNOWN_DIGEST` without opening a socket. The default for `fetch_ollama_version_fn` is changed to `lambda _u: None`. No unit test can now silently reach the network via these paths.
+
+2. **`UNKNOWN_DIGEST` vs `None`.** An uninjected digest records `"UNKNOWN_DIGEST"` (a non-None string), not `None`. `None` means the field was not populated (backward-compat default for old rows). `UNKNOWN_DIGEST` means the digest was deliberately not fetched — an explicitly unknown attribution, not a missing one. Downstream analysis can filter on this sentinel; it cannot distinguish a silent `None` from a broken fetch.
+
+3. **Explicit `None` from an injector is still fatal.** `_require_digest` still raises `ModelDigestUnavailableError` when an explicitly-provided fetcher returns `None` (R2.1). The sentinel path is only for the uninjected case.
+
+4. **Production callers inject explicitly.** `generate_runner.run()` and `paired_arms.run_paired()` — the two production callers that run against a live Ollama — now pass `engine_adapter.fetch_model_digest` and `engine_adapter.fetch_ollama_version` explicitly, preserving their live-attribution behaviour.
+
+**What this does NOT change.** `ModelDigestUnavailableError` semantics for explicit injectors. `RunConfig` field types (`generation_model_digest: str | None` stays — `None` is kept for backward compat with old rows). The `_require_digest` guard. LOC delta: approximately +36 non-test lines across `evals/`; the sentinel buys the safety invariant that no unit test can silently reach the network for digest resolution.

@@ -183,6 +183,18 @@ def _write_arms(
     return tuple(written)
 
 
+def _live_run_config(cases_dir: Path | None, profiles: Sequence[str]) -> RunConfig:
+    import engine_adapter as _engine_adapter
+
+    return resolve_run_config(
+        cases_dir=cases_dir,
+        retrieval_profile=profiles[0],
+        fetch_generation_digest=_engine_adapter.fetch_model_digest,
+        fetch_judge_digest=_engine_adapter.fetch_model_digest,
+        fetch_ollama_version_fn=_engine_adapter.fetch_ollama_version,
+    )
+
+
 def run_paired(
     *, yaml_cases: Sequence[dict], ah_cases: Sequence[dict], client: Any, base_url: str,
     out_dir: Path, gen_id: str, k: int, profiles: Sequence[str],
@@ -209,7 +221,7 @@ def run_paired(
     """
     import generation_collection
 
-    base_config = config or resolve_run_config(cases_dir=cases_dir, retrieval_profile=profiles[0])
+    base_config = config or _live_run_config(cases_dir, profiles)
     arms = collect_paired_records(
         yaml_cases=yaml_cases, ah_cases=ah_cases, client=client, base_url=base_url, k=k,
         profiles=profiles,

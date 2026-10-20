@@ -87,9 +87,14 @@ def run(
     """
     resolved_config = config
     if gen_id and resolved_config is None:
+        import engine_adapter as _engine_adapter
+
         resolved_config = resolve_run_config(
             cases_dir=cases_dir,
             retrieval_profile=retrieval_profile or _DEFAULT_RETRIEVAL_PROFILE,
+            fetch_generation_digest=_engine_adapter.fetch_model_digest,
+            fetch_judge_digest=_engine_adapter.fetch_model_digest,
+            fetch_ollama_version_fn=_engine_adapter.fetch_ollama_version,
         )
     records = collect_records(yaml_cases, ah_cases, client, base_url, k=k, retrieval_profile=retrieval_profile)
     if gen_id:
