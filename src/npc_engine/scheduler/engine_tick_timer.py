@@ -70,12 +70,18 @@ class EngineTickTimer:
         """Return milliseconds elapsed since construction."""
         return (perf_counter() - self._started_at) * _MS_PER_SECOND
 
-    def record_success(self) -> None:
-        """Record a successful engine tick with its duration."""
+    def record_success(self, working_set_size: int | None = None) -> None:
+        """Record a successful engine tick with its duration.
+
+        Args:
+            working_set_size: Sum of work-count values from the engine's result dict,
+                or None when not available. Forwarded to the status store.
+        """
         duration_ms = self.elapsed_ms()
         if self._status_store is not None:
             self._status_store.record_success(
-                self.engine_name, self.tick_id, duration_ms=duration_ms
+                self.engine_name, self.tick_id, duration_ms=duration_ms,
+                working_set_size=working_set_size,
             )
         self._emit(duration_ms=duration_ms, result=_SUCCESS_RESULT_LABEL)
 

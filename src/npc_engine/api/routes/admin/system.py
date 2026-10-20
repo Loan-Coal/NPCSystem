@@ -131,10 +131,12 @@ async def metrics_snapshot() -> dict[str, Any]:
 
     Powers the designer dashboard Analytics tab (S12.5): request counts,
     latencies, validation failures, and any degradation counters recorded since
-    server start.
+    server start. Also carries the per-engine ``engine_error_count``,
+    ``engine_last_error_tick`` and ``engine_working_set_size`` gauges (T15.1),
+    which make a permanently-starved engine visible instead of silently absent.
 
     Returns:
-        Dict with ``data`` holding ``counters`` and ``observations`` maps.
+        Dict with ``data`` holding ``counters``, ``observations`` and ``gauges`` maps.
     """
     return ok_response(get_metrics_registry().snapshot())
 

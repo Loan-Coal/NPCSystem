@@ -86,13 +86,14 @@ def result_label_from_status(status_code: int) -> str:
 
 
 class MetricsRegistry:
-    """Thread-safe in-memory metrics registry for counters and observations."""
+    """Thread-safe in-memory metrics registry for counters, observations, and gauges."""
 
     def __init__(self) -> None:
-        """Initialise empty counters and observations with a threading lock."""
+        """Initialise empty counters, observations, and gauges with a threading lock."""
         self._lock: Lock = Lock()
         self._counters: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
         self._observations: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, float]] = {}
+        self._gauges: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
 
     def increment(self, metric: str, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
         """Increment a counter metric by amount."""
@@ -123,6 +124,31 @@ class MetricsRegistry:
                 "max": max(current["max"], value),
             }
 
+    def set_gauge(self, metric: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Set a gauge metric to the given value, overwriting any previous value.
+
+        Args:
+            metric: Metric name.
+            value: Current value to record (replaces prior value for this label set).
+            labels: Optional label mapping.
+        """
+        key = (metric, _normalize_labels(labels))
+        with self._lock:
+            self._gauges[key] = value
+
+    def gauge_value(self, metric: str, labels: Mapping[str, str] | None = None) -> float | None:
+        """Return gauge value for exact metric and labels, or None if not set.
+
+        Args:
+            metric: Metric name.
+            labels: Optional label mapping.
+        Returns:
+            Current gauge value, or None when the gauge has never been set.
+        """
+        key = (metric, _normalize_labels(labels))
+        with self._lock:
+            return self._gauges.get(key)
+
     def counter_value(self, metric: str, labels: Mapping[str, str] | None = None) -> float:
         """Return counter value for exact metric and labels."""
 
@@ -137,7 +163,7 @@ class MetricsRegistry:
             return sum(v for (m, _), v in self._counters.items() if m == metric)
 
     def snapshot(self) -> dict[str, dict[str, float | dict[str, float]]]:
-        """Return immutable snapshot of counters and observations."""
+        """Return immutable snapshot of counters, observations, and gauges."""
 
         with self._lock:
             return {
@@ -146,6 +172,7 @@ class MetricsRegistry:
                     _serialize_key(key): dict(values)
                     for key, values in self._observations.items()
                 },
+                "gauges": {_serialize_key(key): value for key, value in self._gauges.items()},
             }
 
     def reset(self) -> None:
@@ -154,6 +181,7 @@ class MetricsRegistry:
         with self._lock:
             self._counters = {}
             self._observations = {}
+            self._gauges = {}
 
 
 def _serialize_key(key: tuple[str, tuple[tuple[str, str], ...]]) -> str:
@@ -182,6 +210,12 @@ def observe_metric(metric: str, value: float, labels: Mapping[str, str] | None =
     """Record observation in the default registry."""
 
     get_metrics_registry().observe(metric=metric, value=value, labels=labels)
+
+
+def set_gauge_metric(metric: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+    """Set gauge value in the default registry."""
+
+    get_metrics_registry().set_gauge(metric=metric, value=value, labels=labels)
 
 
 def get_counter_value(metric: str, labels: Mapping[str, str] | None = None) -> float:

@@ -48,6 +48,33 @@ LOGGER = logging.getLogger(__name__)
 # Name must match llm_metrics.LLM_BACKEND_CALLS_METRIC — kept in sync by test_tick_budget_guard_counts_calls.
 _LLM_BACKEND_CALLS_METRIC: str = "llm_backend_calls_total"
 _QUEST_TRIGGER_NAMES: frozenset[str] = frozenset({"event_quest", "need_quest", "world_state_quest"})
+# Keys whose integer values are identifiers or ticks, not work-item counts.
+_WORKING_SET_EXCLUDE_KEYS: frozenset[str] = frozenset({"tick_id"})
+
+
+def _derive_working_set_size(result: dict[str, Any] | None) -> int | None:
+    """Derive working-set size from an engine's result dict.
+
+    Sums all integer (non-bool) values whose key does not end in ``_id``
+    and is not in the explicit exclude list. Returns None when result is None.
+
+    Args:
+        result: Engine result dict, or None on engine failure.
+    Returns:
+        Sum of work-count fields, or None when result is absent.
+    """
+    if result is None:
+        return None
+    return sum(
+        v
+        for k, v in result.items()
+        if (
+            isinstance(v, int)
+            and not isinstance(v, bool)
+            and k not in _WORKING_SET_EXCLUDE_KEYS
+            and not k.endswith("_id")
+        )
+    )
 
 
 class TickScheduler:
@@ -216,7 +243,7 @@ class TickScheduler:
         )
         try:
             result = await coro
-            timer.record_success()
+            timer.record_success(working_set_size=_derive_working_set_size(result))
             return result
         except Exception as exc:
             LOGGER.error(
@@ -358,7 +385,7 @@ class TickScheduler:
         else:
             # row is None when another scheduler held the lease: nothing ran here to time.
             if row is not None:
-                timer.record_success()
+                timer.record_success(working_set_size=_derive_working_set_size(row))
         if row is not None:
             response[name].append(row)
         return unresolved

@@ -2038,7 +2038,7 @@ hide.
 
 The census gap: 27 engines ran, every `last_error` null, and only 6 did any work.
 
-- [ ] **T15.1** Teach `engine_status` to say "starved", and export it
+- [x] **T15.1** Teach `engine_status` to say "starved", and export it
 Pre-approved: public-interface · owner 2026-09-08
 Files: `src/npc_engine/scheduler/engine_status_store.py`,
 `src/npc_engine/scheduler/tick_scheduler.py`, `src/npc_engine/api/routes/admin/system.py`,
@@ -2082,6 +2082,22 @@ T10.2b is instructed to budget this addition into its seed, so a bump should be 
 is needed, say why.
 Validation: `pytest tests/unit/scheduler/ tests/unit/api/test_engine_status_metrics_exported.py -v`,
 then `make check`. Findings L13-04, ISSUE-339, SEV-12.
+`EngineStatusRecord` gained `working_set_size: int | None`, populated by
+`tick_scheduler.py`'s new `_derive_working_set_size()` (sums non-bool int fields in the engine's
+result dict, excluding `tick_id` and any `*_id` key). `MetricsRegistry` gained `set_gauge`/
+`gauge_value`, surfaced in `snapshot()` under a new `gauges` key that `GET /v1/admin/system/metrics`
+already returns unchanged (no route code needed beyond a docstring update) because that endpoint
+just forwards the registry snapshot. `EngineStatusStore.record_success`/`record_error` push
+`engine_error_count`, `engine_last_error_tick` and `engine_working_set_size` gauges on every call.
+Both RED anchors observed red before the change, green after; `pytest tests/unit/scheduler
+tests/unit/utils -q` (63 tests) and `make check` both green (6m35s).
+LOC delta: +123 non-test lines in `src/npc_engine` (engine_status_store +54, tick_scheduler +27,
+metrics +34, engine_tick_timer +6, admin/system +2) — under the 200-line T15.1 allowance T10.2b
+pre-seeded; `scripts/loc_baseline.txt` left unbumped, 391 LOC of ceiling headroom remains
+(`make check-loc-ratchet`).
+ISSUE-339 is **not** fixed here, per the task's own instruction to state that explicitly: it stays
+open, and `probe_runner.py`'s engine-name mapping fix must land separately before
+`working_set_size` is visible to the eval probes. ✅ AUTO (T15.1, 2026-10-20)
 
 - [ ] **T15.2** Assert the surviving portfolio actually works
 Files: new `tests/integration/test_engine_census_does_work.py` or a `make` target, `docs/ENGINES.md`
