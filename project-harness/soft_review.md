@@ -219,3 +219,19 @@ Pattern flags `assert 'expected' == 'expected'` same as `assert 1 == 1`, but com
 
 5. **Project rule compliance: All correct.**  
    No files over 800 lines, no functions over 40 lines, all new functions have type annotations and docstrings, no demo_game/ files edited, ISSUE/DECISIONS entries properly logged. T14.1 and T14.2 both follow layer rules and SRP.
+
+## 2026-10-20 14:01:53 — phase T15
+
+Based on my review of the T15 commits (T15.1–T15.4), here are **5 concrete findings**:
+
+1. **T15.2: Integration test state isolation risk** — `test_engine_census_does_work.py` runs against the shared eval Neo4j (per memory note: "integration tests share the live Neo4j, never run between corpus freeze and generation"). The test pins `time_of_day` to "morning" then cycles it via ticks, but no cleanup is visible. Concurrent runs or leftover state from prior executions could cause assertions on `routine.working_set_size > 0` to fail silently.
+
+2. **T15.3: ADMIN_ID_LIST_MAX_LENGTH lacks rationale** — Capped at 200 with no inline comment explaining whether this bounds query cost, memory, or batch-handler limits. Future maintainers may not understand the constraint's purpose and could accidentally alter it.
+
+3. **T15.1: `working_set_size` not reset on engine error** — When `record_error()` is called, the engine's previous `working_set_size` is preserved. A permanently-failing engine will report stale "last successful work" in metrics, potentially misleading consumers into thinking it's still productive. Intentional design (last-success tracking) but undocumented.
+
+4. **T15.4: `FactionStandingRow.target` type changed semantically** — Changed from `dict` (pre-fix) to `str` ID. The query was already returning a dict before the fix, so the old code would have raised `ResponseValidationError` on every request. The fix is correct, but the scenario e2e test that consumed the old `target["id"]` dict shape was the *only* reader—pre-emptive deletion of dead e2e code is proper (approved by owner).
+
+5. **T15.1: `_derive_working_set_size` excludes `_id` suffix but not all identifier patterns** — Filters out keys ending in `_id` to avoid counting foreign keys. However, if an engine returns a custom identifier field (e.g., `last_processed_id`, `session_id` that's not actually a count), it would be excluded correctly. Design is sound; no issue found.
+
+All four commits pass `make check` and respective tests. No layer-rule or CLAUDE.md violations detected. **Gate: green.**
