@@ -410,4 +410,5 @@ def _variant_fields(gen_dir: Path) -> dict[str, object]:
         # receipts (_receipt_token_budget), not from this client-written config block, where
         # nothing ever wrote it and it read null on every row.
         "mean_precision_at_k": precision,
+        "engine_build_sha": config.get("engine_build_sha"),
     }

@@ -10321,3 +10321,16 @@ not a zero-failure gate.
 **Migration cost.** Existing recorded hashes will not reproduce under the narrower scope: the two pre-existing rows (`f22f61a5d877`, `014abac09947`) were generated with cases folded into `harness_version` and are therefore incomparable with any run generated after this change. This is the same one-time cost DEC-281 (b) noted T20.1 accepts for `dialogue_prompt_hash`. Both existing rows were already mutually incomparable before this change (different harness_version), so the net loss is zero comparable pairs.
 
 **What this does NOT change.** `ComparabilityKey`'s shape and fields. The `select_baseline` and `is_comparable` logic. The case-intersection check in `compare.py`. `TrendRow` serialisation — `case_set_version` defaults to `""` so old rows still parse.
+
+## DEC-294: Record engine's build SHA alongside client's git SHA for stale-image detection
+**Date:** 2026-10-20 · **Status:** ✅ ACCEPTED (owner pre-approved T16.4, DEC-281 (c)) · **Drives:** `evals/engine_adapter.py`, `evals/run_config.py`, `evals/trend_store.py`, `evals/trend_row_builder.py`
+
+**Context.** `RunConfig.git_sha` is `git rev-parse --short=7 HEAD` run on the machine driving the eval. The engine's own identity is `Settings.BUILD_SHA`, served at `GET /health` as `data.version`. Because the app image is not bind-mounted, a recorded run can name a tree that never generated its text. `trend_row_builder.py` documents this class of defect: a 2026-08 arm "claimed a SHA it never ran". The fix there applied only to the token budget; the general case was logged as DEC-281 (c).
+
+**Decision.** Add `fetch_build_sha(base_url, api_key)` to `engine_adapter.py` — reads `data.version` from `GET /health` (public endpoint, no auth) and returns None on any failure. `RunConfig` gains `engine_build_sha: str | None = None`; `resolve_run_config` calls `fetch_build_sha` via an injectable `fetch_build_sha_fn` defaulting to the engine at `EVAL_BASE_URL`. `TrendRow` gains `engine_build_sha: str | None = None` read from the run's `meta.json` config block by `_variant_fields`. Both fields default to None for backward compatibility.
+
+**Non-fatal by design.** An unreachable `/health` records None rather than blocking the run. The two fields differing is the stale-image signal downstream; a row with `engine_build_sha=None` is a row where the check could not be performed — distinguishable from a confirmed match.
+
+**Downstream consumers.** `git_sha` is read by `_variant_fields` (trend row, attribution). `engine_build_sha` is also read by `_variant_fields` (same path) and written into `TrendRow` for the same attribution purpose. No comparability logic reads either field; ComparabilityKey is unchanged.
+
+**What this does NOT change.** `ComparabilityKey`. The `select_baseline` and `is_comparable` logic. The case-intersection check in `compare.py`. LOC delta: +10 non-test lines in `evals/`; justified as the attribution the A/B rests on (rule 9).

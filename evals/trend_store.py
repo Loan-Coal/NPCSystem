@@ -180,6 +180,10 @@ class TrendRow(BaseModel):
         case_set_version: Content hash of evals/cases/ at run time (T16.3). Does
             NOT affect ComparabilityKey — case-set drift is handled by compare.py's
             case-intersection refusal. Rows written before T16.3 carry '' (default).
+        engine_build_sha: The BUILD_SHA the engine image reported at GET /health
+            data.version when this run was generated (T16.4 / DEC-294). None when
+            the health endpoint was unreachable. Rows written before T16.4 carry None.
+            The two sha fields differing is the stale-image signal.
     """
 
     model_config = ConfigDict(frozen=True, extra="allow")
@@ -210,6 +214,7 @@ class TrendRow(BaseModel):
     latency_p50_ms: float | None = None
     latency_p95_ms: float | None = None
     case_set_version: str = ""
+    engine_build_sha: str | None = None
     # --- Labels provenance: WHICH labels produced scorer_kappas ----------------
     labels_gen_id: str | None = None
     labels_n: int | None = None

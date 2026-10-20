@@ -2281,7 +2281,7 @@ not. LOC delta is positive (about +15) — state in the completion note that thi
 comparability the whole eval layer rests on, per rule 9.
 DEC-281 (b). ✅ AUTO (T16.3, 2026-10-20)
 
-- [ ] **T16.4** Record the engine's build sha, not the client's working tree
+- [x] **T16.4** Record the engine's build sha, not the client's working tree
 Pre-approved: public-interface · owner 2026-09-08 · DEC-281
 Files: `evals/engine_adapter.py`, `evals/run_config.py`, `evals/trend_store.py`,
 `evals/trend_row_builder.py`, new test `tests/unit/evals/test_engine_build_sha.py`
@@ -2307,7 +2307,7 @@ image with `bash scripts/eval_stack_at.sh <older-sha>` and resolve the config fr
 Done when: both fields are recorded, the stale-image case is demonstrated to differ, and a note in
 `DECISIONS.md` says which of the two downstream consumers read. LOC delta about +10; justify per
 rule 9 as the attribution the A/B rests on.
-DEC-281 (c).
+DEC-281 (c). ✅ AUTO (T16.4, 2026-10-20)
 
 - [ ] **T16.5** Correct the two measurement constants that name retired things
 Pre-approved: file-deletion · owner 2026-09-08 · DEC-281

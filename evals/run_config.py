@@ -24,6 +24,7 @@ EVAL-P1 constraint.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -58,6 +59,8 @@ _SEED_KEY = "seed"
 _VERSION_KEY = "version"
 
 _DEFAULT_RETRIEVAL_PROFILE = "default"
+_ENGINE_BASE_URL_ENV = "EVAL_BASE_URL"
+_DEFAULT_ENGINE_BASE_URL = "http://localhost:8000"
 _EVAL_PROMPTS_DIR = _REPO_ROOT / "prompts" / "eval"
 _MATCHERS_FILE = _REPO_ROOT / "evals" / "matchers.py"
 _DIALOGUE_PROMPTS_DIR = _REPO_ROOT / "src" / "npc_engine" / "prompts"
@@ -202,6 +205,11 @@ class RunConfig(BaseModel):
             from the same set of nodes; a changed sha means they are not comparable, and
             a P10 gate can assert the corpus did not move between a run's first turn and
             its last. All four default so the committed pre-P8 generations keep loading.
+        engine_build_sha: The BUILD_SHA the running engine image reported at
+            GET /health data.version (T16.4 / DEC-294). None when the engine was
+            unreachable at config-resolution time — non-fatal, does not block the run.
+            Defaults to None so runs generated before T16.4 still load. The two fields
+            differing from git_sha is the stale-image signal.
 
     The ``seed`` field is honest as of EVAL-P20.0 (DEC-176): the protocol carries an
     optional seed, ollama_adapter.py sets ``options.seed``, and the dialogue engine forwards
@@ -235,6 +243,7 @@ class RunConfig(BaseModel):
     corpus_embedding_model: str = ""
     corpus_embedding_dim: int | None = None
     corpus_sha: str = ""
+    engine_build_sha: str | None = None
 
 
 def _read_llm_config(config_path: Path) -> dict[str, Any]:
@@ -290,6 +299,7 @@ def resolve_run_config(
     fetch_ollama_version_fn: Callable[[str], str | None] | None = None,
     judge_temperature: float | None = None,
     fetch_corpus_fingerprint: Callable[[], dict[str, Any] | None] | None = None,
+    fetch_build_sha_fn: Callable[[], str | None] | None = None,
 ) -> RunConfig:
     """Build a RunConfig from live engine config, git state, and judge resolution.
 
@@ -324,6 +334,10 @@ def resolve_run_config(
         fetch_corpus_fingerprint: Callable() -> the vector store's identity dict, or None
             when the engine is unreachable. Defaults to a probe of
             GET /v1/admin/debug/vector-store. Injectable for tests.
+        fetch_build_sha_fn: Callable() -> the engine's build SHA string from
+            GET /health data.version, or None when unreachable. Defaults to a probe
+            of the engine at EVAL_BASE_URL. Non-fatal: None records unknown, not missing.
+            Injectable for tests. See DEC-294.
     Returns:
         Frozen RunConfig instance.
     Raises:
@@ -354,6 +368,11 @@ def resolve_run_config(
     gen_digest_fn = fetch_generation_digest or _engine_adapter.fetch_model_digest
     judge_digest_fn = fetch_judge_digest or _engine_adapter.fetch_model_digest
     version_fn = fetch_ollama_version_fn or _engine_adapter.fetch_ollama_version
+    _engine_base_url = os.environ.get(_ENGINE_BASE_URL_ENV, _DEFAULT_ENGINE_BASE_URL)
+    _api_key = os.environ.get("API_KEY_SECRET", "")
+    build_sha_fn = fetch_build_sha_fn or (
+        lambda: _engine_adapter.fetch_build_sha(_engine_base_url, _api_key)
+    )
 
     generation_model_digest = _require_digest(
         "generation", generation_model, ollama_url, gen_digest_fn
@@ -384,5 +403,6 @@ def resolve_run_config(
         ),
         case_set_version=resolve_case_set_version(resolved_cases_dir),
         dialogue_prompt_hash=_hash_dialogue_prompts(resolved_prompts_dir),
+        engine_build_sha=build_sha_fn(),
         **corpus_fields(fetch_corpus_fingerprint),
     )

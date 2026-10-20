@@ -119,6 +119,40 @@ def fetch_model_digest(model: str, ollama_url: str) -> str | None:
         return None
 
 
+def fetch_build_sha(base_url: str, api_key: str) -> str | None:
+    """Fetch the running engine's build SHA from GET /health data.version.
+
+    `/health` is a public endpoint — no auth header is sent. ``api_key`` is
+    accepted so callers can bind the same (base_url, api_key) pair used for other
+    admin probes without special-casing this call.
+
+    Returns None if the engine is unreachable or the response carries no version.
+    None is non-fatal: the two sha fields differing is the signal (T16.4 / DEC-294),
+    and a run must not be blocked because the health probe is slow or the stack is
+    being rebuilt.
+
+    Args:
+        base_url: Engine base URL (e.g. 'http://localhost:8001').
+        api_key: Accepted for signature consistency; not sent in the request.
+    Returns:
+        The ``data.version`` string from /health, or None on any failure.
+    """
+    import httpx
+
+    try:
+        r = httpx.get(f"{base_url.rstrip('/')}/health", timeout=5.0)
+        r.raise_for_status()
+        body = r.json()
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict):
+            return None
+        version = data.get("version")
+        return str(version) if version is not None else None
+    except Exception as exc:
+        _logger.warning("fetch_build_sha url=%s error=%r", base_url, exc)
+        return None
+
+
 def fetch_ollama_version(ollama_url: str) -> str | None:
     """Fetch the Ollama server version string from /api/version.
 
