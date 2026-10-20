@@ -9518,26 +9518,34 @@ phase's tooling.
 `e2e/helpers/judge_client.py`, `evals/engine_adapter.py`, `evals/run_config.py`, both `.env.example`
 files, `project-harness/ISSUES.md` (ISSUE-296..300)
 
+**Amended:** 2026-10-20, T16.1 — re-measured on `63fc640a` (T15.1, Sprints 1–4 landed), idle
+backend, single session, no concurrent tick. These are best-case numbers; T8.1 exists precisely
+because a background tick can push an interactive turn past its timeout. Three of the five original
+claims did not reproduce and are corrected below; two are confirmed.
+
 **Context.** Dialogue has a 3–7s budget before the game stops feeling responsive, and nothing in
 `src/` measured where that time went. Ollama returns `total_duration`, `load_duration`,
 `prompt_eval_duration` and `eval_duration` on every reply; `prompt_eval_log.py` read only the
 token counts and discarded all four. The budget was being managed by impression.
 
 **What was measured** (2026-09-07, `qwen2.5:7b` Q4_K_M, RTX 5070 Ti Laptop, 12,227 MiB, real
-dialogue system prompt and real output schema):
+dialogue system prompt and real output schema; warm row corrected 2026-10-20 — see amendment note):
 
 | Condition | Total | Prefill | Decode |
 |---|---|---|---|
 | Structured, cold | 6.94s | 3.39s (5,273 tok) | 3.50s (127 tok @ 36 tok/s) |
-| Structured, warm | 3.49–4.18s | **0.05s** (prefix-cached) | 3.4–4.1s (127–162 tok) |
+| Structured, warm | **4.79–5.95s** backend / **5.26–6.39s** e2e | **540–1,779ms** (11–30%) | **68.7 / 87.4 / 84.4%** of turn |
 | Free-text, warm | 1.31s | 0.03s | 1.23s (54 tok @ 44 tok/s) |
-| Cold model load | **+10.3s** | — | — |
+| Cold model load | **+10.3s** (**10.515s** measured) | — | — |
 
-Three consequences. **Decode is ~97% of a warm turn** — prefill is effectively free, and the
-prefix cache survives interleaved calls from other engines (tested explicitly). **Warm dialogue at
-3.5–4.2s matches the harness's own `latency_p50_ms 3607 / p95 6263`**, so the recorded numbers
-were right and unexplained rather than wrong. **The only measured budget breach is the 10.3s cold
-load.**
+Three claims, two corrected. **Decode is 68.7 / 87.4 / 84.4% of a warm turn** (four-turn
+re-measurement; originally stated as ~97%). **Prefill is 540–1,779ms (11–30% of the turn)** —
+the prefix cache does not suppress it as completely as originally measured; "prefix-cached and
+effectively free" does not hold. **Warm dialogue is 4.79–5.95s backend and 5.26–6.39s end to
+end** (originally stated as 3.5–4.2s). **Confirmed: the 10.3s cold load (10.515s measured) and
+that `keep_alive` holds the model.** Half true: `keep_alive` prevents the *second* cold load
+(model evicted from VRAM after idling past the timer), not the first (model not yet loaded when
+the server starts).
 
 **Decision 1 — send `keep_alive`, default 30m, as a constructor parameter.** No engine sent it, so
 Ollama's 5-minute default evicted the model and a player idle longer than that paid 10.3s on their

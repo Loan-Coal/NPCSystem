@@ -2177,7 +2177,7 @@ and ISSUE-354 is closed and archived. ISSUE-354.
 
 The written record.
 
-- [ ] **T16.1** Amend DEC-273 — its mechanism holds, its constants do not
+- [x] **T16.1** Amend DEC-273 — its mechanism holds, its constants do not
 Files: `project-harness/DECISIONS.md`, `project-harness/ISSUES.md`,
 `project-harness/archive/ISSUES_RESOLVED.md`
 Spec: DEC-273 was three days old at review time and already being cited as settled. Re-measured over
@@ -2206,6 +2206,17 @@ appear in exactly one file afterwards.
 Validation: `make check-ledger-ids`, then `make check`.
 Done when: DEC-273 amended with fresh numbers and stated conditions, ISSUE-273 archived.
 Findings L9-03, L9-04, SEV-13.
+DEC-273 amended in place (not retracted) with an **Amended: 2026-10-20, T16.1** note naming
+`63fc640a` (T15.1, Sprints 1-4 landed) as the measurement HEAD, idle backend / single session / no
+concurrent tick, and the best-case caveat against T8.1. Corrected: decode 68.7/87.4/84.4% of a warm
+turn (was ~97%), prefill 540-1,779ms / 11-30% (was "effectively free"), warm dialogue 4.79-5.95s
+backend / 5.26-6.39s e2e (was 3.5-4.2s). Confirmed unchanged: 10.515s cold load, the schema-trimming
+null result (70.0->72.0 tokens). ISSUE-273 moved verbatim to `archive/ISSUES_RESOLVED.md` as
+`[FIXED]`, citing the existing `has_draft_quest` guard at
+`world_state_quest_trigger.py:154`. `make check-ledger-ids` and `make check` both green.
+This task's own session hung on the network outage covering 10:53-12:10 and was retried once
+automatically (ISSUE-370 path); its file edits were already complete and correct, verified and
+committed by hand rather than discarded. ✅ AUTO (T16.1, 2026-10-20)
 
 - [ ] **T16.2** Fix the instrumentation that cannot express its own budget
 Pre-approved: public-interface · owner 2026-09-08
