@@ -358,7 +358,7 @@ Restrict these at the proxy alongside `/v1/admin/*`.
 | `GET` | `/v1/admin/factions/{faction_id}` | Get a faction. |
 | `POST`/`GET` | `/v1/admin/factions/{faction_id}/members` | Add / list members. |
 | `DELETE` | `/v1/admin/factions/{faction_id}/members/{character_id}` | Remove a member. |
-| `PUT`/`GET` | `/v1/admin/factions/{faction_id}/standings[/{target_id}]` | Set / list faction standings. |
+| `PUT`/`GET` | `/v1/admin/factions/{faction_id}/standings[/{target_id}]` | Set / list faction standings. `GET` rows: `{target: str, target_name: str, standing: int}`. |
 | `POST`/`DELETE` | `/v1/admin/factions/{faction_id}/controls/{location_id}` | Set / remove location control. |
 | `PUT` | `/v1/admin/characters/{character_id}/reputation/{faction_id}` | Set a character's faction reputation. |
 | `POST` | `/v1/admin/characters/{character_id}/reputation/{faction_id}/adjust` | Adjust reputation by delta. |

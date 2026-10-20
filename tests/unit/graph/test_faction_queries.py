@@ -238,8 +238,8 @@ async def test_get_standing_returns_none_when_no_edge() -> None:
 @pytest.mark.asyncio
 async def test_list_standings_returns_all_directed_edges() -> None:
     records = [
-        {"target": {"id": "fb"}, "standing": 80},
-        {"target": {"id": "fc"}, "standing": -30},
+        {"target": "fb", "target_name": "Faction Beta", "standing": 80},
+        {"target": "fc", "target_name": "Faction Gamma", "standing": -30},
     ]
     session = _make_session_many(records)
 
@@ -247,6 +247,17 @@ async def test_list_standings_returns_all_directed_edges() -> None:
 
     assert len(result) == 2
     assert result[0]["standing"] == 80
+
+
+@pytest.mark.asyncio
+async def test_list_standings_returns_string_target_and_target_name() -> None:
+    records = [{"target": "fb", "target_name": "Faction Beta", "standing": 80}]
+    session = _make_session_many(records)
+
+    result = await list_standings(session, "fa")  # type: ignore[arg-type]
+
+    assert result[0]["target"] == "fb"
+    assert result[0]["target_name"] == "Faction Beta"
 
 
 @pytest.mark.asyncio

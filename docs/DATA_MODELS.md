@@ -687,6 +687,14 @@ A's standing toward B may differ from B's standing toward A (asymmetric diplomac
 Admin API: `PUT /v1/admin/factions/{faction_id}/standings/{target_id}` to set (one direction),
 `GET /v1/admin/factions/{faction_id}/standings` to list all outgoing standings.
 
+`GET` response row shape (`FactionStandingRow`):
+
+| Field | Type | Description |
+|---|---|---|
+| `target` | string | ID of the target faction node |
+| `target_name` | string | Name of the target faction |
+| `standing` | int [-100, 100] | Directed standing value |
+
 ### CONTROLS Edge (`type_registry/base_edges/controls.yaml`)
 
 `(:Faction)-[:CONTROLS]->(:Location)`

@@ -57,7 +57,7 @@ RETURN r.standing AS standing
 
 CYPHER_LIST_STANDINGS = """
 MATCH (a:Faction {id: $faction_id})-[r:STANDS_WITH]->(b:Faction)
-RETURN properties(b) AS target, r.standing AS standing
+RETURN b.id AS target, b.name AS target_name, r.standing AS standing
 ORDER BY r.standing DESC
 """
 
@@ -190,12 +190,14 @@ async def list_standings(
         faction_id: ID of the source faction.
 
     Returns:
-        List of dicts with ``target`` (faction properties) and ``standing`` (int).
+        List of dicts with ``target`` (faction id str), ``target_name`` (faction name str),
+        and ``standing`` (int).
     """
     result = await session.run(CYPHER_LIST_STANDINGS, faction_id=faction_id)
     return cast(list[dict[str, Any]], [
         {
-            "target": to_native(record["target"]),
+            "target": str(record["target"]),
+            "target_name": str(record["target_name"]),
             "standing": int(record["standing"]),
         }
         async for record in result

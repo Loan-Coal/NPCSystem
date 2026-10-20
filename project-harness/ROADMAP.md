@@ -2147,7 +2147,7 @@ Validation: `pytest tests/unit/api/test_api_boundary_hardening.py -v`, then `mak
 Done when: all three tests pass, `make check` is green, and ISSUE-301, ISSUE-302 and ISSUE-303 are
 closed and archived. Findings ISSUE-301, ISSUE-302, ISSUE-303. ✅ AUTO (T15.3, 2026-10-20)
 
-- [ ] **T15.4** Fix the `/standings` 500 by adding `target_name`, not by changing `target`
+- [x] **T15.4** Fix the `/standings` 500 by adding `target_name`, not by changing `target`
 Pre-approved: file-deletion · owner 2026-09-18
 Files: `src/npc_engine/graph/faction/faction_queries.py` (`CYPHER_LIST_STANDINGS`, `list_standings`),
 `src/npc_engine/api/routes/faction_politics/factions.py` (`FactionStandingRow`),
@@ -2171,7 +2171,7 @@ the change is not additive and the task is wrong. Live: rebuild the eval stack
 (`bash scripts/eval_stack_at.sh HEAD --reset`), `make eval-stack-seed`, and `GET` one seeded faction's
 standings: expect 200 and non-empty rows.
 Done when: both tests pass, `make check` is green with no contract re-record, the live GET returns rows,
-and ISSUE-354 is closed and archived. ISSUE-354.
+and ISSUE-354 is closed and archived. ISSUE-354. ✅ AUTO (T15.4, 2026-10-20)
 
 ### Phase T16
 

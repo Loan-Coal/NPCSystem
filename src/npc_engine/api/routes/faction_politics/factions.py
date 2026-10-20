@@ -99,6 +99,7 @@ class FactionStandingRow(BaseModel):
     """A directed standing row from GET /factions/{id}/standings."""
 
     target: str
+    target_name: str
     standing: int
 
     model_config = ConfigDict(extra="allow")

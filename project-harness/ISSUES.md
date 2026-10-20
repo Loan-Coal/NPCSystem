@@ -3324,24 +3324,6 @@ act, so it is visible rather than silent.
 **To fix:** give `advance_clock` its own timeout sized to the engine's worst case (or pass `NPC_GRAPH_TIMEOUT_S`
 through from `DemoConfig`, which `run.py` currently ignores).
 
-## ISSUE-354: `GET /v1/admin/factions/{id}/standings` returns 500 due to response model mismatch
-**Found:** 2026-09-17, during T3.3 (live stack validation)
-**Severity:** P2 (annoying)
-**Where:** `src/npc_engine/api/routes/faction_politics/factions.py` (`FactionStandingRow`); `src/npc_engine/graph/faction/faction_queries.py` (`CYPHER_LIST_STANDINGS`, `list_standings`)
-**Description:** `CYPHER_LIST_STANDINGS` returns `properties(b)` (the full target faction dict) for the `target` column, but `FactionStandingRow.target: str` expects a faction ID string. FastAPI raises `ResponseValidationError` on every request. Pre-existing — confirmed present in `db5b2c20` (before T3.2). The demo client's `_get_faction_standings_for` returns `[]` on the 500, so the client degrades gracefully, but the sub-endpoint is non-functional. STANDS_WITH edges are seeded and reachable via Cypher; only the HTTP endpoint is broken.
-**Why deferred:** pre-existing; not introduced by T3.2; client degrades gracefully; does not block the live demo.
-**To fix:** either change `CYPHER_LIST_STANDINGS` to `RETURN b.id AS target, r.standing AS standing` (and update `list_standings` accordingly), or update `FactionStandingRow.target` to accept a dict and rename the field. The Cypher fix is simpler and matches the response model's intent.
-**UPDATE 2026-09-18 (analysis, no fix yet — owner to choose):** broken since `87038812` (2026-06-15),
-which added `response_model=OkEnvelope[list[FactionStandingRow]]` with `target: str`; the query has
-returned `properties(b)` since `6cfe763f` (2026-05-06). Consumers disagree on the shape:
-`e2e/scenarios/scenario_faction_politics.py:94` reads `s["target"]["id"]` (dict) — and that scenario
-asserts decay by the `faction_politics` engine deleted in T3.2, so it is obsolete either way; the demo
-client and faction board expect `src_id`/`dst_id` rows and are never called (ISSUE-359). After T3.2
-no tick engine mutates standings. Other readers: the chapter engine reads a top-5 summary internally
-(`get_faction_standings_summary`); this GET is the dedicated per-faction HTTP read.
-**PLAN 2026-09-18 (owner, after adversarial review):** fix additively — keep `target: str`, add
-`target_name: str`; no API-contract re-record. Scheduled as ROADMAP **T15.4**.
-
 ## ISSUE-362: per-NPC trait-modulated emotion model (DEC-137) was removed in T9.1d; re-enabling requires a concrete TraitReadPort implementation
 **Found:** 2026-09-18, during T9.1d
 **Severity:** P3 (nice-to-fix)
