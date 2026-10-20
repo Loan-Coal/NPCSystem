@@ -235,3 +235,22 @@ Based on my review of the T15 commits (T15.1–T15.4), here are **5 concrete fin
 5. **T15.1: `_derive_working_set_size` excludes `_id` suffix but not all identifier patterns** — Filters out keys ending in `_id` to avoid counting foreign keys. However, if an engine returns a custom identifier field (e.g., `last_processed_id`, `session_id` that's not actually a count), it would be excluded correctly. Design is sound; no issue found.
 
 All four commits pass `make check` and respective tests. No layer-rule or CLAUDE.md violations detected. **Gate: green.**
+
+## 2026-10-20 17:01:51 — phase T16
+
+## T16 Phase Review — 5 Findings
+
+1. **Missing test coverage for `guard_anti_hallucination`** (T16.5)
+   - `regression_gate.py:327` checks both `guard_adversarial` and `guard_anti_hallucination` via `_append_rate_finding`, but `test_regression_gate.py` adds a RED anchor only for `guard_adversarial` (line 1545–1562). No test verifies `guard_anti_hallucination` triggers a regression finding.
+
+2. **Asymmetric kappa measurement for `commits_judge`** (T16.5)
+   - `mde.py:237–240` records `commits_judge` kappa (0.308) from **inter-panel Fleiss**, while `tone_judge` and `affirms_judge` use **calibration vs human labels**. Test allows this (line 1369–1370), but future scorers added without calibration have no guard against asymmetric measurement. No gate exists.
+
+3. **Dictionary merge precedence in `_offline_resolve`** (T16.6)
+   - `test_generate_runner_k.py:1341` changed from positional-kwargs to `{**kwargs, **_stubs}`. The stubs now **always override** caller kwargs, even if the caller intends a different value. Docstring acknowledges this, but a test passing incorrect injectors will silently fail without any signal.
+
+4. **`case_set_version` default empty string could mask missing data**
+   - `run_config.py:443` defaults `case_set_version: str = ""` and `trend_store.py:618` repeats it. A TrendRow without cases (old rows, test mocks) carries `""`, indistinguishable from "we ran but found no cases." `_case_set_version()` in `trend_row_builder.py:567` returns `""` if transcript config is None, so backward compat is silent, but an analysis counting case hashes as a dedup key would silently collide all pre-T16.3 rows.
+
+5. **`UNKNOWN_DIGEST` constant exported but not imported by all consumers**
+   - `run_config.py:363` defines `UNKNOWN_DIGEST` in `__all__`, but `paired_arms.py` doesn't import it. If downstream code needs to filter on this sentinel (DEC-295 suggests it can), the constant is discoverable via `run_config` but not explicitly named at call sites—risk of hardcoded strings.
