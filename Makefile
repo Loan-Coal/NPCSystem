@@ -25,7 +25,8 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
-        seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
+        seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr \
+        hello chat
 
 install:
 	pip install -e .[dev]
@@ -800,6 +801,11 @@ eval-dashboard:
 # hello: integrator hello-world — seed one NPC, send one dialogue turn, print reply
 hello:
 	$(PYTHON) -m demo_game.quickstart
+
+# chat: interactive REPL — reads stdin, sends each line to NPC over WS, prints reply
+# Usage: make chat NPC=<npc_id>
+chat:
+	$(PYTHON) -m demo_game.quickstart --npc $(NPC)
 
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:

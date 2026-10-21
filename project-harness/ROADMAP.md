@@ -568,7 +568,7 @@ Done when:
 
 LOC: about −700 non-test (demo_game). ✅ AUTO (T23.3, 2026-10-22)
 
-- [ ] **T23.4** Make `quickstart.py` the thin text client
+- [x] **T23.4** Make `quickstart.py` the thin text client
 Files: `demo_game/quickstart.py`, `Makefile` (the `hello` target :865-866), a new test
 `demo_game/tests/core/test_quickstart_chat.py`, and `README.md` (the quickstart section only).
 Spec: DEC-297 keeps "a thin text client". `quickstart.py` (177) already seeds one NPC and sends one
@@ -593,7 +593,7 @@ Done when:
 - `scripts/loc_baseline.txt` total equals the measured count;
 - `make check` is green.
 
-LOC: about +40 non-test. Phase T23 total ≈ −13,500.
+LOC: about +40 non-test. Phase T23 total ≈ −13,500. ✅ AUTO (T23.4, 2026-10-22)
 
 ---
 

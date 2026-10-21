@@ -55,8 +55,8 @@ pip install -e .[dev]
 # credential (R5.5). The app image is baked, not bind-mounted, so `make demo` rebuilds
 # it and verifies the running build SHA; use `make demo-stale` to skip that.
 docker-compose up -d   # start Neo4j + API server
-make demo-seed         # seed demo world (idempotent)
-make demo              # rebuild, verify build SHA, open interactive pygame window
+make hello             # seed one NPC, send one turn, print reply (hello-world check)
+make chat NPC=<npc_id> # interactive REPL: type lines, get npc_response/emotion/relation_deltas
 
 # Run unit tests:
 make test

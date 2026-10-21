@@ -7,5 +7,5 @@
 src/npc_engine: 65341
 scripts: 11042
 evals: 23228
-demo_game: 21577
-total: 121188
+demo_game: 8126
+total: 107737
