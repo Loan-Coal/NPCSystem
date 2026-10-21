@@ -32,3 +32,22 @@ Now let me get the five concrete findings by reviewing the full diff carefully:
 4. **Test tripwire deletion lost design documentation**: The 150+ line `test_real_roadmap_fence_state_tripwire()` function in test_roadmap_cursor.py was deleted. While the simpler replacement test is functionally correct, the docstring contained extensive historical context about past issues (ISSUE-134, ISSUE-136, DEC-153, DEC-160, DEC-178, DEC-233, DEC-252) and design rationale that is now inaccessible from the code.
 
 5. **Type ratchet gate changed from baseline to hard fail**: HARNESS_GATES.md changed the Types gate from "baseline ratchet" (`make type-ratchet` allows errors up to baseline) to "hard fail" (`make type` requires 0 errors). The Makefile was updated to remove the `type-ratchet` target itself, but this is a significant behavioral change (stricter enforcement) that could break builds if mypy errors exist. This should be marked as a major gate strengthening in the commit message or ROADMAP.
+
+## 2026-10-22 01:31:30 — phase T23
+
+Reading the T23 commits (T23.1 through T23.4), focusing on correctness, edge cases, and CLAUDE.md rule violations:
+
+**1. Missing test for `main(--npc)` dispatch logic (CLAUDE.md: "Every public function gets a happy-path test and a failure test")**
+   - `main()` is public but tests call `chat_repl()` directly, bypassing the argparse branching. The `--npc` argument path is untested.
+
+**2. No exception handling in `chat_repl()` loop**
+   - If `dialogue_ws_worker()` or `_print_reply()` raises, the REPL crashes instead of catching and continuing to the next stdin line. REPL should tolerate transient failures.
+
+**3. Silent failure in `_print_reply()` if queue never receives "done" event**
+   - If the queue is empty (no "done" pushed by worker), the function returns without output. User sees nothing. Should either warn or wait with a timeout.
+
+**4. Missing test for error case in `_print_reply()`**
+   - The `elif kind == "error"` branch is untested. No test verifies that an error on the queue is raised.
+
+**5. LOC baseline updated but no regression test**
+   - `scripts/loc_baseline.txt` changed from 121188 → 107737 (−13,451, within spec), but the "Rule 1 — Reverse LOC ratchet" gate (`make check-loc-ratchet`) isn't mentioned as passing. Verify `make check` is green before merge.
