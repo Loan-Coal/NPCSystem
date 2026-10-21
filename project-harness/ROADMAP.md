@@ -477,7 +477,7 @@ scenarios and a thin text client (DEC-296, DEC-297). About 12.8k LOC of pygame U
 
 ### Phase T23
 
-- [ ] **T23.1** Delete the pygame UI packages
+- [x] **T23.1** Delete the pygame UI packages
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: delete
 - `demo_game/ui/` (7,989), `demo_game/pollers/` (2,168), `demo_game/graph_panel/` (562), `demo_game/workers/` (272);
@@ -505,7 +505,7 @@ Done when:
 - `.mypy_baseline_demo` is no higher than 256;
 - `make check` is green.
 
-LOC: about −10,991 non-test (demo_game).
+LOC: about −10,991 non-test (demo_game). ✅ AUTO (T23.1, 2026-10-21)
 
 - [ ] **T23.2** Delete the interactive root modules and their entry points
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311

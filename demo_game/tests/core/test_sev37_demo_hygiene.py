@@ -44,15 +44,6 @@ def test_trade_intent_magic_string_not_in_game_controller() -> None:
     )
 
 
-def test_trade_intent_magic_string_not_in_action_bar() -> None:
-    """Inline string must not appear in action_bar source."""
-    src = _DEMO_ROOT / "ui" / "widgets" / "action_bar.py"
-    text = src.read_text(encoding="utf-8")
-    assert "\"I'd like to trade.\"" not in text, (
-        "Magic string still present in action_bar.py — use TRADE_INTENT_MESSAGE"
-    )
-
-
 def test_trade_intent_magic_string_not_in_quest_trade_controller() -> None:
     """Inline string must not appear in quest_trade_controller source."""
     src = _DEMO_ROOT / "quest_trade_controller.py"
@@ -67,21 +58,9 @@ def test_trade_intent_magic_string_not_in_quest_trade_controller() -> None:
 # ---------------------------------------------------------------------------
 
 _POLLER_FILES = [
-    _DEMO_ROOT / "pollers" / "gold_poller.py",
-    _DEMO_ROOT / "pollers" / "emotion_poller.py",
-    _DEMO_ROOT / "pollers" / "game_end_poller.py",
-    _DEMO_ROOT / "pollers" / "npc_goals_poller.py",
-    _DEMO_ROOT / "pollers" / "npc_needs_poller.py",
-    _DEMO_ROOT / "pollers" / "npc_politics_poller.py",
-    _DEMO_ROOT / "pollers" / "npc_memory_poller.py",
-    _DEMO_ROOT / "pollers" / "world_poller.py",
-    _DEMO_ROOT / "pollers" / "world_state_poller.py",
-    _DEMO_ROOT / "graph_panel" / "poller.py",
     _DEMO_ROOT / "game_controller.py",
     _DEMO_ROOT / "quest_trade_controller.py",
-    _DEMO_ROOT / "workers" / "action_workers.py",
     _DEMO_ROOT / "knowledge_sidebar_fetcher.py",
-    _DEMO_ROOT / "ui" / "layout" / "game_window.py",
 ]
 
 
