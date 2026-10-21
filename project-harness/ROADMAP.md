@@ -152,7 +152,7 @@ effect only when the driver next starts.
 
 Every task here edits the driver, before T21.4 freezes it. **T21.4 must stay last.**
 
-- [ ] **T21.1** Delete the HUMAN GATE machinery
+- [x] **T21.1** Delete the HUMAN GATE machinery
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: delete `scripts/check_human_gates.py` and `tests/unit/scripts/test_check_human_gates.py`.
 Edit:
@@ -181,7 +181,7 @@ Done when:
 - `bash -n scripts/expand_loop.sh` exits 0;
 - `make check` is green.
 
-LOC: −321 non-test (scripts).
+LOC: −321 non-test (scripts). ✅ AUTO (T21.1, 2026-10-21)
 
 - [ ] **T21.2** Stop committing night-shift reports (C10)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311

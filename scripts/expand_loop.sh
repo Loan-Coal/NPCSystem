@@ -171,7 +171,6 @@ fatal() { log "FATAL: $*"; exit 1; }
 
 cursor() { $PY_RUN "$REPO_ROOT/scripts/roadmap_cursor.py" "$@"; }
 clock()  { $PY_RUN "$REPO_ROOT/scripts/loop_clock.py"     "$@"; }
-gates()  { $PY_RUN "$REPO_ROOT/scripts/check_human_gates.py" "$@"; }
 
 # ======================================================================================
 # preflight
@@ -822,16 +821,6 @@ be committed. Inspect the last task log before re-running."
     else
       LAST_TASK_ID="$task"
       SAME_TASK_REPEATS=0
-    fi
-
-    # DEC-164. `compute_next` enforces no dependency — it skips a flagged task and walks
-    # on. A HUMAN GATE says "not yet" where the flags only say "not you". Halting (rather
-    # than skipping the phase) is deliberate: every gate's blocked set is downstream of
-    # a measurement, so continuing past one means building on a number nobody has taken.
-    if ! gates --check "$task"; then
-      flag_for_human "HUMAN GATE blocks $task" "see scripts/check_human_gates.py --check $task"
-      log "HALT: task $task is behind a closed HUMAN GATE"
-      break
     fi
 
     run_one_task "$phase" "$task"; rc=$?

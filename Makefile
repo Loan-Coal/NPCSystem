@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
-        check-layers check-docstrings roadmap-verify roadmap-audit check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
+        check-layers check-docstrings roadmap-verify roadmap-audit check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         check-ledger-ids check-cited-reports check-ceiling-baseline \
@@ -321,18 +321,6 @@ roadmap-verify:
 roadmap-audit:
 	$(PYTHON) scripts/roadmap_cursor.py --audit-deferred
 
-# check-human-gates: audit the `#### HUMAN GATE` grammar in ROADMAP.md (DEC-164).
-# Grammar only — a closed gate is normal and exits 0. Red means a gate references a
-# task id that does not exist, is missing a field, or can never open.
-check-human-gates:
-	$(PYTHON) scripts/check_human_gates.py --verify
-
-# check-blocking: exit 1 while any HUMAN GATE is not yet cleared (R1.2).
-# NOT in `make check` — it reds on 6+ open gates and would block all loop tasks.
-# Run manually to get a go/no-go signal before starting human gate work.
-check-blocking:
-	$(PYTHON) scripts/check_human_gates.py --strict
-
 # check-conservation: gate on conservation identity violations over the committed artifact.
 # Exits non-zero when any identity fails (wired as a gate by EVAL-P17.6).
 # Identity 4 is DEFERRED (spans two different artifact producers).
@@ -486,7 +474,7 @@ check-engine-logs:
 #          scripts/loc_baseline.txt. Rules 1 and 6.
 # T14.1: type-demo added, 24 -> 25. demo_game/ was gated by nothing; 256 errors across 45
 #         files, invisible on every push (ISSUE-375 tracks the drive-to-zero, waits on T13.2).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-human-gates check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
+check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
