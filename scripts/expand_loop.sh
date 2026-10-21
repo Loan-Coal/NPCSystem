@@ -117,6 +117,10 @@ SESSION_LOG=""
 # Absolute epoch instant, resolved once in main(). Empty = the stop guard is disabled.
 STOP_EPOCH=""
 
+# Paths that task sessions must never write (DEC-316). Defined here — not in Python — so
+# the running session cannot edit the list it is checked against.
+TASK_FROZEN_RE='^(evals/calibration/|evals/generations/k3_73e6c36/|scripts/(expand_loop\.sh|loop\.config\.sh|loop_compat\.sh|loop_gates\.py|scan_fix_diff\.py|gate_baseline\.py|gate_attribution\.py|gate_confirm\.py|classify_gate_failure\.py|worktree_guard\.py|_roadmap_cursor_core\.py|roadmap_cursor\.py)$|\.claude/commands/expand-linear-next\.md$|\.claude/settings)'
+
 usage() {
   # Prints the header block: every comment line after the shebang, stopping at the first
   # line that is not a comment. A hardcoded range silently truncated whenever the header
@@ -633,6 +637,35 @@ no git diff shows it. Halting to prevent laundering failures into the baseline."
   return 2
 }
 
+check_frozen_paths() {
+  # Usage: check_frozen_paths <phase> <task> <before_sha>
+  # Returns 2 (halting) if the task session wrote a frozen path or rewrote history.
+  # On a hit: resets HEAD to <before_sha>, flags for human, returns 2 (DEC-316).
+  local phase="$1" task="$2" before="$3"
+  local hits ancestry_ok=1 reason
+
+  if ! git merge-base --is-ancestor "$before" HEAD 2>/dev/null; then
+    ancestry_ok=0
+  fi
+
+  hits="$({ git diff --name-only "$before" 2>/dev/null; \
+            git ls-files --others --exclude-standard 2>/dev/null; } \
+          | grep -E "$TASK_FROZEN_RE" || true)"
+
+  [ -z "$hits" ] && [ "$ancestry_ok" = "1" ] && return 0
+
+  if [ "$ancestry_ok" = "0" ]; then
+    reason="history rewritten (before=$before is no longer an ancestor of HEAD)"
+    [ -n "$hits" ] && reason="$reason; frozen paths: $hits"
+  else
+    reason="$hits"
+  fi
+
+  git reset --hard "$before" 2>/dev/null && git clean -fd 2>/dev/null || true
+  flag_for_human "frozen path written by $task" "$reason"
+  return 2
+}
+
 write_night_tag() {
   # Stamps the run's end as a local git tag. Idempotent: -f overwrites a prior tag
   # for the same date so a second run on the same night always moves it to HEAD.
@@ -751,8 +784,9 @@ run_one_task() {
   local rc token
 
   local wt_before="$LOOP_STATE_DIR/worktrees-before-$task.json" leaks
-  local baseline_before
+  local baseline_before before_sha
   baseline_before="$(sha256sum "$LOOP_STATE_DIR/gate_baseline.json" 2>/dev/null | awk '{print $1}')"
+  before_sha="$(git rev-parse HEAD)"
   log "--- task $task (phase $phase) -> $tasklog"
   $PY_RUN "$REPO_ROOT/scripts/worktree_guard.py" snapshot > "$wt_before" 2>>"$SESSION_LOG" \
     || log "WARNING: worktree snapshot failed — this task runs without the leak guard"
@@ -761,6 +795,7 @@ run_one_task() {
   rc=$?
 
   check_gate_baseline_drift "$phase" "$task" "$baseline_before" || return 2
+  check_frozen_paths "$phase" "$task" "$before_sha" || return 2
 
   # A task that writes into ANOTHER worktree (the 2026-09-17 T3.2 leak) halts the run. This
   # also trips on your own interactive commits/edits in another worktree during the task.

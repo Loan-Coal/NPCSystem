@@ -247,7 +247,7 @@ Done when: `pytest tests/unit/scripts/test_expand_loop_night_guard.py` passes wi
 behaviour, and `make check` is green.
 LOC: 0 non-test (bash); about +80 test. ✅ AUTO (T21.3, 2026-10-21)
 
-- [ ] **T21.4** Task-session frozen-path check, fixed in the driver
+- [x] **T21.4** Task-session frozen-path check, fixed in the driver
 Files: `scripts/expand_loop.sh` (`run_one_task` near :720-770), and a new test
 `tests/unit/scripts/test_expand_loop_frozen_paths.py`.
 Spec: DEC-316, which supersedes DEC-309's mechanism.
@@ -285,7 +285,7 @@ Done when:
 - `scripts/loc_baseline.txt` total equals the `check_loc_ratchet.py` count;
 - `make check` is green.
 
-LOC: 0 non-test (bash); about +90 test. Phase T21 total ≈ −321.
+LOC: 0 non-test (bash); about +90 test. Phase T21 total ≈ −321. ✅ AUTO (T21.4, 2026-10-21)
 
 ---
 
