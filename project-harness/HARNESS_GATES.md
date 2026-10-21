@@ -26,10 +26,9 @@ it drifting, and correcting one only schedules the next drift (R4.6).
 |------|-------------|------------------|-----------|
 | Lint | `make lint` | ruff clean on `src/` | hard fail |
 | Rules | `make check-rules` | CLAUDE.md strict rules (file-size, `print()`, `except: pass`, `raise Exception`, Cypher-outside-`graph/`, demo→`npc_engine` imports) | **baseline ratchet** |
-| Types | `make type-ratchet` | mypy error count may not rise | **baseline ratchet** |
+| Types | `make type` | mypy error count must stay at 0 | hard fail |
 | Coverage | `make test-cov` | full unit suite, ≥80% | hard fail (`--cov-fail-under=80`) |
 | Honesty | `make check-harness` | docs don't claim a clean state the gates contradict | advisory (warn); `--strict` to enforce |
-| Contracts | `make check-contracts` / `check-contract-sync` | engine contract YAML ↔ tests | hard fail |
 | API contract | `make check-api-contract` | the `/v1` surface (149 ops incl. the WebSocket route, 153 schemas) gains no breaking change: route removal, response field drop/retype, request tightening, status or auth change. Additive change passes untouched (R5.1, DEC-254) | **recorded baseline**, `--update` to re-record |
 | Ledger + cited reports | `make check-ledger-ids` | reused DEC/ISSUE ids documented; no citation to an unassigned id; cited eval reports are committed (R4.5, B5, DEC-239, ISSUE-247) | hard fail |
 

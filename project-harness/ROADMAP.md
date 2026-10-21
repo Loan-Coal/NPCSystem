@@ -435,7 +435,7 @@ Done when:
 
 LOC: 0 non-test. ✅ AUTO (T22.5, 2026-10-21)
 
-- [ ] **T22.6** Delete the unreferenced Makefile targets and fix HARNESS_GATES.md (C12)
+- [x] **T22.6** Delete the unreferenced Makefile targets and fix HARNESS_GATES.md (C12)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: `Makefile`, `project-harness/HARNESS_GATES.md`.
 Spec: C12, with one correction checked on 2026-10-21. Review §8.1 called 20 targets unreferenced, but
@@ -466,7 +466,7 @@ Done when:
 - `scripts/loc_baseline.txt` total equals the measured count;
 - `make check` is green.
 
-LOC: 0 non-test (Makefile). Phase T22 total ≈ −200.
+LOC: 0 non-test (Makefile). Phase T22 total ≈ −200. ✅ AUTO (T22.6, 2026-10-21)
 
 ---
 

@@ -12,16 +12,16 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
 .PHONY: install run test test-cov-run test-cov test-cov-v13 test-cov-full-report \
         app-frozen check-corpus-frozen check-corpus-quiescent \
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
-        test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
+        test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
         check-layers check-docstrings roadmap-verify roadmap-audit check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
         check-ledger-ids \
-        type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
+        type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
-        openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
+        openapi harness-status check-readme-paths check-label-adequacy \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-stale demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
@@ -181,18 +181,6 @@ check-contracts:
 check-contract-sync:
 	$(PYTHON) -m npc_engine.scripts.guard_contract_test_sync
 
-test-v14-p0:
-	$(PYTHON) -m pytest -q tests/unit/api/test_auth_idempotency_middleware_v14.py tests/unit/graph/test_idempotency_service_v14.py tests/unit/llm/test_llm_config_loader_v14.py tests/unit/conformance/test_engine_contract_schema_checker_v14.py tests/unit/api/test_main_reconciler_lifespan.py
-
-test-v14-p1:
-	$(PYTHON) -m pytest -q tests/unit/retrieval/test_context_relevance_engine_v14.py tests/unit/retrieval/test_context_budget_enforcer_v14.py tests/unit/retrieval/test_context_builder.py
-
-test-v14-p2:
-	$(PYTHON) -m pytest -q tests/unit/graph/test_currency_verification_engine_v14.py tests/unit/graph/test_currency_writer_v14.py tests/unit/graph/test_graph_writer_currency_coordinator_v14.py tests/unit/graph/test_action_currency_routing_v14.py tests/unit/api/test_auth_idempotency_middleware_v14.py
-
-test-v14-p3:
-	$(PYTHON) -m pytest -q tests/unit/engines/test_quest_lifecycle_engine_v14.py tests/unit/graph/test_quest_reward_routing_v14.py tests/unit/graph/test_quest_event_provenance_v14.py tests/unit/graph/test_graph_writer_quest_reward_coordinator_v14.py tests/unit/api/test_quest_routes_v14.py tests/unit/conformance/test_v1_route_versioning.py tests/integration/test_quest_lifecycle_integration_v14.py
-
 test-v14-p4:
 	$(PYTHON) -m pytest -q tests/contract tests/unit/api/test_simulate_world_flow_v14.py tests/unit/conformance/test_guard_contract_test_sync_v14.py
 	$(PYTHON) -m npc_engine.scripts.simulate_world_flow
@@ -225,10 +213,6 @@ check-evals-rules:
 
 check-evals-rules-update:
 	$(PYTHON) scripts/check_rules.py --update-evals-baseline
-
-# type-ratchet: kept for historical reference; mypy is now at 0 so 'make type' is the gate.
-type-ratchet:
-	$(PYTHON) scripts/mypy_ratchet.py
 
 type-ratchet-update:
 	$(PYTHON) scripts/mypy_ratchet.py --update
@@ -466,20 +450,6 @@ check-engine-logs:
 # T14.1: type-demo added, 24 -> 25. demo_game/ was gated by nothing; 256 errors across 45
 #         files, invisible on every push (ISSUE-375 tracks the drive-to-zero, waits on T13.2).
 check: check-harness check-ledger-ids lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
-
-verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
-
-verify-v14-p0: lint type check-contracts test-v14-p0
-
-verify-v14-p1: lint type test-v14-p1
-
-verify-v14-p2: lint type test-v14-p1 test-v14-p2
-
-verify-v14-p3: lint type test-v14-p1 test-v14-p2 test-v14-p3
-
-verify-v14-p4: lint type check-contracts check-contract-sync test-v14-p4
-
-verify-v14-p5: lint type test-v14-p5
 
 # ---------------------------------------------------------------------------
 # Eval targets. Every one below is a thin alias over `python -m evals <verb>`
