@@ -540,7 +540,7 @@ Done when:
 
 LOC: about −1,833 non-test (demo_game). ✅ AUTO (T23.2, 2026-10-22)
 
-- [ ] **T23.3** Trim `client.py` to the methods the kept code calls
+- [x] **T23.3** Trim `client.py` to the methods the kept code calls
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: `demo_game/client.py`, its tests under `demo_game/tests/`, `scripts/rules_baseline.txt`.
 Spec:
@@ -566,7 +566,7 @@ Done when:
 - `make check-rules` reports no violation for it;
 - `make check` is green.
 
-LOC: about −700 non-test (demo_game).
+LOC: about −700 non-test (demo_game). ✅ AUTO (T23.3, 2026-10-22)
 
 - [ ] **T23.4** Make `quickstart.py` the thin text client
 Files: `demo_game/quickstart.py`, `Makefile` (the `hello` target :865-866), a new test

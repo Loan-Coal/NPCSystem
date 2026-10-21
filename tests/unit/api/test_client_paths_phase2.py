@@ -38,41 +38,8 @@ def _make_client(recorded: list[httpx.Request]) -> EngineClient:
 
 
 # ---------------------------------------------------------------------------
-# Economy paths
+# Economy paths — get_item_price and post_trade removed in T23.3 (dead callers)
 # ---------------------------------------------------------------------------
-
-def test_get_item_price_uses_admin_path() -> None:
-    recorded: list[httpx.Request] = []
-    client = _make_client(recorded)
-    client.get_item_price("spice", "aldric_merchant")
-    assert len(recorded) == 1
-    assert recorded[0].url.path == "/v1/admin/economy/price"
-
-
-def test_post_trade_uses_admin_path() -> None:
-    recorded: list[httpx.Request] = []
-
-    def _handler(request: httpx.Request) -> httpx.Response:
-        recorded.append(request)
-        return httpx.Response(200, json={"data": {"accepted": True}})
-
-    transport = httpx.MockTransport(_handler)
-    http = httpx.Client(
-        base_url="http://localhost:8000",
-        headers={"Authorization": "Bearer test"},
-        transport=transport,
-    )
-    client = EngineClient(base_url="http://localhost:8000", api_key="test", _http_client=http)
-    client.post_trade(
-        buyer_id="player",
-        seller_id="aldric_merchant",
-        item_id="northern_spice_bundle",
-        item_type="spice",
-        offered_price=80,
-        tick=0,
-    )
-    assert len(recorded) == 1
-    assert recorded[0].url.path == "/v1/admin/economy/trade"
 
 
 # ---------------------------------------------------------------------------
@@ -133,26 +100,8 @@ def test_get_quest_returns_none_on_404() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Quest accept path (singular /v1/quest/)
+# Quest accept path — post_quest_accept removed in T23.3 (dead caller)
 # ---------------------------------------------------------------------------
-
-def test_post_quest_accept_uses_singular_quest_path() -> None:
-    recorded: list[httpx.Request] = []
-
-    def _handler(request: httpx.Request) -> httpx.Response:
-        recorded.append(request)
-        return httpx.Response(200, json={"data": {"status": "accepted"}})
-
-    transport = httpx.MockTransport(_handler)
-    http = httpx.Client(
-        base_url="http://localhost:8000",
-        headers={"Authorization": "Bearer test"},
-        transport=transport,
-    )
-    client = EngineClient(base_url="http://localhost:8000", api_key="test", _http_client=http)
-    client.post_quest_accept("q_123", "player")
-    assert len(recorded) == 1
-    assert recorded[0].url.path == "/v1/quest/accept"
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,6 @@
 # Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
 # (run the corresponding update target). Never add a line by hand to dodge the gate.
-R001|demo_game/client.py:1901
-R001|demo_game/ui/layout/game_window.py:925
 R004|src/npc_engine/setup/neo4j_manager.py
 R004|src/npc_engine/setup/ollama_manager.py
 R006|scripts/check_conservation.py::format_report

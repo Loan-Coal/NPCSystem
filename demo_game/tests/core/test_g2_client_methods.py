@@ -1,8 +1,7 @@
 """
 Module: test_g2_client_methods
 Layer: demo_game (tests)
-Purpose: Unit tests for G2 EngineClient additions:
-         get_player_model (G2.1) and get_director_beats (G2.3).
+Purpose: Unit tests for G2 EngineClient additions: get_player_model (G2.1).
          No network — all HTTP calls are mocked.
 Dependencies: demo_game.client, unittest.mock
 Used by: pytest
@@ -77,50 +76,3 @@ class TestGetPlayerModel:
         assert "player-model" in call_url
 
 
-# ---------------------------------------------------------------------------
-# get_director_beats
-# ---------------------------------------------------------------------------
-
-
-class TestGetDirectorBeats:
-    """Tests for EngineClient.get_director_beats."""
-
-    def test_returns_list_on_200(self) -> None:
-        """On 200 returns the JSON list directly."""
-        mock_http = MagicMock()
-        beats = [
-            {"beat_kind": "tension_spike", "reason": "war", "npc_id": "mira_innkeeper",
-             "player_id": "player_demo", "tick": 10},
-        ]
-        mock_http.get.return_value = _make_response(200, beats)
-        result = _client(mock_http).get_director_beats(limit=5)
-        assert result == beats
-
-    def test_returns_empty_list_on_404(self) -> None:
-        """On 404 returns empty list (graceful degrade)."""
-        mock_http = MagicMock()
-        mock_http.get.return_value = _make_response(404, {})
-        result = _client(mock_http).get_director_beats()
-        assert result == []
-
-    def test_returns_empty_list_on_500(self) -> None:
-        """On 500 returns empty list."""
-        mock_http = MagicMock()
-        mock_http.get.return_value = _make_response(500, {})
-        result = _client(mock_http).get_director_beats()
-        assert result == []
-
-    def test_returns_empty_when_non_list_body(self) -> None:
-        """When 2xx body is not a list (unexpected format) returns empty list."""
-        mock_http = MagicMock()
-        mock_http.get.return_value = _make_response(200, {"data": []})
-        result = _client(mock_http).get_director_beats()
-        assert result == []
-
-    def test_passes_limit_param(self) -> None:
-        """Passes limit as a query parameter."""
-        mock_http = MagicMock()
-        mock_http.get.return_value = _make_response(200, [])
-        _client(mock_http).get_director_beats(limit=3)
-        call_params = mock_http.get.call_args[1]["params"]
-        assert call_params.get("limit") == 3

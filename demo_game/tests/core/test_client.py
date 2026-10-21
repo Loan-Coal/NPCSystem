@@ -1,7 +1,7 @@
 """
 Module: test_client
 Layer: demo_game (tests)
-Purpose: TDD unit tests for EngineClient — all 8 methods, happy path + error path.
+Purpose: TDD unit tests for EngineClient — happy path + error path for live methods.
 Dependencies: demo_game.client, unittest.mock (no network, no engine required)
 Used by: make test-demo
 """
@@ -66,29 +66,6 @@ def test_post_dialogue_raises_on_http_error(mock_http: MagicMock, make_response)
     mock_http.post.return_value = make_response(500, {"error": "Internal"})
     with pytest.raises(EngineClientError, match="HTTP 500"):
         _client(mock_http).post_dialogue("player_1", "npc_1", "Hi")
-
-
-# ---------------------------------------------------------------------------
-# get_graph_nodes
-# ---------------------------------------------------------------------------
-
-
-def test_get_graph_nodes_success(mock_http: MagicMock, make_response) -> None:
-    nodes = [{"id": "npc_1", "properties": {}}]
-    mock_http.get.return_value = make_response(200, {"data": nodes})
-    result = _client(mock_http).get_graph_nodes("Character")
-    assert result == nodes
-    mock_http.get.assert_called_once_with(
-        "/v1/graph/nodes/Character",
-        params={"limit": 100, "offset": 0},
-        timeout=15.0,
-    )
-
-
-def test_get_graph_nodes_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(422, {"error": "bad type"})
-    with pytest.raises(EngineClientError, match="HTTP 422"):
-        _client(mock_http).get_graph_nodes("BadType")
 
 
 # ---------------------------------------------------------------------------
@@ -183,53 +160,6 @@ def test_get_clock_state_raises_on_http_error(mock_http: MagicMock, make_respons
     mock_http.get.return_value = make_response(503, {})
     with pytest.raises(EngineClientError, match="HTTP 503"):
         _client(mock_http).get_clock_state()
-
-
-# ---------------------------------------------------------------------------
-# get_npc_state
-# ---------------------------------------------------------------------------
-
-
-def test_get_npc_state_success(mock_http: MagicMock, make_response) -> None:
-    payload = {"data": {"character": {"id": "npc_1"}, "relations": [], "events": []}}
-    mock_http.get.return_value = make_response(200, payload)
-    result = _client(mock_http).get_npc_state("npc_1")
-    assert result == payload
-    mock_http.get.assert_called_once_with("/v1/npc/npc_1/state", timeout=15.0)
-
-
-def test_get_npc_state_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(404, {"error": "not found"})
-    with pytest.raises(EngineClientError, match="HTTP 404"):
-        _client(mock_http).get_npc_state("npc_missing")
-
-
-# ---------------------------------------------------------------------------
-# get_world_state
-# ---------------------------------------------------------------------------
-
-
-def test_get_world_state_returns_first_item(mock_http: MagicMock, make_response) -> None:
-    node = {"id": "ws_1", "properties": {"epoch": "peace"}}
-    mock_http.get.return_value = make_response(200, {"data": [node]})
-    result = _client(mock_http).get_world_state()
-    assert result == node
-    mock_http.get.assert_called_once_with(
-        "/v1/graph/nodes/world_state",
-        params={"limit": 1, "offset": 0},
-        timeout=15.0,
-    )
-
-
-def test_get_world_state_returns_none_when_empty(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(200, {"data": []})
-    assert _client(mock_http).get_world_state() is None
-
-
-def test_get_world_state_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(500, {})
-    with pytest.raises(EngineClientError, match="HTTP 500"):
-        _client(mock_http).get_world_state()
 
 
 # ---------------------------------------------------------------------------
@@ -615,63 +545,6 @@ def test_get_quest_raises_on_500(mock_http: MagicMock, make_response) -> None:
 
 
 # ---------------------------------------------------------------------------
-# get_item_price
-# ---------------------------------------------------------------------------
-
-
-def test_get_item_price_returns_price_on_200(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(200, {"data": {"price": 120}})
-    result = _client(mock_http).get_item_price("spice", "aldric_merchant")
-    assert result == 120
-    mock_http.get.assert_called_once_with(
-        "/v1/admin/economy/price",
-        params={"item_type": "spice", "character_id": "aldric_merchant"},
-        timeout=15.0,
-    )
-
-
-def test_get_item_price_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
-    mock_http.get.return_value = make_response(404, {})
-    assert _client(mock_http).get_item_price("spice", "aldric_merchant") is None
-
-
-# ---------------------------------------------------------------------------
-# post_trade
-# ---------------------------------------------------------------------------
-
-
-def test_post_trade_returns_result_on_200(mock_http: MagicMock, make_response) -> None:
-    payload = {"data": {"accepted": False, "rejection_reason": "price too low"}}
-    mock_http.post.return_value = make_response(200, payload)
-    result = _client(mock_http).post_trade(
-        buyer_id="player",
-        seller_id="aldric_merchant",
-        item_id="northern_spice_bundle",
-        item_type="spice",
-        offered_price=80,
-        tick=0,
-    )
-    assert result == payload
-    _, kwargs = mock_http.post.call_args
-    body = kwargs["json"]
-    assert body["offered_price"] == 80
-    assert body["seller_id"] == "aldric_merchant"
-
-
-def test_post_trade_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(422, {"detail": "invalid"})
-    with pytest.raises(EngineClientError, match="HTTP 422"):
-        _client(mock_http).post_trade(
-            buyer_id="player",
-            seller_id="aldric_merchant",
-            item_id="northern_spice_bundle",
-            item_type="spice",
-            offered_price=80,
-            tick=0,
-        )
-
-
-# ---------------------------------------------------------------------------
 # _quest_headers
 # ---------------------------------------------------------------------------
 
@@ -731,27 +604,6 @@ def test_post_quest_offer_raises_on_4xx(mock_http: MagicMock, make_response) -> 
 
 
 # ---------------------------------------------------------------------------
-# post_quest_accept
-# ---------------------------------------------------------------------------
-
-
-def test_post_quest_accept_success(mock_http: MagicMock, make_response) -> None:
-    payload = {"data": {"quest_id": "q_001", "status": "active"}}
-    mock_http.post.return_value = make_response(200, payload)
-    result = _client(mock_http).post_quest_accept("q_001", "player")
-    assert result == payload
-    _, kwargs = mock_http.post.call_args
-    assert kwargs["json"]["quest_id"] == "q_001"
-    assert "X-Idempotency-Request-Hash" in kwargs["headers"]
-
-
-def test_post_quest_accept_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(409, {"detail": "already accepted"})
-    with pytest.raises(EngineClientError, match="HTTP 409"):
-        _client(mock_http).post_quest_accept("q_001", "player")
-
-
-# ---------------------------------------------------------------------------
 # pledges (ISSUE-061 path-drift regression — route is mounted at /v1/admin)
 # ---------------------------------------------------------------------------
 
@@ -775,13 +627,6 @@ def test_get_pledges_for_npc_uses_admin_path(mock_http: MagicMock, make_response
 # ---------------------------------------------------------------------------
 
 
-def test_get_engine_status_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
-    """get_engine_status targets /v1/admin/system/engines (SEV-14, DEC-112)."""
-    mock_http.get.return_value = make_response(200, {"data": []})
-    _client(mock_http).get_engine_status()
-    assert mock_http.get.call_args.args[0] == "/v1/admin/system/engines"
-
-
 def test_get_recent_events_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
     """get_recent_events targets /v1/admin/system/events (SEV-14, DEC-112)."""
     mock_http.get.return_value = make_response(200, {"data": []})
@@ -789,21 +634,3 @@ def test_get_recent_events_uses_admin_system_path(mock_http: MagicMock, make_res
     assert mock_http.get.call_args.args[0] == "/v1/admin/system/events"
 
 
-# ---------------------------------------------------------------------------
-# get_schemes (F2.3 / G2.2)
-# ---------------------------------------------------------------------------
-
-
-def test_get_schemes_returns_scheme_list(mock_http: MagicMock, make_response) -> None:
-    """get_schemes returns the 'schemes' sub-list from the envelope data."""
-    schemes = [{"scheme_id": "s1", "goal": "rob", "discovered": True, "steps": []}]
-    mock_http.get.return_value = make_response(200, {"data": {"npc_id": "lira", "schemes": schemes}})
-    result = _client(mock_http).get_schemes("lira")
-    assert result == schemes
-    assert mock_http.get.call_args.args[0] == "/v1/npc/lira/schemes"
-
-
-def test_get_schemes_returns_empty_on_error(mock_http: MagicMock, make_response) -> None:
-    """get_schemes degrades to [] on a >=400 response."""
-    mock_http.get.return_value = make_response(404, {"detail": "nope"})
-    assert _client(mock_http).get_schemes("lira") == []
