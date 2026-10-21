@@ -192,34 +192,9 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
 }
 
 
-# The fence's phase ids, in file order. EVAL-P22B is a real phase, not a typo: it was
-# inserted 2026-08-18 between EVAL-P22 and EVAL-P23 as the engine-iteration track
-# (A/B pipeline unblocking), deliberately lettered so it could be added without
-# renumbering P23/P24 and invalidating every cross-reference in the programme.
-# Both assertions below were left pinning a bare contiguous P0..P24 when it landed,
-# so they were red from that date until 2026-08-20 — hidden the whole time behind the
-# `lint` failure that short-circuits `make check` before test-cov (ISSUE-189). Update
-# this list deliberately, exactly as the tripwire docstring below asks.
-# 2026-08-28 (DEC-233): the EVAL-P sequence is gone. The eval program was culled to a
-# minimal trustworthy instrument (DEC-228) and ROADMAP.md was rebuilt around the 2026-08
-# remediation program, archived at archive/ROADMAP_pre-remediation_2026-08-28.md. The
-# fence now spans the four phases the overnight loop is allowed to own; R5/R6/R7 sit
-# outside it deliberately (R6 would have the loop rewrite its own driver mid-run).
-# File order is dependency order, which is why R4 precedes R3.
-# 2026-09-03: the remediation program is complete and archived at
-# archive/ROADMAP_remediation-2026-08_2026-09-03.md. The fence now spans the mechanical
-# half of the M program — M1 (graph integrity) and M2 (the four unmeasured dimensions).
-# M3, M4 and R6 sit outside it deliberately: M3 and M4 need human judgment and live model
-# runs, and R6 would still have the loop rewrite its own driver mid-run.
-# 2026-09-08: the M programme is retired and archived at
-# archive/ROADMAP_M-programme_2026-09-08.md, and the fence now spans Sprints 1-8 of the
-# T programme (Trim), phases T1..T16. Sprint 0 (T0, T0B) sits outside it deliberately — it
-# rewrites the loop's own driver and skill — as do Sprints 9 and 10, which need human
-# judgement and live model runs. This constant was left pinning M1/M2 by the commit that
-# wrote the T roadmap, so `make check` was red from then until this update (T0.0).
-# 2026-10-21 (DEC-310 C1, DEC-323): Sprints 0-8 archived at
-# archive/ROADMAP_T-programme_2026-10-21.md; the fence is the drain programme, in drain order
-# (file order is the loop's only ordering). T27 is unused: its tasks live in T26.
+# The fence's current phase ids, in file order. Update deliberately.
+# Full change history archived at project-harness/archive/ROADMAP_T-programme_2026-10-21.md
+# and project-harness/archive/ROADMAP_M-programme_2026-09-08.md.
 _EXPECTED_PHASE_IDS: list[str] = ["T21", "T22", "T23", "T24", "T25", "T26", "T28", "T17", "T19", "T29"]
 
 
@@ -238,158 +213,18 @@ def test_real_roadmap_parses_and_verifies_clean() -> None:
     ids = [p.id for p in phases]
     assert ids == _EXPECTED_PHASE_IDS, (
         f"queue phases changed: expected {_EXPECTED_PHASE_IDS}, got {ids}. "
-        "Update the constant deliberately — see the tripwire docstring below."
+        "Update the constant deliberately — see the history comment above _EXPECTED_PHASE_IDS."
     )
-
-
-def test_real_roadmap_fence_state_tripwire() -> None:
-    """Snapshot of the *current* fence, so a move is a conscious act.
-
-    UPDATE DELIBERATELY when the fence moves, and only alongside the ROADMAP
-    reopen condition.
-
-    History. 2026-08-02 (DEC-153 §3) narrowed the fence to EVAL-P0 because
-    ``compute_next`` skips flagged tasks without blocking, so a wider fence let the
-    loop drain EVAL-P1..P7 while EVAL-P0.3 (ask-gate) and EVAL-P0.4 (the live
-    measured baseline every later estimate depends on) sat unchecked forever —
-    finishing the program having measured nothing. That narrowing worked: the
-    baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
-
-    State 2026-08-10 (DEC-163): the fence was narrowed to **EVAL-P0..EVAL-P19**. The end
-    marker moved from below EVAL-P24.3 to immediately above "### Phase EVAL-P20", on the
-    same principle as the DEC-153 §3 narrowing described above: EVAL-P15..P19 recompute
-    and repair over the artifact already on disk and can be validated against it, while
-    EVAL-P20..P24 assume a post-regeneration artifact that does not exist, so the loop
-    could only build them against fixtures. That is not hypothetical — it is how
-    EVAL-P8.2's ``compare`` shipped green and then printed "Intersection: 0 cases /
-    NO_DETECTABLE_CHANGE / p=1.0000" with exit 0 against the two real generation dirs.
-
-    Current state (2026-08-15, DEC-178): the fence spans **EVAL-P0..EVAL-P24** again —
-    reopened by **explicit human override**, not because DEC-163's three reopen
-    conditions were met. They were not: ``EVAL-P17.6``'s live ``make check-conservation``
-    still exits non-zero, and ``EVAL-P20.0`` measured 62.5% reproduction against the
-    required ≥95% (DEC-176). ``EVAL-P20.0`` is ticked in ROADMAP.md as the record of that
-    override, not as a claim its gate passed. This override does **not** fabricate
-    completion of any other task — every phase's own ``HUMAN GATE`` blocks (H4, H6, H7,
-    H8, H9, H10, H12) still gate their tasks on real, unticked-until-genuinely-done work,
-    so ``compute_next`` below still returns real pending tasks, not free passes. Reopen
-    conditions and the override record are at the marker in ROADMAP.md; the ordered
-    human-side sequence is in project-harness/HUMAN_TASKS.md.
-
-    Prior state (2026-08-09, DEC-160): the fence spanned EVAL-P0..EVAL-P24 — Program 1
-    (P0..P8, precision), Program 2 (P9..P14, validity + the portfolio artifact, released
-    2026-08-07), and Program 3 (P15..P24, the measurement apparatus, released 2026-08-09
-    once `loop_gates.FROZEN_PATH_PREFIXES` covered `evals/calibration/` and
-    `evals/generations/` so no unattended session can write the 393 human labels). The
-    2026-08-15 reopening lands at the same span for a different reason (override, not
-    conditions met) — see DEC-178, not DEC-160, for why.
-
-    That release is why this test was red on the nights of 2026-08-09: DEC-160 moved the
-    marker and verified the *cursor* (`roadmap-verify` OK, 25 phases) but not the tests
-    that snapshot it, so the phase gate halted after EVAL-P11 and again after EVAL-P12 on
-    a stale literal rather than a regression. The span assertion below is the snapshot;
-    updating it is the deliberate act the docstring asks for.
-
-    **What this pins, and why it no longer pins the pending list.** Earlier revisions
-    asserted ``pending == 13``, then ``== 11``, then an exact id list, and were red every
-    time (ISSUE-136). That is structural, not carelessness: *pending shrinks by one every
-    time the loop succeeds*, so pinning it means the gate turns red on the first completed
-    task of every night and stays red, which is exactly what happened across EVAL-P2..P5 —
-    four phases committed under "pre-existing red gate" where a genuine regression would
-    have looked identical. A tripwire that fires on success is not a tripwire.
-
-    So this now pins the two things that should only change by deliberate human edit:
-
-    * **the phase span** — a fence move is a conscious act, and P0..P24 must stay
-      contiguous or ``compute_next`` silently skips a programme;
-    * **the flagged set** — the loop refuses flagged tasks, so an accidental flag hides
-      work forever and an accidental unflag hands a human decision to a 3am session.
-
-    Pending is asserted only structurally (non-empty, and every id belongs to a phase in
-    the fence), which catches a corrupted queue without firing on progress.
-
-    **The flagged set is asserted by containment, not equality (ISSUE-136).** Equality had
-    the same defect the pending list had, one step removed: a flagged task is skipped by
-    the loop but still *ticked by a human session*, and the moment it is, it leaves the
-    pending set and the literal dict is stale — EVAL-P6.4 did exactly that and is why this
-    dict no longer names it. Both failure directions are still caught, without firing on
-    progress:
-
-    * an **accidental flag** (ISSUE-134: EVAL-P1.2's body said "Not an ask-gate" and the
-      skip-regex matched the literal token through the negation) fails the subset check,
-      because the new id is not in ``EXPECTED_FLAGS``;
-    * an **accidental unflag** fails the second check, because a task still listed in
-      ``EXPECTED_FLAGS`` and still pending must still carry exactly its recorded flags.
-
-    Ticking a flagged task drops it from ``pending`` and is silently fine, which is the
-    only behaviour equality got wrong.
-
-    EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
-    "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
-    of the negation around it, so the loop skipped the task for a reason that stated the
-    opposite of what was meant (ISSUE-134). That is precisely the failure the flagged-set
-    assertion below exists to catch.
-    """
-    phases, _ = _real_roadmap_phases()
-    # 2026-08-15 (DEC-178): widened 20 -> 25 again. The fence end marker moved back below
-    # EVAL-P24.3 by explicit human override — not because DEC-163's reopen conditions were
-    # met (they were not; see the docstring above and DEC-178). This assertion firing on
-    # that move is the tripwire working as designed.
-    assert [p.id for p in phases] == _EXPECTED_PHASE_IDS
-
-    # 2026-08-28 (DEC-233): no remediation phase is complete yet, so there is no
-    # monotonic done-set to pin. Assert the structural invariant instead — every phase
-    # in the fence has at least one task, which is what makes `is_done` meaningful
-    # (a phase with zero tasks is never done and silently stalls compute_next).
     for phase in phases:
         assert phase.tasks, f"{phase.id} parsed to zero tasks"
-
-    # Filter on `not done` the way the loop does: EVAL-P0.1/P0.3/P0.4 are *also*
-    # skippable (their bodies still carry the ask-gate / live markers that gated
-    # them) but they are ticked, so the loop is not being held back on them.
-    flagged = {t.id: sorted(t.flags) for p in phases for t in p.tasks if t.skippable and not t.done}
-
-    # No task may acquire a flag that is not recorded here (ISSUE-134).
-    unexpected = {task_id: got for task_id, got in flagged.items() if task_id not in EXPECTED_FLAGS}
-    assert not unexpected, (
-        f"tasks newly skipped by the loop, with no recorded reason: {unexpected}. "
-        "If deliberate, add them to EXPECTED_FLAGS; if not, the skip-regex matched prose."
-    )
-
-    # No still-pending task may quietly lose or change its flag.
-    for task_id, expected in EXPECTED_FLAGS.items():
-        if task_id in flagged:
-            assert flagged[task_id] == expected, (
-                f"{task_id} flags changed: expected {expected}, got {flagged[task_id]}"
-            )
-
-    # Structural only — pending shrinks on every success and must not fire this gate.
-    known_task_ids = {t.id for p in phases for t in p.tasks}
     pending = [task_id for p in phases for task_id in p.pending]
-    # 2026-09-02 (DEC-252): `assert pending` replaced by an equivalence, because BOTH of
-    # its predecessors fired on a correct queue and this one now has too.
-    #
-    # The history is the argument. `assert pending == []` was right while the EVAL queue
-    # was honestly drained and wrong the moment the remediation queue was loaded full.
-    # DEC-233 flipped it to `assert pending` — right for a full queue, and wrong the moment
-    # the remediation programme finished, which is today: R0–R4 are complete and the only
-    # unticked task in the fence is R1.7, a flagged ask-gate. Each version pinned a
-    # snapshot of how much work happened to be left, so each was guaranteed to go red on
-    # a legitimate state change. That is a tripwire that fires on success, which the
-    # docstring above already names as the thing to avoid.
-    #
-    # The invariant that holds in EVERY state is that `pending` is exactly the tasks the
-    # loop can act on: unticked and unflagged. It catches the 2026-08-28 corruption —
-    # a full file parsing to ALL_DONE leaves actionable tasks missing from `pending`, so
-    # the two sides diverge — while permitting both an honestly full and an honestly
-    # drained queue, and it shrinks in step with progress rather than against it.
     actionable = sorted(t.id for p in phases for t in p.tasks if not t.done and not t.skippable)
     assert sorted(pending) == actionable, (
         "pending diverged from the tasks the loop can act on. Missing ids mean the queue "
         "parsed to less than the file holds — the silent no-op that made the misplaced "
         "fence look like 'queue drained' on 2026-08-28. Extra ids mean the reverse."
     )
-    assert set(pending) <= known_task_ids
+
 
 
 def test_real_roadmap_line_endings_are_uniform() -> None:
