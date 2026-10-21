@@ -16,3 +16,19 @@
 5. **No validation of `TASK_FROZEN_RE` syntax** — The regex string is complex and unvalidated at script load time. A syntax error in the pattern would silently fail (grep returns nothing), possibly allowing unintended writes. Consider adding a test that validates the regex parses correctly.
 
 All other code follows CLAUDE.md rules: functions <40 lines, proper nesting, module/function docstrings present, no layer violations. LOC baseline updated correctly.
+
+## 2026-10-21 23:12:44 — phase T22
+
+Now let me get the five concrete findings by reviewing the full diff carefully:
+
+**Findings Summary:**
+
+1. **HARNESS_GATES.md gate removal**: The "Contracts" row (`make check-contracts` / `check-contract-sync`) was removed from the documented harness gates table, but the Makefile targets still exist (lines 181-182). This creates inconsistency: either the gate should remain documented (if still enforced) or the targets should be deleted. Currently, the documentation claims these checks don't exist as gates.
+
+2. **Git subprocess error handling gap in _is_tracked()**: The `_is_tracked()` function (check_ledger_ids.py:164-172) uses `subprocess.run(..., check=False)` and only checks `returncode == 0`. This conflates "file not in index" (exit 1) with "git not available" (exit 127), potentially causing false positives for missing reports when git fails.
+
+3. **Archive DECISIONS.md inclusion changes collision semantics**: Adding "archive/DECISIONS_history.md" to _DECISION_FILES means DEC ids in the archive are now treated as "declared" for collision detection. If someone accidentally creates DEC-150 when it exists in the archive, it flags correctly. But the docstring doesn't explain this behavior—it only mentions detecting "undocumented" collisions, not what "documented" means with an archive present.
+
+4. **Test tripwire deletion lost design documentation**: The 150+ line `test_real_roadmap_fence_state_tripwire()` function in test_roadmap_cursor.py was deleted. While the simpler replacement test is functionally correct, the docstring contained extensive historical context about past issues (ISSUE-134, ISSUE-136, DEC-153, DEC-160, DEC-178, DEC-233, DEC-252) and design rationale that is now inaccessible from the code.
+
+5. **Type ratchet gate changed from baseline to hard fail**: HARNESS_GATES.md changed the Types gate from "baseline ratchet" (`make type-ratchet` allows errors up to baseline) to "hard fail" (`make type` requires 0 errors). The Makefile was updated to remove the `type-ratchet` target itself, but this is a significant behavioral change (stricter enforcement) that could break builds if mypy errors exist. This should be marked as a major gate strengthening in the commit message or ROADMAP.
