@@ -183,7 +183,7 @@ Done when:
 
 LOC: −321 non-test (scripts). ✅ AUTO (T21.1, 2026-10-21)
 
-- [ ] **T21.2** Stop committing night-shift reports (C10)
+- [x] **T21.2** Stop committing night-shift reports (C10)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - `scripts/loop.config.sh` :14-15 (`HUMAN_VERIFICATION_FILE`, `SOFT_REVIEW_FILE`);
@@ -213,7 +213,7 @@ Done when:
 - `git ls-files project-harness/human_verification.md` prints nothing;
 - `make check` is green.
 
-LOC: 0 non-test (bash and markdown only).
+LOC: 0 non-test (bash and markdown only). ✅ AUTO (T21.2, 2026-10-21)
 
 - [ ] **T21.3** Guard between nights: night tag, UNVERIFIED refusal, gate-baseline hash
 Files: `scripts/expand_loop.sh` (preflight near :241-252, `run_one_task`, the run end near :866-870),

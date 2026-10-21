@@ -1,6 +1,9 @@
 # Roadmap loop iteration logs
 project-harness/.loop-logs/
 
+# Overnight-run report files (human_verification.md, soft_review.md) — gitignored (C10, DEC-310).
+overnight_logs/
+
 # Python
 __pycache__/
 *.pyc

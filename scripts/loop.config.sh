@@ -10,9 +10,9 @@ HARNESS_DIR="${HARNESS_DIR:-project-harness}"
 ROADMAP_FILE="${ROADMAP_FILE:-$REPO_ROOT/$HARNESS_DIR/ROADMAP.md}"
 LOOP_STATE_DIR="${LOOP_STATE_DIR:-$REPO_ROOT/$HARNESS_DIR/.loop-state}"
 LOOP_LOG_DIR="${LOOP_LOG_DIR:-$REPO_ROOT/$HARNESS_DIR/.loop-logs}"
-# Committed night-shift records (these are project records, not scratch).
-HUMAN_VERIFICATION_FILE="${HUMAN_VERIFICATION_FILE:-$REPO_ROOT/$HARNESS_DIR/human_verification.md}"
-SOFT_REVIEW_FILE="${SOFT_REVIEW_FILE:-$REPO_ROOT/$HARNESS_DIR/soft_review.md}"
+# Overnight-only records (gitignored via overnight_logs/; not committed).
+HUMAN_VERIFICATION_FILE="${HUMAN_VERIFICATION_FILE:-$REPO_ROOT/overnight_logs/human_verification.md}"
+SOFT_REVIEW_FILE="${SOFT_REVIEW_FILE:-$REPO_ROOT/overnight_logs/soft_review.md}"
 
 # ── commands ──────────────────────────────────────────────────────────────────────────
 PY_RUN="${PY_RUN:-python}"

@@ -103,7 +103,7 @@ or `⏸️`. Today that is EVAL-P0.3, EVAL-P0.4, EVAL-P1.2, EVAL-P6.3.
 
 ## Morning review
 
-1. `project-harness/human_verification.md` — everything the night wants a human for.
+1. `overnight_logs/human_verification.md` — everything the night wants a human for (gitignored; not committed).
 2. `git log --oneline` — one commit per task. Look for `[UNVERIFIED: regression]` and
    `fix(loop): auto-repair ... [needs review]`.
 3. `grep "UNVERIFIED" project-harness/ROADMAP.md` — tasks committed over a red gate.
@@ -115,7 +115,7 @@ or `⏸️`. Today that is EVAL-P0.3, EVAL-P0.4, EVAL-P1.2, EVAL-P6.3.
      (`scripts/eval_stack_at.sh HEAD --reset`), reseeds it, and runs `make demo-run-live`.
      `PASS acts_reached=12/12 ...` is logged; `stack unavailable` (Docker down, or the
      rebuild/seed failed) is logged and nothing else happens; a `FAIL`, a hang, a stale
-     image or a crash lands in `human_verification.md` as **live demo broke**, with the
+     image or a crash lands in `overnight_logs/human_verification.md` as **live demo broke**, with the
      act and scene it died in. This is the only nightly check that boots the app —
      `make check` never does, which is how the WS slot leak and the tick-5 defeat got past
      every gate. By hand: `make eval-stack-reset && make eval-stack-up && make

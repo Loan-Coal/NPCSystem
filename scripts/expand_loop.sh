@@ -373,19 +373,13 @@ flag_for_human() {
 }
 
 checkpoint_reports() {
-  # Only stage report files that actually exist: `git add` fails as a whole on a missing
-  # pathspec, which silently left the reports uncommitted and tripped the NEXT task's
-  # clean-tree preflight — exactly the failure scar 6.8 describes.
-  local files=() f changed
-  for f in "$HUMAN_VERIFICATION_FILE" "$SOFT_REVIEW_FILE" "$HARNESS_DIR/ROADMAP.md"; do
-    [ -e "$f" ] && files+=("$f")
-  done
-  [ "${#files[@]}" -gt 0 ] || return 0
-  changed="$(git status --porcelain -- "${files[@]}" 2>/dev/null)"
+  # Report files now live under overnight_logs/ (gitignored). Stage ROADMAP.md only.
+  local changed
+  changed="$(git status --porcelain -- "$HARNESS_DIR/ROADMAP.md" 2>/dev/null)"
   [ -n "$changed" ] || return 0
-  git add -- "${files[@]}" >/dev/null 2>&1 || true
-  git commit -q -m "chore(loop): checkpoint night-shift reports" >/dev/null 2>&1 || true
-  log "checkpointed report artifacts"
+  git add -- "$HARNESS_DIR/ROADMAP.md" >/dev/null 2>&1 || true
+  git commit -q -m "chore(loop): checkpoint roadmap" >/dev/null 2>&1 || true
+  log "checkpointed roadmap"
 }
 
 # ======================================================================================
