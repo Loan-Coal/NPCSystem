@@ -379,7 +379,7 @@ Done when:
 
 LOC: 0 non-test. ✅ AUTO (T22.3, 2026-10-21)
 
-- [ ] **T22.4** Apply the issue triage (C3, DEC-304)
+- [x] **T22.4** Apply the issue triage (C3, DEC-304)
 Files: `project-harness/ISSUES.md` and `project-harness/archive/ISSUES_RESOLVED.md`.
 Spec: DEC-304, executed from the verdict column of `REVIEW_2026-10-21.md` §6.1 (lines 380-551).
 - **KEEP:** stays open.
@@ -403,7 +403,7 @@ Done when:
 - `make check-ledger-ids` prints OK;
 - `make check` is green.
 
-LOC: 0 non-test.
+LOC: 0 non-test. ✅ AUTO (T22.4, 2026-10-21)
 
 - [ ] **T22.5** Archive the one-off files, delete the stale commands, fix CLAUDE.md's rule-5 line (C4, C11, C14)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
