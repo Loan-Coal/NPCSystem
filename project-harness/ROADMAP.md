@@ -354,7 +354,7 @@ Done when:
 
 LOC: about −200 non-test (scripts). ✅ AUTO (T22.2, 2026-10-21)
 
-- [ ] **T22.3** Move uncited DECISIONS to the history file (C2, DEC-327)
+- [x] **T22.3** Move uncited DECISIONS to the history file (C2, DEC-327)
 Files: `project-harness/DECISIONS.md`, and a new `project-harness/archive/DECISIONS_history.md`.
 Spec: DEC-327.
 1. **Find the uncited entries.** Take every `## DEC-NNN` heading in `DECISIONS.md` whose id is cited
@@ -377,7 +377,7 @@ Done when:
 - `make check-ledger-ids` prints OK with `DEC: 4 reused id(s), 0 undocumented`;
 - `make check` is green.
 
-LOC: 0 non-test.
+LOC: 0 non-test. ✅ AUTO (T22.3, 2026-10-21)
 
 - [ ] **T22.4** Apply the issue triage (C3, DEC-304)
 Files: `project-harness/ISSUES.md` and `project-harness/archive/ISSUES_RESOLVED.md`.
