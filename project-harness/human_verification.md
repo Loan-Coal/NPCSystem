@@ -856,3 +856,7 @@ T13.1	phase=T13	flags=deferred	Census what the demo actually exercises ⏸️
 T13.2	phase=T13	flags=deferred	Delete what the census marked dead ⏸️
     deferred: - [ ] **T13.2** Delete what the census marked dead ⏸️
 DEFERRED_TOTAL=2
+
+## 2026-10-21 17:30:02 — HUMAN GATE blocks T21.2
+
+see scripts/check_human_gates.py --check T21.2
