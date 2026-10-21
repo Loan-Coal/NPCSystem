@@ -405,7 +405,7 @@ Done when:
 
 LOC: 0 non-test. ✅ AUTO (T22.4, 2026-10-21)
 
-- [ ] **T22.5** Archive the one-off files, delete the stale commands, fix CLAUDE.md's rule-5 line (C4, C11, C14)
+- [x] **T22.5** Archive the one-off files, delete the stale commands, fix CLAUDE.md's rule-5 line (C4, C11, C14)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - `git mv` into `project-harness/archive/`: `CODEBASE_REVIEW.md`, every `project-harness/PROMPT_*.md`,
@@ -433,7 +433,7 @@ Done when:
 - the CLAUDE.md grep prints nothing;
 - `make check` is green.
 
-LOC: 0 non-test.
+LOC: 0 non-test. ✅ AUTO (T22.5, 2026-10-21)
 
 - [ ] **T22.6** Delete the unreferenced Makefile targets and fix HARNESS_GATES.md (C12)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
