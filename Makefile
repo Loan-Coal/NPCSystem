@@ -23,7 +23,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
-        demo demo-stale demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
+        demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr
 
@@ -782,19 +782,6 @@ eval-harness:
 # Run from repo root so demo_game/ is on sys.path.
 # ---------------------------------------------------------------------------
 
-# demo: start engine (idempotent) then open Pygame window
-# demo depends on boot-check so the documented day-to-day path REBUILDS the app image.
-# The image is baked, not bind-mounted (COPY src/ in the Dockerfile), so `docker-compose
-# up -d` alone serves the pre-edit build with no visible signal — boot-check's staleness
-# detector existed but nothing invoked it (CR-L16-03, R5.5).
-demo: boot-check
-	$(PYTHON) -m demo_game
-
-# demo-stale: the old behaviour — start whatever image is already built, no rebuild.
-# Use when you know the image is current and want the seconds back.
-demo-stale:
-	docker-compose up -d
-	$(PYTHON) -m demo_game
 
 # dashboard: print the URL for the Phase 12 designer web dashboard.
 # The FastAPI app serves it as static files at /dashboard once the backend is up

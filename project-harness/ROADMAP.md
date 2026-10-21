@@ -507,7 +507,7 @@ Done when:
 
 LOC: about −10,991 non-test (demo_game). ✅ AUTO (T23.1, 2026-10-21)
 
-- [ ] **T23.2** Delete the interactive root modules and their entry points
+- [x] **T23.2** Delete the interactive root modules and their entry points
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: delete
 - `demo_game/game_controller.py` (556), `game_end_checker.py` (505), `quest_trade_controller.py` (329),
@@ -538,7 +538,7 @@ Done when:
 - `python -c "import demo_game"` exits 0;
 - `make test-demo` and `make check` are green.
 
-LOC: about −1,833 non-test (demo_game).
+LOC: about −1,833 non-test (demo_game). ✅ AUTO (T23.2, 2026-10-22)
 
 - [ ] **T23.3** Trim `client.py` to the methods the kept code calls
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311

@@ -16,8 +16,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 _DEMO_ROOT = Path(__file__).parent.parent.parent
 
 
@@ -35,44 +33,12 @@ def test_trade_intent_message_constant_exists() -> None:
     assert constants.TRADE_INTENT_MESSAGE == "I'd like to trade."
 
 
-def test_trade_intent_magic_string_not_in_game_controller() -> None:
-    """Inline string must not appear in game_controller source."""
-    src = _DEMO_ROOT / "game_controller.py"
-    text = src.read_text(encoding="utf-8")
-    assert "\"I'd like to trade.\"" not in text, (
-        "Magic string still present in game_controller.py — use TRADE_INTENT_MESSAGE"
-    )
-
-
-def test_trade_intent_magic_string_not_in_quest_trade_controller() -> None:
-    """Inline string must not appear in quest_trade_controller source."""
-    src = _DEMO_ROOT / "quest_trade_controller.py"
-    text = src.read_text(encoding="utf-8")
-    assert "\"I'd like to trade.\"" not in text, (
-        "Magic string still present in quest_trade_controller.py — use TRADE_INTENT_MESSAGE"
-    )
-
 
 # ---------------------------------------------------------------------------
 # 2. print() removed from pollers
 # ---------------------------------------------------------------------------
-
-_POLLER_FILES = [
-    _DEMO_ROOT / "game_controller.py",
-    _DEMO_ROOT / "quest_trade_controller.py",
-    _DEMO_ROOT / "knowledge_sidebar_fetcher.py",
-]
-
-
-@pytest.mark.parametrize("file_path", _POLLER_FILES, ids=[p.name for p in _POLLER_FILES])
-def test_no_print_in_poller(file_path: Path) -> None:
-    """Poller/controller modules must not use print() — use logger instead."""
-    assert file_path.exists(), f"Module file not found: {file_path}"
-    text = file_path.read_text(encoding="utf-8")
-    # Detect indented print( calls (inside a function body = not a module-level comment)
-    assert "    print(" not in text, (
-        f"print() found in {file_path.name} — replace with logger.warning/logger.error"
-    )
+# game_controller.py, quest_trade_controller.py, and knowledge_sidebar_fetcher.py
+# were deleted in T23.2 — no poller files remain to check.
 
 
 # ---------------------------------------------------------------------------
