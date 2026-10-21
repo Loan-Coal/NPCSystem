@@ -10351,3 +10351,522 @@ not a zero-failure gate.
 4. **Production callers inject explicitly.** `generate_runner.run()` and `paired_arms.run_paired()` — the two production callers that run against a live Ollama — now pass `engine_adapter.fetch_model_digest` and `engine_adapter.fetch_ollama_version` explicitly, preserving their live-attribution behaviour.
 
 **What this does NOT change.** `ModelDigestUnavailableError` semantics for explicit injectors. `RunConfig` field types (`generation_model_digest: str | None` stays — `None` is kept for backward compat with old rows). The `_require_digest` guard. LOC delta: approximately +36 non-test lines across `evals/`; the sentinel buys the safety invariant that no unit test can silently reach the network for digest resolution.
+
+## DEC-296: Primary development and eval surface is text-first
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, decision session 2026-10-21) · **Resolves:** REVIEW_2026-10-21 §7.3, end-goal A1
+
+**Question.** What is the primary surface for development and eval?
+
+**Decision.** Text-first. The main loop is an API/WS transcript runner plus a CLI, producing diffable output. The Unreal MetaHuman demo (`../DemoGame`) is the showcase.
+
+**Rejected.** *pygame stays primary*: evaluation stays GUI-bound, and the 12.8k interactive-only LOC stays live. *Both first-class*: two clients to keep in step with every contract change, which loses on simplicity.
+
+**Owner notes.** None.
+
+## DEC-297: Shrink `demo_game/` to the scripted runner, the seeder and a text client
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D3 / T13.1, §7.3, §4.2; subsumes theme T6
+
+**Question.** With text-first chosen (DEC-296), what happens to the pygame `demo_game/`?
+
+**Decision.** Keep the scripted runner (`make demo-run`, ~5.2k LOC), the seeder (`make demo-seed`, ~4.9k) and a thin text client. Delete the interactive UI: `ui/`, `pollers/`, `graph_panel/`, `workers/` and the interactive-only root modules (~12.8k LOC). This makes T13.1's census and the D3 keep-list moot. T13.1/T13.2 are replaced by a deletion phase, and their ⏸️ flag is removed. That takes the three synchronised records (§5.2 item 8), which DEC-312 pre-approves.
+
+**Rejected.** *Keep the UI behind an owner keep-list (D3-B)*: the kept UI still costs maintenance on every contract change. *Keep it all*: 21.6k LOC and 18 copy-pasted pollers stay, and T13 stays blocked.
+
+**Owner notes.** None. In DEC-315 the owner also placed this shrink first in the sequence.
+
+## DEC-298: The engine repo owns the Unreal integration contract
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** end-goal A3(a); REVIEW_2026-10-21 §7.2 (`check-api-stability` duplicate), §8.2 (`check-api-contract` never fired)
+
+**Question.** What is the contract between the engine and the Unreal client?
+
+**Context (DemoGame survey, 2026-10-21).**
+- UE 5.8, its own repo.
+- `NpcEngineClient` is a standalone game module with 14 hand-written USTRUCTs. 23 gameplay files consume it through `INpcDialogueService`/`INpcQuestService`.
+- DemoGame already keeps a hand-curated `docs/openapi.json` with a field-presence gate (`Scripts/check_contract_sync.py`). It has drifted: the 5 `/v1/quest/*` routes the client calls are missing.
+- The WS protocol exists only as prose (`docs/ENGINE_CONTRACT.md` §3.3).
+- DemoGame DEC-001: the game and engine version independently and meet only at the REST/WS contract.
+
+**Decision.**
+- The engine repo commits `contracts/openapi_v1.json`, dumped from the live `app.openapi()` and covering every route the client calls, quest routes included.
+- It also commits a JSON Schema for the WS dialogue frames (`token`/`done`/`error`/`proactive_line`).
+- `make check-api-contract` becomes type-level and reds on a breaking diff.
+- DemoGame's `check_contract_sync.py` is repointed to the engine's file instead of its hand copy. That edit is in the DemoGame repo, outside this repo's loop.
+- The C++ structs stay hand-written.
+
+**Rejected.**
+- *Status quo, tightened*: a hand copy of the API kept away from the code that serves it; it has already drifted once.
+- *Generated C++ client*: a codegen toolchain (raw vs OkEnvelope shapes, bytes, nullables) for only 14 structs; 3–5 days of work that replaces working code.
+- *In-repo UE plugin*: reverses DemoGame DEC-001, and this repo's gates cannot build UE 5.8 C++.
+
+**Owner notes (verbatim, first ask).** "checkout demogame in my hackathons folder, parent folder to the npc system: then reask the question with pros and cons in long term stability ,feature expansion, maintainaiblity, and short term effort". On the re-ask, the owner picked the engine-owned contract.
+
+## DEC-299: One dialogue response model for HTTP and WS, on the same path the evals drive
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 §7.1 (f), §7.2 (3 default payloads); theme T7 (dialogue-output seam)
+
+**Question.** HTTP and WS dialogue payloads differ: WS hand-picks fields at `api/routes/dialogue/dialogue_ws.py:185-192` and drops `learned_facts`/`memories_recalled`. Should they be unified?
+
+**Decision.**
+- Unify into one model. The WS `done` frame's `data` is exactly the HTTP `DialogueResponse`.
+- The two models at `engines/dialogue/dialogue_models.py:104-133` and `:136-164` collapse to one, and the WS whitelist is deleted.
+- A new output field then costs one model edit plus the prompt.
+- Changing WS breaks no client today, because Unreal's WS client is built but not wired (DemoGame `WsClient.cpp:10`).
+- **Binding corollary from the owner's note:** the primary eval (DEC-301) must drive the same public HTTP/WS routes Unreal calls. It must not call internal functions or use a different code path.
+
+**Rejected.** *Leave it*: two contracts, and 4–6 edits per new output field.
+
+**Owner notes (verbatim).** "unify into one single model: the goal is for http used by unreal to cal exactly my engine and behaviour i have when testing eval etc"
+
+## DEC-300: Contract versioning is additive-only, with a `contract_version` field
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** end-goal A3(c)
+
+**Question.** What is the versioning policy for breaking contract changes?
+
+**Decision.** Only optional fields may be added. A breaking change, such as removing, renaming or retyping a field or route, bumps `contract_version` and needs a DECISIONS entry. `contract_version` is served in `GET /health` and on every response. The Unreal client already ignores unknown fields and defaults missing ones (`NpcEngineJsonUtils.cpp:20,36`), so additive changes are free for it.
+
+**Rejected.** *Semver'd contract file with a `/v2` prefix*: more formal than one client needs. *None*: breaking changes would reach Unreal silently, which fails end-goal 4.
+
+**Owner notes.** None.
+
+## DEC-301: The primary eval is deterministic pillar assertions over HTTP/WS transcripts
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D5, D2 (deterministic half); theme T2
+
+**Question.** What does "eval" primarily mean?
+
+**Decision.**
+- A scripted scenario runner drives the public routes (DEC-299) against the live stack with the real LLM.
+- It writes a diffable JSONL transcript: every request, response and graph read.
+- It asserts each pillar as an API or graph fact:
+  - FEEL: an emotion change after an event;
+  - REMEMBER: a non-zero relation delta, and a Memory node after consolidation;
+  - GOSSIP: `distortion_level > 0` at hop 2;
+  - WORLD: NPCs at their seeded locations;
+  - DETERMINISM: compares non-empty tables.
+- LLM-dependent assertions use N-of-M repeats.
+- It is expected to go red today (§4). That is the point.
+
+**Rejected.** *Harden `demo-run-live` only*: it stays tied to the 12-act demo narrative and the pygame-era beats.
+
+**Owner notes.** None.
+
+## DEC-302: Repair the judged LLM-scorer layer (D2-A); the review recommended retiring it
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner; reaffirms the 2026-09-08 keep) · **Resolves:** REVIEW_2026-10-21 D2, §5.1; theme T8
+
+**Question.** Repair, retire or freeze the judged layer?
+
+**Decision.** Repair (Sprint 9 as sketched).
+
+**Consequences for the roadmap builder.**
+- At least 60 new human fail verdicts are owner labour the loop can never do: +18 tone, +17 affirms, +25 commits.
+- Failure-designed cases must be authored, and there are 5 harness fixes (§5).
+- T17.1 detailing is still due **2026-10-27**.
+- `test_label_adequacy.py:70-89` must be rewritten (pre-approved in DEC-312).
+- The frozen-path check must land before any eval-touching task (DEC-309).
+- `check-base-rate`/`check-dead-keywords` stay in `make check` (C8 declined, DEC-310).
+- The parked "quest slot-fill LLM deletion" stays parked until Sprint 9 lands.
+- Kappa thresholds still apply after adequacy: affirms (0.530) would be RESTRICTED and commits (0.308) HIDDEN (`docs/SCORER_TRUST_POLICY.md:22-24`).
+- The judged layer is secondary to DEC-301, which remains the primary eval.
+
+**Rejected.** *Retire (D2-B, the review's recommendation)*: the owner keeps the goal of a quantitative dialogue-quality score for studios. *Freeze (D2-C)*: dead weight with no path forward.
+
+**Owner notes.** None.
+
+## DEC-303: Expansion seams — fix the emotion-model registry and the node-label declarations; record the rest as by-design
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 §7.1 (a, b1, e), §7.2 (labels); ISSUE-315, ISSUE-362; theme T7
+
+**Question.** Which expansion seams are fixed now?
+
+**Decision.**
+- **Fix now.** These two seams are fixed:
+  - **Emotion-model registry shape (ISSUE-362):** the protocol signature gains the NPC id and traits, and the factory is no longer zero-arg. This seam is on the Unreal contract path (`emotion`, `facial_expression`).
+  - **Node labels declared in 4 places** (`title.yaml:3`, `generic_graph_utils.py:22-30`, `schema_bootstrap.py:22-30`, `graph/infra/labels.py:12-19`): consolidate to one declaration.
+- **Record as by-design, with their cost.** These two stay as they are:
+  - Tick-engine registration (4 files / 9 edits, guarded by `_assert_every_engine_slot_wired`): ISSUE-315 closes as by-design.
+  - The token budget derived from `OLLAMA_CONTEXT_LENGTH` (`config.py:162,355-374`): swapping the backend leaks Ollama, and that cost is accepted. This does **not** close ISSUE-209/297, the `.env.example` budget defects, which stay KEEP under theme T3.
+- The dialogue-output seam is resolved by DEC-299.
+
+**Rejected (not selected).** The token-budget seam and tick-engine registration (see above).
+
+**Owner notes.** None.
+
+## DEC-304: Issue-triage bar is the hybrid (D1-C)
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D1, §6
+
+**Question.** Which bar decides which issues stay open?
+
+**Decision.** Keep the 24 KEEPs. Fold LOOSE-KEEPs into the themes that will touch that code anyway. Because of DEC-302, that now includes the ~30 eval-layer LOOSE-KEEPs, which fold into T8 (judge repair) instead of being closed. Close the rest as "not scheduled", and re-log them if they bite. Executed by harness cut C3 (DEC-310).
+
+**Rejected.** *Proposed bar (D1-A)*: it would close eval debt that DEC-302 needs. *Loose bar (D1-B)*: 91 open, and the ledger stays unprioritised.
+
+**Owner notes.** None.
+
+## DEC-305: Unbundle T20.1 and the rule-17 renumber from the batched Sprint 10 revision
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D8; `ROADMAP.md:2421-2423`
+
+**Question.** Should T20.1 (prompt-hash scope) and the rule-17 renumber wait for "one batched revision after Sprint 9"?
+
+**Decision.** Unbundle them. Both become loop-runnable now. The prompt hash is not in `ComparabilityKey` (`evals/comparability.py:30-55`), so neither change orphans a baseline.
+
+**Rejected.** *Keep bundled*: both would wait on the owner's 60+ labels for no technical reason.
+
+**Owner notes.** None.
+
+## DEC-306: Rule 11 — rewrite its trigger; build no `available_interactions` producer
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D8 #2, §5 (T19.2 Rule 11)
+
+**Question.** Rule 11's trigger reads `available_interactions`, which nothing produces (`system_v1.yaml:181`). Should something build a producer, or should the trigger be rewritten?
+
+**Decision.** Rewrite the trigger to fire on context the prompt already carries (an active quest, a trade-capable NPC), and keep the rule's body. It is the only trigger guidance for `propose_trade`/`claim_completion`. This is a prompt-only edit, in line with rule 8.
+
+**Rejected.** *Build a producer*: new code, a new context slot and probably a new contract field.
+
+**Owner notes.** None.
+
+## DEC-307: The dialogue-prompt hash set is all four inputs
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D8 #1; T20.1 (`prompt_builder.py:37-40`, `evals/_run_config_hashing.py:148-167`)
+
+**Question.** Which files does T20.1 hash as the dialogue prompt?
+
+**Decision.** `system_v1`, `system_state_v1`, `moderation/content_ceiling_v1` and `llm_config` `prompt.version`.
+
+**Rejected.** *System prompts only*: a moderation-ceiling edit would change behaviour without moving the hash. That is the unrecorded-move defect class (`38144fa3`, `ffd0ca7f`).
+
+**Owner notes.** None.
+
+## DEC-308: Ticked-but-unmet tasks — un-tick T16.1, T16.4 and T15.4; waive T7.5
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D9, §3.2; theme T12
+
+**Question.** Should the 4 tasks ticked without meeting their Done-when be un-ticked or waived?
+
+**Decision.**
+- **Un-tick** these three, and rerun them on the working stack:
+  - T16.1: re-measure; DEC-273's numbers were copied from 09-07;
+  - T16.4: the stale-image demonstration;
+  - T15.4: a live GET.
+- **Waive T7.5** in its tick note. The encoder warm-up landed. The residual 2.63x against a ≤2x target is carried into theme T4 (LLM budget and latency).
+
+**Rejected.** *Un-tick all four*: T7.5 would duplicate the T4 work. *Waive all four*: three claims would stay unmeasured even though measuring them is now cheap.
+
+**Owner notes.** None.
+
+## DEC-309: Loop frozen-path protection — run the diff check on task sessions; no deny rule
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D6, D4 #3; theme T10
+
+**Question.** How is the loop stopped from writing frozen paths (for example, a fabricated `human_verdict` in `evals/calibration/`) while it runs under `--dangerously-skip-permissions` (`scripts/expand_loop.sh:92`)?
+
+**Decision.** Keep the flag. Extend `scan_fix_diff`'s frozen-path check (`expand_loop.sh:506`, autofix-only today) to every **task** session's diff. On a hit, restore the change and halt. There is no settings deny rule. This must land before any eval-touching task enters the fence, which matters more now because DEC-302 makes the human labels ground truth.
+
+**Rejected.** *Flag + diff check + deny rule (the review's recommendation)*: the owner chose the single mechanism. The known gap is that a bad write happens first and is reverted afterwards. *Drop the flag for an allowlist*: any missed tool halts an unattended night.
+
+**Owner notes.** None.
+
+## DEC-310: Harness cuts approved — C1–C4, C7, C9–C12, C14
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D7, §8.4; theme T11
+
+**Question.** Which of the proposed harness cuts C1–C14 are approved?
+
+**Decision.** These are approved:
+- C1: archive ROADMAP Sprints 0–8;
+- C2: split DECISIONS into a live file and a history file;
+- C3: apply the DEC-304 triage;
+- C4: archive the one-off review/plan files;
+- C7: merge `check-ledger-ids`/`check-cited-reports`/`check-ceiling-baseline`, and delete `check-api-stability` (ISSUE-269), so `check-api-contract` is the single contract gate per DEC-298;
+- C9: delete the fence-snapshot tripwire test;
+- C10: stop committing night-shift reports and drop the pasted coverage rows;
+- C11: delete `continue.md`, `fix-next.md`, `fix-parallel.md` and `full-review.md`;
+- C12: delete the 20 unreferenced Makefile targets and `type-ratchet`, and fix or delete HARNESS_GATES.md;
+- C14: fix CLAUDE.md's rule-5 "No gate" line.
+
+**Rejected.**
+- *C5* (drop check-harness's lint arm): small, and not chosen.
+- *C6* (move census/DIP gates to on-demand): it would make rule 4 review-only.
+- *C8* (pull base-rate/dead-keywords): the judge repair (DEC-302) needs them.
+- *C13* (ratchet `project-harness/*.md`): one more gate, so simplicity loses.
+
+**Owner notes.** None.
+
+## DEC-311: Pre-approved loop classes — file-deletion, public-interface, graph-schema, new-dependency
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D4 #4, #5
+
+**Question.** Which approval classes may the roadmap builder stamp as `Pre-approved:` on tasks that serve these decisions?
+
+**Decision.** All four parsed classes (`expand-linear-next.md:95`), scoped to tasks that implement DEC-296 through DEC-315 and the review themes they name:
+- `file-deletion`: the demo shrink, harness cuts, dead-surface work and `check-api-stability`;
+- `public-interface`: the unified WS frame, `contract_version`, the emotion-protocol reshape, the ISSUE-322 stream chain and ISSUE-328 tone bands;
+- `graph-schema`: for example the ISSUE-373 location fix or an emotion property;
+- `new-dependency`: for example a JSON Schema validator or an OpenAPI diff tool. The task must name the package and its reason in the spec.
+
+**Rejected.** None. The owner approved all four, including the two marked optional.
+
+**Owner notes.** None.
+
+## DEC-312: Pre-approved harness edits, and a new `harness-edit` approval class
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D4 #1, #2, #3, #7; theme T10
+
+**Question.** Which harness edits may the loop make unattended?
+
+**Decision.** These four edits, all approved:
+1. The frozen-path check on task diffs (DEC-309, D4 #3).
+2. Rewriting `tests/unit/evals/test_label_adequacy.py:70-89` so it stops pinning tone_judge at 7/45 (D4 #7).
+3. The synchronised tripwire records: `_EXPECTED_PHASE_IDS` (`test_roadmap_cursor.py:219`), `EXPECTED_FLAGS` (`:171-192`), the backlog table (`ROADMAP.md:504-507`) and the carry-forward count (`:112`) (D4 #1).
+4. Allowing T-ids in `scripts/check_human_gates.py:34` (D4 #2).
+
+Because none of these fits the four parsed classes, the approval also covers adding a `harness-edit` class at `expand-linear-next.md:95`. The class is scoped to exactly these four edits.
+
+**Rejected.** None.
+
+**Owner notes.** None.
+
+## DEC-313: LOC-ratchet policy is net-negative per phase, with no baseline raise
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 D4 #6, §3.3 (97 LOC headroom); rules 1 and 9
+
+**Question.** How is additive work funded under the LOC ratchet?
+
+**Decision.** `scripts/loc_baseline.txt` is not raised. Each phase is net-negative in the rule-1 four-directory count. The demo shrink (DEC-297, ~−12.8k) lands first and funds the additive work: the transcript runner, the contract dump and the judge repair. The baseline is lowered to the new total after each phase.
+
+**Rejected.** *Raise by N*: it breaks rule 1's direction for convenience. *Every fix net-negative*: it would block the transcript runner and the judge repair.
+
+**Owner notes.** None. DEC-315 resolves the ordering conflict this creates.
+
+## DEC-314: Docker Desktop and Ollama stay up overnight
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner commitment) · **Resolves:** REVIEW_2026-10-21 D4 #8
+
+**Question.** Will the live stack be available to unattended runs?
+
+**Decision.** Yes. Live checks and transcript evals may be scheduled unattended. A run that finds the daemon down halts with `STACK_UNAVAILABLE`, as it does today. That is an infrastructure miss, not a task failure.
+
+**Rejected.** *Live work by day only*: every live task would need an attended run.
+
+**Owner notes.** None.
+
+## DEC-315: Theme priority — demo shrink, then the pillar transcript eval, then the pillar fixes
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner) · **Resolves:** REVIEW_2026-10-21 §9
+
+**Question.** Which themes land before anything else?
+
+**Decision.** These three themes come first, in this order:
+1. **Demo shrink** (old T6, DEC-297): it funds the LOC headroom (DEC-313).
+2. **Pillar transcript eval** (old T2, DEC-301): it defines "done" for every later fix and goes red today.
+3. **Pillar fixes** (old T1): remember, feel and gossip, including the ISSUE-373 location snap.
+
+The roadmap builder sequences the rest. One further ordering is forced: the frozen-path check (DEC-309) lands before any judge-repair task.
+
+**Rejected.** *Engine-owned contract in the top tier*: nothing in Unreal is broken today, so it follows the top three.
+
+**Owner notes.** The owner first selected only the transcript eval and the pillar fixes. Asked how to fund the eval under DEC-313, the owner answered (verbatim): "put the demo shrink first as well".
+
+## DEC-316: The task-session frozen-path check is a narrow list fixed in the driver, and a hit ends the night
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Supersedes:** DEC-309's mechanism (its intent stands)
+
+**Challenge (new evidence).** As written, DEC-309 protects nothing:
+- It reuses `FROZEN_PATH_PREFIXES` (`scripts/loop_gates.py:105-144`). That list freezes `tests/`, `demo_game/tests/`, `Makefile` and `scripts/loc_baseline.txt`, so every TDD task, the demo shrink, C12 and every DEC-320 baseline lowering would trip it.
+- `scan_fix_diff.py:61-70` diffs the working tree. Task sessions commit inside the session, so that diff is empty.
+- The list is Python, imported fresh from the working tree, so a commit can edit the list it is checked against.
+- `expand_loop.sh` is fully parsed when it starts (`main` is the last line), so a check added by a loop task takes effect only on the next start.
+
+**Decision.**
+- **The list.** `expand_loop.sh` holds one bash regex, fixed for the run. It covers:
+  - the ground truth: `evals/calibration/` and `evals/generations/k3_73e6c36/`. Other `evals/generations/` dirs stay writable, because new generation runs are loop work (DEC-322);
+  - the loop's own machinery: `expand_loop.sh`, `loop.config.sh`, `loop_compat.sh`, `loop_gates.py`, `scan_fix_diff.py`, `gate_baseline.py`, `gate_attribution.py`, `gate_confirm.py`, `classify_gate_failure.py`, `worktree_guard.py`, `_roadmap_cursor_core.py`, `roadmap_cursor.py`;
+  - the session's instructions and settings: `.claude/commands/expand-linear-next.md` and `.claude/settings*.json`.
+- **The scan.** Record `before=$(git rev-parse HEAD)` before each task session. After it, scan `git diff --name-only $before` plus `git ls-files --others --exclude-standard`. It is also a hit if `$before` is no longer an ancestor of HEAD.
+- **On a hit:** `git reset --hard $before && git clean -fd`, then `flag_for_human`, then **end the night** (return 2). A hit does not just skip the phase.
+- **Bootstrap.** It lands in the first fenced phase (T21). Night 1 runs `--max-phases 1`, so the check is live from night 2, before any `evals/` task.
+
+**Rejected.** *DEC-309 verbatim*: it either scans nothing or halts every task. *A second Python tuple in `loop_gates.py`*: the same commit can disarm it.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-317: No `harness-edit` class; delete the HUMAN GATE machinery
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Supersedes:** DEC-312's class and its edit #4; edits #1–#3 stand
+
+**Challenge (new evidence).**
+- The halt table (`.claude/commands/expand-linear-next.md:89-109`) never halts on a harness, test or script edit, so a `harness-edit` pre-approval would change nothing.
+- Edit #4 (T-ids at `scripts/check_human_gates.py:34`) has no reader. The roadmap holds 0 HUMAN GATE blocks, `compute_next` already sequences by file order, and owner work sits outside the fence (DEC-322). A closed gate would also `break` the run (`expand_loop.sh:827-835`), not skip a task.
+
+**Decision.**
+- There is no `harness-edit` class. Harness tasks carry no `Pre-approved:` line unless they delete a file (`file-deletion`).
+- Delete these: `scripts/check_human_gates.py`, `make check-human-gates` (and its place in `make check`), its tests, and the driver's `--check` call. They go in T21, before DEC-316 freezes the driver. This is a harness cut the owner approved here, on top of DEC-310.
+- **Edit #3** (the synchronised tripwire records) is made by hand by the roadmap builder in the change that writes the new fence, because `_EXPECTED_PHASE_IDS` would otherwise be red from the first task.
+- **Edits #1 and #2** remain loop tasks (T21.1, T17.2).
+
+**Rejected.** *Drop the class but keep the gate script*: an unused 321-LOC gate. *Keep DEC-312 as is*: two edits nothing reads.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-318: Every Done-when names a checkable artefact; the DEC-308 re-measurements are re-issued as new tasks
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-308 (form only)
+
+**Challenge (new evidence).**
+- Nothing checks a Done-when. The session runs `--mark` itself, and the driver trusts its status token (`expand_loop.sh:764`). Fourteen tasks were ticked on assertion alone (review §3.2).
+- Separately, DEC-308's un-ticks sit in Sprint 8. C1 (DEC-310) archives Sprint 8 out of the fence, so un-ticked tasks there would never run. Left in place, they would run *before* the new work, which breaks the agreed order.
+
+**Decision.**
+- Every fenced task's **Done when:** names an artefact the session produces and a reader can re-check. That is a named test, a `make` target's output, or a committed file with an exact path and the content it must hold. "Verified" or "confirmed" alone does not count.
+- No driver re-run is added. The owner chose the cheaper option, and the phase gate plus review remain the backstop.
+- T16.1, T16.4 and T15.4 stay ticked in the archive, each with a "superseded by" note. Their re-measurements are re-issued as **T26.5** and **T26.6**.
+- T7.5's waiver into theme T4 is noted on its archived tick and carried by T29.3.
+
+**Rejected.** *A driver-side `Verify:` re-run* (about 15 lines of bash): not chosen. *Prose Done-whens*: the failure DEC-308 cleaned up.
+
+**Owner notes.** None. The owner picked "write checkable Done-whens only" over the recommended driver re-run.
+
+## DEC-319: A guard between nights — a tag, a refusal on UNVERIFIED ticks, and a gate-baseline hash
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Resolves:** the challenge "a bad night compounds"
+
+**Challenge (new evidence).**
+- `MAX_RED_COMMITS` counts only within one run.
+- `seed_gate_baseline` turns last night's reds into baseline debt (`expand_loop.sh:241-249,870`).
+- `[UNVERIFIED: regression]` ticks count as done and are never retried.
+- `project-harness/.loop-state/gate_baseline.json` is gitignored (`.gitignore:89`). A session that appends its own failures there ticks green as BASELINE_RED, and no diff shows it.
+
+**Decision.** In T21, before DEC-316 freezes the driver:
+1. At each night's end, tag `loop-night-<YYYY-MM-DD>`.
+2. Preflight refuses to start while any `UNVERIFIED` tick exists in the fence, unless `--ack` is passed.
+3. The driver takes a sha256 of `gate_baseline.json` before and after every task session, and ends the night if it changed.
+
+**Rejected.** *Tag only*: relies on the owner reading the report. *Keep as is*.
+
+**Owner notes.** None. Recommended option chosen.
+
+
+## DEC-320: LOC funding — each phase pairs its own deletions, ordered first; the baseline is lowered in each phase's last task
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Supersedes:** DEC-313's "the shrink funds the additive work"
+
+**Challenge (new evidence).** DEC-313 contradicts itself. Lowering `scripts/loc_baseline.txt` to the exact total after the shrink returns headroom to about 0, so the shrink funds nothing. The gate checks the total at every commit (`scripts/check_loc_ratchet.py:158-165`), so the next additive task reds.
+
+**Decision.**
+- Every phase is net-negative on its own in the rule-1 four-directory count (rule 9).
+- Inside a phase, deletion tasks come before additive tasks, so the running total never exceeds the baseline.
+- An additive phase draws its deletions from the dead-surface pool (review §7.2: about 1,467 LOC of dead `src` symbols) and from rule-7 duplicates.
+- The baseline is never raised. Each phase's last task runs `python scripts/check_loc_ratchet.py --update` to lower it to the new total, and states the phase's delta.
+
+**Rejected.** *Cumulative from programme start*: it is the "raise by N" DEC-313 rejected. *DEC-313 verbatim*: additive phases cannot land.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-321: The pillar eval extends the kept scripted runner; `demo_run_live.py` is deleted; scoped 2-of-3 repeats
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-301 (the runner and the repeats; the pillars and DEC-299's same-path rule stand)
+
+**Challenge (new evidence).**
+- The kept runner, `demo_game/runners/run.py`, already drives the public HTTP/WS routes, and `scripts/demo_run_live.py` drives it live. A new runner would be a second driver for one concept (rule 7).
+- Repeating the whole scenario M times risks `CLAUDE_TIMEOUT=5400`, which stashes the work and halts the night.
+
+**Decision.**
+- **What the eval is:** the shrunk `run.py`, plus a JSONL transcript recorder, plus the pillar assertions. `scripts/demo_run_live.py` and its non-empty-only judge are deleted.
+- **How it runs:** `make demo-run-live` keeps its name and its `DEMO_LIVE=` line, so the frozen driver's nightly report (`expand_loop.sh:300-322`) keeps working unedited.
+- **Repeats:** 2-of-3 runs only for the LLM-dependent beats: FEEL, the REMEMBER relation delta and GOSSIP distortion. Graph facts (WORLD, the Memory node, DETERMINISM) run once.
+- **Exit code:** 0 when a pillar is red. Non-zero only on a harness or stack error.
+- **Verdicts:** go to the committed `evals/pillar_verdicts.jsonl`, which is outside the frozen paths.
+- `DEMO_LIVE=PASS` means every pillar is green.
+
+**Rejected.** *A new standalone runner*: three drivers. *Full-scenario N-of-M*: about 3x the live time.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-322: Judge repair — the loop-runnable half inside the fence, the labelled half outside; the drain scope excludes the labels
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-302 (placement only; repair stands)
+
+**Challenge (new evidence).** The loop can never produce the >=60 labels. T18.1 and T18.2 need them, so "drain fully" can only end with the judge repair partly done.
+
+**Decision.**
+- **Inside the fence (phase T17):**
+  - the dead draft-case path (ISSUE-148), if it proves unreferenced;
+  - the roster fix (ISSUE-295/282);
+  - the `test_label_adequacy.py` rewrite (DEC-312 #2);
+  - failure-designed case authoring, with one live generation run into a new `evals/generations/` dir and a labelling export for the owner.
+
+  T17.1 is detailed by the roadmap builder on 2026-10-21, which meets the 2026-10-27 deadline.
+- **Outside the fence, under "Owner work":**
+  - the owner's labelling pass;
+  - T18.1 (relabel and freeze) and T18.2 (re-baseline and sign-off), written as a follow-up roadmap once the labels exist;
+  - T19.1's Rule 16 vs Rule 2 tie-break;
+  - T20.2 (re-baseline against the new prompt).
+- **ALL_DONE** means every decided change except the parts that need the owner's labels or judgement.
+
+**Rejected.** *All of Sprint 9 outside*: the loop-runnable half waits for no reason. *Fence it all, flagged*: a silent skip.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-323: Drain order — bootstrap, harness cuts, then DEC-315's three, then the rest
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-315 ("first" now means first *product* phase)
+
+**Decision.** The fence runs in this file order:
+1. T21, loop bootstrap (DEC-316, DEC-317, DEC-319, C10);
+2. T22, harness cuts (C2, C3, C4, C7, C9, C11, C12, C14; the builder did C1 by hand);
+3. T23, demo shrink;
+4. T24, pillar eval;
+5. T25, pillar fixes;
+6. T26, contract + ledger truth;
+7. T28, seams + dead surface;
+8. T17, judge repair (the loop half);
+9. T19, prompt parts;
+10. T29, latency.
+
+The harness cuts run before the shrink, because they shrink what every later session reads. The owner accepted this order, with the preview, knowing it places them ahead of DEC-315's "shrink first". The ledger re-measurements sit in T26 because T16.4 concerns `/health`, which T26 also changes. A phase with no net deletion of its own was merged into a neighbour, to keep every phase net-negative (DEC-320).
+
+**Rejected.** *Harness cuts last*: sessions read the heavier ledgers for longer. *Contract before the fixes*: DEC-315 rejected that.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-324: One contract file under the existing gate; no new dependency
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Supersedes:** DEC-298's gate and file mechanics (engine ownership, the DemoGame repoint and hand-written C++ structs stand)
+
+**Challenge (new evidence: a STALE premise).** `make check-api-contract` is already type-level and additive-pass (DEC-254). Its committed baseline, `scripts/api_contract_baseline.json` (149 ops), already covers the 7 `/v1/quest/*` routes, the WS route and `DialogueResponse` (`scripts/check_api_contract.py`, `scripts/api_contract_differ.py:217`). Only DemoGame's hand copy drifted. A new `contracts/openapi_v1.json` next to that baseline would be a second contract file (rule 7).
+
+**Decision.**
+- Commit `contracts/openapi_v1.json` as the raw `app.openapi()` dump. The existing gate extracts its baseline from that file.
+- Delete `scripts/api_contract_baseline.json` and `scripts/check_api_stability.py` (ISSUE-269) in the same task.
+- The WS frames become a Pydantic discriminated union. Its `model_json_schema()` goes into the same file under `x-ws-frames`.
+- No new dependency, so DEC-311's `new-dependency` class goes unused.
+- `contract_version` (DEC-300) is a field in the `GET /health` body and an `X-Contract-Version` header on every response. The header is the smallest way to carry it on every response without touching every model. The builder made this small choice and records it here.
+
+**Rejected.** *Two files written by one command*: two artefacts for one concept. *DEC-298 verbatim*: it rebuilds a working gate and adds a dependency.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-325: The WS `done` frame is `DialogueResponse` plus `audio_bytes_b64`; `DialogueGeneration` stays separate
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-299 (what "one model" means; the same-path corollary stands)
+
+**Challenge (new evidence).**
+- `engines/dialogue/dialogue_models.py:104` is `DialogueGeneration`, the LLM's constrained output grammar. It is kept apart on purpose (docstring `:105-116`). Merging it into `DialogueResponse` would put 7 handler-only fields into every generation, which costs the small model.
+- The WS `done` frame sends `audio_bytes_b64` (`api/routes/dialogue/dialogue_ws.py:191`), where `DialogueResponse` has `audio_bytes`. DemoGame plans to read the WS name (`NpcEngineJsonUtils.cpp:128`), so dropping it would break DEC-300.
+
+**Decision.**
+- Delete `_build_done_data`'s hand-picked dict. `done.data` becomes `DialogueResponse` serialised in full, plus one WS-only extra field, `audio_bytes_b64`.
+- This is additive: nothing is removed.
+- `DialogueGeneration` is kept.
+
+**Rejected.** *Rename to `audio_bytes` now*: a contract break. *Collapse `DialogueGeneration`*: a larger grammar.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-326: Collapse the emotion-model protocol; inject `VadEmotionModel` concretely
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Supersedes:** DEC-303's emotion-registry fix (the node-label consolidation and the by-design records stand)
+
+**Challenge (new evidence).** `EmotionModelProtocol` has 1 implementor and a 1-entry registry (`engines/emotion/emotion_model_factory.py:25,76`). The traits argument DEC-303 would add has no producer: `TraitReadPort` and the trait seed were deleted (ISSUE-362). Rule 4 says a 1-implementor protocol collapses.
+
+**Decision.**
+- Delete the protocol, the factory and the registry, and inject `VadEmotionModel` concretely.
+- A future model then costs a new file plus one injection line. The protocol comes back at 2 implementors (rule 4).
+- Add `npc_id` to the signature only if the FEEL fix (T25) needs it.
+- ISSUE-362 closes with this.
+
+**Rejected.** *Reshape as DEC-303 decided*: a seam with 1 implementor and no producer. *Reshape and restore traits*: a graph-schema change plus the most new code.
+
+**Owner notes.** None. Recommended option chosen.
+
+## DEC-327: C2 is a verbatim move of uncited DECs plus a one-line ledger-checker change
+**Date:** 2026-10-21 · **Status:** ✅ ACCEPTED (owner, challenge session 2026-10-21) · **Amends:** DEC-310 C2
+
+**Challenge (new evidence).**
+- `scripts/check_ledger_ids.py:36` reads only `DECISIONS.md`. Every moved DEC still cited by ROADMAP (52 ids) would become an undeclared citation, so `make check` would go red.
+- "Status required" means backfilling about 181 entries.
+
+**Decision.**
+- Move uncited entries verbatim to `archive/DECISIONS_history.md`, and add that path to `_DECISION_FILES`.
+- This goes in the same task as C7's merge of the same script.
+- Drop "sorted" and "Status required".
+
+**Rejected.** *Full C2*: a long, judgement-heavy session. *Drop C2*.
+
+**Owner notes.** None. Recommended option chosen.

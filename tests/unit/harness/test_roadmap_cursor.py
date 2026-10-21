@@ -186,8 +186,9 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     # for live checks (scripts/eval_stack_at.sh), so T3.3, T6.3, T7.4, T15.2, T16.1 and T16.4
     # — deferred only because the loop could not see live code — are loop work. T13.1 and
     # T13.2 stay flagged because a person plays the interactive walkthrough the census needs.
-    "T13.1": ["deferred"],
-    "T13.2": ["deferred"],
+    # 2026-10-21 (DEC-297, DEC-322): empty again. Sprints 0-8 are archived and the drain
+    # programme keeps every human-gated item OUTSIDE the fence ("Owner work"), so no fence
+    # task may carry a flag; T13.1/T13.2 were replaced by the T23 demo-shrink deletion phase.
 }
 
 
@@ -216,7 +217,10 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
 # rewrites the loop's own driver and skill — as do Sprints 9 and 10, which need human
 # judgement and live model runs. This constant was left pinning M1/M2 by the commit that
 # wrote the T roadmap, so `make check` was red from then until this update (T0.0).
-_EXPECTED_PHASE_IDS: list[str] = [f"T{n}" for n in range(1, 17)]
+# 2026-10-21 (DEC-310 C1, DEC-323): Sprints 0-8 archived at
+# archive/ROADMAP_T-programme_2026-10-21.md; the fence is the drain programme, in drain order
+# (file order is the loop's only ordering). T27 is unused: its tasks live in T26.
+_EXPECTED_PHASE_IDS: list[str] = ["T21", "T22", "T23", "T24", "T25", "T26", "T28", "T17", "T19", "T29"]
 
 
 def test_real_roadmap_parses_and_verifies_clean() -> None:
