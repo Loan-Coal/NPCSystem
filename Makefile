@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-layers check-docstrings roadmap-verify roadmap-audit check-conservation check-label-survival check-test-quality check-mutations \
         check-migrations check-api-stability check-api-contract check-engine-logs \
         check-base-rate check-base-rate-update check-dead-keywords-update \
-        check-ledger-ids check-cited-reports check-ceiling-baseline \
+        check-ledger-ids \
         type-ratchet type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -271,8 +271,11 @@ test-integration:
 # The gate also asserts a floor of executed tests: _skip_if_no_neo4j() skips at runtime, so
 # a misconfigured job would otherwise pass green over an all-skip suite — the exact vacuity
 # R2.2 exists to remove.
-# check-ledger-ids: fail when a reused DEC/ISSUE id is undocumented, or when a planning
-# document cites an id that was never assigned (R4.5, DEC-239).
+# check-ledger-ids: fail when a reused DEC/ISSUE id is undocumented, when a planning
+# document cites an id that was never assigned, or when a cited eval report is not committed
+# (R4.5, DEC-239, B5/ISSUE-247; merged from check-cited-reports and check-ceiling-baseline
+# in T22.2 — ceiling check removed: verifies committed constants, adding nothing beyond a
+# file-validity check already guaranteed at write time).
 # Contract is "document every reuse", not "no id is reused": all four colliding DEC ids are
 # cited by number from live source, so renumbering would silently repoint code comments at a
 # decision they were not written about. Counterfactual recorded in
@@ -364,18 +367,6 @@ check-base-rate:
 check-base-rate-update:
 	$(PYTHON) scripts/check_base_rate.py evals/generations/k3_77688e7_regen1 --update
 
-# check-cited-reports: reds when a project-harness document cites an eval report that is
-# not committed (B5/ISSUE-247). Reports are ignored by default and tracked once cited —
-# see DEC-241 for why "tracked when cited" beats tracking all 421 of them.
-check-cited-reports:
-	$(PYTHON) scripts/check_cited_reports.py
-
-# check-ceiling-baseline: the measured assembled-context ceiling must stay a RECORDED
-# measurement that states what it measured, and the shipped window must still clear it
-# (B6/R2.7b, DEC-242). This does NOT re-measure — that needs a live stack, and is
-# `make probe-ceiling ARGS="--record --corpus-sha <sha>"`.
-check-ceiling-baseline:
-	$(PYTHON) scripts/check_ceiling_baseline.py
 
 # check-label-survival: freeze-gate check — does the labels file survive the
 # committed transcript unchanged (no drift, no orphaning)? Run before spending a
@@ -474,7 +465,7 @@ check-engine-logs:
 #          scripts/loc_baseline.txt. Rules 1 and 6.
 # T14.1: type-demo added, 24 -> 25. demo_game/ was gated by nothing; 256 errors across 45
 #         files, invisible on every push (ISSUE-375 tracks the drive-to-zero, waits on T13.2).
-check: check-harness check-ledger-ids check-cited-reports check-ceiling-baseline lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
+check: check-harness check-ledger-ids lint check-rules check-evals-rules check-layers check-engine-census check-dip-threshold check-docstrings type type-evals type-demo check-test-quality test-cov test-cov-evals test-cov-v13 test-cov-full-report check-migrations check-api-stability check-api-contract check-engine-logs check-base-rate check-dead-keywords check-dead-surface check-loc-ratchet
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

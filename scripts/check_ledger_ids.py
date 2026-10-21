@@ -2,8 +2,13 @@
 """
 Module: check_ledger_ids
 Layer: harness (repo-level dev tool)
-Purpose: Detect reused DEC/ISSUE ids across the project ledgers and citations to ids that
-         were never assigned, so an ambiguous cross-reference cannot be introduced silently.
+Purpose: Unified document-integrity gate: detect reused DEC/ISSUE ids across the
+         project ledgers, citations to ids that were never assigned, and citations to
+         eval reports that are not tracked by git. Formerly three separate gates
+         (check-ledger-ids, check-cited-reports, check-ceiling-baseline); the ceiling
+         check was removed because it verifies a committed artifact's self-consistency
+         at write time, which is already guaranteed by `write_ceiling_baseline`'s Pydantic
+         validation, adding nothing beyond a file-validity check (T22.2, DEC-327).
 Dependencies: stdlib only.
 Used by: `make check-ledger-ids`, and tests/unit/scripts/test_check_ledger_ids.py.
 
@@ -20,12 +25,21 @@ Why an outcome heading is not a declaration: DEC-116 is one decision written as 
 2026-06-14). A regex that counts every heading reports it as a collision, which is how
 R4.5's spec came to say "5 reused DEC ids" when the real number is 4. A declaration is
 therefore an id followed immediately by a colon.
+
+Why "tracked when cited" rather than "all reports tracked" (DEC-241): `evals/reports/`
+holds 421 files totalling 4.7 MB, of which roughly 396 are near-identical 824-924 byte
+run stubs, and exactly ONE is cited as a source of record anywhere in project-harness/.
+Committing all of them would bury the one artifact that matters in noise. Committing only
+what is cited fixes the actual harm -- a published number resting on a file that exists on
+one machine -- and scales, because a future citation reds this gate until the report it
+names is committed (B5/ISSUE-247).
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 HARNESS_ROOT = REPO_ROOT / "project-harness"
 
 # Ledgers that DECLARE ids.
-_DECISION_FILES = ("DECISIONS.md",)
+_DECISION_FILES = ("DECISIONS.md", "archive/DECISIONS_history.md")
 _ISSUE_FILES = ("ISSUES.md", "archive/ISSUES_RESOLVED.md")
 # Documents that CITE ids and must not name one that was never assigned.
 _CITING_GLOBS = ("ROADMAP.md", "review-2026-08/*.md")
@@ -46,6 +60,10 @@ _REUSE_HEADING_RE = re.compile(r"^#{1,6}\s+Reused ids\b.*$", re.MULTILINE)
 _NEVER_HEADING_RE = re.compile(r"^#{1,6}\s+Never assigned\b.*$", re.MULTILINE)
 _NEXT_H2_RE = re.compile(r"^#{1,2}\s", re.MULTILINE)
 _BULLET_ID_RE = re.compile(r"^\s*[-*]\s+`((?:DEC|ISSUE)-\d+)`", re.MULTILINE)
+
+#: A run report is `evals/reports/<UTC timestamp>.md`. Restricting the pattern to the
+#: timestamp shape keeps `evals/reports/` (a location, not an artifact) from matching.
+REPORT_CITATION: re.Pattern[str] = re.compile(r"evals/reports/\d{8}T\d{6}Z\.md")
 
 
 def declarations(text: str, prefix: str) -> dict[str, list[int]]:
@@ -124,6 +142,49 @@ def unresolved_citations(
     return {i: sorted(set(s)) for i, s in found.items()}
 
 
+def cited_reports(texts: dict[str, str]) -> dict[str, list[str]]:
+    """Map each cited eval-report path to the documents citing it.
+
+    Args:
+        texts: document name -> full text.
+    Returns:
+        report path -> sorted citing document names. Empty when nothing is cited.
+    """
+    from collections import defaultdict  # noqa: PLC0415
+
+    found: dict[str, list[str]] = defaultdict(list)
+    for name in sorted(texts):
+        for report in sorted(set(REPORT_CITATION.findall(texts[name]))):
+            found[report].append(name)
+    return dict(found)
+
+
+def _is_tracked(path: str, repo_root: Path) -> bool:
+    """True when git has `path` in the index."""
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", path],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def untracked_cited_reports(
+    citations: dict[str, list[str]], repo_root: Path = REPO_ROOT
+) -> dict[str, list[str]]:
+    """Filter `citations` down to the reports git does not track.
+
+    Args:
+        citations: report path -> citing document names, as `cited_reports` returns.
+        repo_root: Repository to resolve the paths against.
+    Returns:
+        The same mapping, restricted to reports that are not in the index.
+    """
+    return {r: sites for r, sites in citations.items() if not _is_tracked(r, repo_root)}
+
+
 def _read(root: Path, names: tuple[str, ...]) -> dict[str, str]:
     """Read the named files under root, skipping any that do not exist."""
     out: dict[str, str] = {}
@@ -143,6 +204,15 @@ def _read_glob(root: Path, globs: tuple[str, ...]) -> dict[str, str]:
                 key = str(path.relative_to(root)).replace("\\", "/")
                 out[key] = path.read_text(encoding="utf-8")
     return out
+
+
+def _read_harness_docs(root: Path) -> dict[str, str]:
+    """Every markdown document under `root`, keyed by its path relative to root."""
+    return {
+        path.relative_to(root).as_posix(): path.read_text(encoding="utf-8", errors="replace")
+        for path in sorted(root.glob("**/*.md"))
+        if path.is_file()
+    }
 
 
 def _report_collisions(found: dict[str, list[str]], documented: set[str], family: str) -> int:
@@ -166,12 +236,13 @@ def _report_citations(citing: dict[str, str], texts: dict[str, str], prefix: str
 
 
 def main(root: Path | None = None) -> int:
-    """Red when a reused id is undocumented or a cited id was never assigned.
+    """Red when a reused id is undocumented, a cited id was never assigned, or a cited
+    eval report is not committed.
 
     Args:
         root: Directory holding the ledgers; defaults to project-harness/.
     Returns:
-        0 when every reuse is documented and every citation resolves, else 1.
+        0 when all checks pass, else 1.
     """
     base = HARNESS_ROOT if root is None else root
     dec_texts = _read(base, _DECISION_FILES)
@@ -187,10 +258,20 @@ def main(root: Path | None = None) -> int:
     bad += _report_citations(citing, dec_texts, "DEC", never)
     bad += _report_citations(citing, issue_texts, "ISSUE", never)
 
+    docs = _read_harness_docs(base)
+    citations = cited_reports(docs)
+    missing = untracked_cited_reports(citations)
+    for report, sites in sorted(missing.items()):
+        print(f"  UNTRACKED {report} cited at {', '.join(sites)}")
+    bad += len(missing)
+
     if bad:
         print(f"  FAIL - {bad} unresolved item(s).")
         return 1
-    print("  OK - every reused id is documented and every citation resolves.")
+    print(
+        f"  OK - every reused id is documented, every citation resolves, and all "
+        f"{len(citations)} cited report(s) are committed."
+    )
     return 0
 
 

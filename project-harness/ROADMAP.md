@@ -296,7 +296,7 @@ DEC-323). C1 (archive Sprints 0-8) was done by hand on 2026-10-21.
 
 ### Phase T22
 
-- [ ] **T22.1** Delete the fence-snapshot tripwire test (C9)
+- [x] **T22.1** Delete the fence-snapshot tripwire test (C9)
 Files: `tests/unit/harness/test_roadmap_cursor.py`.
 Spec: C9. `test_real_roadmap_fence_state_tripwire` (`:241`) was the only failing test in 7 of the 11
 historical `HALT FAILED_CHECK=tests` events (review §8.3).
@@ -321,9 +321,9 @@ Done when:
   every phase has a task and `pending == actionable`;
 - `make check` is green.
 
-LOC: 0 non-test; about −150 test.
+LOC: 0 non-test; about −150 test. ✅ AUTO (T22.1, 2026-10-21)
 
-- [ ] **T22.2** Merge the three ledger/report gates into one, and read the DECISIONS history (C7, DEC-327)
+- [x] **T22.2** Merge the three ledger/report gates into one, and read the DECISIONS history (C7, DEC-327)
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - `scripts/check_ledger_ids.py` (200);
@@ -352,7 +352,7 @@ Done when:
 - `grep -c DECISIONS_history scripts/check_ledger_ids.py` is 1;
 - `make check` is green.
 
-LOC: about −200 non-test (scripts).
+LOC: about −200 non-test (scripts). ✅ AUTO (T22.2, 2026-10-21)
 
 - [ ] **T22.3** Move uncited DECISIONS to the history file (C2, DEC-327)
 Files: `project-harness/DECISIONS.md`, and a new `project-harness/archive/DECISIONS_history.md`.

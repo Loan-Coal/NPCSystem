@@ -31,6 +31,7 @@ it drifting, and correcting one only schedules the next drift (R4.6).
 | Honesty | `make check-harness` | docs don't claim a clean state the gates contradict | advisory (warn); `--strict` to enforce |
 | Contracts | `make check-contracts` / `check-contract-sync` | engine contract YAML ↔ tests | hard fail |
 | API contract | `make check-api-contract` | the `/v1` surface (149 ops incl. the WebSocket route, 153 schemas) gains no breaking change: route removal, response field drop/retype, request tightening, status or auth change. Additive change passes untouched (R5.1, DEC-254) | **recorded baseline**, `--update` to re-record |
+| Ledger + cited reports | `make check-ledger-ids` | reused DEC/ISSUE ids documented; no citation to an unassigned id; cited eval reports are committed (R4.5, B5, DEC-239, ISSUE-247) | hard fail |
 
 ### Baseline ratchet (the key idea)
 
