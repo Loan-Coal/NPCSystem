@@ -220,9 +220,12 @@ Files: `scripts/expand_loop.sh` (preflight near :241-252, `run_one_task`, the ru
 `scripts/loop.config.sh`, and a new test `tests/unit/scripts/test_expand_loop_night_guard.py`.
 Spec: DEC-319. Three checks, all in bash:
 1. **Night tag.** At the run's end, `git tag -f loop-night-$(date +%F)`.
-2. **UNVERIFIED refusal.** Preflight exits non-zero with a clear message while
-   `grep -c "UNVERIFIED (" "$ROADMAP_FILE"` is above 0, unless `--ack` is passed.
-   `--ack` is a new flag, parsed beside the others at :129-140.
+2. **UNVERIFIED refusal.** Preflight exits non-zero with a clear message while any task line
+   carries the cursor's unverified tick marker, unless `--ack` is passed. The marker is the
+   prefix of `UNVERIFIED_TEMPLATE` (`_roadmap_cursor_core.py:47`), so match that prefix
+   (`AUTO ⚠️ UNVERIFIED`) on task lines only (`^- \[x\]`). Never match the bare word: this
+   roadmap's prose names it, and the old count at `:870` read 2 on a clean queue for that reason.
+   Fix `:870` to use the same match. `--ack` is a new flag, parsed beside the others at :129-140.
 3. **Gate-baseline hash.** Take `sha256sum project-harness/.loop-state/gate_baseline.json`
    before and after every task session. If the two differ, call `flag_for_human` and return 2,
    which ends the night. The file is gitignored (`.gitignore:89`), so no diff would ever show a
@@ -231,7 +234,7 @@ Spec: DEC-319. Three checks, all in bash:
 Follow the pattern in `tests/unit/scripts/test_expand_loop_execution_error.py:25-62`: source the script
 under Git Bash with `main` guarded, and call the functions directly.
 RED anchor: the new test fails on all three behaviours today:
-- the preflight helper passes with an `UNVERIFIED (` tick present;
+- the preflight helper passes with an unverified tick line present (made by `--mark T --date D --unverified r` on a fixture); the test also asserts it still passes on a fixture that mentions the word only in prose;
 - the baseline-hash helper does not exist;
 - no tag is written.
 
