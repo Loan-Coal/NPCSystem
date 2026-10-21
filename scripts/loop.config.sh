@@ -77,6 +77,8 @@ MAX_CONSECUTIVE_BLOCKED_PHASES="${MAX_CONSECUTIVE_BLOCKED_PHASES:-2}"
 RED_COMMIT_TOLERANCE="${RED_COMMIT_TOLERANCE:-1}"
 AUTOFIX_ENABLED="${AUTOFIX_ENABLED:-1}"
 SOFT_REVIEW_ENABLED="${SOFT_REVIEW_ENABLED:-1}"
+# Set to 1 (or pass --ack) to skip the between-nights UNVERIFIED-tick refusal.
+ACK_UNVERIFIED="${ACK_UNVERIFIED:-0}"
 
 # ── services (--with-services; default OFF) ───────────────────────────────────────────
 # When enabled, Docker + Neo4j are brought up ONCE at startup so the 31 Neo4j-gated

@@ -215,7 +215,7 @@ Done when:
 
 LOC: 0 non-test (bash and markdown only). ✅ AUTO (T21.2, 2026-10-21)
 
-- [ ] **T21.3** Guard between nights: night tag, UNVERIFIED refusal, gate-baseline hash
+- [x] **T21.3** Guard between nights: night tag, UNVERIFIED refusal, gate-baseline hash
 Files: `scripts/expand_loop.sh` (preflight near :241-252, `run_one_task`, the run end near :866-870),
 `scripts/loop.config.sh`, and a new test `tests/unit/scripts/test_expand_loop_night_guard.py`.
 Spec: DEC-319. Three checks, all in bash:
@@ -245,7 +245,7 @@ Validation:
 
 Done when: `pytest tests/unit/scripts/test_expand_loop_night_guard.py` passes with 3 or more tests, one per
 behaviour, and `make check` is green.
-LOC: 0 non-test (bash); about +80 test.
+LOC: 0 non-test (bash); about +80 test. ✅ AUTO (T21.3, 2026-10-21)
 
 - [ ] **T21.4** Task-session frozen-path check, fixed in the driver
 Files: `scripts/expand_loop.sh` (`run_one_task` near :720-770), and a new test

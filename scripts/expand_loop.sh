@@ -111,6 +111,7 @@ MAX_SAME_TASK_REPEATS="${MAX_SAME_TASK_REPEATS:-2}"
 # ISSUE-370: the one task already retried after a bare "Execution error" (one retry each).
 TRANSIENT_RETRIED_TASK=""
 SKIPPED_PHASES=""
+ACK_UNVERIFIED=0
 START_BRANCH=""
 SESSION_LOG=""
 # Absolute epoch instant, resolved once in main(). Empty = the stop guard is disabled.
@@ -148,6 +149,7 @@ while [ $# -gt 0 ]; do
     --allow-main)       ALLOW_MAIN=1; shift ;;
     --commit-dirty)     COMMIT_DIRTY=1; shift ;;
     --dry-run)          DRY_RUN=1; shift ;;
+    --ack)              ACK_UNVERIFIED=1; shift ;;
     -h|--help)          usage ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
@@ -175,6 +177,12 @@ clock()  { $PY_RUN "$REPO_ROOT/scripts/loop_clock.py"     "$@"; }
 # ======================================================================================
 # preflight
 # ======================================================================================
+check_unverified_ticks() {
+  # Returns 0 if any task line in ROADMAP_FILE carries the UNVERIFIED marker.
+  # Matches only lines starting with "- [x]"; plain prose is not matched.
+  grep -qE "^\- \[x\].*AUTO ⚠️ UNVERIFIED" "$ROADMAP_FILE" 2>/dev/null
+}
+
 preflight_worktree() {
   # ISSUE-139 / T0.1. Sessions commit with `git add -A`, so in a shared checkout a concurrent
   # interactive edit lands in a commit nobody gated. A worktree makes that impossible.
@@ -249,6 +257,11 @@ preflight() {
   fi
 
   cursor --verify >/dev/null || fatal "roadmap failed --verify; fix the grammar first"
+
+  if [ "$ACK_UNVERIFIED" != "1" ] && check_unverified_ticks; then
+    fatal "roadmap has UNVERIFIED ticks — review them and pass --ack to proceed
+  (grep -E '^- \[x\].*AUTO ⚠️ UNVERIFIED' $ROADMAP_FILE)"
+  fi
 
   # Fail fast on the clock flags, BEFORE the multi-minute baseline seed. Defaulting an
   # unparseable stop time to "stop now" would silently reproduce the bug this replaced.
@@ -604,6 +617,30 @@ Review before the next run: python scripts/gate_baseline.py --show"
   fi
 }
 
+check_gate_baseline_drift() {
+  # Usage: check_gate_baseline_drift <phase> <task> <hash_before>
+  # Returns 2 (halting) if gate_baseline.json changed since <hash_before>.
+  # The file is gitignored, so a task modifying it is invisible in git diff —
+  # this check prevents a session from laundering its own failures into the baseline.
+  local phase="$1" task="$2" before="$3"
+  local bfile="$LOOP_STATE_DIR/gate_baseline.json"
+  local after
+  after="$(sha256sum "$bfile" 2>/dev/null | awk '{print $1}')"
+  [ "$before" = "$after" ] && return 0
+  flag_for_human "gate baseline changed mid-task ($task)" \
+    "gate_baseline.json was modified by the $task session. The file is gitignored so
+no git diff shows it. Halting to prevent laundering failures into the baseline."
+  return 2
+}
+
+write_night_tag() {
+  # Stamps the run's end as a local git tag. Idempotent: -f overwrites a prior tag
+  # for the same date so a second run on the same night always moves it to HEAD.
+  local tag="loop-night-$(date +%F)"
+  git tag -f "$tag" >/dev/null 2>&1 && log "night tag: $tag" \
+    || log "WARN: could not write night tag $tag"
+}
+
 push_branch() {
   [ "$PUSH_ENABLED" = "1" ] || { log "push disabled — staying local"; return 0; }
   git push origin "$START_BRANCH" 2>&1 | while read -r l; do log "  push: $l"; done
@@ -714,12 +751,16 @@ run_one_task() {
   local rc token
 
   local wt_before="$LOOP_STATE_DIR/worktrees-before-$task.json" leaks
+  local baseline_before
+  baseline_before="$(sha256sum "$LOOP_STATE_DIR/gate_baseline.json" 2>/dev/null | awk '{print $1}')"
   log "--- task $task (phase $phase) -> $tasklog"
   $PY_RUN "$REPO_ROOT/scripts/worktree_guard.py" snapshot > "$wt_before" 2>>"$SESSION_LOG" \
     || log "WARNING: worktree snapshot failed — this task runs without the leak guard"
   run_claude_session "$tasklog" "$CLAUDE_TIMEOUT" "$MODEL" \
     "/expand-linear-next --auto --single-task --phase $phase --task $task"
   rc=$?
+
+  check_gate_baseline_drift "$phase" "$task" "$baseline_before" || return 2
 
   # A task that writes into ANOTHER worktree (the 2026-09-17 T3.2 leak) halts the run. This
   # also trips on your own interactive commits/edits in another worktree during the task.
@@ -847,10 +888,10 @@ be committed. Inspect the last task log before re-running."
   report_deferred end
   report_demo_live
   checkpoint_reports
+  write_night_tag
   log "=== run finished | tasks=$TASKS_DONE phases=$PHASES_DONE skipped=[${SKIPPED_PHASES:-none}] ==="
   log "queue now: $(cursor --status | tail -1)"
-  # "UNVERIFIED (" is the cursor's marker template; "[UNVERIFIED:" in prose is not a tick.
-  log "UNVERIFIED ticks: $(grep -c 'UNVERIFIED (' "$ROADMAP_FILE" 2>/dev/null) (list them: grep 'UNVERIFIED (' $ROADMAP_FILE)"
+  log "UNVERIFIED ticks: $(grep -cE "^\- \[x\].*AUTO ⚠️ UNVERIFIED" "$ROADMAP_FILE" 2>/dev/null) (list them: grep -E '^- \[x\].*AUTO ⚠️ UNVERIFIED' $ROADMAP_FILE)"
   [ -s "$HUMAN_VERIFICATION_FILE" ] && log "REVIEW: $HUMAN_VERIFICATION_FILE"
   return 0
 }
