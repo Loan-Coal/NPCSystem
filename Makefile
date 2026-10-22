@@ -804,14 +804,13 @@ demo-seed:
 demo-run:
 	$(PYTHON) -m demo_game.runners.run $(ARGS)
 
-# demo-run-live: play the scripted demo through REAL API calls against a live stack and judge
-# it — final act reached, no empty required beat (T2.4, DEC-280(a)). A nightly REPORT, not a
-# gate: deliberately NOT in `check` (it needs a booted stack; see OVERNIGHT_LOOP.md). Defaults
-# to the isolated eval stack; bring it up first (eval-stack-reset/-up/-seed).
-# Exit 0 pass / 1 demo broke / 2 no stack or stale image. ARGS: --expect-sha SHA, --timeout-s N
+# demo-run-live: play the scripted demo against a live stack; assert pillar facts;
+# write evals/pillar_verdicts.jsonl (DEC-301, DEC-321). A nightly REPORT, not a gate.
+# Defaults to the isolated eval stack; bring it up first (eval-stack-reset/-up/-seed).
+# Exit 0 on clean run (even when pillars are red); 2 = no stack. ARGS: --verdicts-path P
 DEMO_LIVE_BASE_URL ?= $(EVAL_BASE_URL)
 demo-run-live:
-	NPC_BASE_URL=$(DEMO_LIVE_BASE_URL) NPC_API_KEY=$(API_KEY) $(PYTHON) scripts/demo_run_live.py --base-url $(DEMO_LIVE_BASE_URL) $(ARGS)
+	NPC_BASE_URL=$(DEMO_LIVE_BASE_URL) NPC_API_KEY=$(API_KEY) $(PYTHON) -m demo_game.runners.pillars --base-url $(DEMO_LIVE_BASE_URL) $(ARGS)
 
 # test-demo: run demo_game unit tests in isolation (separate from make test)
 # Requires: pip install -r demo_game/requirements.txt

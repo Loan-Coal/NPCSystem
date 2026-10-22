@@ -663,7 +663,7 @@ Validation:
 Done when: all three tests pass, ISSUE-347 and ISSUE-348 are archived as `[FIXED]`, and `make check` is green.
 LOC: about +120 non-test (demo_game). ✅ AUTO (T24.2, 2026-10-22)
 
-- [ ] **T24.3** Pillar assertions, replacing `demo_run_live.py`
+- [x] **T24.3** Pillar assertions, replacing `demo_run_live.py`
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - a new `demo_game/runners/pillars.py`;
@@ -706,7 +706,7 @@ Done when:
 - `make -n demo-run-live` names `pillars`;
 - `make check` is green.
 
-LOC: about +500 −338 non-test.
+LOC: about +500 −338 non-test. ✅ AUTO (T24.3, 2026-10-22)
 
 - [ ] **T24.4** First pillar run on the stack, committed as the red baseline
 Files: `evals/pillar_verdicts.jsonl` (new) and `project-harness/ISSUES.md`.

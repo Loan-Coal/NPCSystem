@@ -77,6 +77,14 @@ class DeterminismBeat(Scene):
 
         self._print_seed_table(runner, seeds1, seeds2)
 
+        assert seeds1, (
+            f"Determinism check FAILED: seeds_used is empty in run 1 "
+            f"for tick_override={self.tick_override}"
+        )
+        assert seeds2, (
+            f"Determinism check FAILED: seeds_used is empty in run 2 "
+            f"for tick_override={self.tick_override}"
+        )
         seeds_match = seeds1 == seeds2
         runner.print_ok(f"seeds_match={seeds_match}")
         assert seeds_match, (

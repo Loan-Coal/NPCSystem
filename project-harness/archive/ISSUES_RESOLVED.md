@@ -6842,3 +6842,21 @@ failure, so the nightly cannot stall on it; the interactive runner is out of T2.
 **To fix:** put `("error", TimeoutError(...))` on the queue before breaking, and give `result_q.get()` a timeout.
 Regression test in `demo_game/tests/core/test_dialogue_ws.py` driving a `recv` that raises `TimeoutError`.
 **Fixed:** 2026-10-22, in T24.2 (`dialogue_ws.py` queues error on timeout; `run_scenes.py` has bounded `result_q.get`)
+
+## [FIXED] ISSUE-351: several live demo beats run but do not demonstrate what their narration claims
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`, GREEN run at e7d4ba87)
+**Fixed:** 2026-10-22, in T24.3 (`demo_run_live.py` deleted; pillar assertions replace the non-empty-only judge)
+**Severity:** P2 (annoying)
+**Where:** `demo_game/runners/run.py` SCENES — ACT 4, 6, 9, 10, 11, 12
+**Description:** None of these fail the run (they are not required beats), but on a clean seed:
+ACT 9 reports `Graph: 1 KNOWS_ABOUT 'northern_war_begins' edges for aldric_merchant (expected 0)` and Aldric talks
+about the war — the tick-10 gossip run in ACT 7 reaches him, so the anti-hallucination beat shows the opposite of
+its claim (and the scene counts all his KNOWS_ABOUT edges, not the war's). ACT 6's three blind ticks (3→6) never
+reach a gossip tick, so the reputation event cannot propagate before Mira speaks. ACT 10 reads
+`interactions=0` while the reply claims to remember. ACT 11 finds no pending proactive intents; ACT 12 finds no
+player model; ACT 4 reports the consolidation turn threshold not met.
+**Why deferred:** content quality of non-required beats; T2.4 only makes the run complete and required beats
+non-empty. Promoting any of these to a required beat is a separate owner call.
+**To fix:** per beat — move ACT 9 before ACT 7 or scope the check to the war event; use `GossipBoundaryTick` in
+ACT 6; decide which of ACT 4/10/11/12 must actually land and make them required in
+`scripts/demo_run_live.py`.
