@@ -136,11 +136,6 @@ VERBS: dict[str, VerbTarget] = {
         "main",
         "Run the 6 promoted multi-turn scenarios live and print the fidelity-conditional report (EVAL-P12.4).",
     ),
-    "probe": VerbTarget(
-        "probe_runner",
-        "main",
-        "Run registered per-engine probes k times and print free engine_status liveness/timing (measurement-remediation Phase 3).",
-    ),
     "dashboard": VerbTarget(
         "dashboard.cli", "main", "Serve the local eval dashboard (run list, run detail, case drill-down)."
     ),

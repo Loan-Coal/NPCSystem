@@ -22,7 +22,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet-update type-evals type-evals-update type-demo type-demo-update check-harness \
         test-cov-evals test-integration check-integration-baseline check-integration-baseline-update \
         openapi harness-status check-readme-paths check-label-adequacy \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-probe eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords measure-reset-fidelity label-export-stratified label-import prelabel adjudication-yield scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo-seed demo-run demo-run-live demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard verify-rag bench-nfr \
@@ -678,18 +678,6 @@ eval-sequence:
 	$(PYTHON) -m evals sequence \
 		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
 		--k $(or $(K),3)
-
-# eval-probe: run every registered per-engine probe k times and print the free
-# engine_status liveness/timing snapshot for all tick-registered engines, whether
-# or not a probe exists for them (measurement-remediation Phase 3). Requires the
-# stack up and CLOCK_MODE=game_driven (docker-compose.eval.yml). No probes are
-# registered yet — Phase 4 populates evals/probe_runner.py's PROBE_FACTORIES.
-# Usage: make eval-probe [K=3] [TICKS=1]
-eval-probe:
-	@echo "Running registered per-engine probes against $(BASE_URL) (k=$(or $(K),3), ticks=$(or $(TICKS),1)) ..."
-	$(PYTHON) -m evals probe \
-		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
-		--k $(or $(K),3) --ticks $(or $(TICKS),1)
 
 # label-export-stratified: stratified label-export oversampling expected-negative
 # cases (case_neg/case_adv) until each in-scope judge's projected best-case

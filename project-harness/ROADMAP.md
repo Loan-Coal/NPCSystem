@@ -606,7 +606,7 @@ done when its line turns green.
 
 ### Phase T24
 
-- [ ] **T24.1** Delete the dead eval probes
+- [x] **T24.1** Delete the dead eval probes
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files: delete
 - `evals/probe_runner.py` (386), `probe_dialogue.py` (246), `probe_quest.py` (201), `probe_memory.py` (179),
@@ -634,7 +634,7 @@ Done when:
 - ISSUE-336/337/339 appear only in `archive/ISSUES_RESOLVED.md`;
 - `make check` is green.
 
-LOC: −1,478 non-test (evals).
+LOC: −1,478 non-test (evals). ✅ AUTO (T24.1, 2026-10-22)
 
 - [ ] **T24.2** Give the scripted runner a transcript recorder and bounded waits
 Files: `demo_game/runners/run.py` (`DemoRunner` :536-597, `LLMCache` :86-91),

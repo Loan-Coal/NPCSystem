@@ -6809,3 +6809,22 @@ Remove `.mypy_baseline_demo` and the `type-demo` ratchet target when the count r
 **Why deferred:** T13.2 (the census pass) is expected to cut oath and treaty controls inside `game_window.py`. Splitting before the census splits code that may be deleted — wasted work. The drive-to-zero mypy task (ISSUE-375) also belongs after the split.
 **To fix:** After T13.2 completes — split `game_window.py` by responsibility into focused modules (e.g. `game_window_model.py`, `game_window_events.py`, `game_window_render.py`, thin `game_window.py` coordinator). Delete — do not re-baseline — the `R001|demo_game/ui/layout/game_window.py:925` entry from `scripts/rules_baseline.txt`. Check that any other `demo_game/` module over 800 lines is also addressed.
 **Closed:** 2026-10-21, T22.4 triage (DEC-304); re-log if it bites
+
+## [FIXED] ISSUE-336: `probe_events` creates zero Events — `location_id: None` 422s every POST
+**Found:** 2026-09-08, during the A/B-readiness analysis
+**Severity:** P2 (annoying — the probe path is not on any gate and is not currently run)
+**Where:** `evals/probe_events.py:79-82`, against `src/npc_engine/type_registry/base_nodes/event.yaml`
+**Description:** `drive()` posts an Event with `"location_id": None`. `location_id` is
+`required: true`, and `type_registry/validation.py:184-190` raises `BASE_FIELD_NULL_FORBIDDEN` for an
+explicit `None` on a required base field, which `route_helpers.py:157-159` maps to **HTTP 422**. The
+return code is never checked, so every Event silently fails to exist. Downstream: each `KNOWS_ABOUT`
+POST 404s on the missing node, `_has_knower` is False for all, `orphan_rate` reads 1.0, and the
+`known_events_have_an_edge` invariant fails every repetition. Meanwhile `events_created_per_tick`
+(hardcoded 1.0) and `severity_mean` (computed from the probe's own local `_SEVERITIES` list, never
+read back from the server) stay green — so the probe reports success metrics for events that do not
+exist. Unit tests pass because they assert against hand-authored `MagicMock` responses.
+**Why deferred:** the A/B measurement unit is the case battery, not the probes (plan of 2026-09-08);
+the probe path is excluded from that work rather than repaired inside it.
+**To fix:** omit `location_id` or point it at a real Location; check `is_ok()` on every POST; derive
+`severity_mean` from the server rather than from local state.
+**Fixed:** 2026-10-22, T24.1 (deleted all probe_*.py files — the pillar eval replaces them)

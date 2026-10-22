@@ -34,24 +34,6 @@ the inner `standings` list) or delete the dead client method and widget.
 **PLAN 2026-09-18 (owner):** handed to **T13.1**, which rules on unused demo panels (like TREATY/OATH).
 No code before that ruling; if kept, feed it on tab open via `RightPanelRenderer`, no poller.
 
-## ISSUE-336: `probe_events` creates zero Events — `location_id: None` 422s every POST
-**Found:** 2026-09-08, during the A/B-readiness analysis
-**Severity:** P2 (annoying — the probe path is not on any gate and is not currently run)
-**Where:** `evals/probe_events.py:79-82`, against `src/npc_engine/type_registry/base_nodes/event.yaml`
-**Description:** `drive()` posts an Event with `"location_id": None`. `location_id` is
-`required: true`, and `type_registry/validation.py:184-190` raises `BASE_FIELD_NULL_FORBIDDEN` for an
-explicit `None` on a required base field, which `route_helpers.py:157-159` maps to **HTTP 422**. The
-return code is never checked, so every Event silently fails to exist. Downstream: each `KNOWS_ABOUT`
-POST 404s on the missing node, `_has_knower` is False for all, `orphan_rate` reads 1.0, and the
-`known_events_have_an_edge` invariant fails every repetition. Meanwhile `events_created_per_tick`
-(hardcoded 1.0) and `severity_mean` (computed from the probe's own local `_SEVERITIES` list, never
-read back from the server) stay green — so the probe reports success metrics for events that do not
-exist. Unit tests pass because they assert against hand-authored `MagicMock` responses.
-**Why deferred:** the A/B measurement unit is the case battery, not the probes (plan of 2026-09-08);
-the probe path is excluded from that work rather than repaired inside it.
-**To fix:** omit `location_id` or point it at a real Location; check `is_ok()` on every POST; derive
-`severity_mean` from the server rather than from local state.
-
 ## ISSUE-291: tone_judge fate is decided (author failing cases) but not implemented
 **Found:** 2026-09-07, eval/metrics remediation
 **Severity:** P2 (annoying — the battery stays HIDDEN under scorer_trust_policy in the
