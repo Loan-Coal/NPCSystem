@@ -6860,3 +6860,12 @@ non-empty. Promoting any of these to a required beat is a separate owner call.
 **To fix:** per beat — move ACT 9 before ACT 7 or scope the check to the war event; use `GossipBoundaryTick` in
 ACT 6; decide which of ACT 4/10/11/12 must actually land and make them required in
 `scripts/demo_run_live.py`.
+
+## [FIXED] ISSUE-373: scheduled NPCs snap back to `loc_temple` (tick 0) after every clock advance on the eval stack
+**Found:** 2026-09-24, during ISSUE-371
+**Fixed:** 2026-10-22, in T25.2
+**Severity:** P2 (annoying)
+**Where:** eval stack (`POST /v1/clock/advance`), `routine_engine.run_tick`; the writer that resets `LOCATED_AT` is not identified
+**Description:** On a seeded eval stack, `captain_sorn`, `mira_innkeeper`, `lira_fence` and `old_henryk` are always found at `loc_temple` with `arrived_at_tick=0` after an advance, though the routine engine reported `moved>0` and archived `WAS_AT` departures from `loc_temple` (61 by the fifth run). Calling `update_character_location` directly against the same graph does persist the move, and a second advance reports `moved=3` (Sorn was left at his target) yet all four are back at the temple afterwards. So `routine.moved` counts moves that do not stick, which is also why `test_revived_engines_do_work` asserts a counter and not a location. `Neo4jPlanningRepository` also calls `update_character_location`.
+**Why deferred:** Out of scope for ISSUE-371 (test determinism). Not investigated beyond the probes above.
+**To fix:** Find what rewrites `LOCATED_AT` to the seed default each tick (start with the planning and need-decay paths), then make the routine test assert the persisted `LOCATED_AT`, not `moved`.

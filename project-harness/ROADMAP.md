@@ -786,7 +786,7 @@ Done when:
 
 LOC: about −270 non-test (src). ✅ AUTO (T25.1, 2026-10-22)
 
-- [ ] **T25.2** WORLD: NPCs stay where they were seeded (ISSUE-373)
+- [x] **T25.2** WORLD: NPCs stay where they were seeded (ISSUE-373)
 Files:
 - `src/npc_engine/graph/scheduling/routine_queries.py` :39-46,81-85;
 - `src/npc_engine/graph/planning/planning_repository.py` :79-85 (`move_character`);
@@ -827,7 +827,7 @@ Done when:
 - ISSUE-373 is archived;
 - `make check` is green.
 
-LOC: about +30 non-test.
+LOC: about +30 non-test. ✅ AUTO (T25.2, 2026-10-22)
 
 - [ ] **T25.3** GOSSIP: distortion compounds and edges point the right way (ISSUE-228)
 Files: `src/npc_engine/graph/gossip/gossip_batch_queries.py` :36-62,

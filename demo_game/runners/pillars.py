@@ -240,7 +240,7 @@ def check_gossip(entries: list[TranscriptEntry]) -> tuple[bool, str]:
 def check_world(entries: list[TranscriptEntry]) -> tuple[bool, str]:
     """WORLD: after ACT 1 ticks, each seeded NPC is at its seeded location.
 
-    Checks all Character nodes in the transcript against SEEDED_NPC_LOCATIONS.
+    Reads LOCATED_AT edges from the transcript (dst_id) against SEEDED_NPC_LOCATIONS.
 
     Args:
         entries: Transcript entry list to scan.
@@ -248,18 +248,31 @@ def check_world(entries: list[TranscriptEntry]) -> tuple[bool, str]:
     Returns:
         (passed, evidence_string).
     """
+    located_at_reads = _entries_matching(entries, "GET", "/graph/edges/LOCATED_AT")
+
     wrong: list[str] = []
     missing: list[str] = []
     for npc_id, expected in SEEDED_NPC_LOCATIONS.items():
-        reads = _entries_matching(entries, "GET", f"/graph/nodes/Character/{npc_id}")
-        if not reads:
+        location_id: str | None = None
+        for read in located_at_reads:
+            body = read.get("body", {})
+            if not isinstance(body, dict):
+                continue
+            data = body.get("data", [])
+            if not isinstance(data, list):
+                continue
+            for edge in data:
+                if isinstance(edge, dict) and edge.get("src_id") == npc_id:
+                    location_id = edge.get("dst_id")
+                    break
+            if location_id is not None:
+                break
+
+        if location_id is None:
             missing.append(npc_id)
             continue
-        last_body = reads[-1].get("body", {})
-        data = last_body.get("data", last_body)
-        actual = data.get("location_id")
-        if actual != expected:
-            wrong.append(f"{npc_id}@{actual!r}(expected {expected!r})")
+        if location_id != expected:
+            wrong.append(f"{npc_id}@{location_id!r}(expected {expected!r})")
 
     if missing or wrong:
         parts: list[str] = []
@@ -400,9 +413,9 @@ def _make_pillar_reads(client: Any, recorder: Any) -> None:
     for _ in range(LLMM_REPEATS):
         client.get_edge("KNOWS_ABOUT", GOSSIP_HOP2_NPC, GOSSIP_EVENT_ID)
 
-    # WORLD: one read per seeded NPC
+    # WORLD: one LOCATED_AT edge read per seeded NPC — location is dst_id, not a node property
     for npc_id in SEEDED_NPC_LOCATIONS:
-        client.get_node("Character", npc_id)
+        client.get_graph_edges("LOCATED_AT", src_id=npc_id)
 
     # FEEL: emotion re-reads so total reaches LLMM_REPEATS (demo ran 1 already)
     for _ in range(LLMM_REPEATS - 1):

@@ -43,11 +43,13 @@ class Neo4jPlanningRepository:
         async with self._graph_db.get_session() as session:
             return await get_needs_for_character(session, character_id)
 
-    async def get_satisfying_location_for_need(self, *, need_kind: str) -> str | None:
-        """Open a session and return a location id satisfying the need kind, or None."""
+    async def get_satisfying_location_for_need(
+        self, *, character_id: str, need_kind: str
+    ) -> str | None:
+        """Open a session and return a location id satisfying the need kind for this character."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            return await get_satisfying_location_for_need(session, need_kind)
+            return await get_satisfying_location_for_need(session, character_id, need_kind)
 
     async def create_goal(
         self,
@@ -76,10 +78,15 @@ class Neo4jPlanningRepository:
         async with self._graph_db.get_session() as session:
             await create_goal_targets_edge(session, goal_id, target_id, priority)
 
-    async def move_character(self, *, character_id: str, location_id: str) -> None:
+    async def move_character(
+        self, *, character_id: str, location_id: str, tick_id: int = 0
+    ) -> None:
         """Open a session and move a character's LOCATED_AT edge (planning override)."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             await update_character_location(
-                session, character_id=character_id, location_id=location_id
+                session,
+                character_id=character_id,
+                location_id=location_id,
+                arrived_at_tick=tick_id,
             )

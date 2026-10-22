@@ -49,6 +49,7 @@ class ActionSelector:
         *,
         character_id: str,
         goals: list[dict[str, Any]],
+        tick_id: int = 0,
     ) -> None:
         """Evaluate goals and dispatch a move action if the top goal overrides routine.
 
@@ -57,6 +58,7 @@ class ActionSelector:
             goals: List of active goal dicts with keys: goal_id, urgency,
                    status, target_location_id.  Callers supply pre-fetched goals
                    to keep graph reads in the graph layer.
+            tick_id: Current tick id, stamped on the LOCATED_AT edge via move_character.
         """
         if not goals:
             logger.info("action_selector.no_goals", extra={"character_id": character_id})
@@ -78,12 +80,13 @@ class ActionSelector:
             logger.info("action_selector.deferred_to_routine", extra={"character_id": character_id, "urgency": urgency})
             return
 
-        await self._dispatch_move(character_id, top_goal)
+        await self._dispatch_move(character_id, top_goal, tick_id)
 
     async def _dispatch_move(
         self,
         character_id: str,
         goal: dict[str, Any],
+        tick_id: int,
     ) -> None:
         target_location_id: str | None = goal.get("target_location_id")
         if target_location_id is None:
@@ -93,7 +96,7 @@ class ActionSelector:
             )
             return
         await self._planning.move_character(
-            character_id=character_id, location_id=target_location_id
+            character_id=character_id, location_id=target_location_id, tick_id=tick_id
         )
         logger.info(
             "action_selector.move_dispatched",

@@ -109,12 +109,18 @@ async def get_all_needs_with_location(
 
 async def get_satisfying_location_for_need(
     session: AsyncSession,
+    character_id: str,
     need_kind: str,
 ) -> str | None:
-    """Return the ID of the first location that satisfies a need of the given kind.
+    """Return the ID of a location that satisfies a need of the given kind for this character.
+
+    Scopes the query to the character's own Need nodes so that different NPCs
+    with different SATISFIES_NEED wiring get different results. Ordered by
+    location id for determinism.
 
     Args:
         session: Active Neo4j async session.
+        character_id: ID of the character whose needs are being satisfied.
         need_kind: The need kind to satisfy (e.g. 'hunger', 'social').
 
     Returns:
@@ -122,11 +128,14 @@ async def get_satisfying_location_for_need(
     """
     result = await session.run(
         """
-        MATCH (loc:Location)-[:SATISFIES_NEED]->(n:Need)
+        MATCH (c:Character {id: $character_id})-[:HAS_NEED]->(n:Need)
         WHERE n.kind = $need_kind
+        MATCH (loc:Location)-[:SATISFIES_NEED]->(n)
         RETURN loc.id AS location_id
+        ORDER BY loc.id
         LIMIT 1
         """,
+        character_id=character_id,
         need_kind=need_kind,
     )
     record = await result.single()

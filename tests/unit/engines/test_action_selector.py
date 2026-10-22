@@ -33,7 +33,9 @@ async def test_high_urgency_goal_overrides_routine():
 
     await ActionSelector(planning_repo=port).select_action(character_id="char-1", goals=goals)
 
-    port.move_character.assert_awaited_once_with(character_id="char-1", location_id="tavern")
+    port.move_character.assert_awaited_once_with(
+        character_id="char-1", location_id="tavern", tick_id=0
+    )
 
 
 @pytest.mark.asyncio
@@ -56,3 +58,18 @@ async def test_no_target_location_skips_move():
     await ActionSelector(planning_repo=port).select_action(character_id="char-1", goals=goals)
 
     port.move_character.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_move_character_receives_tick_id():
+    """ActionSelector must forward tick_id to move_character."""
+    port = AsyncMock()
+    goals = [_goal("g-high", urgency=90, target_location_id="tavern")]
+
+    await ActionSelector(planning_repo=port).select_action(
+        character_id="char-1", goals=goals, tick_id=7
+    )
+
+    port.move_character.assert_awaited_once_with(
+        character_id="char-1", location_id="tavern", tick_id=7
+    )

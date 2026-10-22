@@ -101,6 +101,7 @@ class GoalFormerAdapter:
             await self._action_selector.select_action(
                 character_id=npc_id,
                 goals=[{"goal_id": goal_id, "urgency": urgency, "status": "active", "target_location_id": target_location_id}],
+                tick_id=tick_id,
             )
 
         return {"goal_formations": goal_ids, "tick_id": tick_id}

@@ -263,8 +263,9 @@ _NPC_NEEDS: list[tuple[str, str, int, int]] = [
     (NPC_ID_HARWICK_GUARD, "recreation", 30, 2),
     (NPC_ID_HARWICK_GUARD, "rest",       55, 3),
     # nel_pickpocket — anxious, high social need (information gathering)
+    # hunger starts at 90 so urgency (100-level) stays ≤ 50 across the 10-tick demo window
     (NPC_ID_NEL_PICKPOCKET, "social",    80, 3),
-    (NPC_ID_NEL_PICKPOCKET, "hunger",    40, 4),
+    (NPC_ID_NEL_PICKPOCKET, "hunger",    90, 4),
 ]
 
 # SATISFIES_NEED edges: (location_id, need_id, magnitude)

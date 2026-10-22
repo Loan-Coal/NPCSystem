@@ -51,10 +51,10 @@ async def test_get_satisfying_location_delegates():
     repo = Neo4jPlanningRepository(db)  # type: ignore[arg-type]
 
     with patch(f"{_MOD}.get_satisfying_location_for_need", new=AsyncMock(return_value="tavern")) as fn:
-        result = await repo.get_satisfying_location_for_need(need_kind="social")
+        result = await repo.get_satisfying_location_for_need(character_id="c1", need_kind="social")
 
     assert result == "tavern"
-    fn.assert_awaited_once_with(db._session, "social")
+    fn.assert_awaited_once_with(db._session, "c1", "social")
 
 
 @pytest.mark.asyncio
@@ -93,4 +93,37 @@ async def test_move_character_delegates():
     with patch(f"{_MOD}.update_character_location", new=AsyncMock()) as fn:
         await repo.move_character(character_id="c1", location_id="tavern")
 
-    fn.assert_awaited_once_with(db._session, character_id="c1", location_id="tavern")
+    fn.assert_awaited_once_with(
+        db._session, character_id="c1", location_id="tavern", arrived_at_tick=0
+    )
+
+
+@pytest.mark.asyncio
+async def test_move_character_records_tick_id():
+    """move_character must forward tick_id as arrived_at_tick to update_character_location."""
+    db = _FakeGraphDB(object())
+    repo = Neo4jPlanningRepository(db)  # type: ignore[arg-type]
+
+    with patch(f"{_MOD}.update_character_location", new=AsyncMock()) as fn:
+        await repo.move_character(character_id="c1", location_id="tavern", tick_id=42)
+
+    fn.assert_awaited_once_with(
+        db._session, character_id="c1", location_id="tavern", arrived_at_tick=42
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_satisfying_location_scoped_by_character_id():
+    """get_satisfying_location_for_need must scope the query to the given character."""
+    db = _FakeGraphDB(object())
+    repo = Neo4jPlanningRepository(db)  # type: ignore[arg-type]
+
+    with patch(
+        f"{_MOD}.get_satisfying_location_for_need", new=AsyncMock(return_value="tavern")
+    ) as fn:
+        result = await repo.get_satisfying_location_for_need(
+            character_id="char-a", need_kind="social"
+        )
+
+    assert result == "tavern"
+    fn.assert_awaited_once_with(db._session, "char-a", "social")

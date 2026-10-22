@@ -86,3 +86,37 @@ async def test_no_needs_returns_none_and_writes_nothing():
 
     assert result is None
     port.create_goal.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_satisfying_location_called_with_character_id():
+    """GoalFormer must pass character_id to get_satisfying_location_for_need."""
+    port = _port([_need("n-hunger", "hunger", level=30)], goal_id="goal-001", location="market")
+
+    await GoalFormer(planning_repo=port).form_goal(character_id="char-1", game_time=_game_time())
+
+    port.get_satisfying_location_for_need.assert_awaited_once_with(
+        character_id="char-1", need_kind="hunger"
+    )
+
+
+@pytest.mark.asyncio
+async def test_two_npcs_get_different_satisfier_locations():
+    """Two NPCs with different needs must each pass their own character_id to the satisfier query."""
+    port_a = _port([_need("n-social", "social", level=10)], goal_id="goal-a", location="loc_tavern")
+    port_b = _port([_need("n-hunger", "hunger", level=20)], goal_id="goal-b", location="loc_market")
+
+    _, _, loc_a = await GoalFormer(planning_repo=port_a).form_goal(
+        character_id="char-a", game_time=_game_time()
+    )
+    _, _, loc_b = await GoalFormer(planning_repo=port_b).form_goal(
+        character_id="char-b", game_time=_game_time()
+    )
+
+    port_a.get_satisfying_location_for_need.assert_awaited_once_with(
+        character_id="char-a", need_kind="social"
+    )
+    port_b.get_satisfying_location_for_need.assert_awaited_once_with(
+        character_id="char-b", need_kind="hunger"
+    )
+    assert loc_a != loc_b

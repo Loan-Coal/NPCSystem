@@ -86,7 +86,9 @@ class GoalFormer:
                 "goal_id": goal_id,
             },
         )
-        target_location_id = await self._maybe_write_goal_targets(goal_id, worst_need["kind"], urgency)
+        target_location_id = await self._maybe_write_goal_targets(
+            goal_id, worst_need["kind"], urgency, character_id
+        )
         return goal_id, urgency, target_location_id
 
     async def _maybe_write_goal_targets(
@@ -94,9 +96,10 @@ class GoalFormer:
         goal_id: str,
         need_kind: str,
         urgency: int,
+        character_id: str,
     ) -> str | None:
         target_location_id = await self._planning.get_satisfying_location_for_need(
-            need_kind=need_kind
+            character_id=character_id, need_kind=need_kind
         )
         if target_location_id is None:
             return None
