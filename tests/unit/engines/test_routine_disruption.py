@@ -125,7 +125,7 @@ def test_apply_disruption_rules_expires_at_tick_correct() -> None:
 
 @pytest.mark.asyncio
 async def test_set_routine_override_writes_correct_json() -> None:
-    from npc_engine.engines.routine.routine_queries import set_routine_override
+    from npc_engine.graph.scheduling.routine_queries import set_routine_override
 
     session = MagicMock()
     session.run = AsyncMock()

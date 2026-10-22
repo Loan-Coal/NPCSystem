@@ -746,7 +746,7 @@ so a fix task needs no old-tree rebuild.
 
 ### Phase T25
 
-- [ ] **T25.1** Collapse the emotion-model protocol and delete the dead mood/routine surface
+- [x] **T25.1** Collapse the emotion-model protocol and delete the dead mood/routine surface
 Pre-approved: file-deletion, public-interface · owner 2026-10-21 · DEC-311
 Files:
 - delete `src/npc_engine/engines/emotion/emotion_model_protocol.py` (68) and `emotion_model_factory.py` (76);
@@ -784,7 +784,7 @@ Done when:
 - ISSUE-362 is archived;
 - `make check` is green.
 
-LOC: about −270 non-test (src).
+LOC: about −270 non-test (src). ✅ AUTO (T25.1, 2026-10-22)
 
 - [ ] **T25.2** WORLD: NPCs stay where they were seeded (ISSUE-373)
 Files:

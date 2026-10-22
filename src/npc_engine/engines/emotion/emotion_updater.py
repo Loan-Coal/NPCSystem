@@ -2,11 +2,11 @@
 Module: emotion_updater
 Layer: engines
 Purpose: Applies mood updates and decay rules to emotion states via async store calls.
-Does NOT: read or write graph data directly.  Delegates computation to EmotionModelProtocol
+Does NOT: read or write graph data directly.  Delegates computation to VadEmotionModel
           and graph write-through to an injected Neo4jEmotionRepository (no session held).
-Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_model_protocol,
-              engines/emotion/vad_emotion_model, graph/repositories/emotion_repository
-Dependencies injected: EmotionStore, EmotionModelProtocol, Neo4jEmotionRepository (optional).
+Dependencies: engines/emotion/emotion_store, engines/emotion/vad_emotion_model,
+              graph/repositories/emotion_repository
+Dependencies injected: EmotionStore, VadEmotionModel, Neo4jEmotionRepository (optional).
 Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
 
@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
@@ -28,8 +27,8 @@ _MOOD_AROUSAL_INCREMENT = 5
 class EmotionUpdater:
     """Service that updates stored emotion states.
 
-    All emotion computation is delegated to the injected EmotionModelProtocol.
-    This class owns only store I/O and method orchestration (OCP / DIP).
+    All emotion computation is delegated to the injected VadEmotionModel.
+    This class owns only store I/O and method orchestration.
 
     When a Neo4jEmotionRepository is injected, every store write is followed by a
     graph write-through so emotion state survives process restarts.
@@ -39,7 +38,7 @@ class EmotionUpdater:
         self,
         emotion_store: EmotionStore,
         decay_rate: int = 2,
-        model: EmotionModelProtocol | None = None,
+        model: VadEmotionModel | None = None,
         writer: Neo4jEmotionRepository | None = None,
     ) -> None:
         """Initialise the updater with a backing store, decay rate, and optional deps.
@@ -47,13 +46,13 @@ class EmotionUpdater:
         Args:
             emotion_store: Store used to read and persist NPC emotion states.
             decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
-            model: EmotionModelProtocol implementation.  Defaults to VadEmotionModel().
+            model: VadEmotionModel instance.  Defaults to VadEmotionModel().
             writer: Optional Neo4jEmotionRepository for graph write-through.  When None,
                     state is only stored in-memory (no graph persistence).
         """
         self._store = emotion_store
         self._decay_rate = decay_rate
-        self._model: EmotionModelProtocol = model if model is not None else VadEmotionModel()
+        self._model: VadEmotionModel = model if model is not None else VadEmotionModel()
         self._writer: Neo4jEmotionRepository | None = writer
 
     async def apply_dialogue_mood(

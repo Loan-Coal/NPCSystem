@@ -1,11 +1,10 @@
 """
 test_ocp_residuals.py — Unit tests for REM-W4 OCP residuals (ISSUE-104).
 
-Verifies that the four OCP-residual fixes are in place:
-1. emotion_model_factory has a registry (registered_emotion_models).
-2. emotion_state exports MOOD_LABEL_TO_VAD (single shared table).
-3. covert_event_factory defines SchemeStepKind enum.
-4. engines/tts/factory has a registry (registered_tts_backends + build_tts_client).
+Verifies that the three remaining OCP-residual fixes are in place:
+1. emotion_state exports MOOD_LABEL_TO_VAD (single shared table).
+2. covert_event_factory defines SchemeStepKind enum.
+3. engines/tts/factory has a registry (registered_tts_backends + build_tts_client).
 """
 
 from __future__ import annotations
@@ -15,48 +14,7 @@ from types import SimpleNamespace
 
 
 # ---------------------------------------------------------------------------
-# 1. Emotion model registry
-# ---------------------------------------------------------------------------
-
-
-def test_registered_emotion_models_returns_builtins() -> None:
-    """registered_emotion_models() exposes at least vad."""
-    from npc_engine.engines.emotion.emotion_model_factory import registered_emotion_models
-
-    backends = registered_emotion_models()
-    assert "vad" in backends
-
-
-def test_register_emotion_model_extends_registry() -> None:
-    """register_emotion_model adds a new entry without mutating existing ones."""
-    from npc_engine.engines.emotion.emotion_model_factory import (
-        _EMOTION_REGISTRY,
-        register_emotion_model,
-        registered_emotion_models,
-    )
-    from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
-
-    before = set(registered_emotion_models())
-    register_emotion_model("_test_ocp_stub", VadEmotionModel)
-    try:
-        assert "_test_ocp_stub" in registered_emotion_models()
-        # Original entries survive
-        assert "vad" in registered_emotion_models()
-    finally:
-        _EMOTION_REGISTRY.pop("_test_ocp_stub", None)
-
-
-def test_build_emotion_model_dispatches_via_registry() -> None:
-    """build_emotion_model returns the registered implementation for the name."""
-    from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
-    from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
-
-    settings_vad = SimpleNamespace(EMOTION_MODEL="vad")
-    assert isinstance(build_emotion_model(settings_vad), VadEmotionModel)
-
-
-# ---------------------------------------------------------------------------
-# 2. Shared mood→VAD table in emotion_state
+# 1. Shared mood→VAD table in emotion_state
 # ---------------------------------------------------------------------------
 
 

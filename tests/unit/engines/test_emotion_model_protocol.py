@@ -1,20 +1,18 @@
 """
 Module: test_emotion_model_protocol
 Layer: tests/unit
-Purpose: Unit tests for EmotionModelProtocol and VadEmotionModel.
-Dependencies: engines/emotion/emotion_model_protocol, engines/emotion/vad_emotion_model,
-              engines/emotion/emotion_updater, engines/emotion/emotion_state,
-              engines/emotion/emotion_store
+Purpose: Unit tests for VadEmotionModel and EmotionUpdater delegation.
+Dependencies: engines/emotion/vad_emotion_model, engines/emotion/emotion_updater,
+              engines/emotion/emotion_state, engines/emotion/emotion_store
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
-from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 
@@ -88,22 +86,13 @@ def test_vad_apply_mood_hint_increments_arousal() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Protocol conformance
+# EmotionUpdater delegates to VadEmotionModel
 # ---------------------------------------------------------------------------
 
-def test_vad_protocol_conformance() -> None:
-    """`isinstance` check must pass for runtime_checkable EmotionModelProtocol."""
-    assert isinstance(VadEmotionModel(), EmotionModelProtocol)
-
-
-# ---------------------------------------------------------------------------
-# EmotionUpdater delegates to protocol
-# ---------------------------------------------------------------------------
-
-async def test_emotion_updater_uses_protocol_method() -> None:
+async def test_emotion_updater_uses_model_method() -> None:
     """EmotionUpdater.apply_event_shock must delegate to model.apply_shock."""
     store = EmotionStore()
-    mock_model = MagicMock(spec=EmotionModelProtocol)
+    mock_model = MagicMock(spec=VadEmotionModel)
     mock_model.apply_shock.return_value = EmotionState(valence=-10, arousal=20)
 
     updater = EmotionUpdater(emotion_store=store, model=mock_model)

@@ -16,9 +16,9 @@ from typing import Any
 from npc_engine.api.dependencies_infra import get_graph_db, get_llm_config
 from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.session_store import SessionStore
-from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
     KnowledgeExtractionEngine,
 )
@@ -67,15 +67,12 @@ def get_emotion_store() -> EmotionStore:
 def get_emotion_updater() -> EmotionUpdater:
     """Create singleton emotion updater bound to the shared emotion store.
 
-    The emotion model is selected from settings (F1.3): VAD baseline or
-    trait-modulated, via ``build_emotion_model``.
-
     Returns:
-        EmotionUpdater wired to the singleton EmotionStore and configured model.
+        EmotionUpdater wired to the singleton EmotionStore and VadEmotionModel.
     """
     return EmotionUpdater(
         emotion_store=get_emotion_store(),
-        model=build_emotion_model(get_settings()),
+        model=VadEmotionModel(),
         writer=Neo4jEmotionRepository(get_graph_db()),
     )
 

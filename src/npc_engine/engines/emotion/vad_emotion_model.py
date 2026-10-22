@@ -1,16 +1,15 @@
 """
 Module: vad_emotion_model
 Layer: engines
-Purpose: Concrete VAD (Valence-Arousal-Dominance) implementation of EmotionModelProtocol.
+Purpose: Concrete VAD (Valence-Arousal-Dominance) emotion model.
          Ports the shock/decay/mood-hint computations formerly embedded in EmotionUpdater.
 Does NOT: persist state, access the graph, or call LLMs.
-Dependencies: engines/emotion/emotion_model_protocol, engines/emotion/emotion_state
+Dependencies: engines/emotion/emotion_state
 Dependencies injected: None.
 Used by: engines/emotion/emotion_updater (default injection)
 """
 from __future__ import annotations
 
-from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
 
 _SHOCK_VALENCE_DIVISOR = 3
@@ -110,7 +109,3 @@ class VadEmotionModel:
             arousal=arousal,
             label=derive_label(valence, arousal),
         )
-
-
-# Confirm VadEmotionModel satisfies the protocol at import time.
-assert isinstance(VadEmotionModel(), EmotionModelProtocol)
