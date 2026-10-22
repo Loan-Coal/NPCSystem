@@ -19,10 +19,15 @@ from typing import TYPE_CHECKING
 from demo_game.constants import (
     BRIBE_GOLD_COST,
     BRIBE_STANDING_GAIN,
+    NPC_DIALOGUE_TIMEOUT_S,
     PROPAGATED_REP_DELTA,
     PROPAGATED_REP_FACTION,
     PROPAGATED_REP_LOCATION,
 )
+
+# Safety margin on top of the WS recv timeout so the queue drain never blocks
+# indefinitely if the daemon thread exits without queuing an event (ISSUE-347).
+_WS_QUEUE_TIMEOUT_S: float = NPC_DIALOGUE_TIMEOUT_S + 10.0
 from demo_game.dialogue_ws import dialogue_ws_worker
 from demo_game.branches.branch_node import build_garrick_branch
 from demo_game.branches.branch_state import load_branch_state, save_branch_state
@@ -195,7 +200,7 @@ class DialogueBeat(Scene):
             return
 
         cached = runner.cache.get(self.npc_id, self.player_input)
-        if cached:
+        if cached and cached.get("npc_response"):
             runner.print_ok(f"[cached] {display}: {cached.get('npc_response', '')[:80]}")
             return
 
@@ -227,7 +232,7 @@ class StreamingDialogueBeat(Scene):
             return
 
         cached = runner.cache.get(self.npc_id, self.player_input)
-        if cached:
+        if cached and cached.get("npc_response"):
             runner.print_ok(f"[cached] {display}: {cached.get('npc_response', '')[:80]}")
             return
 
@@ -247,7 +252,14 @@ class StreamingDialogueBeat(Scene):
         print(f"  >>  {display}: ", end="", flush=True)
         tokens: list[str] = []
         while True:
-            event_type, data = result_q.get()
+            try:
+                event_type, data = result_q.get(timeout=_WS_QUEUE_TIMEOUT_S)
+            except queue.Empty:
+                print()
+                raise RuntimeError(
+                    f"WS dialogue queue drained with no done/error for {self.npc_id} "
+                    f"after {_WS_QUEUE_TIMEOUT_S}s"
+                )
             if event_type == "token":
                 tokens.append(data)
                 print(data, end="", flush=True)

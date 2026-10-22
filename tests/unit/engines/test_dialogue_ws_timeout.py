@@ -60,8 +60,10 @@ class TestDialogueWsTimeout:
 
         # on_cleanup must have been invoked exactly once
         on_cleanup.assert_called_once()
-        # The queue should be empty — no error event pushed on a plain timeout
-        assert result_q.empty()
+        # An ("error", TimeoutError) event must be queued so the caller does not hang
+        item = result_q.get_nowait()
+        assert item[0] == "error"
+        assert isinstance(item[1], TimeoutError)
 
     def test_is_waiting_cleared_after_timeout(self) -> None:
         """_is_waiting becomes False after a recv timeout via clear_waiting callback."""
@@ -131,7 +133,9 @@ class TestDialogueWsTimeout:
             # Must not raise
             dialogue_ws_worker(_WS_URL, _API_KEY, _PAYLOAD, result_q)
 
-        assert result_q.empty()
+        # An error event is queued on timeout; no exception is raised to the caller
+        item = result_q.get_nowait()
+        assert item[0] == "error"
 
     def test_timeout_passes_correct_timeout_arg_to_recv(self) -> None:
         """ws.recv() is called with timeout=NPC_DIALOGUE_TIMEOUT_S."""

@@ -28,6 +28,7 @@ from typing import Any, Callable
 from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
 from demo_game.encoding_utils import ensure_utf8_stdout
+from demo_game.runners.transcript import RecordingClientWrapper, TranscriptRecorder
 from demo_game.runners.run_scenes import (
     AntiHallucinationBeat,
     BranchBeat,
@@ -542,15 +543,19 @@ class DemoRunner:
         cached: bool = False,
         cinematic: bool = False,
         cache: LLMCache | None = None,
+        recorder: TranscriptRecorder | None = None,
     ) -> None:
         self.dry_run = dry_run
         self.cinematic = cinematic
         self.cache = cache if cache is not None else LLMCache(readonly=cached)
+        self.recorder = recorder
         cfg = DemoConfig()
         self.client: EngineClient = EngineClient(
             base_url=cfg.NPC_BASE_URL,
             api_key=cfg.NPC_API_KEY,
         )
+        if recorder is not None:
+            self.client._client = RecordingClientWrapper(self.client._client, recorder)
 
     def run(self, on_scene: Callable[[Scene], None] | None = None) -> None:
         """Execute all scenes in order.

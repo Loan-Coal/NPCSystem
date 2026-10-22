@@ -89,6 +89,9 @@ def _recv_loop(ws: websockets.sync.client.ClientConnection, result_q: queue.Queu
                 "ws_recv_timeout",
                 extra={"timeout_s": NPC_DIALOGUE_TIMEOUT_S, "path": _WS_DIALOGUE_PATH},
             )
+            result_q.put(("error", TimeoutError(
+                f"ws_recv_timeout: no frame in {NPC_DIALOGUE_TIMEOUT_S}s on {_WS_DIALOGUE_PATH}"
+            )))
             break
         msg = json.loads(raw)
         msg_type = msg.get("type")

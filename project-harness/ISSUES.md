@@ -1005,18 +1005,6 @@ the repo root via `docker-compose.yml`'s `env_file: .env`); delete it if not. Th
 `check-env-example` gate asserting every non-secret `Settings` field appears in the surviving
 file with a value matching its shipped default, and wire it into `make check`.
 
-## ISSUE-347: a WebSocket recv timeout hangs the scripted demo forever
-**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
-**Severity:** P2 (annoying)
-**Where:** `demo_game/dialogue_ws.py:86-92`, `demo_game/runners/run_scenes.py:219`
-**Description:** On `TimeoutError` from `recv(timeout=NPC_DIALOGUE_TIMEOUT_S)` the worker `break`s without putting
-anything on the result queue. `StreamingDialogueBeat` then waits on `result_q.get()` with no timeout, so
-`make demo-run` blocks forever instead of failing.
-**Why deferred:** `scripts/demo_run_live.py` already bounds the run with a watchdog and reports a hang as a
-failure, so the nightly cannot stall on it; the interactive runner is out of T2.4's scope.
-**To fix:** put `("error", TimeoutError(...))` on the queue before breaking, and give `result_q.get()` a timeout.
-Regression test in `demo_game/tests/core/test_dialogue_ws.py` driving a `recv` that raises `TimeoutError`.
-
 ## ISSUE-349: demo docs have drifted — `DEMO_SCRIPT.md` says Act 5 is final; freeze.yml names a wrong route
 **Found:** 2026-09-17, during T2.4 (`demo-run-live`)
 **Severity:** P3 (nice-to-fix)

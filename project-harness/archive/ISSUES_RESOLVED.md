@@ -6681,7 +6681,7 @@ and humans running both targets pay the cost.
 **Closed:** 2026-10-21, T22.4 triage (DEC-304); re-log if it bites
 test mirroring `tests/unit/scripts/test_mypy_evals_ratchet.py`.
 
-## [CLOSED] ISSUE-348: the demo LLM cache stores an empty reply and replays it forever
+## [FIXED] ISSUE-348: the demo LLM cache stores an empty reply and replays it forever
 **Found:** 2026-09-17, during T2.4 (`demo-run-live`)
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/runners/run_scenes.py:199,231-232`, `demo_game/runners/run.py` (`LLMCache`)
@@ -6692,6 +6692,7 @@ the gate is not affected; fixing the recording cache is a separate change.
 **To fix:** refuse to `put` a response whose stripped `npc_response` is empty (raise, or skip with a warning), and
 **Closed:** 2026-10-21, T22.4 triage (DEC-304); re-log if it bites
 treat such a file as a miss in `get`. Unit test both.
+**Fixed:** 2026-10-22, in T24.2 (`if cached and cached.get("npc_response"):` at both cache-check sites in `run_scenes.py`)
 
 ## [CLOSED] ISSUE-350: the WORLD feed scene prints `?` for every event summary
 **Found:** 2026-09-17, during T2.4 (`demo-run-live`)
@@ -6828,3 +6829,16 @@ the probe path is excluded from that work rather than repaired inside it.
 **To fix:** omit `location_id` or point it at a real Location; check `is_ok()` on every POST; derive
 `severity_mean` from the server rather than from local state.
 **Fixed:** 2026-10-22, T24.1 (deleted all probe_*.py files — the pillar eval replaces them)
+
+## [FIXED] ISSUE-347: a WebSocket recv timeout hangs the scripted demo forever
+**Found:** 2026-09-17, during T2.4 (`demo-run-live`)
+**Severity:** P2 (annoying)
+**Where:** `demo_game/dialogue_ws.py:86-92`, `demo_game/runners/run_scenes.py:219`
+**Description:** On `TimeoutError` from `recv(timeout=NPC_DIALOGUE_TIMEOUT_S)` the worker `break`s without putting
+anything on the result queue. `StreamingDialogueBeat` then waits on `result_q.get()` with no timeout, so
+`make demo-run` blocks forever instead of failing.
+**Why deferred:** `scripts/demo_run_live.py` already bounds the run with a watchdog and reports a hang as a
+failure, so the nightly cannot stall on it; the interactive runner is out of T2.4's scope.
+**To fix:** put `("error", TimeoutError(...))` on the queue before breaking, and give `result_q.get()` a timeout.
+Regression test in `demo_game/tests/core/test_dialogue_ws.py` driving a `recv` that raises `TimeoutError`.
+**Fixed:** 2026-10-22, in T24.2 (`dialogue_ws.py` queues error on timeout; `run_scenes.py` has bounded `result_q.get`)

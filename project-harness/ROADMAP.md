@@ -636,7 +636,7 @@ Done when:
 
 LOC: −1,478 non-test (evals). ✅ AUTO (T24.1, 2026-10-22)
 
-- [ ] **T24.2** Give the scripted runner a transcript recorder and bounded waits
+- [x] **T24.2** Give the scripted runner a transcript recorder and bounded waits
 Files: `demo_game/runners/run.py` (`DemoRunner` :536-597, `LLMCache` :86-91),
 `demo_game/runners/run_scenes.py` (:196, :229), `demo_game/dialogue_ws.py`, a new
 `demo_game/runners/transcript.py`, and new tests in `demo_game/tests/runners/`.
@@ -661,7 +661,7 @@ Validation:
 - `make check`.
 
 Done when: all three tests pass, ISSUE-347 and ISSUE-348 are archived as `[FIXED]`, and `make check` is green.
-LOC: about +120 non-test (demo_game).
+LOC: about +120 non-test (demo_game). ✅ AUTO (T24.2, 2026-10-22)
 
 - [ ] **T24.3** Pillar assertions, replacing `demo_run_live.py`
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
