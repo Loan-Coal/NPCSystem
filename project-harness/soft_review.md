@@ -51,3 +51,17 @@ Reading the T23 commits (T23.1 through T23.4), focusing on correctness, edge cas
 
 **5. LOC baseline updated but no regression test**
    - `scripts/loc_baseline.txt` changed from 121188 → 107737 (−13,451, within spec), but the "Rule 1 — Reverse LOC ratchet" gate (`make check-loc-ratchet`) isn't mentioned as passing. Verify `make check` is green before merge.
+
+## 2026-10-22 03:31:11 — phase T24
+
+**Review of T24 diff - 5 concrete findings:**
+
+1. **[CRITICAL] Unused DemoRunner instance in pillars.py:main()** — Lines 458-462 create a `runner` that's never run. The code then calls `_run_demo_with_recorder()` which creates a *different* `DemoRunner` inside a thread, and the original `runner` remains uninitialized. Subsequent calls to `_make_pillar_reads(runner.client, recorder)` use a client that was never set up. Either pass the runner to `_run_demo_with_recorder()` or capture it from the thread.
+
+2. **[MODERATE] Misleading docstring in _write_verdicts()** — Says "Append verdicts as JSONL" but uses `open("w")` which overwrites. Should say "Write verdicts as JSONL" or document the overwrite behavior.
+
+3. **[MODERATE] FEEL pillar falsely passes edge case** — In green_facts.jsonl, the third emotion read has both valence=0 and arousal=0, yet still counts as non-neutral due to the condition `valence != 0 or arousal != 0`. A read with valence=-0.5 and arousal=0 would also pass, which may not represent actual emotion change. Consider requiring *both* to be non-zero or using an absolute magnitude threshold.
+
+4. **[LOW] Defensive fallback in check_gossip never exercises** — Pattern `body.get("data", body)` assumes body might lack a "data" key, but all fixtures have `{"data": {...}}` structure. Dead defensive code; either assert the structure or document why the fallback exists.
+
+5. **[INFO] Committed red baseline hides backend issues (ISSUE-379, ISSUE-380)** — The pillar verdicts are intentionally red (acknowledging interaction_count and seeds_used are broken), but the code doesn't validate this is *expected*. A future operator might misread red verdicts as a test failure rather than a documented known issue.
