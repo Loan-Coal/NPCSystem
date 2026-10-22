@@ -5,7 +5,7 @@
 # T15.1 and T16.2 list this file in their Files: and will bump it when they land.
 #
 src/npc_engine: 65341
-scripts: 11042
-evals: 23228
-demo_game: 8126
-total: 107737
+scripts: 10704
+evals: 21745
+demo_game: 8744
+total: 106534

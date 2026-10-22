@@ -1082,3 +1082,19 @@ list. That is the owner's call, not a review fix.
 **Description:** `make type-demo` ratchets demo_game mypy errors against `.mypy_baseline_demo` (baseline 256). The ratchet prevents growth but does not require shrinkage. Reaching zero would retire the baseline file and bring `demo_game/` under the same hard `type` gate as `src/`.
 **Why deferred:** Blocked on T13.2 (census pass may delete modules whose type errors would vanish) and the `game_window.py` split. Fixing types in modules T13.2 will cut is wasted work.
 **To fix:** After T13.2 completes, run `make type-demo-update` to record the post-deletion baseline, then fix errors file by file. Remove `.mypy_baseline_demo` and the `type-demo` target when the count reaches zero.
+
+## ISSUE-379: REMEMBER pillar RED — relation `interaction_count` stays at 0; memory consolidation never fires
+**Found:** 2026-10-22, during T24.4
+**Severity:** P2 (annoying)
+**Where:** `demo_game/runners/pillars.py` REMEMBER pillar; `src/npc_engine/graph/` relation writer; `src/npc_engine/engines/memory/`
+**Description:** First committed `evals/pillar_verdicts.jsonl` (sha=04782e03) shows REMEMBER RED: `delta: 0/2 relation reads have interaction_count>0; memory: memory_id=None`. Two dialogue beats with Mira produce no `interaction_count` increment on any outgoing relation edge, and consolidation reports "Turn threshold not met (need more dialogue turns)" — the threshold is never crossed because the dialogue engine does not increment the relation counter per turn.
+**Why deferred:** T24.4 records the red baseline only; fixes are sequenced in Sprint 15.
+**To fix:** Find the relation-delta writer and confirm it increments `interaction_count` on each dialogue turn. Confirm the memory consolidation threshold matches the number of turns the demo runs. Add a targeted integration test asserting `interaction_count > 0` after one dialogue exchange.
+
+## ISSUE-380: DETERMINISM pillar RED — `seeds_used` is empty in both gossip-tick runs
+**Found:** 2026-10-22, during T24.4
+**Severity:** P2 (annoying)
+**Where:** `demo_game/runners/pillars.py` DETERMINISM pillar; `POST /v1/admin/batch/gossip_tick` response schema
+**Description:** First committed `evals/pillar_verdicts.jsonl` (sha=04782e03) shows DETERMINISM RED: `seeds_used is empty: run1={} run2={}`. The batch gossip-tick endpoint returns no `seeds_used` field (or an empty dict) in both calls with `tick_override=42`, so the pillar cannot compare seeds and the determinism proof is vacuous — matching T24.3's fix of the `{} == {}` vacuous check.
+**Why deferred:** T24.4 records the red baseline only; fixes are sequenced in Sprint 15.
+**To fix:** Confirm `POST /v1/admin/batch/gossip_tick` populates `seeds_used` in its response. If the field is absent, add it to the response model and the batch handler. Add a targeted unit test asserting `seeds_used` is non-empty for a non-empty gossip graph.

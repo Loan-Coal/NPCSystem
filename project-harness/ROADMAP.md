@@ -708,7 +708,7 @@ Done when:
 
 LOC: about +500 −338 non-test. ✅ AUTO (T24.3, 2026-10-22)
 
-- [ ] **T24.4** First pillar run on the stack, committed as the red baseline
+- [x] **T24.4** First pillar run on the stack, committed as the red baseline
 Files: `evals/pillar_verdicts.jsonl` (new) and `project-harness/ISSUES.md`.
 Spec: DEC-301 says the eval is expected to go red today. Make that a committed fact.
 1. Rebuild with `bash scripts/eval_stack_at.sh HEAD --reset && make eval-stack-seed`.
@@ -733,7 +733,7 @@ Done when:
 - `scripts/loc_baseline.txt` total equals the measured count;
 - `make check` is green.
 
-LOC: 0 non-test. Phase T24 total ≈ −1,200.
+LOC: 0 non-test. Phase T24 total ≈ −1,200. ✅ AUTO (T24.4, 2026-10-22)
 
 ---
 

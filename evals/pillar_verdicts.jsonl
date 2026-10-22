@@ -1,0 +1,5 @@
+{"pillar": "FEEL", "verdict": "red", "repeats": 3, "evidence": "0/3 emotion reads non-neutral (threshold=2)", "sha": "04782e03"}
+{"pillar": "REMEMBER", "verdict": "red", "repeats": 1, "evidence": "delta: 0/2 relation reads have interaction_count>0; memory: memory_id=None", "sha": "04782e03"}
+{"pillar": "GOSSIP", "verdict": "red", "repeats": 3, "evidence": "distortion: 0/3 reads >0 (threshold=2); chain: source_character_id='mira_innkeeper'", "sha": "04782e03"}
+{"pillar": "WORLD", "verdict": "red", "repeats": 1, "evidence": "wrong_location=[\"mira_innkeeper@None(expected 'loc_tavern')\", \"lira_fence@None(expected 'loc_tavern')\", \"aldric_merchant@None(expected 'loc_market_square')\", \"old_henryk@None(expected 'loc_market_square')\", \"captain_sorn@None(expected 'loc_guard_barracks')\", \"sera_barmaid@None(expected 'loc_tavern')\", \"harwick_guard@None(expected 'loc_guard_barracks')\", \"nel_pickpocket@None(expected 'loc_tavern')\"]", "sha": "04782e03"}
+{"pillar": "DETERMINISM", "verdict": "red", "repeats": 1, "evidence": "seeds_used is empty: run1={} run2={}", "sha": "04782e03"}
