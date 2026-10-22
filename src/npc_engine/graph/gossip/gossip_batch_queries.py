@@ -34,17 +34,22 @@ WITH pair, a, e, k,
      coalesce(e.is_canonical, false) AS is_canonical,
      e.occurred_at AS occurred_at
 ORDER BY pair.sharer_id, is_canonical DESC, occurred_at DESC
-WITH pair, head(collect(e)) AS best_event,
-     head(collect(is_canonical)) AS best_is_canonical,
-     head(collect(k.distorted_summary)) AS best_distorted_summary
+WITH pair,
+     head(collect({{
+         event: e,
+         is_canonical: is_canonical,
+         distorted_summary: k.distorted_summary,
+         distortion_level: k.distortion_level
+     }})) AS best_row
 OPTIONAL MATCH (a2:{_CHARACTER} {{id: pair.sharer_id}})-[r:{_RELATES_TO}]->(b:{_CHARACTER} {{id: pair.receiver_id}})
-RETURN pair.sharer_id  AS sharer_id,
-       pair.receiver_id AS receiver_id,
-       best_event.id    AS event_id,
-       coalesce(best_distorted_summary, best_event.summary) AS summary,
-       best_event.severity  AS severity,
-       best_is_canonical    AS is_canonical,
-       coalesce(r.trust, 50) AS trust
+RETURN pair.sharer_id        AS sharer_id,
+       pair.receiver_id       AS receiver_id,
+       best_row.event.id      AS event_id,
+       coalesce(best_row.distorted_summary, best_row.event.summary) AS summary,
+       best_row.event.severity AS severity,
+       best_row.is_canonical   AS is_canonical,
+       coalesce(r.trust, 50)   AS trust,
+       coalesce(best_row.distortion_level, 0) AS sharer_distortion_level
 """
 
 # ---------------------------------------------------------------------------
@@ -55,12 +60,13 @@ CYPHER_BATCH_PROPAGATE_KNOWLEDGE = f"""
 UNWIND $writes AS w
 MATCH (receiver:{_CHARACTER} {{id: w.receiver_id}}), (event:{_EVENT} {{id: w.event_id}})
 MERGE (receiver)-[k:{_KNOWS_ABOUT}]->(event)
+ON CREATE SET k.source_character_id = w.source_character_id,
+              k.learned_at_tick = w.tick_id
 SET k.knowledge_state = w.knowledge_state,
     k.distortion_type = w.distortion_type,
     k.distortion_level = w.distortion_level,
     k.distorted_summary = w.distorted_summary,
-    k.learned_at_tick = w.tick_id,
-    k.source_character_id = w.source_character_id
+    k.learned_at_tick = CASE WHEN k.learned_at_tick IS NULL THEN w.tick_id ELSE k.learned_at_tick END
 """
 
 # ---------------------------------------------------------------------------
@@ -109,7 +115,7 @@ async def select_batch_event_trust(
 
     Returns:
         List of dicts with keys sharer_id, receiver_id, event_id, summary,
-        severity, is_canonical, trust.
+        severity, is_canonical, trust, sharer_distortion_level.
     """
     if not pairs:
         return []

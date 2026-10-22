@@ -6869,3 +6869,21 @@ ACT 6; decide which of ACT 4/10/11/12 must actually land and make them required 
 **Description:** On a seeded eval stack, `captain_sorn`, `mira_innkeeper`, `lira_fence` and `old_henryk` are always found at `loc_temple` with `arrived_at_tick=0` after an advance, though the routine engine reported `moved>0` and archived `WAS_AT` departures from `loc_temple` (61 by the fifth run). Calling `update_character_location` directly against the same graph does persist the move, and a second advance reports `moved=3` (Sorn was left at his target) yet all four are back at the temple afterwards. So `routine.moved` counts moves that do not stick, which is also why `test_revived_engines_do_work` asserts a counter and not a location. `Neo4jPlanningRepository` also calls `update_character_location`.
 **Why deferred:** Out of scope for ISSUE-371 (test determinism). Not investigated beyond the probes above.
 **To fix:** Find what rewrites `LOCATED_AT` to the seed default each tick (start with the planning and need-decay paths), then make the routine test assert the persisted `LOCATED_AT`, not `moved`.
+
+## [FIXED] ISSUE-228: gossip distortion does not compound across hops
+**Found:** 2026-08-28, during the 2026-08 review remediation triage
+**Fixed:** 2026-10-22, in T25.3
+**Severity:** P1 (blocking)
+**Where:** `src/npc_engine/graph/gossip/gossip_batch_queries.py:29-47`
+**Description:** `CYPHER_BATCH_EVENT_TRUST` returns `best_event.summary` — the canonical Event node's
+text — rather than the sharer's own `distorted_summary`, which `CYPHER_BATCH_PROPAGATE_KNOWLEDGE`
+does write to the KNOWS_ABOUT edge. Every hop therefore distorts the original, so the signature demo
+feature is a no-op; the chain looks right only because it is hand-seeded. Separately the
+`MERGE ... SET` overwrites existing edges unconditionally: `old_henryk`, seeded at distortion_level
+70, reads 0 at tick 600 — running the world erases the seeded demo. Re-verified by reading the Cypher
+at HEAD.
+**Why deferred:** sequenced to R3.3, behind R2 — fixing gossip shifts eval golden strings and gossip
+determinism fixtures, and the instrument that would verify the fix is itself broken (ISSUE-229).
+**To fix:** relay the sharer's `distorted_summary` with `e.summary` as fallback; use `ON CREATE SET`
+for the distortion fields or guard on higher incoming distortion. Proof:
+`test_distortion_compounds_across_hops` — assert hop-2 level strictly exceeds hop-1; today equal.

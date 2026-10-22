@@ -251,6 +251,7 @@ class GossipHandler:
             belief_confidence = compute_confidence(
                 source_trust=trust, event_severity=severity_int
             )
+            prior_level = int(row.get("sharer_distortion_level", 0) or 0)
             distortion = gossip_distort(
                 event_summary=str(row["summary"]),
                 sharer_honesty=honesty_int,
@@ -264,6 +265,7 @@ class GossipHandler:
                 receiver_confidence=belief_confidence,
                 confidence_high_threshold=self._weight_config.confidence_high_threshold,
                 confidence_low_threshold=self._weight_config.confidence_low_threshold,
+                prior_distortion_level=prior_level,
             )
             knowledge_state: KnowledgeState = (
                 KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR

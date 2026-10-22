@@ -158,6 +158,7 @@ def gossip_distort(
     receiver_confidence: int | None = None,
     confidence_high_threshold: int = _DEFAULT_CONFIDENCE_HIGH_THRESHOLD,
     confidence_low_threshold: int = _DEFAULT_CONFIDENCE_LOW_THRESHOLD,
+    prior_distortion_level: int = 0,
 ) -> GossipDistortion:
     """Return a deterministic GossipDistortion based on bounded probability.
 
@@ -201,6 +202,10 @@ def gossip_distort(
             (no type shift). Should match config.yaml:confidence_high_threshold.
         confidence_low_threshold: Confidence value at or below which the band is "low"
             (maximum type shift). Should match config.yaml:confidence_low_threshold.
+        prior_distortion_level: Distortion level already accumulated on the sharer's
+            KNOWS_ABOUT edge (0–100). Added to the computed level so distortion compounds
+            across hops rather than being reset each hop (ISSUE-228). Default 0 preserves
+            pre-ISSUE-228 behavior for first-hand witnesses.
 
     Returns:
         GossipDistortion with the (possibly modified) summary and distortion metadata.
@@ -238,6 +243,6 @@ def gossip_distort(
         type_index = base_index
 
     distortion_type = keys[type_index]
-    level = int(min(100, max(1, int(probability * 100))))
+    level = int(min(100, max(1, int(probability * 100)) + prior_distortion_level))
     distorted = STRATEGY_REGISTRY[distortion_type](event_summary)
     return GossipDistortion(summary=distorted, distortion_type=distortion_type, distortion_level=level)

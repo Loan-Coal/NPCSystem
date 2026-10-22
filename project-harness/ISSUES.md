@@ -794,7 +794,7 @@ the session excess probably wants to be TRIMMED (oldest turn first) rather than 
 Add a test that a session over the sub-budget is bounded on the live path, and a test that
 fails if `enforce_context_budget` regains zero callers while still being exported.
 
-## ISSUE-228: gossip distortion does not compound across hops
+## [FIXED] ISSUE-228: gossip distortion does not compound across hops
 **Found:** 2026-08-28, during the 2026-08 review remediation triage
 **Severity:** P1 (blocking)
 **Where:** `src/npc_engine/graph/gossip/gossip_batch_queries.py:29-47`
@@ -810,6 +810,7 @@ determinism fixtures, and the instrument that would verify the fix is itself bro
 **To fix:** relay the sharer's `distorted_summary` with `e.summary` as fallback; use `ON CREATE SET`
 for the distortion fields or guard on higher incoming distortion. Proof:
 `test_distortion_compounds_across_hops` — assert hop-2 level strictly exceeds hop-1; today equal.
+**Fixed:** 2026-10-22, in T25.3
 
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning

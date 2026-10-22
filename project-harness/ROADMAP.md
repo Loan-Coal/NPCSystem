@@ -829,7 +829,7 @@ Done when:
 
 LOC: about +30 non-test. ✅ AUTO (T25.2, 2026-10-22)
 
-- [ ] **T25.3** GOSSIP: distortion compounds and edges point the right way (ISSUE-228)
+- [x] **T25.3** GOSSIP: distortion compounds and edges point the right way (ISSUE-228)
 Files: `src/npc_engine/graph/gossip/gossip_batch_queries.py` :36-62,
 `src/npc_engine/engines/gossip/gossip_distort.py` :240, tests in `tests/unit/graph/` and
 `tests/unit/engines/gossip/`, and `evals/pillar_verdicts.jsonl`.
@@ -861,7 +861,7 @@ Done when:
 - ISSUE-228 is archived;
 - `make check` is green.
 
-LOC: about +20 non-test.
+LOC: about +20 non-test. ✅ AUTO (T25.3, 2026-10-22)
 
 - [ ] **T25.4** FEEL: a world event moves the emotion of NPCs who witness it (ISSUE-201)
 Files:
