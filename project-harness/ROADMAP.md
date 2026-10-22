@@ -863,7 +863,7 @@ Done when:
 
 LOC: about +20 non-test. ✅ AUTO (T25.3, 2026-10-22)
 
-- [ ] **T25.4** FEEL: a world event moves the emotion of NPCs who witness it (ISSUE-201)
+- [x] **T25.4** FEEL: a world event moves the emotion of NPCs who witness it (ISSUE-201)
 Files:
 - the events/world-state route handler that `EventFire` calls (`demo_game/runners/run_scenes.py:91-104`
   shows which route; find its handler under `src/npc_engine/api/routes/`);
@@ -901,7 +901,7 @@ Done when:
 - ISSUE-201 is archived;
 - `make check` is green.
 
-LOC: about +60 non-test.
+LOC: about +60 non-test. ✅ AUTO (T25.4, 2026-10-22)
 
 - [ ] **T25.5** REMEMBER: dialogue moves relationships
 Files:

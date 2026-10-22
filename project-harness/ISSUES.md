@@ -206,27 +206,6 @@ CI configuration, which requires approval before touching.
 the Makefile, and add a guard target that fails with a readable message when the resolved shell
 cannot run a POSIX test. Until then, run make from Git Bash on Windows.
 
-## ISSUE-201: `npc.emotion` reports "neutral" while the NPC's character node says otherwise
-**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
-**Severity:** P2 (annoying)
-**Where:** `engines/dialogue/dialogue_handler.py:452` (the `emotion_state` argument) and
-`retrieval/context/context_builder.py:176-181` (`_resolve_initial_state`)
-**Description:** `npc.emotion` is the default `{"current_mood": "neutral"}` in 100% of the
-975 eval rows. It is NOT a budget drop — the emotion item is pinned tier-0 and always
-reaches the model; the value itself is neutral. On `mira_innkeeper` the same prompt carries
-`npc.profile.emotion_valence = -100`, `emotion_arousal = 100`,
-`emotion_mood_label = "agitated"` from the character node, next to
-`npc.emotion.current_mood = "neutral"` — the prompt contradicts itself in adjacent fields.
-Two candidates, neither confirmed: the handler's `current_emotion` is read from the
-in-process emotion store rather than the persisted node, or the store is not seeded from the
-graph on a cold start. Also note the whole emotion snapshot is a ONE-KEY dict — valence,
-arousal and the mood label never reach the prompt through this path at all.
-**Why deferred:** different subsystem (emotion store / dialogue handler), different root
-cause from ISSUE-163; logging it separately as instructed rather than widening that fix.
-**To fix:** trace `current_emotion` in `dialogue_handler` back to its source, decide whether
-the character node or the emotion store is authoritative, and make the tier-0 snapshot carry
-valence/arousal/label rather than `current_mood` alone.
-
 ## ISSUE-192: `evals/dashboard/headline.py` silently skips malformed calibration rows without counting them
 **Found:** 2026-08-20, during the metrics-pipeline closeout (DEC-193)
 **Severity:** P3 (nice-to-fix)
@@ -793,24 +772,6 @@ RAISES, and `fill_to_budget` is documented as never failing a turn for budget re
 the session excess probably wants to be TRIMMED (oldest turn first) rather than raised on.
 Add a test that a session over the sub-budget is bounded on the live path, and a test that
 fails if `enforce_context_budget` regains zero callers while still being exported.
-
-## [FIXED] ISSUE-228: gossip distortion does not compound across hops
-**Found:** 2026-08-28, during the 2026-08 review remediation triage
-**Severity:** P1 (blocking)
-**Where:** `src/npc_engine/graph/gossip/gossip_batch_queries.py:29-47`
-**Description:** `CYPHER_BATCH_EVENT_TRUST` returns `best_event.summary` — the canonical Event node's
-text — rather than the sharer's own `distorted_summary`, which `CYPHER_BATCH_PROPAGATE_KNOWLEDGE`
-does write to the KNOWS_ABOUT edge. Every hop therefore distorts the original, so the signature demo
-feature is a no-op; the chain looks right only because it is hand-seeded. Separately the
-`MERGE ... SET` overwrites existing edges unconditionally: `old_henryk`, seeded at distortion_level
-70, reads 0 at tick 600 — running the world erases the seeded demo. Re-verified by reading the Cypher
-at HEAD.
-**Why deferred:** sequenced to R3.3, behind R2 — fixing gossip shifts eval golden strings and gossip
-determinism fixtures, and the instrument that would verify the fix is itself broken (ISSUE-229).
-**To fix:** relay the sharer's `distorted_summary` with `e.summary` as fallback; use `ON CREATE SET`
-for the distortion fields or guard on higher incoming distortion. Proof:
-`test_distortion_compounds_across_hops` — assert hop-2 level strictly exceeds hop-1; today equal.
-**Fixed:** 2026-10-22, in T25.3
 
 ## ISSUE-237: check_base_rate scores generation rows for cases that no longer exist
 **Found:** 2026-08-31, during R2 planning

@@ -6887,3 +6887,25 @@ determinism fixtures, and the instrument that would verify the fix is itself bro
 **To fix:** relay the sharer's `distorted_summary` with `e.summary` as fallback; use `ON CREATE SET`
 for the distortion fields or guard on higher incoming distortion. Proof:
 `test_distortion_compounds_across_hops` — assert hop-2 level strictly exceeds hop-1; today equal.
+
+## [FIXED] ISSUE-201: `npc.emotion` reports "neutral" while the NPC's character node says otherwise
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Fixed:** 2026-10-22, in T25.4
+**Severity:** P2 (annoying)
+**Where:** `engines/dialogue/dialogue_handler.py:452` (the `emotion_state` argument) and
+`retrieval/context/context_builder.py:176-181` (`_resolve_initial_state`)
+**Description:** `npc.emotion` is the default `{"current_mood": "neutral"}` in 100% of the
+975 eval rows. It is NOT a budget drop — the emotion item is pinned tier-0 and always
+reaches the model; the value itself is neutral. On `mira_innkeeper` the same prompt carries
+`npc.profile.emotion_valence = -100`, `emotion_arousal = 100`,
+`emotion_mood_label = "agitated"` from the character node, next to
+`npc.emotion.current_mood = "neutral"` — the prompt contradicts itself in adjacent fields.
+Two candidates, neither confirmed: the handler's `current_emotion` is read from the
+in-process emotion store rather than the persisted node, or the store is not seeded from the
+graph on a cold start. Also note the whole emotion snapshot is a ONE-KEY dict — valence,
+arousal and the mood label never reach the prompt through this path at all.
+**Why deferred:** different subsystem (emotion store / dialogue handler), different root
+cause from ISSUE-163; logging it separately as instructed rather than widening that fix.
+**To fix:** trace `current_emotion` in `dialogue_handler` back to its source, decide whether
+the character node or the emotion store is authoritative, and make the tier-0 snapshot carry
+valence/arousal/label rather than `current_mood` alone.
