@@ -903,7 +903,7 @@ Done when:
 
 LOC: about +60 non-test. ✅ AUTO (T25.4, 2026-10-22)
 
-- [ ] **T25.5** REMEMBER: dialogue moves relationships
+- [x] **T25.5** REMEMBER: dialogue moves relationships
 Files:
 - `src/npc_engine/engines/dialogue/dialogue_models.py` :74-79,129;
 - `src/npc_engine/engines/dialogue/dialogue_handler.py` :271-280;
@@ -940,7 +940,7 @@ Done when:
   at this commit's sha;
 - `make check` is green.
 
-LOC: about +15 non-test.
+LOC: about +15 non-test. ✅ AUTO (T25.5, 2026-10-22)
 
 - [ ] **T25.6** REMEMBER: consolidation fires from config, and its failure is visible
 Files:

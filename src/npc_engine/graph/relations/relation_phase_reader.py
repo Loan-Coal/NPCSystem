@@ -23,7 +23,8 @@ RETURN coalesce(r.trust, 0) AS trust,
        coalesce(r.fear, 0) AS fear,
        coalesce(r.affection, 0) AS affection,
        r.relationship_phase AS relationship_phase,
-       r.phase_started_at_tick AS phase_started_at_tick
+       r.phase_started_at_tick AS phase_started_at_tick,
+       coalesce(r.interaction_count, 0) AS interaction_count
 """
 
 
@@ -36,6 +37,7 @@ class RelationPhaseRow(BaseModel):
         affection: Current affection scalar (0 when unset).
         relationship_phase: Persisted phase string, or None if never transitioned.
         phase_started_at_tick: Tick the current phase began, or None if never transitioned.
+        interaction_count: Total number of interactions persisted on this edge (0 when unset).
     """
 
     trust: int
@@ -43,6 +45,7 @@ class RelationPhaseRow(BaseModel):
     affection: int
     relationship_phase: str | None
     phase_started_at_tick: int | None = None
+    interaction_count: int = 0
 
     model_config = {"frozen": True}
 
@@ -77,6 +80,7 @@ async def get_relation_phase_state(
             affection=record["affection"],
             relationship_phase=record["relationship_phase"],
             phase_started_at_tick=record["phase_started_at_tick"],
+            interaction_count=record["interaction_count"],
         )
 
     return await run_in_tx(session, _work)

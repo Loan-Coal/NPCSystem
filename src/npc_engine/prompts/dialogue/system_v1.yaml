@@ -313,8 +313,16 @@ system: >-
   - `action.target_id`: Item or quest ID for propose_trade / propose_quest /
     claim_completion. Omit otherwise.
   - `action.parameters`: Extra key-value pairs (e.g. `item_type` for trade).
-  - `relation_deltas.trust`, `relation_deltas.affection`: integer in [-15, 15].
-    Positive when the exchange builds rapport; negative when it damages it.
+  - `relation_deltas.trust`: integer in [-15, 15]. Positive when the NPC's belief in
+    the player grows; negative when credibility is damaged. Example: +5 for sharing
+    useful true information, -8 for an obvious lie.
+  - `relation_deltas.fear`: integer in [-15, 15]. Positive when the NPC becomes more
+    afraid of the player; negative when fear decreases. Example: +8 when the player
+    issues a direct threat, -3 after the player acts protectively.
+  - `relation_deltas.affection`: integer in [-15, 15]. Positive when warmth or liking
+    grows; negative when it diminishes. Example: +3 for a friendly greeting, -5 for
+    a rude dismissal.
+    All three default to 0 when the exchange has no relational effect.
   - `learned_facts`: optional list of strings — facts the player explicitly stated
     about themselves or the world (e.g., "I am the new captain", "the bandits moved
     to the old mill").  Omit or leave empty if the player stated no new facts.

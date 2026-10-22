@@ -71,12 +71,30 @@ class DialogueRequest(FrozenDialogueModel):
     )
 
 
+_DELTA_FIELDS: frozenset[str] = frozenset({"trust", "fear", "affection"})
+_DELTA_MIN = -15
+_DELTA_MAX = 15
+
+
 class RelationDeltas(FrozenDialogueModel):
     """Per-turn relation delta outputs from the LLM."""
 
-    trust: int = Field(default=0, ge=-15, le=15)
-    fear: int = Field(default=0, ge=-15, le=15)
-    affection: int = Field(default=0, ge=-15, le=15)
+    trust: int = Field(default=0, ge=_DELTA_MIN, le=_DELTA_MAX)
+    fear: int = Field(default=0, ge=_DELTA_MIN, le=_DELTA_MAX)
+    affection: int = Field(default=0, ge=_DELTA_MIN, le=_DELTA_MAX)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _clamp_deltas(cls, data: object) -> object:
+        """Clamp LLM-provided deltas to [-15, 15] instead of failing validation."""
+        if not isinstance(data, dict):
+            return data
+        result = dict(data)
+        for field in _DELTA_FIELDS:
+            raw = result.get(field)
+            if isinstance(raw, (int, float)):
+                result[field] = max(_DELTA_MIN, min(_DELTA_MAX, int(raw)))
+        return result
 
 
 class ActionModel(FrozenDialogueModel):

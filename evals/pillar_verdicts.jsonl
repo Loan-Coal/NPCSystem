@@ -1,5 +1,5 @@
-{"pillar": "FEEL", "verdict": "green", "repeats": 3, "evidence": "3/3 emotion reads non-neutral (threshold=2)", "sha": "a854e996"}
-{"pillar": "REMEMBER", "verdict": "red", "repeats": 1, "evidence": "delta: 0/2 relation reads have interaction_count>0; memory: memory_id=None", "sha": "a854e996"}
-{"pillar": "GOSSIP", "verdict": "green", "repeats": 3, "evidence": "distortion: 3/3 reads >0 (threshold=2); chain: source_character_id='mira_innkeeper'", "sha": "a854e996"}
-{"pillar": "WORLD", "verdict": "green", "repeats": 1, "evidence": "all 8 seeded NPCs at expected locations", "sha": "a854e996"}
-{"pillar": "DETERMINISM", "verdict": "red", "repeats": 1, "evidence": "seeds_used is empty: run1={} run2={}", "sha": "a854e996"}
+{"pillar": "FEEL", "verdict": "green", "repeats": 3, "evidence": "3/3 emotion reads non-neutral (threshold=2)", "sha": "2c939d5a"}
+{"pillar": "REMEMBER", "verdict": "green", "repeats": 1, "evidence": "delta: 2/2 relation reads have interaction_count>0; memory: memory_id='ef088eef-73a5-4485-972a-e96fb6805e5a'", "sha": "2c939d5a"}
+{"pillar": "GOSSIP", "verdict": "green", "repeats": 3, "evidence": "distortion: 3/3 reads >0 (threshold=2); chain: source_character_id='mira_innkeeper'", "sha": "2c939d5a"}
+{"pillar": "WORLD", "verdict": "green", "repeats": 1, "evidence": "all 8 seeded NPCs at expected locations", "sha": "2c939d5a"}
+{"pillar": "DETERMINISM", "verdict": "red", "repeats": 1, "evidence": "seeds_used is empty: run1={} run2={}", "sha": "2c939d5a"}

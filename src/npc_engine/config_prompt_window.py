@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 
-SYSTEM_PROMPT_TOKEN_RESERVE = 5850
+SYSTEM_PROMPT_TOKEN_RESERVE = 5950
 """Tokens reserved for the ASSEMBLED dialogue system prompt, worst content rating.
 
 Measured 2026-08-26: build_system_prompt() returned 5,249 tokens at 'mature', 5,473 with
@@ -50,6 +50,10 @@ CONTEXT) added +235 tokens, and it is not optional — without a rule teaching t
 what `context.retrieved_context` is, the tier-B slot P8 exists to fill is ignored, or
 worse, read as events the NPC witnessed. Raised 5600 -> 5850, which costs
 PROMPT_TOKEN_BUDGET 250 tokens. This is the re-measurement P10 gate 12 calls for.
+
+Re-measured 2026-10-22 (T25.5): 5,917 at 'everyone' after expanding the relation_deltas
+output rule to include `fear` with per-field examples. Raised 5850 -> 5950 (+100), which
+costs PROMPT_TOKEN_BUDGET 100 tokens.
 
 This replaces MEASURED_SYSTEM_PROMPT_TOKENS = 21707 // 4, which measured the BYTE SIZE OF
 THE YAML FILE -- including the `system:` key and every line's indentation -- an artifact

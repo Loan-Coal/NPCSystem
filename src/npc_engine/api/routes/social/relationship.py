@@ -31,6 +31,7 @@ class RelationshipResponse(BaseModel):
     affection: int
     relationship_phase: str | None = None
     phase_started_at_tick: int | None = None
+    interaction_count: int = 0
 
     model_config = ConfigDict(frozen=True)
 
@@ -83,5 +84,6 @@ async def get_relationship_standing(
         affection=row.affection,
         relationship_phase=row.relationship_phase,
         phase_started_at_tick=row.phase_started_at_tick,
+        interaction_count=row.interaction_count,
     )
     return ok_response(payload.model_dump())

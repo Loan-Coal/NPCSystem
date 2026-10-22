@@ -4953,6 +4953,7 @@
       "fields": {
         "affection": "integer!",
         "fear": "integer!",
+        "interaction_count": "integer!",
         "phase_started_at_tick": "any?",
         "relationship_phase": "any?",
         "standing": "Standing!",
