@@ -4,8 +4,8 @@
 #   T15.1 (~200 src/npc_engine scheduler+metrics), T16.2 (~100 src metrics).
 # T15.1 and T16.2 list this file in their Files: and will bump it when they land.
 #
-src/npc_engine: 65341
+src/npc_engine: 65252
 scripts: 10704
 evals: 21745
-demo_game: 8744
-total: 106534
+demo_game: 8760
+total: 106461

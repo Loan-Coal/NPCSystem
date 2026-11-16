@@ -65,3 +65,46 @@ def test_distortion_level_capped_at_100() -> None:
     assert result.distortion_level <= 100, (
         f"distortion_level {result.distortion_level} exceeds maximum of 100."
     )
+
+
+# Parameters that never pass the distortion gate: probability is ~0 for an honest,
+# trusted sharer of a trivial event, so every gate value exceeds it.
+_GATE_MISS_KWARGS: dict = dict(
+    event_summary="Word is the northmen poured through king's pass, thousands dead.",
+    sharer_honesty=100,
+    sharer_receiver_trust=100,
+    event_severity=0,
+    tick_id=10,
+    distortion_base=0.0,
+)
+
+
+def test_gate_miss_carries_the_sharers_level_forward() -> None:
+    """A retelling that adds no new distortion still passes on a distorted version (T25.13).
+
+    The summary passed in is the sharer's distorted text, so resetting the level to 0
+    stored a 70-level rumour as undistorted truth (live run, 2026-11-16: Henryk 70 -> Nel 0).
+    """
+    precondition = gossip_distort(**_GATE_MISS_KWARGS, prior_distortion_level=0)
+    assert precondition.distortion_type is None, "precondition: these params must miss the gate"
+
+    result = gossip_distort(**_GATE_MISS_KWARGS, prior_distortion_level=70)
+
+    assert result.distortion_level == 70
+    assert result.summary == _GATE_MISS_KWARGS["event_summary"]
+    assert result.distortion_type is None
+
+
+def test_canonical_event_carries_the_sharers_level_forward() -> None:
+    """is_canonical skips new distortion, but a sharer holding a distorted version still passes it on."""
+    result = gossip_distort(**_COMPOUND_KWARGS, is_canonical=True, prior_distortion_level=20)
+
+    assert result.distortion_level == 20
+    assert result.distortion_type is None
+
+
+def test_canonical_first_hand_stays_undistorted() -> None:
+    """A first-hand witness of a canonical event passes on the truth at level 0."""
+    result = gossip_distort(**_COMPOUND_KWARGS, is_canonical=True, prior_distortion_level=0)
+
+    assert result.distortion_level == 0

@@ -1101,7 +1101,7 @@ beats the canonical known one.
 Validation: targeted pytest; integration tests against the eval Neo4j; `make check`; the T25.9 live run
 (DETERMINISM gets real seeds).
 
-- [ ] **T25.13** GOSSIP: a retelling carries the sharer's distortion forward
+- [x] **T25.13** GOSSIP: a retelling carries the sharer's distortion forward
 Files: `src/npc_engine/engines/gossip/gossip_distort.py` (`gossip_distort`); `tests/unit/engines/gossip/test_gossip_distort_compound.py`.
 
 Spec: found by T25.9's live proof (2026-11-16). With T25.12 the war rumour spreads, but every retold hop stored
@@ -1114,7 +1114,7 @@ RED anchor: a gate miss with prior 70 returns 70; a canonical event with prior 2
 first-hand witness stays at 0.
 Validation: targeted pytest; `make check`; the T25.9 live run (GOSSIP green).
 This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`; done when the baseline total
-equals the measured count. ✅ AUTO (T25.12, 2026-11-16)
+equals the measured count. ✅ AUTO (T25.12, 2026-11-16) ✅ AUTO (T25.13, 2026-11-16)
 
 ---
 

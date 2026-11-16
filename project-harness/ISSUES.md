@@ -1087,8 +1087,9 @@ Then replace the `HOME_LOCATION` sentinel with that choice. The WORLD pillar mus
 **Description:**
 - When the distortion gate misses, or the event is canonical, the stored level drops to 0, although the summary passed on is the sharer's already-distorted text.
 - The `SET` of the distortion fields runs on every re-tell, so a later sharer overwrites the level and summary, while `source_character_id` keeps the first sharer (`ON CREATE`).
-**Why deferred:** T25.12 made re-telling rarer (unknown events first), and the GOSSIP pillar checks the compounding case; the remaining inconsistency is a design call.
-**To fix:** carry the sharer's level forward when the gate misses (`max(level, sharer_level)`). Either set source, level and summary together on every write, or only `ON CREATE`. Add a unit test for the gate-miss path.
+**Update 2026-11-16:** T25.13 fixed the first bullet: a gate miss or a canonical event now carries the sharer's level forward. The second bullet is still open.
+**Why deferred:** T25.12 made re-telling rarer (unknown events first). Whether a re-tell should overwrite the receiver's version is a design call.
+**To fix:** either set source, level and summary together on every write, or only `ON CREATE`, and add an integration test for a re-tell.
 
 ## ISSUE-384: Relation-delta clamp lets non-finite and string values escape
 **Found:** 2026-11-16, during the T25.2–T25.5 audit

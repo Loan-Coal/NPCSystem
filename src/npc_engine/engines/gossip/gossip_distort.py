@@ -194,7 +194,8 @@ def gossip_distort(
             or None if no standing edges exist. Standing <= -50 triggers hostile amplification.
         hostile_distortion_factor: Multiplier applied to probability when faction_standing
             indicates hostility. Values above 1.0 increase distortion likelihood.
-        is_canonical: When True, skip all distortion and return the summary unchanged.
+        is_canonical: When True, add no new distortion: return the summary unchanged at the
+            sharer's ``prior_distortion_level``.
         receiver_confidence: Optional BELIEVES_RUMOR.confidence of the receiver (0–100).
             When provided, biases which distortion strategy is selected. Defaults to None
             (no bias — preserves pre-EXP-213 behavior).
@@ -210,8 +211,11 @@ def gossip_distort(
     Returns:
         GossipDistortion with the (possibly modified) summary and distortion metadata.
     """
+    # No new distortion is added on these two paths, but the summary is the sharer's own
+    # version, so its accumulated level travels with it (T25.13, ISSUE-383).
+    carried = int(min(100, max(0, prior_distortion_level)))
     if is_canonical:
-        return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
+        return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=carried)
 
     probability = _distortion_probability(
         honesty=sharer_honesty,
@@ -224,7 +228,7 @@ def gossip_distort(
     seed = _seed_value(event_summary, sharer_honesty, sharer_receiver_trust, tick_id)
     gate = (seed % 1000) / 1000.0
     if gate > probability:
-        return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
+        return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=carried)
 
     keys = registry_keys()
     base_index = seed % len(keys)
