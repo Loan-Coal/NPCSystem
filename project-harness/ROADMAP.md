@@ -1063,12 +1063,12 @@ Validation: a live red→green proof. Run the working-tree `pillars.py` against 
 missing, and every pillar is green at HEAD. Raw outputs are cited in the commit body. Done when that holds and
 `make check` is green. ✅ AUTO (T25.9, 2026-11-16)
 
-- [ ] **T25.10** GOSSIP mispairing test that can fail, and the phase's LOC ratchet
+- [x] **T25.10** GOSSIP mispairing test that can fail, and the phase's LOC ratchet
 Files: `tests/integration/` (gossip batch); `tests/unit/graph/test_gossip_batch_mispairing.py`; `scripts/loc_baseline.txt`.
 
 Spec: `_MispairingAwareSession` picked its answer by matching the query string, so it could not catch a
 mispairing. Replace it with an integration test against Neo4j: a batch where one candidate has a null summary.
-Done when the integration test passes against the eval Neo4j and `make check` is green.
+Done when the integration test passes against the eval Neo4j and `make check` is green. ✅ AUTO (T25.10, 2026-11-16)
 
 - [x] **T25.11** REMEMBER/FEEL: the model's grammar requires every field it authors
 Files: `src/npc_engine/engines/dialogue/dialogue_models.py` (`generation_json_schema`), `engines/dialogue/llm_client.py`;

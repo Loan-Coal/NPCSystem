@@ -88,3 +88,42 @@ async def test_sharer_still_retells_when_the_receiver_knows_everything() -> None
         async with graph_db.get_session() as session:
             await session.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=list(ids.values()))
         await graph_db.close()
+
+
+@pytest.mark.asyncio
+async def test_a_null_summary_candidate_keeps_its_own_summary() -> None:
+    """ISSUE-228 (T25.10): the chosen event's fields all come from the same candidate.
+
+    The canonical event has no distorted_summary; a sibling rumour has one. With three
+    separate head(collect(field)) calls, collect() dropped the null and paired the
+    canonical event_id with the sibling's distorted text. Replaces a fake session that
+    picked its answer by matching the query string, so it could not catch this.
+    """
+    graph_db = _make_graph_db()
+    ids = {name: f"{name}-test-{uuid4().hex[:8]}" for name in ("sharer", "receiver", "canon", "rumour")}
+    try:
+        await graph_db.connect()
+        async with graph_db.get_session() as session:
+            await session.run(
+                """
+                CREATE (s:Character {id: $sharer}), (:Character {id: $receiver}),
+                       (c:Event {id: $canon, is_canonical: true, occurred_at: '2026-01-01', summary: 'The truth.', severity: 60}),
+                       (r:Event {id: $rumour, is_canonical: false, occurred_at: '2026-01-02', summary: 'base', severity: 40}),
+                       (s)-[:KNOWS_ABOUT {knowledge_state: 'knows', distortion_level: 0}]->(c),
+                       (s)-[:KNOWS_ABOUT {knowledge_state: 'rumor', distortion_level: 40,
+                                          distorted_summary: 'A wildly distorted rumour.'}]->(r)
+                """,
+                **ids,
+            )
+
+        rows = await Neo4jGossipRepository(graph_db).select_batch_event_trust(
+            [{"sharer_id": ids["sharer"], "receiver_id": ids["receiver"]}]
+        )
+
+        assert [(row["event_id"], row["summary"], row["sharer_distortion_level"]) for row in rows] == [
+            (ids["canon"], "The truth.", 0)
+        ]
+    finally:
+        async with graph_db.get_session() as session:
+            await session.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=list(ids.values()))
+        await graph_db.close()
