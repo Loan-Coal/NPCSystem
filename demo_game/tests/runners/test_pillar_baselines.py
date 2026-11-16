@@ -240,3 +240,12 @@ def test_world_red_when_the_start_is_not_the_seed() -> None:
 
     assert not ok, evidence
     assert "mira_innkeeper" in evidence
+
+
+def test_feel_red_when_the_emotion_moves_the_wrong_way() -> None:
+    """A fire lowers valence and raises arousal; a cheerier NPC after it is not the shock."""
+    entries = [_emotion(-5, 10), _BASELINE_MARK, _FIRE, _emotion(20, 5), _DEMO_MARK]
+
+    ok, evidence = check_feel(entries)
+
+    assert not ok, evidence

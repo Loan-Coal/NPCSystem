@@ -257,3 +257,30 @@ def test_malformed_active_conditions_is_rejected(monkeypatch: pytest.MonkeyPatch
 
     assert resp.status_code == 422
     assert spy.calls == []
+
+
+def test_witness_lookup_failure_after_write_returns_200_with_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Neo4j error finding witnesses also lands after the write: a warning, not a 500 (T25.8 review)."""
+    spy = _EmotionUpdaterSpy()
+    client = _build_app(_EVENT_SEVERE, ["aldric_merchant"], spy, monkeypatch)
+
+    async def _down(session, location_id: str) -> list[str]:
+        raise ServiceUnavailable("neo4j down")
+
+    monkeypatch.setattr(route_mod, "get_characters_at_location", _down)
+
+    resp = _patch_conditions(client, ["market_fire_active"])
+
+    assert resp.status_code == 200
+    assert [w["warning_code"] for w in resp.json()["meta"]["warnings"]] == ["EVENT_SHOCK_FAILED"]
+    assert spy.calls == []
+
+
+def test_duplicate_conditions_shock_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same condition twice in one body is one event."""
+    spy = _EmotionUpdaterSpy()
+    client = _build_app(_EVENT_SEVERE, ["aldric_merchant"], spy, monkeypatch)
+
+    _patch_conditions(client, ["market_fire_active", "market_fire_active"])
+
+    assert len(spy.calls) == 1

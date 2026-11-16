@@ -127,3 +127,36 @@ async def test_a_null_summary_candidate_keeps_its_own_summary() -> None:
         async with graph_db.get_session() as session:
             await session.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=list(ids.values()))
         await graph_db.close()
+
+
+@pytest.mark.asyncio
+async def test_a_corrected_event_is_never_shared() -> None:
+    """SEV-09 on the live batch query: a corrected KNOWS_ABOUT edge is not re-shared.
+
+    Ported from test_gossip_event_selection_integration.py, which exercised the dead
+    single-pair CYPHER_SELECT_EVENT path removed with it.
+    """
+    from npc_engine.graph.gossip.rumor_trace_service import correct_rumor_at_npc
+
+    graph_db = _make_graph_db()
+    ids = {name: f"{name}-test-{uuid4().hex[:8]}" for name in ("sharer", "receiver", "fresh")}
+    try:
+        await graph_db.connect()
+        async with graph_db.get_session() as session:
+            await session.run(
+                "CREATE (s:Character {id: $sharer}), (:Character {id: $receiver}), "
+                "(e:Event {id: $fresh, is_canonical: false, summary: 'x', severity: 50}), "
+                "(s)-[:KNOWS_ABOUT {knowledge_state: 'rumor', distortion_level: 30}]->(e)",
+                **ids,
+            )
+            await correct_rumor_at_npc(session, npc_id=ids["sharer"], event_id=ids["fresh"])
+
+        rows = await Neo4jGossipRepository(graph_db).select_batch_event_trust(
+            [{"sharer_id": ids["sharer"], "receiver_id": ids["receiver"]}]
+        )
+
+        assert rows == []
+    finally:
+        async with graph_db.get_session() as session:
+            await session.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=list(ids.values()))
+        await graph_db.close()

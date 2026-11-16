@@ -332,3 +332,20 @@ async def test_home_override_without_home_skips_the_move():
     repo.update_character_location.assert_not_awaited()
     repo.record_departure.assert_not_awaited()
     assert result == {"moved": 0, "skipped": 1}
+
+
+
+@pytest.mark.asyncio
+async def test_unmatched_destination_records_no_departure_and_no_move():
+    """When the destination Location does not exist the update matches nothing (T25.7 review).
+
+    Recording a departure and counting a move anyway repeated both on every tick.
+    """
+    entries = [{"time_of_day": "morning", "location_id": "loc_missing"}]
+    repo = _make_repo([_char_record("char_a", entries, current_loc="loc_tavern", current_arrived_at_tick=3)])
+    repo.update_character_location = AsyncMock(return_value=False)
+
+    result = await RoutineEngine(routine_repo=repo).run_tick(time_of_day="morning", tick_id=10)
+
+    repo.record_departure.assert_not_awaited()
+    assert result == {"moved": 0, "skipped": 1}

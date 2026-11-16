@@ -124,9 +124,10 @@ async def test_update_location_to_missing_location_keeps_the_old_edge() -> None:
                 cid=char_id, lid=loc_id,
             )
 
-        await repo.update_character_location(
+        moved = await repo.update_character_location(
             character_id=char_id, location_id=f"missing-{uuid4().hex[:8]}", arrived_at_tick=9,
         )
+        assert moved is False
 
         async with graph_db.get_session() as session:
             result = await session.run(

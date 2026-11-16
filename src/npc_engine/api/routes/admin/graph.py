@@ -33,6 +33,7 @@ from npc_engine.utils.logging import get_logger
 LOGGER = get_logger(__name__)
 
 _ACTIVE_SUFFIX = "_active"
+_SHOCK_ERRORS = (NPCSystemError, Neo4jError, DriverError)
 _CONDITIONS_ADAPTER: TypeAdapter[list[str]] = TypeAdapter(list[str])
 
 
@@ -139,7 +140,9 @@ async def patch_world_state(
     emotion-shock side-effect is deterministic and requires no LLM call (rule 8,
     DEC-299, ISSUE-201).  Only conditions absent before the PATCH shock (T25.8):
     callers resend the full list each time.  A shock failure after the write is
-    returned as a warning in ``meta``, not a 500, since the write has landed.
+    returned as a warning in ``meta``, not a 500, since the write has landed.  The
+    read of the previous conditions and the write are not atomic: two concurrent
+    PATCHes can both shock (an admin route; ISSUE-385 moves this into an engine).
     """
     conditions = _parse_active_conditions(body.properties)
     previous = await service.get_node(node_type="world_state", node_id=node_id) or {}
@@ -186,11 +189,14 @@ async def _apply_world_event_shocks(
         One ``EVENT_SHOCK_FAILED`` warning per NPC whose shock could not be written.
     """
     warnings: list[dict[str, Any]] = []
-    for condition in conditions:
-        location_id, severity = await _severe_event_location(condition, service, threshold)
-        if location_id is None:
+    for condition in dict.fromkeys(conditions):
+        try:
+            location_id, severity = await _severe_event_location(condition, service, threshold)
+            npc_ids = await get_characters_at_location(session, location_id=location_id) if location_id else []
+        except _SHOCK_ERRORS as error:
+            warnings.append(_shock_warning(None, condition, error))
             continue
-        for npc_id in await get_characters_at_location(session, location_id=location_id):
+        for npc_id in npc_ids:
             warning = await _shock_one(emotion_updater, npc_id=npc_id, condition=condition, severity=severity, tick=tick)
             if warning is not None:
                 warnings.append(warning)
@@ -219,17 +225,8 @@ async def _shock_one(
     """Shock one NPC; return a warning dict if the write fails, else None."""
     try:
         await emotion_updater.apply_event_shock(npc_id=npc_id, severity=severity, tick=tick)
-    except (NPCSystemError, Neo4jError, DriverError) as error:
-        LOGGER.warning(
-            "world_event_shock_failed npc_id=%s condition=%s", npc_id, condition, exc_info=True,
-        )
-        return {
-            "warning_code": "EVENT_SHOCK_FAILED",
-            "type": "event_shock",
-            "npc_id": npc_id,
-            "condition": condition,
-            "error": type(error).__name__,
-        }
+    except _SHOCK_ERRORS as error:
+        return _shock_warning(npc_id, condition, error)
     LOGGER.info(
         "world_event_shock npc_id=%s condition=%s severity=%d tick=%d", npc_id, condition, severity, tick,
     )
@@ -328,3 +325,15 @@ async def delete_edge(
     """Delete an edge by type, source, and destination ids."""
     deleted = await service.delete_edge(edge_type=edge_type, src_id=src_id, dst_id=dst_id)
     return ok_response({"deleted": deleted})
+
+
+def _shock_warning(npc_id: str | None, condition: str, error: Exception) -> dict[str, Any]:
+    """Log a failed shock step with its traceback and return its EVENT_SHOCK_FAILED warning."""
+    LOGGER.warning("world_event_shock_failed npc_id=%s condition=%s", npc_id, condition, exc_info=error)
+    return {
+        "warning_code": "EVENT_SHOCK_FAILED",
+        "type": "event_shock",
+        "npc_id": npc_id,
+        "condition": condition,
+        "error": type(error).__name__,
+    }

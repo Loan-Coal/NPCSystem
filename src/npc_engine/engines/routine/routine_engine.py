@@ -84,6 +84,11 @@ class RoutineEngine:
 
                 current = row.get("current_location_id")
                 if current != target:
+                    if not await self._routine_repo.update_character_location(
+                        character_id=row["character_id"], location_id=target, arrived_at_tick=tick_id,
+                    ):
+                        skipped += 1  # destination Location missing: no move, no departure
+                        continue
                     if current is not None:
                         arrived_at_tick = int(row["current_arrived_at_tick"]) if row.get("current_arrived_at_tick") is not None else tick_id
                         await self._routine_repo.record_departure(
@@ -93,11 +98,6 @@ class RoutineEngine:
                             departed_at_tick=tick_id,
                             reason="routine",
                         )
-                    await self._routine_repo.update_character_location(
-                        character_id=row["character_id"],
-                        location_id=target,
-                        arrived_at_tick=tick_id,
-                    )
                     LOGGER.info(
                         "routine: %s moved to %s at %s",
                         row["character_id"],

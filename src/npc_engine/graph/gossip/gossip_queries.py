@@ -13,13 +13,12 @@ from __future__ import annotations
 from typing import Any
 from neo4j import AsyncSession
 
-from npc_engine.graph.infra.labels import CHARACTER, EVENT, FACTION, LOCATION, SECRET
+from npc_engine.graph.infra.labels import CHARACTER, FACTION, LOCATION, SECRET
 from npc_engine.graph.infra.relationships import (
     KNOWS_ABOUT,
     KNOWS_SECRET,
     LOCATED_AT,
     MEMBER_OF,
-    RELATES_TO,
     STANDS_WITH,
 )
 
@@ -34,23 +33,6 @@ from npc_engine.graph.gossip.gossip_write_queries import (  # noqa: F401
 # ---------------------------------------------------------------------------
 # Query constants
 # ---------------------------------------------------------------------------
-
-CYPHER_SELECT_EVENT = f"""
-MATCH (a:{CHARACTER} {{id: $sharer_id}})-[k:{KNOWS_ABOUT}]->(e:{EVENT})
-WHERE coalesce(k.knowledge_state, '') <> 'corrected'
-RETURN e.id AS event_id,
-       e.summary AS summary,
-       e.severity AS severity,
-       coalesce(e.is_canonical, false) AS is_canonical
-ORDER BY coalesce(e.is_canonical, false) DESC,
-         e.occurred_at DESC
-LIMIT 1
-"""
-
-CYPHER_RELATION_TRUST = f"""
-MATCH (a:{CHARACTER} {{id: $sharer_id}})-[r:{RELATES_TO}]->(b:{CHARACTER} {{id: $receiver_id}})
-RETURN r.trust AS trust
-"""
 
 CYPHER_SELECT_SECRET = f"""
 MATCH (a:{CHARACTER} {{id: $sharer_id}})-[:{KNOWS_SECRET}]->(s:{SECRET})
@@ -85,43 +67,6 @@ RETURN n.id AS node_id
 # ---------------------------------------------------------------------------
 # Query functions
 # ---------------------------------------------------------------------------
-
-
-async def select_gossip_event(session: AsyncSession, sharer_id: str) -> dict[str, Any] | None:
-    """Return the best event the sharer knows about, or None.
-
-    Canonical events are ordered first; corrected edges are excluded (SEV-09).
-
-    Args:
-        session: Active Neo4j async session.
-        sharer_id: Character node ID of the gossip sharer.
-
-    Returns:
-        Dict with keys event_id, summary, severity, is_canonical, or None.
-    """
-    result = await session.run(CYPHER_SELECT_EVENT, sharer_id=sharer_id)
-    record = await result.single()
-    return record.data() if record is not None else None
-
-
-async def select_relation_trust(
-    session: AsyncSession, sharer_id: str, receiver_id: str
-) -> int:
-    """Return the trust value on the RELATES_TO edge between two characters.
-
-    Args:
-        session: Active Neo4j async session.
-        sharer_id: Source character node ID.
-        receiver_id: Target character node ID.
-
-    Returns:
-        Trust integer (0-100); defaults to 50 when no edge exists.
-    """
-    result = await session.run(
-        CYPHER_RELATION_TRUST, sharer_id=sharer_id, receiver_id=receiver_id
-    )
-    record = await result.single()
-    return int(record["trust"]) if record is not None else 50
 
 
 async def select_gossip_secret(session: AsyncSession, sharer_id: str) -> dict[str, Any] | None:

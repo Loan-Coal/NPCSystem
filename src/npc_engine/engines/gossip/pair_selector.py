@@ -63,14 +63,15 @@ async def select_pairs(
         weight_config: Faction weight multipliers for pair ranking.
         allowed_ids: Optional allowlist; only pairs with at least one listed ID are ranked.
             Applied before the ``max_pairs`` cut, so a higher-ranked pair outside the
-            allowlist cannot crowd out an allowed one (T25.12, ISSUE-380).
+            allowlist cannot crowd out an allowed one (T25.12, ISSUE-380). None means no
+            allowlist; an empty set allows nobody.
 
     Returns:
         List of (sharer, receiver, location, faction_ctx) tuples, limited to max_pairs.
         faction_ctx contains ``a_faction_ids``, ``b_faction_ids``, and ``best_standing``.
     """
     rows = await repo.fetch_gossip_pairs()
-    if allowed_ids:
+    if allowed_ids is not None:
         rows = [row for row in rows if row["a"]["id"] in allowed_ids or row["b"]["id"] in allowed_ids]
 
     # Build goal-alignment bonus map — skip entirely when no rows

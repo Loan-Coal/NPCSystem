@@ -266,7 +266,7 @@ class GossipHandler:
                 prior_distortion_level=prior_level,
             )
             knowledge_state: KnowledgeState = (
-                KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR
+                KNOWLEDGE_STATE_KNOWS if distortion.distortion_level == 0 else KNOWLEDGE_STATE_RUMOR
             )
             write_entry: dict[str, Any] = {
                 "receiver_id": receiver["id"],
@@ -315,7 +315,7 @@ class GossipHandler:
             severity_int = int(row["severity"])
             event_id = write["event_id"]
 
-            if write["distortion_level"] >= self._settings.RUMOR_DISTORTION_THRESHOLD:
+            if write["distortion_type"] and write["distortion_level"] >= self._settings.RUMOR_DISTORTION_THRESHOLD:
                 try:
                     rumor_id = await self._gossip_repo.create_rumor(
                         content=write["distorted_summary"],

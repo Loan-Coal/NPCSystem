@@ -160,8 +160,8 @@ def check_feel(entries: list[TranscriptEntry]) -> tuple[bool, str]:
     """FEEL: the witness's emotion differs across the last world-state event (T25.9).
 
     Compares the last emotion read before the final world_state PATCH (the market
-    fire) with the first read after it.  "Non-neutral" alone passed a seeded mood
-    that the event never touched.
+    fire) with the first read after it: a shock lowers valence and raises arousal.
+    "Non-neutral" alone passed a seeded mood that the event never touched.
     """
     emotion = f"/npc/{FEEL_NPC_ID}/emotion"
     fires = [i for i, e in enumerate(entries) if e.get("method") == "PATCH" and _WORLD_STATE_PATH in e.get("path", "")]
@@ -173,7 +173,8 @@ def check_feel(entries: list[TranscriptEntry]) -> tuple[bool, str]:
         return False, f"need {FEEL_NPC_ID} emotion reads around the event (before={len(before)}, after={len(after)})"
     b, a = _payload(before[-1]), _payload(after[0])
     old, new = (b.get("valence"), b.get("arousal")), (a.get("valence"), a.get("arousal"))
-    return old != new, f"{FEEL_NPC_ID} valence/arousal {old[0]}/{old[1]} -> {new[0]}/{new[1]}"
+    shocked = (new[0] or 0) < (old[0] or 0) and (new[1] or 0) > (old[1] or 0)
+    return shocked, f"{FEEL_NPC_ID} valence/arousal {old[0]}/{old[1]} -> {new[0]}/{new[1]}"
 
 
 def _deltas(entry: TranscriptEntry) -> tuple[int, ...]:
@@ -247,7 +248,8 @@ def check_world(entries: list[TranscriptEntry]) -> tuple[bool, str]:
     """WORLD: every NPC starts where seeded; a later move carries a real arrival tick (T25.9).
 
     Owner, 2026-11-16: NPCs may move as the demo runs.  ISSUE-373's bug was every NPC
-    snapping to one location with arrived_at_tick 0, so that is what goes red.
+    snapping to one location with arrived_at_tick 0, so that is what goes red.  Like
+    every baseline check, it assumes a freshly seeded stack (make eval-stack-seed).
     """
     baseline, after = _phases(entries)
     start, end = _locations(baseline), _locations(after)
@@ -465,7 +467,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if status != "up":
         print(f"DEMO_LIVE=STACK_UNAVAILABLE base_url={args.base_url}")
         return EXIT_STACK_UNAVAILABLE
-    if args.expect_sha and not (sha.startswith(args.expect_sha) or args.expect_sha.startswith(sha)):
+    if args.expect_sha and not (sha and (sha.startswith(args.expect_sha) or args.expect_sha.startswith(sha))):
         print(f"DEMO_LIVE=STACK_UNAVAILABLE reason=stale-image stack={sha!r} expected={args.expect_sha!r}")
         return EXIT_STACK_UNAVAILABLE
 

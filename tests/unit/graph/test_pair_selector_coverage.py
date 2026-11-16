@@ -159,3 +159,14 @@ async def test_no_allowlist_keeps_the_global_ranking() -> None:
     pairs = await select_pairs(repo=_make_repo(rows), max_pairs=1, weight_config=_DEFAULT_CONFIG)
 
     assert [(p[0]["id"], p[1]["id"]) for p in pairs] == [("nel_pickpocket", "lira_fence")]
+
+
+
+@pytest.mark.asyncio
+async def test_empty_allowlist_selects_no_pair() -> None:
+    """allowed_ids=set() allows nobody; only None means "no allowlist"."""
+    rows = [_make_row("nel_pickpocket", "lira_fence")]
+
+    pairs = await select_pairs(repo=_make_repo(rows), max_pairs=5, weight_config=_DEFAULT_CONFIG, allowed_ids=set())
+
+    assert pairs == []

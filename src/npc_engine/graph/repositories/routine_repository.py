@@ -43,11 +43,11 @@ class Neo4jRoutineRepository:
 
     async def update_character_location(
         self, *, character_id: str, location_id: str, arrived_at_tick: int
-    ) -> None:
-        """Open a session and move a character's LOCATED_AT edge."""
+    ) -> bool:
+        """Open a session and move a character's LOCATED_AT edge; False if nothing matched."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            await update_character_location(
+            return await update_character_location(
                 session=session,
                 character_id=character_id,
                 location_id=location_id,

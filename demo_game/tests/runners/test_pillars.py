@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from demo_game.runners.pillars import (
     PILLAR_DETERMINISM,
@@ -169,3 +168,15 @@ def test_matching_short_sha_is_accepted(monkeypatch) -> None:
     rc = pillars.main(["--expect-sha", "aaaa111", "--base-url", "http://stack"])
 
     assert rc == pillars.EXIT_HARNESS_ERROR
+
+
+def test_stack_reporting_no_version_is_stale(monkeypatch, capsys) -> None:
+    """An image without /health data.version must not pass --expect-sha ("x".startswith("") is True)."""
+    from demo_game.runners import pillars
+
+    monkeypatch.setattr(pillars, "_probe_health", lambda base_url: ("up", ""))
+
+    rc = pillars.main(["--expect-sha", "bbbb222", "--base-url", "http://stack"])
+
+    assert rc == pillars.EXIT_STACK_UNAVAILABLE
+    assert "reason=stale-image" in capsys.readouterr().out

@@ -167,3 +167,25 @@ async def test_run_tick_with_npc_ids_and_one_pair_still_seeds() -> None:
     result = await handler.run_tick(tick_id=42, max_pairs=1, npc_ids=["captain_sorn", "mira_innkeeper"])
 
     assert list(result["seeds_used"]) == ["captain_sorn→mira_innkeeper"]
+
+
+@pytest.mark.asyncio
+async def test_relaying_a_distorted_version_stores_a_rumor_without_a_new_rumor_node() -> None:
+    """A retelling that adds no distortion carries the sharer's level (T25.13).
+
+    The receiver holds a distorted version, so its state is "rumor", not "knows". It is
+    the same rumour passed on, so no new Rumor node is created on every hop.
+    """
+    handler = _make_handler()
+    relayed = {**_BATCH_ROW, "is_canonical": True, "sharer_distortion_level": 70}
+    handler._gossip_repo.select_batch_event_trust = AsyncMock(return_value=[relayed])
+
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIR)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
+    ):
+        await handler.run_tick(tick_id=42)
+
+    write = handler._gossip_repo.write_batch_knowledge_propagation.await_args.kwargs["writes"][0]
+    assert (write["distortion_level"], write["knowledge_state"]) == (70, "rumor")
+    handler._gossip_repo.create_rumor.assert_not_awaited()

@@ -46,6 +46,7 @@ OPTIONAL MATCH (c)-[old:LOCATED_AT]->()
 DELETE old
 WITH DISTINCT c, loc
 CREATE (c)-[:LOCATED_AT {arrived_at_tick: $arrived_at_tick}]->(loc)
+RETURN true AS moved
 """
 
 CYPHER_CLEAR_ROUTINE_OVERRIDE = """
@@ -86,7 +87,7 @@ async def update_character_location(
     character_id: str,
     location_id: str,
     arrived_at_tick: int = 0,
-) -> None:
+) -> bool:
     """Atomically replace the LOCATED_AT edge for a character.
 
     Deletes any existing LOCATED_AT edge and creates a new one pointing to
@@ -98,13 +99,17 @@ async def update_character_location(
         character_id: ID of the character to move.
         location_id: ID of the destination location node.
         arrived_at_tick: Tick at which the character arrived; written onto the new edge.
+
+    Returns:
+        True when the edge moved; False when the character or Location does not exist.
     """
-    await session.run(
+    result = await session.run(
         CYPHER_UPDATE_LOCATED_AT,
         character_id=character_id,
         location_id=location_id,
         arrived_at_tick=arrived_at_tick,
     )
+    return await result.single() is not None
 
 
 async def clear_routine_override(session: AsyncSession, character_id: str) -> None:

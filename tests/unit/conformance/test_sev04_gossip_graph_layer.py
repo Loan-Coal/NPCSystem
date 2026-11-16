@@ -8,18 +8,8 @@ Tests fail before the migration (ImportError or AttributeError) and pass after.
 """
 from __future__ import annotations
 
-from npc_engine.graph.gossip.gossip_queries import (
-    CYPHER_SELECT_EVENT,
-    CYPHER_GOSSIP_PAIRS,
-)
+from npc_engine.graph.gossip.gossip_queries import CYPHER_GOSSIP_PAIRS
 from npc_engine.graph.gossip.gossip_write_queries import CYPHER_PROPAGATE_KNOWLEDGE
-
-
-def test_select_event_in_graph_layer():
-    """CYPHER_SELECT_EVENT must live in graph/gossip_queries (SEV-09 clauses preserved)."""
-    assert "is_canonical" in CYPHER_SELECT_EVENT
-    assert "corrected" in CYPHER_SELECT_EVENT
-    assert "ORDER BY" in CYPHER_SELECT_EVENT
 
 
 def test_gossip_pairs_query_in_graph_layer():

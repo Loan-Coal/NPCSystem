@@ -171,7 +171,7 @@ def gossip_distort(
     between hostile-faction pairs.
 
     Canonical events (is_canonical=True) are never distorted — they pass through
-    unchanged with distortion_type=None and distortion_level=0.
+    unchanged with distortion_type=None at the sharer's prior_distortion_level (T25.13).
 
     EXP-213: When receiver_confidence is provided, the distortion-type index is
     shifted by a band offset derived from the confidence value so that a doubtful
