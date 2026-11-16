@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 
-from npc_engine.engines.dialogue.dialogue_models import DialogueGeneration
+from npc_engine.engines.dialogue.dialogue_models import DialogueGeneration, generation_json_schema
 from pydantic import ValidationError
 from npc_engine.engines.llm.llm_metrics import record_llm_input_tokens
 from npc_engine.engines.llm.protocols import LLMClientProtocol
@@ -89,7 +89,7 @@ class DialogueLLMClient:
         # The generation grammar, not the response contract: DialogueResponse carries seven
         # further fields the handler overwrites after generation, so constraining the model
         # to them only buys discarded tokens. See DialogueGeneration.
-        schema = DialogueGeneration.model_json_schema()
+        schema = generation_json_schema()
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)

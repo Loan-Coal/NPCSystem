@@ -8797,3 +8797,30 @@ behaviour commits its code first, then records the verdict measured at that sha 
 Done-when lines say "at the code commit's sha" from now on.
 
 **Rejected.** *Amend after measuring*: rewrites history the loop's frozen-path check scans.
+
+## DEC-330: The generation grammar requires every field the model authors
+**Date:** 2026-11-16 · **Status:** ✅ ACCEPTED (owner, 2026-11-16: "all authored fields") · **Task:** T25.11 · **Amends:** `254bea67` (generation-only schema)
+
+**Evidence (measured 2026-11-16 on qwen2.5:7b, the logged live prompt replayed through `/api/chat`).**
+- The grammar marked only `npc_response` required. Under the full system prompt (23k chars, about 7.5k
+  prompt tokens) the model emitted only `npc_response`, `action` and `learned_facts` in 3 of 3 runs. It skipped
+  `relation_deltas`, `mood_update` and `facial_expression`, so Pydantic filled zeros and `None`. That is why
+  four demo dialogues left Mira→player at 0/0/0 with `interaction_count` 4.
+- With every field required, the same prompt gave `trust +5, affection 0–3` in 3 of 3 runs for "I paid off your
+  debt". A neutral line ("What is on the menu tonight?") gave 0/0/0 in 3 of 3, so requiring the field does not
+  inflate deltas.
+
+**Decision.**
+- `generation_json_schema()` adds `required` lists to the grammar only:
+  - all top-level authored fields;
+  - `RelationDeltas` trust, fear and affection;
+  - `FacialExpressionModel` type and intensity;
+  - `ActionModel` type.
+- `DialogueGeneration` and `DialogueResponse` stay lenient: the public contract is unchanged, and a test pins it.
+
+**Cost.** About +35 decode tokens, roughly +0.5 s a turn at the measured ~74 tokens/s. T29.4 measures latency
+after this. `num_predict` stays 150: 6 of 6 forced probes parsed. The live proof counts canned fallbacks to catch
+truncation. Judged-eval baselines shift; the re-baseline is already owner work O9.
+
+**Rejected.** *Deltas and mood only*: Unreal's facial expression and actions stay defaults. *Fix by prompt*:
+unproven, and that is T19's job.

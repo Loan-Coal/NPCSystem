@@ -20,7 +20,15 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
-from npc_engine.engines.dialogue.dialogue_models import DialogueGeneration, DialogueResponse
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from npc_engine.engines.dialogue.dialogue_models import (
+    DialogueGeneration,
+    DialogueResponse,
+    generation_json_schema,
+)
 from npc_engine.engines.dialogue.response_parser import parse_dialogue_response
 
 # Written by the handler after generation, never usefully by the model.
@@ -79,9 +87,48 @@ def test_the_generation_schema_is_materially_smaller() -> None:
     assert generation < response / 2
 
 
-def test_only_npc_response_is_required() -> None:
-    """Matches DialogueResponse: the model must always speak, everything else is optional."""
+def test_the_grammar_requires_every_authored_field() -> None:
+    """Under the full prompt qwen2.5:7b skipped every optional field, so relation deltas,
+    mood and expression were always defaults (measured 2026-11-16, T25.11).
+
+    Constrained decoding only forces what the grammar marks required.
+    """
+    assert set(generation_json_schema()["required"]) == set(_AUTHORED_FIELDS)
+
+
+def test_the_grammar_requires_all_three_relation_deltas() -> None:
+    """A delta object with only trust is as silent on fear and affection as no object."""
+    defs = generation_json_schema()["$defs"]
+
+    assert set(defs["RelationDeltas"]["required"]) == {"trust", "fear", "affection"}
+    assert set(defs["FacialExpressionModel"]["required"]) == {"type", "intensity"}
+    assert defs["ActionModel"]["required"] == ["type"]
+
+
+def test_requiring_fields_in_the_grammar_leaves_the_public_contract_alone() -> None:
+    """DialogueResponse is the published HTTP schema; only the model's grammar tightens."""
+    assert DialogueResponse.model_json_schema()["required"] == ["npc_response"]
     assert DialogueGeneration.model_json_schema()["required"] == ["npc_response"]
+    assert "required" not in DialogueResponse.model_json_schema()["$defs"]["RelationDeltas"]
+
+
+@pytest.mark.asyncio
+async def test_the_client_sends_the_strict_grammar() -> None:
+    """The schema handed to the backend is the strict one, not the lenient parse model's."""
+    from npc_engine.engines.dialogue.llm_client import DialogueLLMClient
+
+    backend = MagicMock()
+    backend.model_name.return_value = "stub"
+    backend.generate_structured = AsyncMock(return_value={"npc_response": "Well met."})
+    client = DialogueLLMClient(
+        llm_client=backend, fallback_path="unused.json", max_tokens=64,
+        temperature=0.0, top_p=1.0, stop_sequences=[],
+    )
+
+    await client.generate_response(prompt="hello")
+
+    sent = backend.generate_structured.await_args.kwargs["schema"]
+    assert set(sent["required"]) == set(_AUTHORED_FIELDS)
 
 
 def test_the_echo_prefix_stripper_still_applies_to_generated_text() -> None:

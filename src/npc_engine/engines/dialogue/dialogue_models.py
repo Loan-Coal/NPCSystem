@@ -198,3 +198,28 @@ class DialogueResponse(FrozenDialogueModel):
             data = dict(data)
             data["emotion"] = data.get("mood_update")
         return data
+
+
+# Grammar-only `required` lists. Constrained decoding forces exactly these, so a 7B model under
+# the full system prompt can no longer skip the deltas, mood or expression and leave defaults.
+# The Pydantic models stay lenient: DialogueResponse is the public contract (T25.11, DEC-330).
+_GRAMMAR_REQUIRED: dict[str, list[str]] = {
+    "RelationDeltas": ["trust", "fear", "affection"],
+    "FacialExpressionModel": ["type", "intensity"],
+    "ActionModel": ["type"],
+}
+
+
+def generation_json_schema() -> dict[str, Any]:
+    """Return the DialogueGeneration grammar with every authored field required.
+
+    Returns:
+        A fresh JSON schema dict: top-level ``required`` lists every property, and the
+        nested delta, expression and action definitions require their key fields.
+    """
+    schema = DialogueGeneration.model_json_schema()
+    definitions = {
+        name: {**body, "required": _GRAMMAR_REQUIRED[name]} if name in _GRAMMAR_REQUIRED else body
+        for name, body in schema.get("$defs", {}).items()
+    }
+    return {**schema, "required": list(schema["properties"]), "$defs": definitions}

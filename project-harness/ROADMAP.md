@@ -1072,6 +1072,37 @@ This is the phase's last task: run `python scripts/check_loc_ratchet.py --update
 Done when the integration test passes against the eval Neo4j, `make check` is green, and the baseline total
 equals the measured count.
 
+- [x] **T25.11** REMEMBER/FEEL: the model's grammar requires every field it authors
+Files: `src/npc_engine/engines/dialogue/dialogue_models.py` (`generation_json_schema`), `engines/dialogue/llm_client.py`;
+`tests/unit/engines/test_dialogue_generation_schema.py`.
+
+Spec: found while writing T25.9's stricter REMEMBER check (DEC-330). Four live dialogues left Mira→player at
+0/0/0. The grammar required only `npc_response`, and under the full prompt qwen2.5:7b skipped
+`relation_deltas`, `mood_update` and `facial_expression` in 3 of 3 replays.
+Fix: send a grammar whose `required` lists name every authored field, and the delta, expression and action
+keys. The public `DialogueResponse` schema is unchanged.
+RED anchor: the grammar's `required` covers every authored field, and the client sends that grammar.
+Validation: targeted pytest; `make check`; the T25.9 live run (REMEMBER-delta green, canned replies counted). ✅ AUTO (T25.11, 2026-11-16)
+
+- [ ] **T25.12** GOSSIP: the allowlist applies before the pair cut, and a sharer tells something new
+Files: `src/npc_engine/engines/gossip/pair_selector.py`, `engines/gossip/gossip_handler.py`,
+`src/npc_engine/graph/gossip/gossip_batch_queries.py`; tests.
+
+Spec: also found during T25.9.
+- `run_tick` took the global top `max_pairs`, then filtered by `npc_ids`. The determinism beat
+  (`npc_ids=[sorn, mira]`, `max_pairs=1`) therefore always got `[]`, and `seeds_used` was `{}` (ISSUE-380).
+- `CYPHER_BATCH_EVENT_TRUST` picked the sharer's canonical, newest event whatever the receiver knew. Every NPC
+  on the demo seed knows one public event, so pairs re-told it and the war rumour never left Mira.
+
+Fix:
+- filter by the allowlist before ranking;
+- order a sharer's events by "the receiver does not know it" first; retelling still happens when nothing is new.
+
+RED anchor: unit tests for the allowlist (selector and handler); an integration test in which the fresh event
+beats the canonical known one.
+Validation: targeted pytest; integration tests against the eval Neo4j; `make check`; the T25.9 live run
+(DETERMINISM gets real seeds).
+
 ---
 
 # SPRINT 16 — One contract Unreal can trust, and a ledger that tells the truth
