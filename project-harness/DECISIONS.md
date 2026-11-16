@@ -8783,3 +8783,17 @@ The response gains `status` (additive). The re-record also captures T25.4's
 `PATCH /graph/nodes/world_state/{node_id}`, which is additive and was never recorded.
 
 **Consequence.** Pillar verdicts recorded with a warm cache (the 2026-10-22 08:4x run) are not evidence. T25.9's red→green proof re-measures every pillar with the cache bypassed.
+
+## DEC-329: A pillar verdict records the sha its stack was built from, not its own commit
+**Date:** 2026-11-16 · **Status:** ✅ ACCEPTED (owner-approved plan, 2026-11-16) · **Task:** T25.9
+
+**Evidence.** T25.2–T25.4 each had a Done-when of "verdict green at this commit's sha". A commit cannot contain
+its own sha, so each committed `evals/pillar_verdicts.jsonl` carries its parent's sha. Only T25.5 used a
+follow-up commit (`295d9f7c` records `90c800c6`). The audit read the mismatch as an unmet Done-when.
+
+**Decision.** A verdict line's `sha` is the commit the eval stack was built from. A task that changes engine
+behaviour commits its code first, then records the verdict measured at that sha in a follow-up
+`chore(evals)` commit. When the stack is built from a dirty working tree, the commit body says so.
+Done-when lines say "at the code commit's sha" from now on.
+
+**Rejected.** *Amend after measuring*: rewrites history the loop's frozen-path check scans.
