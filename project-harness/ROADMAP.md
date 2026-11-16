@@ -984,6 +984,94 @@ Done when:
 
 LOC: about +10 non-test. Phase T25 total ≈ −120 (T25.1 funds T25.2-T25.10). ✅ AUTO (T25.6, 2026-11-16)
 
+*T25.7–T25.10 were added on 2026-11-16, after an audit of T25.2–T25.5 (owner: fix the high findings before
+relaunch). They are done interactively, not by the loop.*
+
+- [ ] **T25.7** WORLD: NPCs have homes, and a move to a missing location is a no-op
+Files:
+- `src/npc_engine/type_registry/base_nodes/character.yaml`;
+- `src/npc_engine/graph/scheduling/routine_queries.py` (`CYPHER_UPDATE_LOCATED_AT`, `CYPHER_GET_SCHEDULED_CHARACTERS`);
+- `src/npc_engine/engines/routine/routine_engine.py` (`_resolve_target`);
+- `demo_game/seeds/seed_builders.py` (`build_npc_payload`), `demo_game/seeds/seed_world_data.py` (Nel's hunger);
+- tests in `tests/unit/engines/`, `tests/integration/`, `demo_game/tests/seeds/`.
+
+Spec: two writers send NPCs to the location id `"home"`: the low-valence dialogue override
+(`dialogue_handler.py`) and the event disruption rules (`disruption_rules.yaml`). No Location `home` exists and
+Characters had no home field. `CYPHER_UPDATE_LOCATED_AT` deleted the old edge before matching the destination,
+so the NPC lost its `LOCATED_AT` edge for the override's duration, although its docstring promised a no-op.
+T25.2 also raised Nel's hunger seed from 40 to 90 to keep her at the tavern. Her move to the market is correct
+need-driven behaviour, and the bump did not hold (WORLD red at `90c800c6`).
+
+Fix (owner, 2026-11-16):
+- Character gains an optional `home_location_id`. The seed sets it to each NPC's seeded start location
+  (`build_npc_payload` already receives it).
+- The routine engine resolves an override to `"home"` through `home_location_id`. With no home, it skips the move.
+- `CYPHER_UPDATE_LOCATED_AT` matches the destination before deleting anything.
+- Nel's hunger seed returns to 40.
+
+The richer design (several "safe places", leaving home when upset, a mover choosing the destination) is
+recorded as an issue, not built.
+RED anchor:
+- a routine-engine unit test where an override to `"home"` moves the NPC to its `home_location_id`;
+- an integration test where moving to a missing location keeps the old edge;
+- a seed test where every NPC payload's `home_location_id` is its `LOCATED_AT` location.
+
+Validation: targeted pytest; `make check`; the integration test against the eval Neo4j. Done when they pass.
+LOC: about +15 non-test.
+
+- [x] **T25.8** FEEL: shock only newly active events, and never 500 after the write
+Files: `src/npc_engine/api/routes/admin/graph.py` (`patch_world_state`); `tests/unit/api/test_world_state_event_shock.py`.
+
+Spec: T25.4 shocked NPCs for every condition in the PATCH body. `EventFire` resends the full list each time,
+so repeated PATCHes stacked shocks. A shock failure escaped after the world-state write had landed (a 500,
+and a client retry shocks again). `active_conditions` was read unchecked, so a string was iterated
+character by character.
+
+Fix:
+- shock only the conditions absent from the node before the PATCH;
+- validate `active_conditions` as `list[str]` (422 otherwise);
+- return a shock failure as an `EVENT_SHOCK_FAILED` warning in `meta`, logged with the request id;
+- use `removesuffix`.
+
+RED anchor: unit tests for a repeated PATCH (one shock), an already-active condition (no shock), a failing
+shock (200 plus a warning), and malformed conditions (422).
+Validation: targeted pytest; `make check`. LOC: about +40 non-test. ✅ AUTO (T25.8, 2026-11-16)
+
+- [ ] **T25.9** Pillar checks that tell the bugs apart
+Files: `demo_game/runners/pillars.py`; `demo_game/tests/runners/` (checks and fixtures); `evals/pillar_verdicts.jsonl`.
+
+Spec: the audit found GOSSIP and FEEL green before T25.3 and T25.4 changed anything, and REMEMBER-delta green
+on `interaction_count > 0`, which every turn increments. Each check reads one value after the run, so it cannot
+see a change.
+
+Fix:
+- take baseline reads before the demo runs; the transcript order tells baseline from after;
+- REMEMBER-delta: trust, fear or affection differ from the baseline;
+- FEEL: the witness's emotion differs from the baseline;
+- GOSSIP: hop-2 distortion is above 0 and at least hop-1's;
+- WORLD (owner, 2026-11-16): every NPC is at its seeded location before the first tick. After the run, an
+  NPC that moved has `arrived_at_tick > 0` and is not the global snap;
+- `check_world` stays within 40 lines and 3 levels of nesting; `main()` loses its duplicate branch;
+  `EXIT_HARNESS_ERROR` becomes reachable.
+
+The verdict file records the sha the stack was built from, which is the parent of the commit that holds it.
+A commit cannot contain its own sha (DEC-329).
+RED anchor: fixture tests where a transcript showing each old bug is red, and a fixed one is green.
+
+Validation: a live red→green proof. Run the working-tree `pillars.py` against stacks built at `72675ac7`
+(pre-T25.2), `7d2103a1` (pre-T25.3/T25.4) and `2c939d5a` (pre-T25.5); each pillar is red where its fix is
+missing, and every pillar is green at HEAD. Raw outputs are cited in the commit body. Done when that holds and
+`make check` is green.
+
+- [ ] **T25.10** GOSSIP mispairing test that can fail, and the phase's LOC ratchet
+Files: `tests/integration/` (gossip batch); `tests/unit/graph/test_gossip_batch_mispairing.py`; `scripts/loc_baseline.txt`.
+
+Spec: `_MispairingAwareSession` picked its answer by matching the query string, so it could not catch a
+mispairing. Replace it with an integration test against Neo4j: a batch where one candidate has a null summary.
+This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`.
+Done when the integration test passes against the eval Neo4j, `make check` is green, and the baseline total
+equals the measured count.
+
 ---
 
 # SPRINT 16 — One contract Unreal can trust, and a ledger that tells the truth

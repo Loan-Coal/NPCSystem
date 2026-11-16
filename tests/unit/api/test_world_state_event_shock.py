@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from neo4j.exceptions import ServiceUnavailable
 
 from npc_engine.api.dependencies import get_db_session, get_generic_graph_service
 from npc_engine.api.dependencies_stores import get_emotion_updater
@@ -47,17 +48,21 @@ _EVENT_MILD: dict = {
 
 
 class _GraphServiceStub:
-    """Stub that returns a fixed event node and a patched world-state node."""
+    """Stub holding one event node and a world-state node that PATCH updates."""
 
-    def __init__(self, event: dict | None = None) -> None:
+    def __init__(self, event: dict | None = None, previous_conditions: list[str] | None = None) -> None:
         self._event = event
+        self._world: dict = {"id": "world", "tick_id": 5, "active_conditions": previous_conditions or []}
 
     async def patch_node(self, node_type: str, node_id: str, payload: dict) -> dict:
-        """Return a minimal world-state node."""
-        return {"id": node_id, "tick_id": 5}
+        """Merge the payload into the stored world-state node and return it."""
+        self._world = {**self._world, **payload}
+        return self._world
 
     async def get_node(self, node_type: str, node_id: str) -> dict | None:
-        """Return the seeded event when type and id match."""
+        """Return the stored world-state node, or the seeded event when type and id match."""
+        if node_type == "world_state":
+            return self._world
         if (
             node_type == "event"
             and self._event is not None
@@ -93,20 +98,30 @@ class _Settings:
 # ---------------------------------------------------------------------------
 
 
+class _FailingEmotionUpdater:
+    """Raises the driver error a Neo4j outage produces during the write-through."""
+
+    async def apply_event_shock(self, npc_id: str, severity: int, tick: int) -> None:
+        """Simulate the emotion write failing after the world-state write succeeded."""
+        raise ServiceUnavailable("neo4j down")
+
+
 def _build_app(
     event: dict | None,
     npc_ids_at_location: list[str],
-    emotion_spy: _EmotionUpdaterSpy,
+    emotion_spy: object,
     monkeypatch: pytest.MonkeyPatch,
+    previous_conditions: list[str] | None = None,
 ) -> TestClient:
     async def _fake_chars_at_location(session, location_id: str) -> list[str]:
         return npc_ids_at_location
 
     monkeypatch.setattr(route_mod, "get_characters_at_location", _fake_chars_at_location)
 
+    service = _GraphServiceStub(event, previous_conditions)
     app = FastAPI()
     app.include_router(route_mod.router, prefix="/v1")
-    app.dependency_overrides[get_generic_graph_service] = lambda: _GraphServiceStub(event)
+    app.dependency_overrides[get_generic_graph_service] = lambda: service
     app.dependency_overrides[get_db_session] = lambda: object()
     app.dependency_overrides[get_emotion_updater] = lambda: emotion_spy
     app.dependency_overrides[get_settings] = lambda: _Settings()
@@ -176,4 +191,69 @@ def test_no_matching_event_does_not_shock(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     assert resp.status_code == 200
+    assert spy.calls == []
+
+
+def _patch_conditions(client: TestClient, conditions: object):
+    """PATCH the world-state node with *conditions* as active_conditions."""
+    return client.patch(
+        "/v1/graph/nodes/world_state/world",
+        json={"properties": {
+            "active_conditions": conditions,
+            "epoch": "war",
+            "last_updated_at": "t",
+            "last_graph_updated_at": "t",
+        }},
+    )
+
+
+def test_already_active_condition_does_not_shock_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A condition active before the PATCH is not newly active: no second shock (T25.8)."""
+    spy = _EmotionUpdaterSpy()
+    client = _build_app(
+        _EVENT_SEVERE, ["aldric_merchant"], spy, monkeypatch,
+        previous_conditions=["market_fire_active"],
+    )
+
+    resp = _patch_conditions(client, ["market_fire_active"])
+
+    assert resp.status_code == 200
+    assert spy.calls == []
+
+
+def test_repeated_patch_shocks_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """EventFire resends the full list each time; two identical PATCHes shock once."""
+    spy = _EmotionUpdaterSpy()
+    client = _build_app(_EVENT_SEVERE, ["aldric_merchant"], spy, monkeypatch)
+
+    _patch_conditions(client, ["market_fire_active"])
+    _patch_conditions(client, ["market_fire_active"])
+
+    assert len(spy.calls) == 1
+
+
+def test_shock_failure_after_write_returns_200_with_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The world-state write already succeeded, so a shock failure must not become a 500.
+
+    It is surfaced as a warning in meta, never swallowed.
+    """
+    client = _build_app(_EVENT_SEVERE, ["aldric_merchant"], _FailingEmotionUpdater(), monkeypatch)
+
+    resp = _patch_conditions(client, ["market_fire_active"])
+
+    assert resp.status_code == 200
+    warnings = resp.json()["meta"]["warnings"]
+    assert [w["warning_code"] for w in warnings] == ["EVENT_SHOCK_FAILED"]
+    assert warnings[0]["npc_id"] == "aldric_merchant"
+
+
+@pytest.mark.parametrize("bad", ["market_fire_active", [1, 2], {"a": 1}])
+def test_malformed_active_conditions_is_rejected(monkeypatch: pytest.MonkeyPatch, bad: object) -> None:
+    """active_conditions must be a list of strings; anything else is a 422, not a 500."""
+    spy = _EmotionUpdaterSpy()
+    client = _build_app(_EVENT_SEVERE, ["aldric_merchant"], spy, monkeypatch)
+
+    resp = _patch_conditions(client, bad)
+
+    assert resp.status_code == 422
     assert spy.calls == []

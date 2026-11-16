@@ -13,9 +13,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from neo4j import AsyncSession
-from pydantic import BaseModel, ConfigDict, Field
+from neo4j.exceptions import DriverError, Neo4jError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from npc_engine.api.dependencies import get_db_session, get_generic_graph_service
 from npc_engine.api.dependencies_stores import get_emotion_updater
@@ -26,10 +27,13 @@ from npc_engine.config import Settings, get_settings
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.graph.event.event_queries import get_characters_at_location
 from npc_engine.graph.generic.generic_graph_service import GenericGraphService
-from npc_engine.utils.errors import NodeNotFoundError, RegistryPayloadValidationError
+from npc_engine.utils.errors import NodeNotFoundError, NPCSystemError, RegistryPayloadValidationError
 from npc_engine.utils.logging import get_logger
 
 LOGGER = get_logger(__name__)
+
+_ACTIVE_SUFFIX = "_active"
+_CONDITIONS_ADAPTER: TypeAdapter[list[str]] = TypeAdapter(list[str])
 
 
 class NodeWriteBody(BaseModel):
@@ -133,26 +137,39 @@ async def patch_world_state(
 
     Matches before the generic PATCH handler (FastAPI first-match routing).  The
     emotion-shock side-effect is deterministic and requires no LLM call (rule 8,
-    DEC-299, ISSUE-201).
+    DEC-299, ISSUE-201).  Only conditions absent before the PATCH shock (T25.8):
+    callers resend the full list each time.  A shock failure after the write is
+    returned as a warning in ``meta``, not a 500, since the write has landed.
     """
+    conditions = _parse_active_conditions(body.properties)
+    previous = await service.get_node(node_type="world_state", node_id=node_id) or {}
+    previously_active = set(previous.get("active_conditions") or [])
     try:
         node = await service.patch_node(node_type="world_state", node_id=node_id, payload=body.properties)
     except (NodeNotFoundError, RegistryPayloadValidationError) as error:
         raise graph_error_to_http(error) from error
-    warnings = service.missing_extension_warnings(node_type="world_state", node_payload=node)
-    request_id = getattr(request.state, "request_id", "")
-    emit_graph_warnings(warnings=warnings, request_id=request_id)
-    tick = int(node.get("tick_id") or 0)
-    conditions: list[str] = body.properties.get("active_conditions") or []
-    await _apply_world_event_shocks(
-        conditions=conditions,
+    shock_warnings = await _apply_world_event_shocks(
+        conditions=[c for c in conditions if c not in previously_active],
         service=service,
         session=session,
         emotion_updater=emotion_updater,
         threshold=settings.RUMOR_EMOTION_SEVERITY_THRESHOLD,
-        tick=tick,
+        tick=int(node.get("tick_id") or 0),
     )
+    warnings = [*service.missing_extension_warnings(node_type="world_state", node_payload=node), *shock_warnings]
+    emit_graph_warnings(warnings=warnings, request_id=getattr(request.state, "request_id", ""))
     return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
+
+
+def _parse_active_conditions(properties: dict[str, Any]) -> list[str]:
+    """Return ``active_conditions`` as a list of strings, or raise 422 on any other shape."""
+    raw = properties.get("active_conditions")
+    if raw is None:
+        return []
+    try:
+        return _CONDITIONS_ADAPTER.validate_python(raw, strict=True)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="active_conditions must be a list of strings") from error
 
 
 async def _apply_world_event_shocks(
@@ -162,35 +179,61 @@ async def _apply_world_event_shocks(
     emotion_updater: EmotionUpdater,
     threshold: int,
     tick: int,
-) -> None:
+) -> list[dict[str, Any]]:
     """Shock NPCs at each location where a newly-active condition maps to a severe event.
 
-    Strips the ``_active`` suffix from each condition to derive a candidate Event node
-    id; skips conditions that do not match and events whose severity is below threshold.
+    Returns:
+        One ``EVENT_SHOCK_FAILED`` warning per NPC whose shock could not be written.
     """
+    warnings: list[dict[str, Any]] = []
     for condition in conditions:
-        if not condition.endswith("_active"):
+        location_id, severity = await _severe_event_location(condition, service, threshold)
+        if location_id is None:
             continue
-        event_id = condition[:-7]
-        event = await service.get_node(node_type="event", node_id=event_id)
-        if event is None:
-            continue
-        severity = int(event.get("severity") or 0)
-        if severity < threshold:
-            continue
-        location_id = str(event.get("location_id") or "")
-        if not location_id:
-            continue
-        npc_ids = await get_characters_at_location(session, location_id=location_id)
-        for npc_id in npc_ids:
-            await emotion_updater.apply_event_shock(npc_id=npc_id, severity=severity, tick=tick)
-            LOGGER.info(
-                "world_event_shock npc_id=%s condition=%s severity=%d tick=%d",
-                npc_id,
-                condition,
-                severity,
-                tick,
-            )
+        for npc_id in await get_characters_at_location(session, location_id=location_id):
+            warning = await _shock_one(emotion_updater, npc_id=npc_id, condition=condition, severity=severity, tick=tick)
+            if warning is not None:
+                warnings.append(warning)
+    return warnings
+
+
+async def _severe_event_location(
+    condition: str, service: GenericGraphService, threshold: int
+) -> tuple[str | None, int]:
+    """Return (location_id, severity) for a condition naming a severe located event, else (None, 0)."""
+    if not condition.endswith(_ACTIVE_SUFFIX):
+        return None, 0
+    event = await service.get_node(node_type="event", node_id=condition.removesuffix(_ACTIVE_SUFFIX))
+    if event is None:
+        return None, 0
+    severity = int(event.get("severity") or 0)
+    location_id = str(event.get("location_id") or "")
+    if severity < threshold or not location_id:
+        return None, 0
+    return location_id, severity
+
+
+async def _shock_one(
+    emotion_updater: EmotionUpdater, *, npc_id: str, condition: str, severity: int, tick: int
+) -> dict[str, Any] | None:
+    """Shock one NPC; return a warning dict if the write fails, else None."""
+    try:
+        await emotion_updater.apply_event_shock(npc_id=npc_id, severity=severity, tick=tick)
+    except (NPCSystemError, Neo4jError, DriverError) as error:
+        LOGGER.warning(
+            "world_event_shock_failed npc_id=%s condition=%s", npc_id, condition, exc_info=True,
+        )
+        return {
+            "warning_code": "EVENT_SHOCK_FAILED",
+            "type": "event_shock",
+            "npc_id": npc_id,
+            "condition": condition,
+            "error": type(error).__name__,
+        }
+    LOGGER.info(
+        "world_event_shock npc_id=%s condition=%s severity=%d tick=%d", npc_id, condition, severity, tick,
+    )
+    return None
 
 
 @router.patch("/nodes/{node_type}/{node_id}", response_model=OkEnvelope[dict[str, Any]])
