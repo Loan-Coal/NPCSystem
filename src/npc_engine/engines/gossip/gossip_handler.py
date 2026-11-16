@@ -137,10 +137,8 @@ class GossipHandler:
                 repo=self._gossip_repo,
                 max_pairs=max_pairs,
                 weight_config=self._weight_config,
+                allowed_ids=set(npc_ids) if npc_ids else None,
             )
-            if npc_ids:
-                allowed = set(npc_ids)
-                pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
 
             return await self._process_pairs(pairs=pairs, tick_id=tick_id)
 

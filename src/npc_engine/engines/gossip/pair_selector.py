@@ -47,6 +47,7 @@ async def select_pairs(
     repo: Neo4jGossipRepository,
     max_pairs: int,
     weight_config: GossipWeightConfig,
+    allowed_ids: set[str] | None = None,
 ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]]:
     """Return top-weighted directed gossip pairs sorted deterministically.
 
@@ -60,12 +61,17 @@ async def select_pairs(
         repo: Gossip graph port providing pair and goal reads.
         max_pairs: Maximum number of pairs to return.
         weight_config: Faction weight multipliers for pair ranking.
+        allowed_ids: Optional allowlist; only pairs with at least one listed ID are ranked.
+            Applied before the ``max_pairs`` cut, so a higher-ranked pair outside the
+            allowlist cannot crowd out an allowed one (T25.12, ISSUE-380).
 
     Returns:
         List of (sharer, receiver, location, faction_ctx) tuples, limited to max_pairs.
         faction_ctx contains ``a_faction_ids``, ``b_faction_ids``, and ``best_standing``.
     """
     rows = await repo.fetch_gossip_pairs()
+    if allowed_ids:
+        rows = [row for row in rows if row["a"]["id"] in allowed_ids or row["b"]["id"] in allowed_ids]
 
     # Build goal-alignment bonus map — skip entirely when no rows
     goal_alignment: dict[tuple[str, str], int] = {}

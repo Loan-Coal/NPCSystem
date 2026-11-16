@@ -1084,7 +1084,7 @@ keys. The public `DialogueResponse` schema is unchanged.
 RED anchor: the grammar's `required` covers every authored field, and the client sends that grammar.
 Validation: targeted pytest; `make check`; the T25.9 live run (REMEMBER-delta green, canned replies counted). ✅ AUTO (T25.11, 2026-11-16)
 
-- [ ] **T25.12** GOSSIP: the allowlist applies before the pair cut, and a sharer tells something new
+- [x] **T25.12** GOSSIP: the allowlist applies before the pair cut, and a sharer tells something new
 Files: `src/npc_engine/engines/gossip/pair_selector.py`, `engines/gossip/gossip_handler.py`,
 `src/npc_engine/graph/gossip/gossip_batch_queries.py`; tests.
 
@@ -1101,7 +1101,7 @@ Fix:
 RED anchor: unit tests for the allowlist (selector and handler); an integration test in which the fresh event
 beats the canonical known one.
 Validation: targeted pytest; integration tests against the eval Neo4j; `make check`; the T25.9 live run
-(DETERMINISM gets real seeds).
+(DETERMINISM gets real seeds). ✅ AUTO (T25.12, 2026-11-16)
 
 ---
 

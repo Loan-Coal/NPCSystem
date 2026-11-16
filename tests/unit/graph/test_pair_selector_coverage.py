@@ -121,3 +121,41 @@ async def test_select_pairs_returns_correct_tuple_shape() -> None:
     assert "a_faction_ids" in faction_ctx
     assert "b_faction_ids" in faction_ctx
     assert "best_standing" in faction_ctx
+
+
+# ---------------------------------------------------------------------------
+# npc_ids allowlist applies before the max_pairs cut (T25.12, ISSUE-380)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_allowlist_applies_before_the_max_pairs_cut() -> None:
+    """With max_pairs=1, the allowed pair is returned even when a higher-ranked pair exists.
+
+    The determinism beat sends npc_ids=[sorn, mira], max_pairs=1. The handler took the
+    global top-1 (nel→lira, gossipy 140) and only then filtered it out, so every call
+    returned no pair and seeds_used was {}.
+    """
+    rows = [
+        _make_row("nel_pickpocket", "lira_fence", gossipy_a=65, gossipy_b=75),
+        _make_row("captain_sorn", "mira_innkeeper", gossipy_a=25, gossipy_b=60),
+    ]
+
+    pairs = await select_pairs(
+        repo=_make_repo(rows), max_pairs=1, weight_config=_DEFAULT_CONFIG,
+        allowed_ids={"captain_sorn", "mira_innkeeper"},
+    )
+
+    assert [(p[0]["id"], p[1]["id"]) for p in pairs] == [("captain_sorn", "mira_innkeeper")]
+
+
+@pytest.mark.asyncio
+async def test_no_allowlist_keeps_the_global_ranking() -> None:
+    """Without an allowlist the top-ranked pair still wins."""
+    rows = [
+        _make_row("captain_sorn", "mira_innkeeper", gossipy_a=25, gossipy_b=60),
+        _make_row("nel_pickpocket", "lira_fence", gossipy_a=65, gossipy_b=75),
+    ]
+
+    pairs = await select_pairs(repo=_make_repo(rows), max_pairs=1, weight_config=_DEFAULT_CONFIG)
+
+    assert [(p[0]["id"], p[1]["id"]) for p in pairs] == [("nel_pickpocket", "lira_fence")]

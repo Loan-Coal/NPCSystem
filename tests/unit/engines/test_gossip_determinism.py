@@ -148,3 +148,22 @@ async def test_different_tick_id_produces_different_seeds() -> None:
     assert result_42["seeds_used"][pair_key] != result_43["seeds_used"][pair_key], (
         "Different tick_id must produce different seeds"
     )
+
+
+@pytest.mark.asyncio
+async def test_run_tick_with_npc_ids_and_one_pair_still_seeds() -> None:
+    """The determinism beat's call shape (npc_ids, max_pairs=1) must yield a seeded pair (ISSUE-380)."""
+    handler = _make_handler()
+    rows = [
+        {"a": {"id": "nel_pickpocket", "gossipy": 65}, "b": {"id": "lira_fence", "gossipy": 75},
+         "loc": {"id": "loc_tavern"}, "a_faction_ids": [], "b_faction_ids": [], "best_standing": None},
+        {"a": {"id": "captain_sorn", "gossipy": 25, "honesty": 70}, "b": {"id": "mira_innkeeper", "gossipy": 60},
+         "loc": {"id": "loc_tavern"}, "a_faction_ids": [], "b_faction_ids": [], "best_standing": None},
+    ]
+    handler._gossip_repo.fetch_gossip_pairs = AsyncMock(return_value=rows)
+    handler._gossip_repo.get_goals_for_character = AsyncMock(return_value=[])
+    handler._gossip_repo.fetch_known_node_ids = AsyncMock(return_value=set())
+
+    result = await handler.run_tick(tick_id=42, max_pairs=1, npc_ids=["captain_sorn", "mira_innkeeper"])
+
+    assert list(result["seeds_used"]) == ["captain_sorn→mira_innkeeper"]

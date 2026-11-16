@@ -32,8 +32,9 @@ MATCH (a:{_CHARACTER} {{id: pair.sharer_id}})-[k:{_KNOWS_ABOUT}]->(e:{_EVENT})
 WHERE coalesce(k.knowledge_state, '') <> 'corrected'
 WITH pair, a, e, k,
      coalesce(e.is_canonical, false) AS is_canonical,
-     e.occurred_at AS occurred_at
-ORDER BY pair.sharer_id, is_canonical DESC, occurred_at DESC
+     e.occurred_at AS occurred_at,
+     EXISTS {{ MATCH (:{_CHARACTER} {{id: pair.receiver_id}})-[:{_KNOWS_ABOUT}]->(e) }} AS receiver_knows
+ORDER BY pair.sharer_id, receiver_knows ASC, is_canonical DESC, occurred_at DESC
 WITH pair,
      head(collect({{
          event: e,
