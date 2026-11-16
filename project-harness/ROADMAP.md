@@ -30,8 +30,8 @@ below until `roadmap_cursor.py --next` prints `ALL_DONE`, and leaves a strong, c
 - **Every task states its LOC delta.** A task whose delta turns out positive while its phase is
   still net-negative says so in its commit body.
 
-Running total against `scripts/loc_baseline.txt` (121,771; measured 121,674 on 2026-10-21). Estimates
-from `wc -l` of the files each task deletes or touches:
+The table below is the 2026-10-21 plan; its numbers are not re-measured. The current baseline lives in
+`scripts/loc_baseline.txt`. Estimates from `wc -l` of the files each task deletes or touches:
 
 | Phase | Theme | Est. delta | Running total | Net-negative? |
 |---|---|---:|---:|---|
@@ -48,6 +48,8 @@ from `wc -l` of the files each task deletes or touches:
 | T29 | Latency | −265 | 104,368 | yes |
 | **Programme** | | **≈ −17,306** | **≈ 104,368** | |
 
+T25 also gained T25.7–T25.12 on 2026-11-16 (stabilisation after an audit); the T25 row predates them.
+
 T27 is unused, because its ledger-truth tasks live in T26 (DEC-323). T25 has the thinnest margin.
 Its first task is a pure deletion (about −270), so its four fixes share about 270 LOC. A fix that needs
 more pulls a deletion from the T28 pool forward into its own commit, rather than raising anything.
@@ -60,11 +62,9 @@ more pulls a deletion from the T28 pool forward into its own commit, rather than
 
 - **Flagged tasks:** **0** tasks in the fence are flagged. Every task inside the fence is loop work.
   Work that needs a person sits outside the fence, under "Owner work".
-- **Fence size:** **45** tasks in 10 phases (T21, T22, T23, T24, T25, T26, T28, T17, T19, T29), counted 2026-10-21.
+- **Fence size:** the loop's remaining fence is **21** unchecked tasks in 5 phases (T26, T28, T17, T19
+  incl. T20.1, T29), counted 2026-11-16; T25.9–T25.10 are also still unchecked.
   Nothing tests this number. Recount it whenever you move the fence.
-- **Night 1 runs the bootstrap alone:** `bash scripts/expand_loop.sh --max-phases 1`. The task-session
-  frozen-path check (T21.4) takes effect only when the driver next starts, so phase T21 must finish
-  and the driver must restart before any later phase runs (DEC-316).
 - **The app image is not bind-mounted.** Every live check rebuilds the isolated eval stack first:
   `bash scripts/eval_stack_at.sh HEAD --reset && make eval-stack-seed`. It then checks against
   `:8001` and bolt `:7688`. Nothing that must survive lives in the eval Neo4j.
@@ -1119,20 +1119,21 @@ Validation: targeted pytest; integration tests against the eval Neo4j; `make che
 Pre-approved: file-deletion, public-interface · owner 2026-10-21 · DEC-311
 Files:
 - `src/npc_engine/engines/dialogue/dialogue_handler.py` :371-391;
-- `src/npc_engine/engines/llm/llm_client.py` :214-250;
+- `src/npc_engine/engines/dialogue/llm_client.py` :214-250;
 - the `stream` methods in `admission_control.py` :219-247, `mock_adapter.py` :201-230,
   `ollama_adapter.py` :222-292 and `openai_adapter.py` :220-257;
-- `LLMStreamProtocol` in `protocols.py` :111-125;
+- `LLMStreamProtocol` in `protocols.py` :111-125, and its use as a base of `LLMClientProtocol` (`protocols.py:147`);
 - the matching tests;
-- `docs/API.md` and `docs/ARCHITECTURE.md` (the streaming-frame sections).
+- `docs/API.md` :138-149 and `docs/ARCHITECTURE.md` :508-512 (the streaming-frame sections).
 
 Spec: ISSUE-322.
 - `DialogueHandler.stream` has no caller. It is the only consumer of `stream_text`, which is the only
   consumer of the adapters' `stream` methods.
 - The WS route awaits `handler.handle` in full (`dialogue_ws.py:293`).
 - Delete the chain.
-- Correct the docs (ISSUE-299). They must describe the frames the code sends: `token`, `done`, `error`
-  and `proactive_line`.
+- Correct the docs. ISSUE-299 is already closed (T22.4 triage, DEC-304), but the docs are still wrong:
+  `docs/API.md:144-148` shows `action` and `expression` frames and a bare `done`. They must describe the
+  frames the code sends: `token`, `done`, `error` and `proactive_line`.
 
 RED anchor: `git grep -n "def stream\b\|stream_text\|LLMStreamProtocol" -- src` prints lines today and must print none.
 Validation:
@@ -1142,7 +1143,7 @@ Validation:
 
 Done when:
 - the grep prints nothing;
-- ISSUE-322 and ISSUE-299 are archived;
+- ISSUE-322 is archived (ISSUE-299 is already closed: T22.4 triage, DEC-304);
 - `make check` is green.
 
 LOC: about −240 non-test (src).
@@ -1152,8 +1153,11 @@ Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - a new `contracts/openapi_v1.json`;
 - `scripts/check_api_contract.py`, `scripts/api_contract_extractor.py`;
-- delete `scripts/api_contract_baseline.json` and `scripts/check_api_stability.py` (163), plus its baseline file and tests;
-- `Makefile` :427-428,447-448,489;
+- delete `scripts/api_contract_baseline.json` and `scripts/check_api_stability.py` (163), plus its baseline
+  file `scripts/api_stability_baseline.json` and its test `tests/unit/scripts/test_check_api_stability.py`;
+- `Makefile` :19 (`.PHONY`), :387-392 (the `check-api-stability` target), :425-426 (the R1.8 comment) and
+  :453 (the `check` aggregate);
+- `docs/API_STABILITY.md`;
 - `project-harness/HARNESS_GATES.md`.
 
 Spec: DEC-324, superseding DEC-298's mechanics.
@@ -1322,14 +1326,16 @@ LOC: about −600 non-test (src).
 - [ ] **T28.2** One LLM-fallback path, one default payload
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
-- `src/npc_engine/config.py` :128-129,305;
-- `src/npc_engine/engines/llm/llm_client.py` :178-189;
+- `src/npc_engine/config.py` :128-129 (the two settings), :299 (`CLIQUE_FORMATION_TICK_INTERVAL`) and :500
+  (the `LLM_FALLBACK_PATH` validator);
+- `src/npc_engine/engines/dialogue/llm_client.py` :178-189;
 - `src/npc_engine/engines/llm/mock_adapter.py` :18-24;
 - `src/npc_engine/engines/dialogue/degradation.py` :44-70;
 - `src/npc_engine/engines/dialogue/dialogue_handler.py` :179,221;
 - `src/npc_engine/utils/errors.py` :308;
-- `src/npc_engine/api/.../dashboard_models.py` :62;
-- `.env.example`;
+- `src/npc_engine/api/dashboard/dashboard_models.py` :62;
+- `.env.example` :23 and `src/npc_engine/.env.example` :28 (the `LLM_FALLBACK_PATH` lines);
+- delete `src/npc_engine/data/fallback_responses.json`, the file `LLM_FALLBACK_PATH` points at;
 - tests.
 
 Spec: rule 7. There are two "LLM failed → canned line" stores:
@@ -1358,29 +1364,34 @@ Files:
 - `src/npc_engine/graph/infra/labels.py` :12-19;
 - `src/npc_engine/graph/generic/generic_graph_utils.py` :22-30;
 - `src/npc_engine/graph/infra/schema_bootstrap.py` :23-31;
-- `src/npc_engine/graph/politics/political_queries.py` :27;
+- `src/npc_engine/graph/political/political_queries.py` :27;
 - `src/npc_engine/type_registry/base_nodes/title.yaml` :3;
 - tests;
 - `project-harness/ISSUES.md`.
 
 Spec: DEC-303. A node label is declared in four places, five counting `political_queries.py:27`.
-- Make `graph/infra/labels.py` the one Python declaration.
+- Make `graph/infra/labels.py` the one Python declaration for the labels in `BASE_NODE_LABELS`
+  (`generic_graph_utils.py:22-30`) and `_CORE_LABELS` (`schema_bootstrap.py:23-31`), plus `Title`. Add a
+  `TITLE` constant; `labels.py` has none today.
 - `BASE_NODE_LABELS` and `_CORE_LABELS` derive from it.
+- Scope: only those labels. The other base-node YAMLs under `type_registry/base_nodes/` (34 files) do not get
+  constants; that would add about 26 for no reader.
 - The YAML `label:` stays the type-registry contract, with a test asserting it agrees with `labels.py`.
-- ISSUE-315 (tick-engine registration in 4 files / 9 edits) closes **by design** per DEC-303. Archive it
-  with that note and its recorded cost.
+- ISSUE-315 (tick-engine registration in 4 files / 9 edits) is already closed (T22.4 triage, DEC-304).
+  Nothing to archive.
 
 This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`.
 RED anchor: a test fails today: every label in `BASE_NODE_LABELS` and `_CORE_LABELS` must be imported from
-`labels.py` rather than defined as a literal, and every base-node YAML `label:` must be in `labels.py`.
+`labels.py` rather than defined as a literal, and the base-node YAML `label:` of each of those labels plus
+`Title` (`title.yaml:3`) must equal its `labels.py` constant.
 Validation:
 - `pytest tests/unit/graph -q`;
 - `make check`.
 
 Done when:
 - the test passes;
-- `git grep -n '"Title"' -- src/npc_engine/graph` prints only `labels.py`;
-- ISSUE-315 is archived as by-design;
+- `git grep -n '"Title"' -- src` prints exactly one line, in `labels.py` (today it prints nothing: the label
+  lives only inside Cypher strings as `:Title`, e.g. `political_queries.py:27`);
 - `scripts/loc_baseline.txt` total equals the measured count;
 - `make check` is green.
 
@@ -1401,7 +1412,7 @@ failure-designed cases waits for the owner (DEC-322). The owner's labelling, T18
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
 - delete `evals/case_drafts.py` (359) and its tests;
-- `evals/__main__.py` :126-127 and `Makefile` :798 (the `draft-cases` verb and target);
+- `evals/__main__.py` :126-127 and `Makefile` :25 (`.PHONY`) and :733-742 (the `draft-cases` verb and target);
 - `evals/calibration.py` :817-821;
 - `scripts/check_label_adequacy.py` :68;
 - `evals/label_export_stratified.py` :44;
@@ -1413,7 +1424,9 @@ roster artefacts:
   (`dict.fromkeys(r.scorer for r in rows)`);
 - so `refusal_judge` (retired, DEC-269) and `anti_hallucination_grounded` (out of `IN_SCOPE_SCORERS`)
   are still calibrated and counted (ISSUE-295);
-- `family_size` counts every scorer with 2 or more human verdicts, not every adequacy-passing one (ISSUE-282).
+- `family_size` counts every scorer with 2 or more human verdicts, not every adequacy-passing one
+  (`calibration.py:818-821`). ISSUE-282 is already closed (T22.4 triage, DEC-304), but the bug is still in
+  the code and this task fixes it.
 
 Fix it:
 - take the roster from one place, `IN_SCOPE_SCORERS` (`label_export_stratified.py:44`), in both;
@@ -1435,7 +1448,7 @@ Validation:
 Done when:
 - the tests pass;
 - `check_label_adequacy.py` lists exactly the three in-scope scorers;
-- ISSUE-295, ISSUE-282 and ISSUE-148 are archived;
+- ISSUE-295 and ISSUE-148 are archived (ISSUE-282 is already closed: T22.4 triage, DEC-304);
 - `make check` is green.
 
 LOC: about −340 non-test (evals).
@@ -1461,18 +1474,23 @@ LOC: 0 non-test.
 
 - [ ] **T17.3** Author failure-designed cases, generate them on the stack, and export the labelling batch
 Files:
-- new case YAML under the eval case directory, the same place existing judged cases live;
+- new case YAML under `evals/cases/`, the same place existing judged cases live;
 - a new `evals/generations/<new_gen_id>/`;
 - a new `evals/label_batches/<new_gen_id>/`;
 - `project-harness/ISSUES.md`.
 
 Spec: DEC-302 and DEC-322. Labels are short of the minority floor by 18 (tone), 17 (affirms) and 25
-(commits) (review §5.1), and failures sit in only 3-5 clusters per scorer.
+(commits) (review §5.1), and failures sit in only 3-5 clusters per scorer. A **cluster** is a distinct
+`case_id`, the first `:`-separated part of a label's `record_id` (`calibration._extract_case_clusters`,
+`label_adequacy._cluster_count`), so 10 new clusters means 10 new case files.
 1. **Author.** Write cases built to elicit each failure: a tone mismatch, a false affirmation, a
    non-commitment. Spread them over 10 or more new clusters per scorer, with at least 2× each shortfall,
    so the owner can reject weak ones.
 2. **Generate.** Rebuild with `bash scripts/eval_stack_at.sh HEAD --reset && make eval-stack-seed`.
-   Generate into a **new** generation dir, never `k3_73e6c36` (DEC-316).
+   Generate into a **new** generation dir, never `k3_73e6c36` (DEC-316). `make eval-generate` defaults
+   to `BASE_URL` `:8000` and takes the gen dir only through `ARGS`, so run exactly:
+   `make eval-generate BASE_URL=http://localhost:8001 GEN_ID=<id> ARGS="--gen-id <id>"`
+   (`:8001` is the Makefile's `EVAL_BASE_URL`).
 3. **Export.**
    `make label-export-stratified TRANSCRIPT=evals/generations/<id>/outputs.jsonl OUT_DIR=evals/label_batches/<id>`.
    Never use the default `evals/calibration/...` path, which is frozen.
@@ -1500,7 +1518,7 @@ LOC: 0 non-test. Phase T17 total ≈ −340.
 
 **Self-contained goal:** the dialogue prompt has one numbering, no dead trigger, guidance for every
 generated field and one tone system, and its hash covers exactly what changes behaviour (DEC-305,
-DEC-306, DEC-307). Rule 16 vs Rule 2 (T19.1) and the re-baseline (T20.2) are owner work.
+DEC-306, DEC-307). Rule 16 vs Rule 2 (T19.1) was decided on 2026-11-16 (DEC-332), and T19.5 implements it. The re-baseline (T20.2) is owner work.
 
 ### Phase T19
 
@@ -1534,7 +1552,8 @@ Files:
 - tests.
 
 Spec:
-- **ISSUE-325.** Give `system_state_v1.yaml`'s rule the next free number, and update every cross-reference.
+- **ISSUE-325** (already closed: T22.4 triage, DEC-304; the two rule 17s are still there). Give
+  `system_state_v1.yaml`'s rule the next free number, and update every cross-reference.
 - **DEC-306.** Rule 11 fires on `available_interactions`, which nothing produces (`system_v1.yaml:181`).
   Rewrite its trigger to fire on context the prompt already carries: an active quest, or a
   trade-capable NPC. Keep its body. Build no producer.
@@ -1551,16 +1570,18 @@ Validation:
 Done when:
 - both tests pass;
 - `git grep -n "available_interactions" -- src/npc_engine/prompts` prints nothing;
-- ISSUE-325 and ISSUE-293 are archived;
+- nothing to archive: ISSUE-325 and ISSUE-293 are already closed (T22.4 triage, DEC-304);
 - `make check` is green.
 
 LOC: 0 non-test.
 
 - [ ] **T19.4** Give the prompt guidance for every field the model generates
-Files: `src/npc_engine/prompts/dialogue/system_v1.yaml` (Output rules, about :310-322), and tests.
+Files: `src/npc_engine/prompts/dialogue/system_v1.yaml` (Output rules, :308-337), and tests.
 Spec: review §9 T9. Of the 6 fields the model generates, `facial_expression` and `mood_update` get
-**zero** guidance, and `relation_deltas.fear` is missing from the Output rules. `facial_expression`
-reaches Unreal (DEC-298).
+**zero** guidance. (`relation_deltas.fear` already has its line, `system_v1.yaml:319-321`.)
+`facial_expression` reaches Unreal (DEC-298). Since T25.11 (DEC-330) the generation grammar **requires**
+every authored field, so the model always emits these two, and the guidance for each now directly
+shapes the emitted values.
 - Add one line per field: the allowed values, sourced from the schema enum, and when to use each.
 - Do not restate schema-enforced constraints (ISSUE-330).
 
@@ -1572,45 +1593,52 @@ Validation:
 Done when: the test passes and `make check` is green.
 LOC: 0 non-test.
 
-- [ ] **T19.5** Resolve the tone band server-side: one system, not two (ISSUE-328)
+- [ ] **T19.5** Resolve the tone band server-side: one system, not two (ISSUE-328, DEC-332)
 Pre-approved: public-interface · owner 2026-10-21 · DEC-311
 Files:
-- `src/npc_engine/prompts/dialogue/system_v1.yaml` :36-50 (Rule 2), :269 (Rule 16);
-- `src/npc_engine/graph/reputation/reputation_queries.py` :60-87;
+- `src/npc_engine/prompts/dialogue/system_v1.yaml` :36-51 (Rule 2), :269-281 (Rule 16), and the Rule 2
+  cross-reference in Rule 13 (:239);
 - `src/npc_engine/engines/relationship/standing.py` :43-86;
 - `src/npc_engine/engines/dialogue/prompt_builder_standing.py`;
-- `src/npc_engine/services/context_slots.py`;
+- `src/npc_engine/retrieval/context/context_slots.py` :159-161 (the `reputation` slot);
+- `src/npc_engine/graph/reputation/reputation_queries.py` :62-90 (read only: `label` stays);
 - tests.
 
-Spec: ISSUE-328. Two independent five-band tone systems do one job:
-- Rule 2 uses reputation bands (`reputation_queries.py:64-87`);
-- Rule 16 uses `derive_standing` (`standing.py:61`).
+Spec: DEC-332 (owner, 2026-11-16), resolving ISSUE-328 (open) and ISSUE-327 (closed). Two five-band tone
+systems feed the prompt today: Rule 2 bands the faction reputation (`reputation_queries._standing_label`),
+Rule 16 bands the personal edge (`derive_standing`, `standing.py:61`). Resolve **one** band server-side:
+1. Start from `derive_standing(trust, fear, affection)`. With no edge, that is NEUTRAL (today
+   `build_standing_line` emits nothing then).
+2. Take the player's reputation with the NPC's own faction (`player_reputation` is already filtered to the
+   NPC's factions, `reputation_queries.py:183`). With several, use the largest absolute `standing`; with
+   none, there is no nudge.
+3. `standing` ≥ 50 moves the band one step warmer; ≤ −50 one step colder; anything between leaves it.
+   Order HOSTILE < WARY < NEUTRAL < FRIENDLY < ALLIED, clamped at both ends. Threshold on the raw
+   `standing`, not on `label` (whose −50 falls in `unfriendly`, DEC-252).
+4. The prompt receives exactly one band and one rule text: Rules 2 and 16 collapse into one rule.
+5. `player_reputation[].label` stays in the API response (public contract; the UI reads it) but leaves the
+   prompt.
 
-Make one change:
-- resolve one band server-side, with `derive_standing` as the survivor;
-- pass the prompt one resolved answer;
-- delete the other band computation and its prompt rule text.
+RED anchor: tests fail today:
+- unit tests for the resolver's nudge table: FRIENDLY + hostile → NEUTRAL, WARY + allied → NEUTRAL,
+  NEUTRAL + allied → FRIENDLY, ALLIED + neutral → ALLIED, ALLIED + allied → ALLIED (clamp);
+- a prompt test: the rendered prompt carries exactly one tone band, and no reputation band label.
 
-Rule 8: deterministic beats model judgement. **Do not** decide the Rule 16 vs Rule 2 tie-break for
-conflicting signals. That is T19.1, owner work. Where the two disagree today, keep `derive_standing`'s
-answer and note the disagreement in the commit.
-RED anchor: a test fails today: the rendered prompt must contain exactly one tone band, and the reputation
-band labels must not appear in any prompt YAML.
 Validation:
 - the targeted pytest;
 - `make check-api-contract`;
 - `make check`.
 
-Done when: the test passes, ISSUE-328 is archived, and `make check` is green.
-LOC: about −30 non-test.
+Done when: the tests pass, ISSUE-328 is archived citing DEC-332, and `make check` is green.
+LOC: about 0 to −20 non-test (a resolver added, one rule text and the label in the prompt removed).
 
 - [ ] **T20.1** Hash exactly the dialogue prompt's four inputs (DEC-307)
 Files: `evals/_run_config_hashing.py` :25,148-167, `evals/run_config.py` :447,
 `project-harness/DECISIONS.md` (a migration note), and tests.
 Spec: DEC-307. `dialogue_prompt_hash` hashes every `*.yaml` under the prompts dir, so editing an unrelated
 prompt breaks comparability (L12-14).
-- Hash exactly four inputs: `system_v1`, `system_state_v1`, `moderation/content_ceiling_v1`, and the
-  `llm_config` `prompt.version`.
+- Hash exactly four inputs: `system_v1`, `system_state_v1`, `moderation/content_ceiling_v1`, and
+  `prompt.version` in `src/npc_engine/engines/dialogue/llm_config.yaml` (:14).
 - The hash is not in `ComparabilityKey` (`evals/comparability.py:30-55`), so no baseline is orphaned (DEC-305).
 - Write a short DECISIONS migration note: old recorded hashes will not reproduce.
 
@@ -1646,7 +1674,7 @@ LOC: about +10 non-test. Phase T19 total ≈ −320.
 - [ ] **T29.1** Delete the dead political writers and the unused Redis runtime
 Pre-approved: file-deletion · owner 2026-10-21 · DEC-311
 Files:
-- delete `src/npc_engine/graph/politics/political_leverage_writer.py` (100);
+- delete `src/npc_engine/graph/political/political_leverage_writer.py` (100);
 - `political_title_writer.py` (130): delete `grant_title`, and its repository method if that has no caller;
 - `political_agenda_writer.py` (111): keep `set_agenda_status`, delete `create_agenda` and `vote_on_agenda`;
 - `src/npc_engine/graph/repositories/political_repository.py` :25;
@@ -1655,7 +1683,7 @@ Files:
 - `src/npc_engine/config.py` :118-120;
 - `docker-compose.yml` :59-68;
 - `pyproject.toml` :17;
-- `.env.example` :17-19;
+- `.env.example` :17-19 and `src/npc_engine/.env.example` :22-24 (the `REDIS_*` lines);
 - tests.
 
 Spec:
@@ -1689,7 +1717,7 @@ Files:
 - a new `project-harness/evidence/T29.2_tick_calls.txt`.
 
 Spec: review §4 records one tick making **14** quest LLM calls against `QUEST_TRIGGER_MAX_LLM_INVOCATIONS_PER_TICK=10`
-(`config.py:60`) and `TICK_LLM_CALLS_PER_MINUTE_MAX=6` (`config.py:289`). The scheduler's guard is a
+(`config.py:60`) and `TICK_LLM_CALLS_PER_MINUTE_MAX=6` (`config.py:283`). The scheduler's guard is a
 pre-check only (`tick_scheduler.py:544-562`).
 - Find why `TickLLMBudget` let 14 through. A likely cause is a budget built per trigger rather than per tick.
 - Make the cap a hard per-tick ceiling, checked per call.
@@ -1759,13 +1787,13 @@ Each item names the date it is due and what it unblocks.
 | # | Work | Due | Unblocks |
 |---|---|---|---|
 | O1 | **Before night 1:** know that the driver starts Neo4j and exports `NEO4J_URI=bolt://localhost:7687` (`loop_compat.sh:170`). `make check`'s integration tests then write to that default-stack Neo4j, as on every earlier night. Keep nothing there you need, or snapshot it first (`make demo-snapshot`). | before night 1 | a safe night 1 |
-| O2 | **Night 1:** `bash scripts/expand_loop.sh --max-phases 1` (phase T21 only). In the morning, read `git log loop-night-<date>` and the report. | night 1 | T21.4 live from night 2 |
+| O2 | ~~**Night 1:** `bash scripts/expand_loop.sh --max-phases 1` (phase T21 only). In the morning, read `git log loop-night-<date>` and the report.~~ **Done:** night 1 ran 2026-10-21. | night 1 | T21.4 live from night 2 |
 | O3 | **Each morning:** review the night's commits, then fast-forward `remediation-2026-08` from the loop branch by hand. If preflight refuses because of an `UNVERIFIED` tick, read it, then restart with `--ack`. | daily | the next night |
 | O4 | **T17.1 detailing:** done by the roadmap builder on 2026-10-21 (DEC-322). Review the spec. | 2026-10-27 | — |
 | O5 | **DemoGame repo:** repoint `Scripts/check_contract_sync.py` at this repo's `contracts/openapi_v1.json`, and drop the hand copy (DEC-298, DEC-324). | within 7 days of T26.2 | the Unreal contract pillar |
 | O6 | **Labelling pass:** label the batch T17.3 exports at `evals/label_batches/<id>/`. You need ≥25 minority labels per scorer, in ≥10 clusters (+18 tone, +17 affirms, +25 commits). T17.3 writes `<id>` here. | within 14 days of T17.3 | T18.1 |
 | O7 | **T18.1 relabel and freeze, T18.2 re-baseline and sign-off:** write these as a follow-up roadmap once O6 lands. They accept or reject real kappa numbers; affirms (0.530) would be RESTRICTED and commits (0.308) HIDDEN (`docs/SCORER_TRUST_POLICY.md:22-24`). | after O6 | T20.2, the quest slot-fill deletion |
-| O8 | **T19.1 tie-break:** decide what wins when Rule 16 (standing) and Rule 2 (reputation) disagree (ISSUE-327). This is a product-behaviour call. T19.5 keeps `derive_standing` meanwhile. | before T18.2 | the prompt revision's last part |
+| O8 | ~~**T19.1 tie-break:** decide what wins when Rule 16 (standing) and Rule 2 (reputation) disagree (ISSUE-327). This is a product-behaviour call.~~ **Done:** decided 2026-11-16: DEC-332 (T19.5 implements it). | before T18.2 | the prompt revision's last part |
 | O9 | **T20.2:** re-baseline the judged evals against the new prompt and publish the delta. | after O7 | — |
 
 ### Parked

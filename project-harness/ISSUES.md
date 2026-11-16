@@ -1071,3 +1071,77 @@ Owner ideas (2026-11-16):
 - who picks the destination (disruption rule, emotion, or the planner's goal former);
 - how it interacts with need-driven moves and schedules.
 Then replace the `HOME_LOCATION` sentinel with that choice. The WORLD pillar must keep passing (T25.9).
+
+## ISSUE-382: Pillar eval has no real N-of-M for LLM-dependent pillars
+**Found:** 2026-11-16, during T25.9
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/runners/pillars.py` (`main`, `judge_pillars`); DEC-321, DEC-331
+**Description:** DEC-321 asked for 2-of-3 on FEEL, REMEMBER-delta and GOSSIP. The implementation re-read one static graph value three times after a single demo run, so its threshold never sampled LLM variance. T25.9 dropped the fake re-reads (`repeats: 1`). A single run's verdict on an LLM-dependent pillar can still flip on sampling.
+**Why deferred:** one demo run takes about 10 minutes on the eval stack. N runs per phase gate is a budget decision.
+**To fix:** add `--runs N` to `pillars.py`: reset and seed the stack between runs, judge each run, and report a pillar green when at least the threshold of runs pass. Decide N for the loop's phase gate against its time budget.
+
+## ISSUE-383: Gossip distortion level and summary can disagree on an edge
+**Found:** 2026-11-16, during the T25.2–T25.5 audit
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/gossip/gossip_distort.py` :213-247; `graph/gossip/gossip_batch_queries.py` (`CYPHER_BATCH_PROPAGATE_KNOWLEDGE`)
+**Description:**
+- When the distortion gate misses, or the event is canonical, the stored level drops to 0, although the summary passed on is the sharer's already-distorted text.
+- The `SET` of the distortion fields runs on every re-tell, so a later sharer overwrites the level and summary, while `source_character_id` keeps the first sharer (`ON CREATE`).
+**Why deferred:** T25.12 made re-telling rarer (unknown events first), and the GOSSIP pillar checks the compounding case; the remaining inconsistency is a design call.
+**To fix:** carry the sharer's level forward when the gate misses (`max(level, sharer_level)`). Either set source, level and summary together on every write, or only `ON CREATE`. Add a unit test for the gate-miss path.
+
+## ISSUE-384: Relation-delta clamp lets non-finite and string values escape
+**Found:** 2026-11-16, during the T25.2–T25.5 audit
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_models.py` (`RelationDeltas._clamp_deltas`)
+**Description:**
+- `float('inf')` makes `int(raw)` raise `OverflowError`, which escapes Pydantic.
+- `"20"` is not clamped and fails validation.
+- `True` is clamped as 1.
+The constrained grammar (DEC-330) makes these unlikely from Ollama, but other backends parse through the same model.
+**Why deferred:** no live occurrence; low risk under the constrained grammar.
+**To fix:** clamp only finite `int` or `float` values (`math.isfinite`, excluding `bool`); coerce numeric strings first. Add parametrized tests.
+
+## ISSUE-385: World-state PATCH route orchestrates domain logic and opens a session itself
+**Found:** 2026-11-16, during the T25.2–T25.5 audit
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/routes/admin/graph.py` (`patch_world_state`, `_apply_world_event_shocks`)
+**Description:** The route resolves events, finds witnesses through `graph.event.event_queries.get_characters_at_location` with a route-opened `AsyncSession`, and applies shocks. Layer ranks allow it, but this is engine orchestration in `api/`, and the session should not reach a route (CLAUDE.md: engines call services or retrieval).
+**Why deferred:** T25.8 fixed the behaviour (only new events, no 500 after the write); moving the code is a refactor.
+**To fix:** move the shock orchestration into an engine method, for example `EmotionUpdater.shock_witnesses(event_ids, tick)`, behind the existing repository. The route calls one method.
+
+## ISSUE-386: A failing beat aborts the rest of the scripted demo
+**Found:** 2026-11-16, during T25.6's live run
+**Severity:** P2 (annoying)
+**Where:** `demo_game/beats/determinism_beat.py` (raises `AssertionError`); `demo_game/runners/run.py` (`DemoRunner.run`)
+**Description:** The determinism beat raised `AssertionError: seeds_used is empty`, which ended `DemoRunner.run()`, so no act after it ran. Every pillar that depends on a later act loses its evidence, and the verdict file does not say so. T25.12 fixes this instance; any future beat assertion does the same. Related: when `pillars._run_demo_with_recorder` times out (`DEMO_TIMEOUT_S`), its daemon thread keeps driving the stack while the after-reads run.
+**Why deferred:** T25.12 removed the trigger; changing the runner's failure model is separate.
+**To fix:** beats report a failure (log it and mark the act red) instead of raising. `DemoRunner.run` continues and returns a list of failed beats, and `pillars.py` puts it in the report. Add a test that a raising beat does not stop later scenes.
+
+## ISSUE-387: `npc_engine.retrieval.context` cannot be imported on its own (circular import)
+**Found:** 2026-11-16, during T25.11
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/retrieval/context/__init__.py` → `context_builder` → `context_cache_state` → `retrieval/dialogue_context/__init__.py` → `dialogue_context_adapter` → `context_builder`
+**Description:** `python -c "import npc_engine.retrieval.context"`, and so `import npc_engine.engines.dialogue.dialogue_models`, raises `ImportError: cannot import name 'build_serialized_context_with_receipt' from partially initialized module`. The app works only because `npc_engine.main` happens to import modules in a working order. Any new entry point or test that imports these first fails.
+**Why deferred:** found while diagnosing T25.11. Fixing it means moving an import or splitting a module.
+**To fix:** break the cycle. Make `dialogue_context_adapter` import `context_builder` lazily inside the function, or move `build_serialized_context_with_receipt` below `context_cache_state`. Add a test that imports each `npc_engine` package in a fresh interpreter (`importlib` in a subprocess).
+
+## ISSUE-388: An overnight loop loses its night to a short network outage, then false-flags a leak
+**Found:** 2026-11-16, reviewing the 2026-10-22 night
+**Severity:** P2 (annoying)
+**Where:** `scripts/expand_loop.sh` (ISSUE-370 retry, `worktree_guard.py` check)
+**Description:**
+- On 2026-10-22, T25.6's session ended with a bare `Execution error` when the connection dropped. The loop retried once after 60 s, the network was still down, and the night ended.
+- The operator's Ctrl+C then crashed `worktree_guard.py` at import (`KeyboardInterrupt`). Its non-zero exit was read as "task changed another worktree", a false flag in the report.
+**Why deferred:** the driver is outside the drain fence (T21.4 frozen paths); changing it is owner work.
+**To fix:**
+- retry a bare `Execution error` with backoff (for example 1, 5 and 15 minutes) before halting;
+- treat a guard that crashed (exit code above 1, or a traceback) as "guard failed", not as a leak, and say so in the report.
+
+## ISSUE-389: `scripts/rules_baseline.txt` lists a deleted function
+**Found:** 2026-11-16, during the T25.2–T25.5 audit
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/rules_baseline.txt` :27 (`relation_mutator.py::apply_dialogue_relation_deltas`)
+**Description:** The waiver names a function that no longer exists, so the baseline has a dead entry. It cannot hide a new violation, but it misstates the waiver list.
+**Why deferred:** cosmetic.
+**To fix:** delete the line. Consider having `check_rules.py` fail on baseline entries that match nothing.

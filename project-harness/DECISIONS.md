@@ -8824,3 +8824,49 @@ truncation. Judged-eval baselines shift; the re-baseline is already owner work O
 
 **Rejected.** *Deltas and mood only*: Unreal's facial expression and actions stay defaults. *Fix by prompt*:
 unproven, and that is T19's job.
+
+## DEC-331: A pillar compares a baseline read with an after read; re-reads were not N-of-M
+**Date:** 2026-11-16 · **Status:** ✅ ACCEPTED (owner-approved plan, 2026-11-16) · **Task:** T25.9 · **Amends:** DEC-321 (2-of-3)
+
+**Evidence.**
+- `pillars.py` met DEC-321's "2-of-3" by reading the same graph value three times after one demo run. A static
+  value read three times is one observation, so the threshold never measured LLM variance.
+- Each check read one value after the run, so it could not see a change. GOSSIP and FEEL were green before
+  T25.3 and T25.4 changed anything. REMEMBER was green on `interaction_count > 0`, which every turn increments.
+- GOSSIP read the seeded Sorn→Mira→Henryk chain (DEC-006), so it proved the seed.
+
+**Decision.**
+- `main()` reads state, records a `pillars:baseline_done` marker, runs the demo, records `pillars:demo_done`,
+  then reads again.
+- FEEL compares the witness's emotion across the last world-state event.
+- REMEMBER needs trust, fear or affection to change.
+- GOSSIP needs a KNOWS_ABOUT edge absent at baseline, sourced by an NPC, with distortion above 0 and at least
+  its source's.
+- WORLD needs the seeded start, and a real arrival tick on any move.
+- Each value is read once per phase, and every verdict says `repeats: 1`.
+
+**Deferred.** Real N-of-M means N independent demo runs, each about 10 minutes on the stack (ISSUE-382).
+
+## DEC-332: One tone band: personal standing first, a strong faction reputation nudges it one step
+**Date:** 2026-11-16 · **Status:** ✅ ACCEPTED (owner, 2026-11-16) · **Task:** T19.5 · **Resolves:** owner work O8, ISSUE-327 · **Amends:** T19.5's original spec (`derive_standing` survives and Rule 2 is deleted)
+
+**Context.** Two five-band tone systems feed the prompt today:
+- Rule 2: the player's per-faction reputation, banded by `reputation_queries._standing_label`;
+- Rule 16: the personal trust, fear and affection edge, banded by `derive_standing`.
+Rule 16 asks the model to reconcile them "using your judgement". The original T19.5 spec deleted Rule 2 and
+dropped faction tone. The owner chose a merge.
+
+**Decision.** The server resolves one band, and the prompt gets that band with one rule text.
+1. Start from `derive_standing(trust, fear, affection)`. With no edge, that is NEUTRAL.
+2. Take the player's reputation with the NPC's own faction. With several factions, use the one with the
+   largest absolute standing; with none, there is no nudge.
+3. A standing of 50 or more (allied) moves the band one step warmer. A standing of -50 or less (hostile) moves it
+   one step colder. Anything between leaves it unchanged. The order is HOSTILE < WARY < NEUTRAL < FRIENDLY < ALLIED,
+   clamped at both ends.
+4. `player_reputation[].label` stays in the API response: it is public contract, and the UI reads it. It leaves the
+   prompt.
+
+**Rejected.**
+- *Colder wins if either is cold, else warmer*: faction tone would override the personal history the REMEMBER
+  pillar is about.
+- *Weighted score*: adds a tuning knob that designers cannot read.
