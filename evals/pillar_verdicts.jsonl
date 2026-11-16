@@ -1,5 +1,5 @@
-{"pillar": "FEEL", "verdict": "green", "repeats": 3, "evidence": "3/3 emotion reads non-neutral (threshold=2)", "sha": "90c800c6"}
-{"pillar": "REMEMBER", "verdict": "green", "repeats": 1, "evidence": "delta: 2/2 relation reads have interaction_count>0; memory: memory_id='847d9783-e1c6-4c69-9cbf-03c6fae628e7'", "sha": "90c800c6"}
-{"pillar": "GOSSIP", "verdict": "green", "repeats": 3, "evidence": "distortion: 3/3 reads >0 (threshold=2); chain: source_character_id='mira_innkeeper'", "sha": "90c800c6"}
-{"pillar": "WORLD", "verdict": "red", "repeats": 1, "evidence": "wrong_location=[\"nel_pickpocket@'loc_market_square'(expected 'loc_tavern')\"]", "sha": "90c800c6"}
-{"pillar": "DETERMINISM", "verdict": "red", "repeats": 1, "evidence": "seeds_used is empty: run1={} run2={}", "sha": "90c800c6"}
+{"pillar": "FEEL", "verdict": "green", "repeats": 1, "evidence": "aldric_merchant valence/arousal 0/0 -> -18/28", "sha": "0371fe3c"}
+{"pillar": "REMEMBER", "verdict": "green", "repeats": 1, "evidence": "delta: trust/fear/affection (0, 0, 0) -> (0, 0, 6); memory: memory_id='deaa0406-f2df-4a82-8172-19ceee65ce52'", "sha": "0371fe3c"}
+{"pillar": "GOSSIP", "verdict": "green", "repeats": 1, "evidence": "9 engine hop(s); e.g. old_henryk->aldric_merchant on northern_war_begins at 70 >= source 70", "sha": "0371fe3c"}
+{"pillar": "WORLD", "verdict": "green", "repeats": 1, "evidence": "all 8 started where seeded; moved with an arrival tick: ['nel_pickpocket']", "sha": "0371fe3c"}
+{"pillar": "DETERMINISM", "verdict": "green", "repeats": 1, "evidence": "seeds match (1 pairs)", "sha": "0371fe3c"}
