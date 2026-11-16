@@ -1,20 +1,30 @@
-{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "afraid", "valence": -20, "arousal": 45, "updated_at": "2026-01-01T00:00:00Z"}}
-{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "afraid", "valence": -18, "arousal": 42, "updated_at": "2026-01-01T00:00:10Z"}}
-{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "neutral", "valence": 0, "arousal": 0, "updated_at": "2026-01-01T00:00:20Z"}}
-{"method": "GET", "path": "/v1/npc/mira_innkeeper/relationship/player_demo", "status": 200, "body": {"data": {"trust": 10, "fear": 0, "affection": 5, "interaction_count": 2}}}
-{"method": "GET", "path": "/v1/npc/mira_innkeeper/relationship/player_demo", "status": 200, "body": {"data": {"trust": 10, "fear": 0, "affection": 5, "interaction_count": 2}}}
-{"method": "GET", "path": "/v1/npc/mira_innkeeper/relationship/player_demo", "status": 200, "body": {"data": {"trust": 10, "fear": 0, "affection": 5, "interaction_count": 2}}}
-{"method": "POST", "path": "/v1/admin/memories/consolidate/mira_innkeeper", "status": 200, "body": {"data": {"memory_id": "mem_abc123def456"}}}
-{"method": "GET", "path": "/v1/graph/edges/KNOWS_ABOUT/old_henryk/northern_war_begins", "status": 200, "body": {"data": {"distortion_level": 3, "source_character_id": "mira_innkeeper"}}}
-{"method": "GET", "path": "/v1/graph/edges/KNOWS_ABOUT/old_henryk/northern_war_begins", "status": 200, "body": {"data": {"distortion_level": 2, "source_character_id": "mira_innkeeper"}}}
-{"method": "GET", "path": "/v1/graph/edges/KNOWS_ABOUT/old_henryk/northern_war_begins", "status": 200, "body": {"data": {"distortion_level": 1, "source_character_id": "mira_innkeeper"}}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "mira_innkeeper", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "lira_fence", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "aldric_merchant", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "old_henryk", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "captain_sorn", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "sera_barmaid", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "harwick_guard", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
-{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"status": "success", "data": [{"src_id": "nel_pickpocket", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
-{"method": "POST", "path": "/v1/admin/batch/gossip_tick", "status": 200, "body": {"data": {"seeds_used": {"captain_sorn:mira_innkeeper": 42}}}}
-{"method": "POST", "path": "/v1/admin/batch/gossip_tick", "status": 200, "body": {"data": {"seeds_used": {"captain_sorn:mira_innkeeper": 42}}}}
+{"method": "GET", "path": "/v1/graph/edges/KNOWS_ABOUT", "status": 200, "body": {"success": true, "data": [{"src_id": "captain_sorn", "dst_id": "northern_war_begins", "distortion_level": 0, "source_character_id": null}, {"src_id": "mira_innkeeper", "dst_id": "northern_war_begins", "distortion_level": 20, "source_character_id": "captain_sorn"}, {"src_id": "old_henryk", "dst_id": "northern_war_begins", "distortion_level": 70, "source_character_id": "mira_innkeeper"}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "mira_innkeeper", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "lira_fence", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "aldric_merchant", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "old_henryk", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "captain_sorn", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "sera_barmaid", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "harwick_guard", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "nel_pickpocket", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "content", "valence": 10, "arousal": 20}}
+{"method": "GET", "path": "/v1/npc/mira_innkeeper/relationship/player_demo", "status": 404, "body": null}
+{"method": "MARK", "path": "pillars:baseline_done", "status": 0, "body": null}
+{"method": "PATCH", "path": "/v1/graph/nodes/world_state/world", "status": 200, "body": {"data": {"id": "world"}}}
+{"method": "POST", "path": "/v1/admin/memories/consolidate/mira_innkeeper", "status": 200, "body": {"data": {"memory_id": "mem_abc123def456", "status": "created"}}}
+{"method": "PATCH", "path": "/v1/graph/nodes/world_state/world", "status": 200, "body": {"data": {"id": "world"}}}
+{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "afraid", "valence": -20, "arousal": 45}}
+{"method": "POST", "path": "/v1/admin/batch/gossip_tick", "status": 200, "body": {"data": {"seeds_used": {"captain_sorn→mira_innkeeper": 42}}}}
+{"method": "POST", "path": "/v1/admin/batch/gossip_tick", "status": 200, "body": {"data": {"seeds_used": {"captain_sorn→mira_innkeeper": 42}}}}
+{"method": "MARK", "path": "pillars:demo_done", "status": 0, "body": null}
+{"method": "GET", "path": "/v1/graph/edges/KNOWS_ABOUT", "status": 200, "body": {"success": true, "data": [{"src_id": "captain_sorn", "dst_id": "northern_war_begins", "distortion_level": 0, "source_character_id": null}, {"src_id": "mira_innkeeper", "dst_id": "northern_war_begins", "distortion_level": 20, "source_character_id": "captain_sorn"}, {"src_id": "old_henryk", "dst_id": "northern_war_begins", "distortion_level": 70, "source_character_id": "mira_innkeeper"}, {"src_id": "sera_barmaid", "dst_id": "northern_war_begins", "distortion_level": 35, "source_character_id": "mira_innkeeper"}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "mira_innkeeper", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "lira_fence", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "aldric_merchant", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "old_henryk", "dst_id": "loc_market_square", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "captain_sorn", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "sera_barmaid", "dst_id": "loc_tavern", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "harwick_guard", "dst_id": "loc_guard_barracks", "arrived_at_tick": 0}]}}
+{"method": "GET", "path": "/v1/graph/edges/LOCATED_AT", "status": 200, "body": {"success": true, "data": [{"src_id": "nel_pickpocket", "dst_id": "loc_market_square", "arrived_at_tick": 10}]}}
+{"method": "GET", "path": "/v1/npc/aldric_merchant/emotion", "status": 200, "body": {"npc_id": "aldric_merchant", "label": "content", "valence": -20, "arousal": 45}}
+{"method": "GET", "path": "/v1/npc/mira_innkeeper/relationship/player_demo", "status": 200, "body": {"data": {"trust": 0, "fear": 0, "affection": 3, "interaction_count": 4}}}

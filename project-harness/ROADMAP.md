@@ -1037,7 +1037,7 @@ RED anchor: unit tests for a repeated PATCH (one shock), an already-active condi
 shock (200 plus a warning), and malformed conditions (422).
 Validation: targeted pytest; `make check`. LOC: about +40 non-test. ✅ AUTO (T25.8, 2026-11-16)
 
-- [ ] **T25.9** Pillar checks that tell the bugs apart
+- [x] **T25.9** Pillar checks that tell the bugs apart
 Files: `demo_game/runners/pillars.py`; `demo_game/tests/runners/` (checks and fixtures); `evals/pillar_verdicts.jsonl`.
 
 Spec: the audit found GOSSIP and FEEL green before T25.3 and T25.4 changed anything, and REMEMBER-delta green
@@ -1061,16 +1061,14 @@ RED anchor: fixture tests where a transcript showing each old bug is red, and a 
 Validation: a live red→green proof. Run the working-tree `pillars.py` against stacks built at `72675ac7`
 (pre-T25.2), `7d2103a1` (pre-T25.3/T25.4) and `2c939d5a` (pre-T25.5); each pillar is red where its fix is
 missing, and every pillar is green at HEAD. Raw outputs are cited in the commit body. Done when that holds and
-`make check` is green.
+`make check` is green. ✅ AUTO (T25.9, 2026-11-16)
 
 - [ ] **T25.10** GOSSIP mispairing test that can fail, and the phase's LOC ratchet
 Files: `tests/integration/` (gossip batch); `tests/unit/graph/test_gossip_batch_mispairing.py`; `scripts/loc_baseline.txt`.
 
 Spec: `_MispairingAwareSession` picked its answer by matching the query string, so it could not catch a
 mispairing. Replace it with an integration test against Neo4j: a batch where one candidate has a null summary.
-This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`.
-Done when the integration test passes against the eval Neo4j, `make check` is green, and the baseline total
-equals the measured count.
+Done when the integration test passes against the eval Neo4j and `make check` is green.
 
 - [x] **T25.11** REMEMBER/FEEL: the model's grammar requires every field it authors
 Files: `src/npc_engine/engines/dialogue/dialogue_models.py` (`generation_json_schema`), `engines/dialogue/llm_client.py`;
@@ -1101,7 +1099,22 @@ Fix:
 RED anchor: unit tests for the allowlist (selector and handler); an integration test in which the fresh event
 beats the canonical known one.
 Validation: targeted pytest; integration tests against the eval Neo4j; `make check`; the T25.9 live run
-(DETERMINISM gets real seeds). ✅ AUTO (T25.12, 2026-11-16)
+(DETERMINISM gets real seeds).
+
+- [ ] **T25.13** GOSSIP: a retelling carries the sharer's distortion forward
+Files: `src/npc_engine/engines/gossip/gossip_distort.py` (`gossip_distort`); `tests/unit/engines/gossip/test_gossip_distort_compound.py`.
+
+Spec: found by T25.9's live proof (2026-11-16). With T25.12 the war rumour spreads, but every retold hop stored
+`distortion_level 0` while its source held 20 or 70 (Henryk 70 → Nel 0). `gossip_distort` returned level 0 on
+both of its "no new distortion" paths, a canonical event and a missed gate, although the summary passed on is
+the sharer's distorted text (`CYPHER_BATCH_EVENT_TRUST` coalesces it). T25.3 compounded only when the gate fired.
+Fix: both paths return the sharer's `prior_distortion_level` (clamped 0–100), adding nothing new. This is the
+level half of ISSUE-383.
+RED anchor: a gate miss with prior 70 returns 70; a canonical event with prior 20 returns 20; a canonical
+first-hand witness stays at 0.
+Validation: targeted pytest; `make check`; the T25.9 live run (GOSSIP green).
+This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`; done when the baseline total
+equals the measured count. ✅ AUTO (T25.12, 2026-11-16)
 
 ---
 

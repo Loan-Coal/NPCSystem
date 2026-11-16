@@ -44,22 +44,22 @@ def _load(name: str) -> list[dict]:
 
 class TestRedFixture:
     def test_feel_is_red(self) -> None:
-        """Neutral emotion on all 3 reads → FEEL red."""
+        """The event leaves Aldric's emotion unchanged → FEEL red."""
         ok, evidence = check_feel(_load("red_facts.jsonl"))
         assert not ok, f"expected FEEL red but got green: {evidence}"
 
     def test_remember_is_red(self) -> None:
-        """Zero interaction_count and no memory_id → REMEMBER red."""
+        """Turns counted but deltas unchanged, and no memory_id → REMEMBER red."""
         ok, evidence = check_remember(_load("red_facts.jsonl"))
         assert not ok, f"expected REMEMBER red but got green: {evidence}"
 
     def test_gossip_is_red(self) -> None:
-        """distortion_level=0 on all 3 reads → GOSSIP red."""
+        """The only engine hop stores distortion 0 → GOSSIP red."""
         ok, evidence = check_gossip(_load("red_facts.jsonl"))
         assert not ok, f"expected GOSSIP red but got green: {evidence}"
 
     def test_world_is_red(self) -> None:
-        """At least one NPC at wrong location → WORLD red."""
+        """An NPC moved with arrived_at_tick 0 (ISSUE-373) → WORLD red."""
         ok, evidence = check_world(_load("red_facts.jsonl"))
         assert not ok, f"expected WORLD red but got green: {evidence}"
 
@@ -137,3 +137,35 @@ class TestDeterminismEmptySeeds:
         ]
         ok, evidence = check_determinism(entries)
         assert not ok, evidence
+
+
+# ---------------------------------------------------------------------------
+# --expect-sha: expand_loop.sh passes it; a stack on another commit is stale (T25.9)
+# ---------------------------------------------------------------------------
+
+def test_stale_stack_is_reported_unavailable(monkeypatch, capsys) -> None:
+    """The loop's phase-boundary check passes --expect-sha; pillars.py rejected it before T25.9."""
+    from demo_game.runners import pillars
+
+    monkeypatch.setattr(pillars, "_probe_health", lambda base_url: ("up", "aaaa1111"))
+
+    rc = pillars.main(["--expect-sha", "bbbb222", "--base-url", "http://stack"])
+
+    assert rc == pillars.EXIT_STACK_UNAVAILABLE
+    assert "DEMO_LIVE=STACK_UNAVAILABLE reason=stale-image" in capsys.readouterr().out
+
+
+def test_matching_short_sha_is_accepted(monkeypatch) -> None:
+    """A 7-char git short sha matches the stack's 8-char version by prefix."""
+    from demo_game.runners import pillars
+
+    monkeypatch.setenv("NPC_API_KEY", "test-key")
+    monkeypatch.setenv("NPC_BASE_URL", "http://stack")  # main() writes it; monkeypatch restores it
+    monkeypatch.setattr(pillars, "_probe_health", lambda base_url: ("up", "aaaa1111"))
+    monkeypatch.setattr(pillars, "_make_state_reads", lambda client: None)
+    monkeypatch.setattr(pillars, "_run_demo_with_recorder", lambda recorder: "boom")
+    monkeypatch.setattr(pillars, "_write_verdicts", lambda verdicts, path: None)
+
+    rc = pillars.main(["--expect-sha", "aaaa111", "--base-url", "http://stack"])
+
+    assert rc == pillars.EXIT_HARNESS_ERROR
