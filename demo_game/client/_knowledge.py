@@ -204,32 +204,39 @@ class _KnowledgeMixin(EngineClientBase):
         npc_id: str,
         player_id: str,
         game_time: dict | None = None,
-    ) -> str | None:
+        *,
+        turn_threshold: int | None = None,
+    ) -> dict:
         """Trigger memory consolidation for an NPC from their dialogue session turns.
 
-        Calls POST /v1/admin/memories/consolidate/{npc_id}. Returns the new
-        memory ID if consolidation occurred, or None if the turn threshold was not met.
+        Calls POST /v1/admin/memories/consolidate/{npc_id}. Returns the data
+        payload dict containing 'memory_id' (str or None) and 'status'
+        ('created', 'threshold_not_met', or 'llm_failed').
 
         Args:
             npc_id: NPC whose session turns to consolidate.
             player_id: Player session identifier.
             game_time: Optional game-time dict; defaults to spring day 1 morning.
+            turn_threshold: Optional override sent to the engine; omitted when None.
 
         Returns:
-            Memory ID string if a memory was created, else None.
+            Data dict from the API response.
 
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
         if game_time is None:
             game_time = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+        body: dict = {"player_id": player_id, "game_time": game_time}
+        if turn_threshold is not None:
+            body["turn_threshold"] = turn_threshold
         resp = self._client.post(
             f"/v1/admin/memories/consolidate/{npc_id}",
-            json={"player_id": player_id, "game_time": game_time},
+            json=body,
             timeout=self._graph_timeout,
         )
         self._raise_for_status(resp, f"POST /v1/admin/memories/consolidate/{npc_id}")
-        return resp.json().get("data", {}).get("memory_id")
+        return resp.json().get("data", {})
 
     def post_secret(
         self,

@@ -2273,6 +2273,29 @@
         "422"
       ]
     },
+    "PATCH {v1}/graph/nodes/world_state/{node_id}": {
+      "auth_required": true,
+      "deprecated": false,
+      "method": "PATCH",
+      "params": [
+        {
+          "location": "path",
+          "name": "node_id",
+          "required": true,
+          "type_name": "string"
+        }
+      ],
+      "path": "{v1}/graph/nodes/world_state/{node_id}",
+      "request_schema": "NodeWriteBody",
+      "response_schemas": {
+        "200": "OkEnvelope_dict_str__Any__",
+        "422": "HTTPValidationError"
+      },
+      "status_codes": [
+        "200",
+        "422"
+      ]
+    },
     "PATCH {v1}/graph/nodes/{node_type}/{node_id}": {
       "auth_required": true,
       "deprecated": false,
@@ -3658,9 +3681,16 @@
       "refs": []
     },
     "ConsolidatePayload": {
-      "enums": {},
+      "enums": {
+        "status": [
+          "created",
+          "llm_failed",
+          "threshold_not_met"
+        ]
+      },
       "fields": {
-        "memory_id": "any?"
+        "memory_id": "any?",
+        "status": "string!"
       },
       "name": "ConsolidatePayload",
       "refs": []
@@ -3670,7 +3700,7 @@
       "fields": {
         "game_time": "object?",
         "player_id": "string!",
-        "turn_threshold": "integer?"
+        "turn_threshold": "any?"
       },
       "name": "ConsolidateRequest",
       "refs": []
@@ -4107,9 +4137,12 @@
       "fields": {
         "engine_name": "string!",
         "error_count": "integer?",
+        "last_duration_ms": "any?",
         "last_error": "any?",
         "last_error_tick": "any?",
-        "last_tick_id": "any?"
+        "last_tick_id": "any?",
+        "tick_count": "integer?",
+        "working_set_size": "any?"
       },
       "name": "EngineStatusRecord",
       "refs": []
@@ -4142,6 +4175,7 @@
       "enums": {},
       "fields": {
         "location_ids": "array?",
+        "template_id": "any?",
         "tick_override": "any?"
       },
       "name": "EventTickRequest",
@@ -4186,7 +4220,8 @@
       "enums": {},
       "fields": {
         "standing": "integer!",
-        "target": "string!"
+        "target": "string!",
+        "target_name": "string!"
       },
       "name": "FactionStandingRow",
       "refs": []
@@ -4953,7 +4988,7 @@
       "fields": {
         "affection": "integer!",
         "fear": "integer!",
-        "interaction_count": "integer!",
+        "interaction_count": "integer?",
         "phase_started_at_tick": "any?",
         "relationship_phase": "any?",
         "standing": "Standing!",

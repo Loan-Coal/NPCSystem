@@ -70,14 +70,16 @@ class LLMCache:
     """Hash-keyed disk cache for LLM dialogue responses.
 
     Key: sha256(npc_id + player_input + PROMPT_VERSION). Value: raw dialogue response dict.
-    Cache miss with readonly=True raises CacheMissError.
+    Cache miss with readonly=True raises CacheMissError. enabled=False serves no hits and
+    writes nothing, so every beat reaches the engine (the live pillar eval, T25.6).
     """
 
     class CacheMissError(RuntimeError):
         """Raised on a cache miss when --cached is set."""
 
-    def __init__(self, readonly: bool = False) -> None:
+    def __init__(self, readonly: bool = False, enabled: bool = True) -> None:
         self.readonly = readonly
+        self.enabled = enabled
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     def _key(self, npc_id: str, player_input: str) -> str:
@@ -85,14 +87,18 @@ class LLMCache:
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def get(self, npc_id: str, player_input: str) -> dict[str, Any] | None:
-        """Return the cached response dict or None on miss."""
+        """Return the cached response dict, or None on a miss or when disabled."""
+        if not self.enabled:
+            return None
         path = CACHE_DIR / f"{self._key(npc_id, player_input)}.json"
         if path.exists():
             return json.loads(path.read_text())
         return None
 
     def put(self, npc_id: str, player_input: str, response: dict[str, Any]) -> None:
-        """Write a response to cache; raises CacheMissError if readonly."""
+        """Write a response to cache; raises CacheMissError if readonly; no-op when disabled."""
+        if not self.enabled:
+            return
         if self.readonly:
             truncated = repr(player_input)[:40]
             raise LLMCache.CacheMissError(

@@ -19,6 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_memory_consolidation_engine, get_memory_engine
 from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.engines.memory_consolidation.memory_consolidation_engine import (
+    ConsolidationStatus,
+    MemoryConsolidationEngine,
+)
 from npc_engine.graph.memory.memory_service import (
     create_memory,
     decay_all_vividness,
@@ -90,7 +94,7 @@ class ConsolidateRequest(BaseModel):
     game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
-    turn_threshold: int = Field(default=5, ge=1)
+    turn_threshold: int | None = Field(default=None, ge=1)
 
     model_config = ConfigDict(frozen=True)
 
@@ -115,10 +119,12 @@ class MemoriesPayload(BaseModel):
 class ConsolidatePayload(BaseModel):
     """Typed payload for POST /memories/consolidate/{npc_id} (SEV-16).
 
-    ``memory_id`` is null when the turn threshold was not met.
+    ``memory_id`` is null when consolidation did not produce a node.
+    ``status`` distinguishes the reason: 'created', 'threshold_not_met', or 'llm_failed'.
     """
 
     memory_id: str | None = None
+    status: ConsolidationStatus
 
     model_config = ConfigDict(frozen=True)
 
@@ -258,7 +264,7 @@ async def remove_memory(
 async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,
-    session: AsyncSession = Depends(get_db_session),
+    engine: MemoryConsolidationEngine = Depends(get_memory_consolidation_engine),
 ) -> dict[str, Any]:
     """Consolidate recent dialogue turns into a memory via the MemoryConsolidationEngine.
 
@@ -267,12 +273,13 @@ async def consolidate_memories(
 
     Args:
         npc_id: ID of the NPC whose dialogue session should be consolidated.
-        body: player_id, game_time, and optional turn_threshold.
+        body: player_id, game_time, and optional turn_threshold (None uses
+            CONSOLIDATION_TURN_THRESHOLD via the engine).
+        engine: MemoryConsolidationEngine singleton (injected).
 
     Returns:
-        Envelope with memory_id if a memory was created, or null.
+        Envelope with memory_id (null unless created) and the consolidation status.
     """
-    engine = get_memory_consolidation_engine()
     gt = body.game_time
     game_time = TimePoint(
         year=int(gt.get("year", 1)),
@@ -280,8 +287,11 @@ async def consolidate_memories(
         day=int(gt.get("day", 1)),
         time_of_day=str(gt.get("time_of_day", "morning")),
     )
-    memory_id = await engine.consolidate(
+    result = await engine.consolidate(
         npc_id=npc_id,
         game_time=game_time,
+        turn_threshold=body.turn_threshold,
     )
-    return ok_response(ConsolidatePayload(memory_id=memory_id).model_dump())
+    return ok_response(
+        ConsolidatePayload(memory_id=result.memory_id, status=result.status).model_dump()
+    )

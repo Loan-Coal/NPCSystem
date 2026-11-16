@@ -381,13 +381,13 @@ def _probe_health(base_url: str) -> tuple[str, str]:
 
 def _run_demo_with_recorder(recorder: Any) -> str | None:
     """Drive DemoRunner in a daemon thread; return error string or None on success."""
-    from demo_game.runners.run import DemoRunner
+    from demo_game.runners.run import DemoRunner, LLMCache
 
     errors: list[str] = []
 
     def _body() -> None:
         try:
-            DemoRunner(recorder=recorder).run()
+            DemoRunner(recorder=recorder, cache=LLMCache(enabled=False)).run()
         except BaseException as exc:  # noqa: BLE001 — captured as error string
             errors.append(f"{type(exc).__name__}: {exc}")
 

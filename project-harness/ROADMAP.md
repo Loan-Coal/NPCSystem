@@ -942,35 +942,35 @@ Done when:
 
 LOC: about +15 non-test. ✅ AUTO (T25.5, 2026-10-22)
 
-- [ ] **T25.6** REMEMBER: consolidation fires from config, and its failure is visible
+- [x] **T25.6** REMEMBER: consolidation fires from config, and its failure is visible
 Files:
 - `src/npc_engine/api/dependencies_advanced/progression.py` :104;
-- `src/npc_engine/api/routes/npc/memories.py` :93,283 (the route that ignores `body.turn_threshold`);
+- `src/npc_engine/api/routes/knowledge/memories.py` :93,283 (the route that ignores `body.turn_threshold`);
 - `src/npc_engine/engines/memory_consolidation/memory_consolidation_engine.py` :112-114;
-- `src/npc_engine/config.py` :275;
-- `demo_game/runners/run.py` :159;
+- `src/npc_engine/config.py` :269;
+- `demo_game/runners/run.py` (`LLMCache`), `demo_game/runners/run_scenes.py` (`MemoryConsolidate`), `demo_game/runners/pillars.py`;
 - tests;
 - `evals/pillar_verdicts.jsonl`.
 
-Spec: ACT 4 prints "Turn threshold not met" (review §4). Four causes:
+Spec: ACT 4 prints "Turn threshold not met" (review §4). Causes:
 - the engine is built with a hard-coded `turn_threshold=5` (`progression.py:104`), while
-  `CONSOLIDATION_TURN_THRESHOLD=10` (`config.py:275`) is read only by the dashboard;
-- the route ignores `body.turn_threshold`;
-- Mira has 1 turn before ACT 4 (`run.py:159`);
+  `CONSOLIDATION_TURN_THRESHOLD=10` (`config.py:269`) is read only by the dashboard;
+- the route ignores `body.turn_threshold`, and the request model's own default (5) would override config;
+- Mira has 1 dialogue before ACT 4, and a warm demo disk cache serves even that one without reaching the engine (DEC-328);
 - the engine returns `None` on LLM failure, so the message conflates two causes.
 
 Fix them:
-- read the config value in `progression.py` (one source, rule 3);
+- read the config value in `progression.py` (one source, rule 3); the request field defaults to `None`;
 - honour `body.turn_threshold`;
 - return a distinct status on LLM failure;
-- give the scripted scene enough turns before ACT 4, or pass `turn_threshold` in its request.
+- pass `turn_threshold` in the scene's request, and make the pillar eval bypass the disk cache (DEC-328).
 
-This is the phase's last task: run `python scripts/check_loc_ratchet.py --update`.
+*Amended 2026-11-16:* finished interactively after the 2026-10-22 night was interrupted mid-task. The
+LOC ratchet moves to the new last task of the phase (T25.10).
 RED anchor: unit tests fail today:
-- the route must pass `body.turn_threshold` to the engine;
-- an LLM failure must not report "Turn threshold not met".
-
-The Memory-node part of the REMEMBER line is also red.
+- the route must pass `body.turn_threshold` to the engine, and `None` when omitted;
+- an LLM failure must not report "Turn threshold not met";
+- the pillar eval's runner must use a disabled cache.
 Validation:
 - the targeted pytest;
 - `make check`;
@@ -979,11 +979,10 @@ Validation:
 
 Done when:
 - the tests pass;
-- the re-committed verdict file shows REMEMBER `"green"`, both parts, at this commit's sha;
-- `scripts/loc_baseline.txt` total equals the measured count;
+- a live run with the cache bypassed prints "Memory node created" at ACT 4;
 - `make check` is green.
 
-LOC: about +10 non-test. Phase T25 total ≈ −120 (T25.1 funds T25.2-T25.6).
+LOC: about +10 non-test. Phase T25 total ≈ −120 (T25.1 funds T25.2-T25.10). ✅ AUTO (T25.6, 2026-11-16)
 
 ---
 

@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from npc_engine.engines.dialogue.session_store import SessionStore
+from npc_engine.engines.memory_consolidation.memory_consolidation_engine import ConsolidationResult
 from npc_engine.world.time_utils import TimePoint
 
 _MCE_MODULE = "npc_engine.engines.memory_consolidation.memory_consolidation_engine"
@@ -96,6 +97,44 @@ def _make_engine(
 
 
 @pytest.mark.asyncio
+async def test_consolidate_explicit_threshold_overrides_instance_default():
+    """A per-call turn_threshold below the instance default lets consolidation fire."""
+    npc_id = "npc_inn"
+    store = await _make_store_with_turns(npc_id, ["Turn 0", "Turn 1"])
+    engine = _make_engine(store, _make_llm(), threshold=5)
+
+    result = await engine.consolidate(
+        npc_id=npc_id, game_time=_make_game_time(), turn_threshold=2
+    )
+
+    assert result.status == "created"
+
+
+@pytest.mark.asyncio
+async def test_consolidate_none_threshold_falls_back_to_instance_default():
+    """turn_threshold=None uses the configured instance threshold, not a smaller one."""
+    npc_id = "npc_inn"
+    store = await _make_store_with_turns(npc_id, ["Turn 0", "Turn 1"])
+    llm = _make_llm()
+    engine = _make_engine(store, llm, threshold=5)
+
+    result = await engine.consolidate(
+        npc_id=npc_id, game_time=_make_game_time(), turn_threshold=None
+    )
+
+    assert result.status == "threshold_not_met"
+    llm.generate.assert_not_awaited()
+
+
+def test_consolidation_result_rejects_unknown_status():
+    """ConsolidationResult is a validated boundary model: an unknown status fails."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ConsolidationResult(memory_id=None, status="exploded")
+
+
+@pytest.mark.asyncio
 async def test_consolidate_enough_turns_creates_memory():
     npc_id = "npc_inn"
     turns = [f"Turn {i}" for i in range(10)]
@@ -106,7 +145,9 @@ async def test_consolidate_enough_turns_creates_memory():
 
     result = await engine.consolidate(npc_id=npc_id, game_time=_make_game_time())
 
-    assert result == "mem-uuid-001"
+    assert isinstance(result, ConsolidationResult)
+    assert result.memory_id == "mem-uuid-001"
+    assert result.status == "created"
     repo.create_memory.assert_awaited_once()
     call_kwargs = repo.create_memory.call_args.kwargs
     assert call_kwargs["character_id"] == npc_id
@@ -130,7 +171,9 @@ async def test_consolidate_below_threshold_returns_none():
 
     result = await engine.consolidate(npc_id=npc_id, game_time=_make_game_time())
 
-    assert result is None
+    assert isinstance(result, ConsolidationResult)
+    assert result.status == "threshold_not_met"
+    assert result.memory_id is None
     llm.generate.assert_not_awaited()
     repo.create_memory.assert_not_awaited()
 
@@ -152,7 +195,9 @@ async def test_consolidate_llm_failure_returns_none_without_crash():
 
     result = await engine.consolidate(npc_id=npc_id, game_time=_make_game_time())
 
-    assert result is None
+    assert isinstance(result, ConsolidationResult)
+    assert result.status == "llm_failed"
+    assert result.memory_id is None
     repo.create_memory.assert_not_awaited()
 
 

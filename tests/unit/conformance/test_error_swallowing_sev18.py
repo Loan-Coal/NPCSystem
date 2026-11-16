@@ -49,6 +49,7 @@ def test_load_canned_text_logs_warning_on_corrupt_yaml(tmp_path):
 async def test_witnessed_query_failure_logs_warning():
     """WITNESSED query failure must log a warning but still create the memory."""
     from npc_engine.engines.memory_consolidation.memory_consolidation_engine import (
+        ConsolidationResult,
         MemoryConsolidationEngine,
     )
 
@@ -78,7 +79,9 @@ async def test_witnessed_query_failure_logs_warning():
     ) as mock_logger:
         result = await engine.consolidate(npc_id="npc_001", game_time=MagicMock())
 
-    assert result == "mem-001"
+    assert isinstance(result, ConsolidationResult)
+    assert result.memory_id == "mem-001"
+    assert result.status == "created"
     mock_logger.warning.assert_called_once()
     call_args = mock_logger.warning.call_args
     assert "witnessed_query_failed" in call_args.args[0]

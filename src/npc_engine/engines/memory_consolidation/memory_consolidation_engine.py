@@ -17,7 +17,9 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
+
+from pydantic import BaseModel, ConfigDict
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import Settings
@@ -29,6 +31,24 @@ if TYPE_CHECKING:
     from npc_engine.graph.repositories.memory_consolidation_repository import Neo4jMemoryConsolidationRepository
 
 _LOGGER = logging.getLogger(__name__)
+
+
+ConsolidationStatus = Literal["created", "threshold_not_met", "llm_failed"]
+
+
+class ConsolidationResult(BaseModel):
+    """Return value from MemoryConsolidationEngine.consolidate().
+
+    Attributes:
+        memory_id: New Memory node ID when status is 'created', else None.
+        status: 'created', 'threshold_not_met', or 'llm_failed'.
+    """
+
+    memory_id: str | None
+    status: ConsolidationStatus
+
+    model_config = ConfigDict(frozen=True)
+
 
 _PROMPT_PATH = (
     Path(__file__).resolve().parent.parent.parent
@@ -94,24 +114,27 @@ class MemoryConsolidationEngine:
         *,
         npc_id: str,
         game_time: TimePoint,
-    ) -> str | None:
+        turn_threshold: int | None = None,
+    ) -> ConsolidationResult:
         """Consolidate all session turns for an NPC into a Memory node.
 
         Fetches turns from the SessionStore across all player sessions for this
-        NPC. Returns None without calling the LLM if the turn count is below
-        the configured threshold. LLM errors are caught and logged; the method
-        returns None on failure so the caller can continue safely.
+        NPC. Returns a ConsolidationResult with status 'threshold_not_met' if
+        the turn count is below the effective threshold, or 'llm_failed' if
+        the LLM call raises, or 'created' on success.
 
         Args:
             npc_id: ID of the NPC whose turns to consolidate.
             game_time: Game-time snapshot at moment of consolidation.
+            turn_threshold: Per-call override; falls back to instance default.
 
         Returns:
-            Memory ID string if consolidation occurred, else None.
+            ConsolidationResult with memory_id and status.
         """
+        effective_threshold = turn_threshold if turn_threshold is not None else self._turn_threshold
         turns = await self._session_store.get_all_turns_for_npc(npc_id)
-        if len(turns) < self._turn_threshold:
-            return None
+        if len(turns) < effective_threshold:
+            return ConsolidationResult(memory_id=None, status="threshold_not_met")
 
         # Fetch existing beliefs and recent memories so the LLM avoids redundancy.
         existing_beliefs = await self._memory_repo.get_beliefs(character_id=npc_id, k=5)
@@ -138,7 +161,7 @@ class MemoryConsolidationEngine:
             )
         except Exception:
             _LOGGER.exception("LLM error during consolidation for NPC %s — skipping", npc_id)
-            return None
+            return ConsolidationResult(memory_id=None, status="llm_failed")
 
         # Boost vividness when the NPC has undisclosed WITNESSED observations,
         # since high-clarity first-hand observations form more vivid memories.
@@ -169,14 +192,14 @@ class MemoryConsolidationEngine:
         if self._clear_turns:
             await self._session_store.clear_all_turns_for_npc(npc_id)
 
-        return memory_id
+        return ConsolidationResult(memory_id=memory_id, status="created")
 
     async def _consolidate_bounded(
         self,
         sem: asyncio.Semaphore,
         npc_id: str,
         game_time: TimePoint,
-    ) -> str | None:
+    ) -> ConsolidationResult:
         """Acquire the semaphore then consolidate one NPC via the graph port.
 
         The semaphore caps the number of simultaneously open LLM + graph
@@ -188,7 +211,7 @@ class MemoryConsolidationEngine:
             game_time: Game-time snapshot passed through to consolidate().
 
         Returns:
-            Memory ID if consolidation occurred, else None.
+            ConsolidationResult for this NPC.
         """
         async with sem:
             return await self.consolidate(npc_id=npc_id, game_time=game_time)
@@ -217,5 +240,5 @@ class MemoryConsolidationEngine:
         results = await asyncio.gather(
             *(self._consolidate_bounded(sem, n, game_time) for n in npc_ids)
         )
-        consolidated = [n for n, mid in zip(npc_ids, results) if mid is not None]
+        consolidated = [n for n, r in zip(npc_ids, results) if r.memory_id is not None]
         return {"consolidated": consolidated}

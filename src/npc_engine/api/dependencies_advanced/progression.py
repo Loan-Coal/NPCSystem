@@ -101,7 +101,7 @@ def get_memory_consolidation_engine() -> MemoryConsolidationEngine:
         llm_client=llm_client,
         memory_repo=Neo4jMemoryConsolidationRepository(get_graph_db()),
         settings=settings,
-        turn_threshold=5,
+        turn_threshold=settings.CONSOLIDATION_TURN_THRESHOLD,
         clear_turns_after=False,
         max_tokens=engine_config.llm.max_tokens,
         temperature=engine_config.llm.temperature,

@@ -406,6 +406,7 @@ class MemoryConsolidate(Scene):
 
     npc_id: str = ""
     player_id: str = "player_demo"
+    turn_threshold: int = 1
 
     def execute(self, runner: DemoRunner) -> None:
         """Call POST /v1/admin/memories/consolidate/{npc_id}."""
@@ -413,9 +414,15 @@ class MemoryConsolidate(Scene):
         if runner.dry_run:
             return
         game_time = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
-        memory_id = runner.client.consolidate_memory(self.npc_id, self.player_id, game_time)
+        result = runner.client.consolidate_memory(
+            self.npc_id, self.player_id, game_time, turn_threshold=self.turn_threshold
+        )
+        memory_id = result.get("memory_id")
+        status = result.get("status", "threshold_not_met")
         if memory_id:
             runner.print_ok(f"[memory] {self.npc_id}: Memory node created -- id={memory_id}")
+        elif status == "llm_failed":
+            runner.print_ok(f"[memory] {self.npc_id}: LLM error during consolidation")
         else:
             runner.print_ok(f"[memory] {self.npc_id}: Turn threshold not met (need more dialogue turns)")
 

@@ -8758,3 +8758,28 @@ The harness cuts run before the shrink, because they shrink what every later ses
 **Rejected.** *Full C2*: a long, judgement-heavy session. *Drop C2*.
 
 **Owner notes.** None. Recommended option chosen.
+
+## DEC-328: The live pillar eval bypasses the demo dialogue disk cache
+**Date:** 2026-11-16 · **Status:** ✅ ACCEPTED (owner, 2026-11-16: "investigate the warmup, then decide") · **Task:** T25.6
+
+**Evidence.**
+- `DialogueBeat` and `StreamingDialogueBeat` return early on a disk-cache hit (`demo_game/runners/run_scenes.py`), before `POST /v1/dialogue` or the WS call. A hit never reaches the engine.
+- The cache lives at `demo_game/.cache/demo/` (`run.py` `_REPO_ROOT` is `demo_game/`). Its 9 entries were written at 2026-10-22 07:07–07:08, during T25.5's live run. Later live runs read them.
+- With the cache warm, Mira's session store had no turns before ACT 4. The interrupted T25.6 session added a "warmup" `post_dialogue` before consolidating. That one call was also the only dialogue Mira received, so it is what turned REMEMBER green on that run.
+
+**Decision.**
+- `LLMCache(enabled=False)` serves no hits and writes nothing. `pillars._run_demo_with_recorder` builds its `DemoRunner` with it, so every beat reaches the engine.
+- Delete the warmup call and its broad `except`. `MemoryConsolidate` sends `turn_threshold=1`, the spec's second option.
+- `make demo-run` keeps its cache: it is a replay tool, not an eval.
+
+**Rejected.** *Keep the warmup*: an extra LLM call per run (rule 8) that hides the cache bypass from every other pillar. *Delete the disk cache*: `--cached` replay is a documented demo mode.
+
+**Contract (owner, 2026-11-16).** `ConsolidateRequest.turn_threshold` widens from `int` (default 5) to
+optional (default `None`, meaning `CONSOLIDATION_TURN_THRESHOLD`, 10). Every payload that sends an int is
+unaffected, and a widened request is allowed by `docs/API_STABILITY.md`. `check-api-contract` reads the
+nullable schema as type "any", so the baseline is re-recorded. A caller that omits the field now gets 10,
+not 5. No DemoGame caller exists; the demo scene sends 1 and `evals/scenario_adapters_extra.py` sends 5.
+The response gains `status` (additive). The re-record also captures T25.4's
+`PATCH /graph/nodes/world_state/{node_id}`, which is additive and was never recorded.
+
+**Consequence.** Pillar verdicts recorded with a warm cache (the 2026-10-22 08:4x run) are not evidence. T25.9's red→green proof re-measures every pillar with the cache bypassed.
