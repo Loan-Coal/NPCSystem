@@ -19,6 +19,10 @@ from npc_engine.graph.repositories.routine_repository import Neo4jRoutineReposit
 
 LOGGER = logging.getLogger(__name__)
 
+# Override destination meaning "this character's home_location_id", not a Location id.
+# Written by the low-valence dialogue override and disruption_rules.yaml.
+HOME_LOCATION = "home"
+
 
 class RoutineEngine:
     """Moves characters to their scheduled locations on each game tick.
@@ -133,13 +137,23 @@ class RoutineEngine:
             if override and isinstance(override, dict):
                 expires_at = override.get("expires_at_tick")
                 if expires_at is not None and tick_id < expires_at:
-                    return str(override["location_id"])
+                    return self._override_destination(row, str(override["location_id"]))
                 # Expired — clear it
                 await self._routine_repo.clear_routine_override(
                     character_id=row["character_id"]
                 )
 
         return self._entry_location(row.get("entries_json"), time_of_day)
+
+    @staticmethod
+    def _override_destination(row: dict[str, Any], location_id: str) -> str | None:
+        """Resolve the HOME_LOCATION sentinel to the character's own home_location_id.
+
+        Returns None (no move) when the character has no home (T25.7).
+        """
+        if location_id == HOME_LOCATION:
+            return row.get("home_location_id")
+        return location_id
 
     @staticmethod
     def _entry_location(entries_json: str | None, time_of_day: str) -> str | None:

@@ -1052,3 +1052,22 @@ list. That is the owner's call, not a review fix.
 **Description:** First committed `evals/pillar_verdicts.jsonl` (sha=04782e03) shows DETERMINISM RED: `seeds_used is empty: run1={} run2={}`. The batch gossip-tick endpoint returns no `seeds_used` field (or an empty dict) in both calls with `tick_override=42`, so the pillar cannot compare seeds and the determinism proof is vacuous — matching T24.3's fix of the `{} == {}` vacuous check.
 **Why deferred:** T24.4 records the red baseline only; fixes are sequenced in Sprint 15.
 **To fix:** Confirm `POST /v1/admin/batch/gossip_tick` populates `seeds_used` in its response. If the field is absent, add it to the response model and the batch handler. Add a targeted unit test asserting `seeds_used` is non-empty for a non-empty gossip graph.
+
+## ISSUE-381: "Home" is one fixed location; design safe places and destination choice
+**Found:** 2026-11-16, during T25.7
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/routine/routine_engine.py` (`HOME_LOCATION`, `_override_destination`); `engines/dialogue/dialogue_handler.py` (low-valence override); `engines/events/disruption_rules.yaml`; `type_registry/base_nodes/character.yaml` (`home_location_id`)
+**Description:** T25.7 gave every Character one `home_location_id`, seeded to its start location, and made an override to `"home"` resolve through it. That fixes NPCs vanishing, but the model is thin:
+- an NPC upset while already at home has nowhere to withdraw to, so it stays put;
+- an innkeeper's "home" is her workplace (the tavern), so withdrawing changes nothing;
+- the destination is fixed per NPC, whatever the cause (grief after a death, fear after a fire, sulking after an insult).
+Owner ideas (2026-11-16):
+- rename "home" to **safe places**, and allow several per NPC;
+- a low-valence event at a safe place still makes the NPC leave, for another safe place;
+- the event, or the planner/mover (`engines/planning/`), computes where the character goes, instead of a fixed sentinel.
+**Why deferred:** the owner chose the seeded-start-location home for now; the richer model is a design task (graph schema, seed content, planner interplay).
+**To fix:** write a design note covering:
+- the safe-place data model (an edge such as `(:Character)-[:SAFE_PLACE {rank}]->(:Location)`, or a list property);
+- who picks the destination (disruption rule, emotion, or the planner's goal former);
+- how it interacts with need-driven moves and schedules.
+Then replace the `HOME_LOCATION` sentinel with that choice. The WORLD pillar must keep passing (T25.9).

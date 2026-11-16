@@ -17,6 +17,7 @@ fields:
   current_mood: { type: str, required: false }
   mood_intensity: { type: float, required: false }
   routine_override: { type: str, required: false }
+  home_location_id: { type: str, required: false }  # where a "home" override sends the NPC (T25.7)
   currency_balance: { type: int, required: false }
   voice_descriptor: { type: str, required: false }
   emotion_valence: { type: int, required: false, range: [-100, 100] }

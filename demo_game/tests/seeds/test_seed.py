@@ -123,6 +123,17 @@ def test_build_npc_payload_returns_correct_shape() -> None:
     assert "last_graph_updated_at" in payload
 
 
+def test_every_seeded_npc_home_is_its_located_at_location() -> None:
+    """Each NPC's home_location_id is the location its LOCATED_AT edge seeds (T25.7, owner 2026-11-16)."""
+    from demo_game.seeds.seed import _NPCS, _NPC_LOCATED_AT
+    from demo_game.seeds.seed_npc_data import H2_NPC_LOCATED_AT, H2_NPCS
+
+    located_at = dict(_NPC_LOCATED_AT) | dict(H2_NPC_LOCATED_AT)
+    homes = {row[0]: build_npc_payload(*row)["home_location_id"] for row in [*_NPCS, *H2_NPCS]}
+
+    assert homes == located_at
+
+
 def test_build_npc_payload_voice_descriptor_defaults_to_none() -> None:
     payload = build_npc_payload(
         id="guard_01",

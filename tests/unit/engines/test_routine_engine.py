@@ -36,6 +36,7 @@ def _char_record(
     current_loc: str | None,
     routine_override: dict | None = None,
     current_arrived_at_tick: int | None = None,
+    home_location_id: str | None = None,
 ) -> dict:
     return {
         "character_id": char_id,
@@ -43,6 +44,7 @@ def _char_record(
         "current_location_id": current_loc,
         "routine_override": json.dumps(routine_override) if routine_override else None,
         "current_arrived_at_tick": current_arrived_at_tick,
+        "home_location_id": home_location_id,
     }
 
 
@@ -296,3 +298,37 @@ def test_entry_location_returns_location_for_matching_slot():
 
 def test_entry_location_returns_none_for_malformed_json():
     assert RoutineEngine._entry_location("not-json", "morning") is None
+
+
+# ---------------------------------------------------------------------------
+# "home" overrides resolve through home_location_id (T25.7)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_home_override_moves_to_home_location_id():
+    """An override to "home" sends the NPC to its own home_location_id, not a Location named home."""
+    override = {"location_id": "home", "expires_at_tick": 20}
+    repo = _make_repo([_char_record(
+        "mira", [], current_loc="loc_market", routine_override=override, home_location_id="loc_tavern",
+    )])
+
+    result = await RoutineEngine(routine_repo=repo).run_tick(time_of_day="morning", tick_id=10)
+
+    repo.update_character_location.assert_awaited_once_with(
+        character_id="mira", location_id="loc_tavern", arrived_at_tick=10
+    )
+    assert result == {"moved": 1, "skipped": 0}
+
+
+@pytest.mark.asyncio
+async def test_home_override_without_home_skips_the_move():
+    """With no home_location_id, a "home" override leaves the NPC where it is."""
+    override = {"location_id": "home", "expires_at_tick": 20}
+    repo = _make_repo([_char_record("nel", [], current_loc="loc_tavern", routine_override=override)])
+
+    result = await RoutineEngine(routine_repo=repo).run_tick(time_of_day="morning", tick_id=10)
+
+    repo.update_character_location.assert_not_awaited()
+    repo.record_departure.assert_not_awaited()
+    assert result == {"moved": 0, "skipped": 1}

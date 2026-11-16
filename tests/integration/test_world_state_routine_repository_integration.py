@@ -103,3 +103,41 @@ async def test_clear_routine_override_nulls_override_field() -> None:
         async with graph_db.get_session() as session:
             await session.run("MATCH (c:Character {id: $id}) DETACH DELETE c", id=char_id)
         await graph_db.close()
+
+
+@pytest.mark.asyncio
+async def test_update_location_to_missing_location_keeps_the_old_edge() -> None:
+    """Moving to a Location that does not exist is a no-op, not a deleted LOCATED_AT edge (T25.7).
+
+    The "home" override and the disruption rules used a location id no Location had, and
+    the old query deleted the edge before matching the destination, so the NPC left the world.
+    """
+    graph_db = _make_graph_db()
+    repo = Neo4jRoutineRepository(graph_db)
+    char_id = f"char-test-{uuid4().hex[:8]}"
+    loc_id = f"loc-test-{uuid4().hex[:8]}"
+    try:
+        await graph_db.connect()
+        async with graph_db.get_session() as session:
+            await session.run(
+                "CREATE (c:Character {id: $cid})-[:LOCATED_AT {arrived_at_tick: 3}]->(:Location {id: $lid})",
+                cid=char_id, lid=loc_id,
+            )
+
+        await repo.update_character_location(
+            character_id=char_id, location_id=f"missing-{uuid4().hex[:8]}", arrived_at_tick=9,
+        )
+
+        async with graph_db.get_session() as session:
+            result = await session.run(
+                "MATCH (:Character {id: $cid})-[e:LOCATED_AT]->(l) RETURN l.id AS loc, e.arrived_at_tick AS tick",
+                cid=char_id,
+            )
+            rows = [record.data() async for record in result]
+        assert rows == [{"loc": loc_id, "tick": 3}]
+    finally:
+        async with graph_db.get_session() as session:
+            await session.run(
+                "MATCH (n) WHERE n.id IN [$cid, $lid] DETACH DELETE n", cid=char_id, lid=loc_id,
+            )
+        await graph_db.close()

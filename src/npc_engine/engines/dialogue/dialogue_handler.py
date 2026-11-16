@@ -37,6 +37,7 @@ from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.ports.clock_port import ClockPort
+from npc_engine.engines.routine.routine_engine import HOME_LOCATION
 from npc_engine.graph.repositories.dialogue_repository import Neo4jDialogueRepository
 from npc_engine.retrieval.dialogue_context.dialogue_context_adapter import Neo4jDialogueContextAdapter
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
@@ -326,7 +327,7 @@ class DialogueHandler:
             )
         if new_emotion.valence < LOW_VALENCE_THRESHOLD:
             await self._dialogue_repo.set_routine_override(
-                character_id=request.npc_id, location_id="home",
+                character_id=request.npc_id, location_id=HOME_LOCATION,
                 expires_at_tick=tick_id + LOW_VALENCE_ROUTINE_OVERRIDE_TICKS,
             )
         await self._session_store.append_turns(

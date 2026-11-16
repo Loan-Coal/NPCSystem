@@ -185,6 +185,7 @@ def build_npc_payload(
         "honesty": honesty,
         "current_mood": "neutral",
         "voice_descriptor": voice_descriptor,
+        "home_location_id": location_id,
         "created_at": now,
         "updated_at": now,
         "last_graph_updated_at": now,

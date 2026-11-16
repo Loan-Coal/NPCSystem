@@ -28,6 +28,7 @@ WHERE c.is_active = true
 RETURN c.id AS character_id,
        s.entries AS entries_json,
        c.routine_override AS routine_override,
+       c.home_location_id AS home_location_id,
        [(c)-[:LOCATED_AT]->(loc) | loc.id][0] AS current_location_id,
        [(c)-[e:LOCATED_AT]->() | e.arrived_at_tick][0] AS current_arrived_at_tick
 """
@@ -36,12 +37,14 @@ RETURN c.id AS character_id,
 # Write queries
 # ---------------------------------------------------------------------------
 
+# Match the destination before deleting: a missing Location must leave the old edge
+# in place, not strand the character with no LOCATED_AT edge (T25.7).
 CYPHER_UPDATE_LOCATED_AT = """
 MATCH (c:Character {id: $character_id})
+MATCH (loc:Location {id: $location_id})
 OPTIONAL MATCH (c)-[old:LOCATED_AT]->()
 DELETE old
-WITH c
-MATCH (loc:Location {id: $location_id})
+WITH DISTINCT c, loc
 CREATE (c)-[:LOCATED_AT {arrived_at_tick: $arrived_at_tick}]->(loc)
 """
 

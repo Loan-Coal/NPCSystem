@@ -987,7 +987,7 @@ LOC: about +10 non-test. Phase T25 total ≈ −120 (T25.1 funds T25.2-T25.10). 
 *T25.7–T25.10 were added on 2026-11-16, after an audit of T25.2–T25.5 (owner: fix the high findings before
 relaunch). They are done interactively, not by the loop.*
 
-- [ ] **T25.7** WORLD: NPCs have homes, and a move to a missing location is a no-op
+- [x] **T25.7** WORLD: NPCs have homes, and a move to a missing location is a no-op
 Files:
 - `src/npc_engine/type_registry/base_nodes/character.yaml`;
 - `src/npc_engine/graph/scheduling/routine_queries.py` (`CYPHER_UPDATE_LOCATED_AT`, `CYPHER_GET_SCHEDULED_CHARACTERS`);
@@ -1017,7 +1017,7 @@ RED anchor:
 - a seed test where every NPC payload's `home_location_id` is its `LOCATED_AT` location.
 
 Validation: targeted pytest; `make check`; the integration test against the eval Neo4j. Done when they pass.
-LOC: about +15 non-test.
+LOC: about +15 non-test. ✅ AUTO (T25.7, 2026-11-16)
 
 - [x] **T25.8** FEEL: shock only newly active events, and never 500 after the write
 Files: `src/npc_engine/api/routes/admin/graph.py` (`patch_world_state`); `tests/unit/api/test_world_state_event_shock.py`.
